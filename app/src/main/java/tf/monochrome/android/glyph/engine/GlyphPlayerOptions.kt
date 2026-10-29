@@ -153,6 +153,12 @@ data class GlyphGraphics(
     val beatFlash: Boolean = true,
     /** The burst across the field every fifty combo. */
     val comboBurst: Boolean = true,
+    /**
+     * Faded copies trailing each moving note, 0 (off) to 4; see
+     * [tf.monochrome.android.motion.MotionBlurQuality]. Off by default: the
+     * accepted look is sharp notes, and the trail is the player's choice.
+     */
+    val motionBlur: Int = 0,
     /** The playfield seen through an old TV; [GlyphTvShader.OFF] by default. */
     val tvShader: GlyphTvShader = GlyphTvShader.OFF,
     /** The TV's sliders: its pixel size and how strongly each part shows. */
@@ -165,6 +171,14 @@ data class GlyphGraphics(
             1 -> "Low"
             2 -> "Medium"
             else -> "High"
+        }
+
+        fun motionBlurLabel(level: Int): String = when (level) {
+            0 -> "Off"
+            1 -> "Light"
+            2 -> "Balanced"
+            3 -> "Smooth"
+            else -> "Cinematic"
         }
     }
 }

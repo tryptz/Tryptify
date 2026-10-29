@@ -416,6 +416,8 @@ internal fun SyncedLyricsView(
     // disabled (and the analyzer never acquired) at intensity 0.
     val fx = LocalLyricsFx.current
     val beatIntensity = fx.bassReact
+    // The glide's motion blur (LyricsMotionBlur.kt): 0 px while the lines rest.
+    val glideBlur = rememberLyricMotionBlur(listState, fx.motionBlurQuality)
     // God rays: what is being sung, in root px — the sung word when they
     // follow it (word-timed lyrics), else the line. Read in the draw phase of
     // whichever layer draws the light, so the shafts follow the scroll glide
@@ -609,7 +611,13 @@ internal fun SyncedLyricsView(
                     curveSide,
                     curveFocus,
                     wide = curveTarget == LyricsFxSettings.CURVE_WORD,
-                ),
+                )
+                // Innermost of all: the plain letters are smeared along the
+                // glide, so the copy, the glass, the shadow and the rays all
+                // take the moving letters as they are. One layer for the whole
+                // list, only while it moves; a layer per line would cut each
+                // line's blur off at its own box.
+                .lyricMotionBlur(glideBlur),
             contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

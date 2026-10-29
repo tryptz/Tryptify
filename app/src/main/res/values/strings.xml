@@ -1926,6 +1926,13 @@
     <string name="fx_god_ray_tilt_desc">How far tilting the phone swings the light.</string>
     <string name="fx_god_ray_samples_value">%1$d samples</string>
     <string name="fx_god_ray_quality_desc">Samples per pixel: cleaner shafts against GPU cost.</string>
+    <string name="fx_motion_blur">Motion blur</string>
+    <string name="fx_motion_blur_desc">Smears the lyrics as they glide to the next line. Further right is smoother, at more GPU work while they move. Android 12 and later.</string>
+    <string name="fx_motion_blur_off">Off</string>
+    <string name="fx_motion_blur_light">Light</string>
+    <string name="fx_motion_blur_balanced">Balanced</string>
+    <string name="fx_motion_blur_smooth">Smooth</string>
+    <string name="fx_motion_blur_cinematic">Cinematic</string>
     <string name="fx_god_ray_follow_word">Follow the sung word</string>
     <string name="fx_god_ray_follow_word_desc">With word-timed lyrics, only the word being sung shines, and the light hops along word by word. Line-timed lyrics keep the whole line.</string>
     <string name="fx_god_ray_all_lyrics">All lyrics shine</string>

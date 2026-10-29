@@ -3,6 +3,8 @@ package tf.monochrome.android.ui.settings
 import tf.monochrome.android.ui.player.LocalGlassArea
 import tf.monochrome.android.domain.model.LinkArea
 import tf.monochrome.android.ui.player.lyricCurvature
+import tf.monochrome.android.ui.player.lyricMotionBlurSupported
+import tf.monochrome.android.motion.MotionBlurQuality
 import kotlin.math.roundToInt
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import tf.monochrome.android.ui.navigation.navigateTool
@@ -1115,6 +1117,18 @@ fun LyricsFxStudioScreen(
                 FxSlider(stringResource(R.string.fx_wave_travel), "%.1f dp".format(fx.waveTravelDp), fx.waveTravelDp, 0f..8f, linkKey = "lyrics.waveTravelDp", defaultValue = LyricsFxSettings.DEFAULT.waveTravelDp) {
                     viewModel.update { s -> s.copy(waveTravelDp = it) }
                 }
+                // Quality against performance: each step right is a smoother,
+                // longer smear and more GPU work while the lines glide.
+                FxSlider(
+                    stringResource(R.string.fx_motion_blur),
+                    stringResource(motionBlurLabel(fx.motionBlurQuality)),
+                    fx.motionBlurQuality.toFloat(),
+                    MotionBlurQuality.OFF.toFloat()..MotionBlurQuality.MAX.toFloat(),
+                    steps = MotionBlurQuality.MAX - 1,
+                    description = stringResource(R.string.fx_motion_blur_desc),
+                    enabled = lyricMotionBlurSupported(),
+                    defaultValue = LyricsFxSettings.DEFAULT.motionBlurQuality.toFloat(),
+                ) { viewModel.update { s -> s.copy(motionBlurQuality = it.roundToInt()) } }
                 FxSlider(
                     stringResource(R.string.fx_shadow_depth), "${(fx.shadowDepth * 100).toInt()}%", fx.shadowDepth, 0f..1f,
                     description = stringResource(R.string.fx_lyric_shadow_desc),
@@ -2993,4 +3007,13 @@ internal fun FxNudge(label: String, step: Float, unit: String, onNudge: (Float) 
             modifier = Modifier.semantics { contentDescription = "$label, more by $amount" },
         ) { Text("+ $amount") }
     }
+}
+
+/** The motion blur slider's reading for each level. */
+private fun motionBlurLabel(level: Int): Int = when (level) {
+    0 -> R.string.fx_motion_blur_off
+    1 -> R.string.fx_motion_blur_light
+    2 -> R.string.fx_motion_blur_balanced
+    3 -> R.string.fx_motion_blur_smooth
+    else -> R.string.fx_motion_blur_cinematic
 }

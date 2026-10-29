@@ -400,6 +400,22 @@ class LyricsFxSettingsTest {
     }
 
     @Test
+    fun `motion blur is off by default, clamped to its five levels, and personal`() {
+        // Off by default: the accepted look is the lyrics glide unblurred.
+        assertEquals(0, LyricsFxSettings.DEFAULT.motionBlurQuality)
+        assertEquals(0, LyricsFxSettings(motionBlurQuality = -2).clamped().motionBlurQuality)
+        assertEquals(4, LyricsFxSettings(motionBlurQuality = 9).clamped().motionBlurQuality)
+        // A performance choice, so a theme never changes it...
+        val mine = LyricsFxSettings(motionBlurQuality = 3)
+        val theme = LyricsFxSettings.PRESETS.first().second
+        val applied = theme.withPersonalFrom(mine)
+        assertEquals(3, applied.motionBlurQuality)
+        assertTrue(applied.matchesPreset(theme))
+        // ...and a shared theme never carries it.
+        assertEquals(0, mine.withPersonalFrom(LyricsFxSettings.DEFAULT).motionBlurQuality)
+    }
+
+    @Test
     fun `the god ray quality is personal and a theme carries it over`() {
         val mine = LyricsFxSettings(godRayQuality = 1)
         val theme = LyricsFxSettings.PRESETS.first { it.first == "Cathedral" }.second

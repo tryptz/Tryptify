@@ -1925,6 +1925,13 @@
     <string name="fx_god_ray_tilt_desc">Wie weit das Neigen des Handys das Licht schwenkt.</string>
     <string name="fx_god_ray_samples_value">%1$d Samples</string>
     <string name="fx_god_ray_quality_desc">Samples pro Pixel: sauberere Bündel gegen GPU-Last.</string>
+    <string name="fx_motion_blur">Bewegungsunschärfe</string>
+    <string name="fx_motion_blur_desc">Verwischt die Liedtexte, während sie zur nächsten Zeile gleiten. Weiter rechts ist es weicher, kostet aber mehr GPU-Arbeit, solange sie sich bewegen. Ab Android 12.</string>
+    <string name="fx_motion_blur_off">Aus</string>
+    <string name="fx_motion_blur_light">Leicht</string>
+    <string name="fx_motion_blur_balanced">Ausgewogen</string>
+    <string name="fx_motion_blur_smooth">Weich</string>
+    <string name="fx_motion_blur_cinematic">Filmisch</string>
     <string name="fx_god_ray_follow_word">Dem gesungenen Wort folgen</string>
     <string name="fx_god_ray_follow_word_desc">Bei wortgenau getimten Songtexten leuchtet nur das gerade gesungene Wort, und das Licht springt Wort für Wort weiter. Zeilenweise getimte Songtexte behalten die ganze Zeile.</string>
     <string name="fx_god_ray_all_lyrics">Der ganze Songtext leuchtet</string>

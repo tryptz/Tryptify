@@ -1925,6 +1925,13 @@
     <string name="fx_god_ray_tilt_desc">Telefonu eğmenin ışığı ne kadar savurduğu.</string>
     <string name="fx_god_ray_samples_value">%1$d örnek</string>
     <string name="fx_god_ray_quality_desc">Piksel başına örnek: daha temiz huzmeler ile GPU maliyeti arasında denge.</string>
+    <string name="fx_motion_blur">Hareket bulanıklığı</string>
+    <string name="fx_motion_blur_desc">Sözler bir sonraki satıra kayarken iz bırakır. Sağa doğru daha yumuşak olur, ancak hareket sırasında GPU yükü artar. Android 12 ve sonrası.</string>
+    <string name="fx_motion_blur_off">Kapalı</string>
+    <string name="fx_motion_blur_light">Hafif</string>
+    <string name="fx_motion_blur_balanced">Dengeli</string>
+    <string name="fx_motion_blur_smooth">Yumuşak</string>
+    <string name="fx_motion_blur_cinematic">Sinematik</string>
     <string name="fx_god_ray_follow_word">Söylenen kelimeyi izle</string>
     <string name="fx_god_ray_follow_word_desc">Kelime zamanlamalı sözlerde yalnızca söylenen kelime parlar ve ışık kelime kelime ilerler. Satır zamanlamalı sözlerde tüm satır parlar.</string>
     <string name="fx_god_ray_all_lyrics">Tüm sözler parlasın</string>

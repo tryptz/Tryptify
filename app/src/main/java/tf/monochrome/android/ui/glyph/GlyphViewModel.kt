@@ -43,6 +43,7 @@ import tf.monochrome.android.audio.usb.BypassVolumeController
 import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
+import tf.monochrome.android.motion.MotionBlurQuality
 import tf.monochrome.android.glyph.pack.GlyphPackLibrary
 import tf.monochrome.android.glyph.data.GlyphWheel
 import tf.monochrome.android.glyph.pack.OwnPackStore
@@ -2071,6 +2072,7 @@ class GlyphViewModel @Inject constructor(
                 explosions = prefs.getBoolean(PREF_GFX_EXPLOSIONS, true),
                 beatFlash = prefs.getBoolean(PREF_GFX_BEAT_FLASH, true),
                 comboBurst = prefs.getBoolean(PREF_GFX_COMBO_BURST, true),
+                motionBlur = MotionBlurQuality.coerce(prefs.getInt(PREF_GFX_MOTION_BLUR, MotionBlurQuality.OFF)),
                 tvShader = GlyphTvShader.fromId(prefs.getString(PREF_GFX_TV_SHADER, null)),
                 tv = loadTvTuning(),
             ),
@@ -2119,6 +2121,7 @@ class GlyphViewModel @Inject constructor(
             .putBoolean(PREF_GFX_EXPLOSIONS, modifiers.graphics.explosions)
             .putBoolean(PREF_GFX_BEAT_FLASH, modifiers.graphics.beatFlash)
             .putBoolean(PREF_GFX_COMBO_BURST, modifiers.graphics.comboBurst)
+            .putInt(PREF_GFX_MOTION_BLUR, modifiers.graphics.motionBlur)
             .putString(PREF_GFX_TV_SHADER, modifiers.graphics.tvShader.id)
             .also { saveTvTuning(it, modifiers.graphics.tv) }
             .apply()
@@ -3300,6 +3303,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_SORT_ASCENDING = "song_sort_ascending"
         const val PREF_GFX_RAYS = "gfx_hit_rays"
         const val PREF_GFX_RAY_QUALITY = "gfx_ray_quality"
+        const val PREF_GFX_MOTION_BLUR = "gfx_motion_blur"
         const val PREF_GFX_LIGHTING = "gfx_note_lighting"
         const val PREF_GFX_EXPLOSIONS = "gfx_explosions"
         const val PREF_GFX_BEAT_FLASH = "gfx_beat_flash"
