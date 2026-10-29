@@ -50,9 +50,9 @@ import tf.monochrome.android.ui.theme.MonoDimens
  *
  * Only the archive's own pages, over https, without JavaScript, which they do
  * not need; a link anywhere else opens in the browser. Its downloads come
- * from its file host and GitHub, and any https archive link is taken. A RAR
- * is not imported, and the line under the title says so. A full-screen
- * dialog, as Packs' is: a web page is opaque and the whole screen.
+ * from its file host and GitHub, and any https archive link is taken: ZIP,
+ * .smzip, 7z or RAR. A full-screen dialog, as Packs' is: a web page is opaque
+ * and the whole screen.
  */
 @Composable
 fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) -> Unit) {
@@ -63,7 +63,6 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
     var note by remember { mutableStateOf<String?>(null) }
     var section by rememberSaveable { mutableStateOf(ARCHIVE_SECTIONS.first().path) }
     val queuedLine = stringResource(R.string.tm_themes_archive_queued)
-    val rarLine = stringResource(R.string.tm_themes_archive_rar)
     val labels = ARCHIVE_SECTIONS.associate { it.path to stringResource(it.label) }
 
     Dialog(
@@ -122,10 +121,6 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
                             settings.allowContentAccess = false
                             fun take(url: Uri) {
                                 val file = Uri.decode(url.lastPathSegment.orEmpty())
-                                if (file.endsWith(".rar", ignoreCase = true)) {
-                                    note = rarLine
-                                    return
-                                }
                                 val name = file.substringBeforeLast('.')
                                 download(url.toString(), name)
                                 note = queuedLine.format(name.ifBlank { "…" })
@@ -186,7 +181,7 @@ private fun isArchive(url: Uri): Boolean {
     return host == "josevarela.net" || host.endsWith(".josevarela.net")
 }
 
-/** A link to an archive file: a ZIP, .smzip, 7z or RAR (refused later, with a reason). */
+/** A link to an archive file: a ZIP, .smzip, 7z or RAR. */
 private fun isArchiveDownload(url: Uri): Boolean {
     val path = url.path.orEmpty().lowercase()
     return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }

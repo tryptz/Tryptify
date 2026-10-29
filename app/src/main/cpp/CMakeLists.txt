@@ -150,6 +150,21 @@ target_compile_options(monochrome_motion PRIVATE
 
 set_target_properties(monochrome_motion PROPERTIES DEBUG_POSTFIX "")
 
+# ── RAR import (Trypt Mania's StepMania downloads) ──────────────────────────
+# libarchive's RAR and RAR5 readers (third_party/libarchive), behind a small
+# reader that Kotlin's StyleArchive drives file by file.
+include(${CMAKE_CURRENT_SOURCE_DIR}/archive/libarchive_rar.cmake)
+
+add_library(monochrome_archive SHARED
+    archive/rar_reader.cpp
+    archive/rar_jni.cpp
+)
+
+target_compile_features(monochrome_archive PRIVATE cxx_std_17)
+target_compile_options(monochrome_archive PRIVATE -O2 -fno-exceptions -fno-rtti)
+set_target_properties(monochrome_archive PROPERTIES DEBUG_POSTFIX "")
+target_link_libraries(monochrome_archive archive_rar)
+
 # ── libusb (USB Audio Class direct output) ────────────────────────────────
 # Vendored at third_party/libusb. Upstream uses autotools + Android.mk;
 # we list the platform source files directly here so the existing CMake

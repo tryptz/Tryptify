@@ -3390,7 +3390,7 @@
     <string name="tm_themes_title">Temas</string>
     <string name="tm_themes_menu_subtitle">Skins de notas, temas, locutores y personajes de StepMania</string>
     <string name="tm_themes_import_title">Importar</string>
-    <string name="tm_themes_import_desc">Un skin de notas, tema o locutor de StepMania Archive o de cualquier sitio: ZIP, .smzip o 7z. Trypt Mania toma las flechas, los juicios, el combo, las fuentes, un fondo y los sonidos; sus menús no cambian.</string>
+    <string name="tm_themes_import_desc">Un skin de notas, tema o locutor de StepMania Archive o de cualquier sitio: ZIP, .smzip, 7z o RAR. Trypt Mania toma las flechas, los juicios, el combo, las fuentes, un fondo y los sonidos; sus menús no cambian.</string>
     <string name="tm_themes_import_button">Importar un archivo</string>
     <string name="tm_themes_themes">Temas</string>
     <string name="tm_themes_themes_desc">Los juicios, el combo, las fuentes, el fondo y los sonidos de acierto de una partida.</string>
@@ -3413,7 +3413,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">Toca una descarga: se importa en Trypt Mania en segundo plano.</string>
     <string name="tm_themes_archive_queued">Importando %1$s. Sigue explorando.</string>
-    <string name="tm_themes_archive_rar">Es un RAR, que no se puede importar. Descomprímelo en un ordenador, comprime la carpeta en ZIP e importa el ZIP.</string>
     <string name="tm_themes_characters">Personajes</string>
     <string name="tm_themes_characters_desc">Un personaje de StepMania que baila detrás del campo al tempo de la canción.</string>
     <string name="tm_themes_no_character">Ninguno</string>

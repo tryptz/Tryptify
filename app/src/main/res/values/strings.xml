@@ -3315,7 +3315,7 @@
     <string name="tm_themes_title">Themes</string>
     <string name="tm_themes_menu_subtitle">StepMania noteskins, themes, announcers and characters</string>
     <string name="tm_themes_import_title">Import</string>
-    <string name="tm_themes_import_desc">A noteskin, theme or announcer from the StepMania Archive or anywhere else: a ZIP, .smzip or 7z. Trypt Mania takes the arrows, the judgements, the combo, the fonts, a background and the sounds; its menus stay as they are.</string>
+    <string name="tm_themes_import_desc">A noteskin, theme or announcer from the StepMania Archive or anywhere else: a ZIP, .smzip, 7z or RAR. Trypt Mania takes the arrows, the judgements, the combo, the fonts, a background and the sounds; its menus stay as they are.</string>
     <string name="tm_themes_import_button">Import a file</string>
     <string name="tm_themes_themes">Themes</string>
     <string name="tm_themes_themes_desc">The judgements, the combo, the fonts, the background and the hit sounds of a run.</string>
@@ -3338,7 +3338,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">Tap a download: it imports into Trypt Mania in the background.</string>
     <string name="tm_themes_archive_queued">Importing %1$s. Carry on browsing.</string>
-    <string name="tm_themes_archive_rar">That one is a RAR, which can\'t be imported. Unpack it on a computer, zip the folder and import the ZIP.</string>
     <string name="tm_themes_characters">Characters</string>
     <string name="tm_themes_characters_desc">A StepMania character dancing behind the field to the song\'s tempo.</string>
     <string name="tm_themes_no_character">None</string>

@@ -3312,7 +3312,7 @@
     <string name="tm_themes_title">Themes</string>
     <string name="tm_themes_menu_subtitle">StepMania-Noteskins, Themes, Ansager und Figuren</string>
     <string name="tm_themes_import_title">Importieren</string>
-    <string name="tm_themes_import_desc">Ein Noteskin, Theme oder Ansager aus dem StepMania Archive oder von anderswo: ZIP, .smzip oder 7z. Trypt Mania nimmt die Pfeile, die Bewertungen, die Kombo, die Schriften, einen Hintergrund und die Klänge; seine Menüs bleiben, wie sie sind.</string>
+    <string name="tm_themes_import_desc">Ein Noteskin, Theme oder Ansager aus dem StepMania Archive oder von anderswo: ZIP, .smzip, 7z oder RAR. Trypt Mania nimmt die Pfeile, die Bewertungen, die Kombo, die Schriften, einen Hintergrund und die Klänge; seine Menüs bleiben, wie sie sind.</string>
     <string name="tm_themes_import_button">Datei importieren</string>
     <string name="tm_themes_themes">Themes</string>
     <string name="tm_themes_themes_desc">Die Bewertungen, die Kombo, die Schriften, der Hintergrund und die Trefferklänge eines Laufs.</string>
@@ -3335,7 +3335,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">Tippe auf einen Download: Er wird im Hintergrund in Trypt Mania importiert.</string>
     <string name="tm_themes_archive_queued">%1$s wird importiert. Stöbere ruhig weiter.</string>
-    <string name="tm_themes_archive_rar">Das ist ein RAR, das nicht importiert werden kann. Entpacke es am Computer, zippe den Ordner und importiere das ZIP.</string>
     <string name="tm_themes_characters">Figuren</string>
     <string name="tm_themes_characters_desc">Eine StepMania-Figur, die hinter dem Feld im Tempo des Songs tanzt.</string>
     <string name="tm_themes_no_character">Keine</string>

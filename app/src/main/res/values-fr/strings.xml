@@ -3390,7 +3390,7 @@
     <string name="tm_themes_title">Thèmes</string>
     <string name="tm_themes_menu_subtitle">Skins de notes, thèmes, annonceurs et personnages StepMania</string>
     <string name="tm_themes_import_title">Importer</string>
-    <string name="tm_themes_import_desc">Un skin de notes, un thème ou un annonceur de la StepMania Archive ou d\'ailleurs : ZIP, .smzip ou 7z. Trypt Mania prend les flèches, les jugements, le combo, les polices, un fond et les sons ; ses menus restent tels quels.</string>
+    <string name="tm_themes_import_desc">Un skin de notes, un thème ou un annonceur de la StepMania Archive ou d\'ailleurs : ZIP, .smzip, 7z ou RAR. Trypt Mania prend les flèches, les jugements, le combo, les polices, un fond et les sons ; ses menus restent tels quels.</string>
     <string name="tm_themes_import_button">Importer un fichier</string>
     <string name="tm_themes_themes">Thèmes</string>
     <string name="tm_themes_themes_desc">Les jugements, le combo, les polices, le fond et les sons de frappe d\'une partie.</string>
@@ -3413,7 +3413,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">Touchez un téléchargement : il s\'importe dans Trypt Mania en arrière-plan.</string>
     <string name="tm_themes_archive_queued">Importation de %1$s. Continuez à parcourir.</string>
-    <string name="tm_themes_archive_rar">C\'est un RAR, qui ne peut pas être importé. Décompressez-le sur un ordinateur, zippez le dossier et importez le ZIP.</string>
     <string name="tm_themes_characters">Personnages</string>
     <string name="tm_themes_characters_desc">Un personnage StepMania qui danse derrière le terrain au tempo du morceau.</string>
     <string name="tm_themes_no_character">Aucun</string>

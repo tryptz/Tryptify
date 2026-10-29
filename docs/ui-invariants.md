@@ -2351,16 +2351,20 @@ and every selection, Start included, read as disabled.
 
 **Imported StepMania styles are baked into the game's own layouts, and change only the playfield.**
 Trypt Mania › Themes (`GlyphThemesScreen`, a menu built like Packs: top bar,
-`GlyphPanel`s, `GlyphButton`s) imports a ZIP, `.smzip` or 7z
+`GlyphPanel`s, `GlyphButton`s) imports a ZIP, `.smzip`, 7z or RAR
 (`StyleArchive`, the song packs' rules: nothing outside the folder, each
-kind of file bounded, RAR refused with what to do) and finds its
+kind of file bounded; RAR through libarchive's BSD readers, `RarNative`,
+never unRAR's code, whose licence a GPL app cannot ship) and finds its
 noteskins, themes and announcers by StepMania's own file names
 (`StepManiaStyleScan`), never running its Lua. At import, never while
 playing, `StepManiaStyleBaker` turns them into what the game already draws:
 a noteskin into the retro skin's layout (a PNG per lane and part and a
 `GlyphSkinManifest`, the Down arrow turned per lane, a quantized sheet a row
 per division, hold bodies and caps flipped, parts a variant lacks taken from
-the skin its metrics.ini falls back on, `NoteSkinResolver`), listed beside
+the skin its metrics.ini falls back on, `NoteSkinResolver`; a part
+StepMania draws as a 3D model, like Opal's tap note, is the model drawn face
+on with its textures, `ModelSnapshot`, never the texture sheet wrapped round
+it, which is pieces, not a note), listed beside
 the app's skins in every noteskin picker (`GlyphSkin.all()`; the options'
 three-way `GlyphSegmented` turns into the pause panel's `GlyphChipRow` only
 once there are more); a theme into the names `GlyphStepArt` loads (its
@@ -2380,9 +2384,9 @@ source: the art is its authors'.
 Browse button opens josevarela.net's archive (`StepManiaArchiveBrowser`, a
 full-screen dialog like Packs' StepMania Online one, no JavaScript, only the
 archive's pages) with a `GlyphChipRow` of its Themes, NoteSkins, Announcers
-and Characters; a ZIP, `.smzip` or 7z link tapped is downloaded (https only,
-a few redirects, `GlyphStyleLibrary.importUrl`) and imported in the
-background, and a RAR link says it cannot be.
+and Characters; a ZIP, `.smzip`, 7z or RAR link tapped is downloaded (https
+only, a few redirects, `GlyphStyleLibrary.importUrl`) and imported in the
+background.
 
 **A character dances off the field's frame.** An imported StepMania character
 (MilkShape's text model, read by `Milkshape`, posed by `CharacterPose`: rigid

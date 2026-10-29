@@ -120,7 +120,10 @@ fun GlyphThemesScreen(
                     text = stringResource(R.string.tm_themes_import_button),
                     onClick = {
                         if (!themes.importing) picker.launch(
-                            arrayOf("application/zip", "application/x-zip-compressed", "application/x-7z-compressed", "application/octet-stream"),
+                            arrayOf(
+                                "application/zip", "application/x-zip-compressed", "application/x-7z-compressed",
+                                "application/vnd.rar", "application/x-rar-compressed", "application/x-rar", "application/octet-stream",
+                            ),
                         )
                     },
                     height = 44.dp,

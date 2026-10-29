@@ -3312,7 +3312,7 @@
     <string name="tm_themes_title">Temalar</string>
     <string name="tm_themes_menu_subtitle">StepMania nota görünümleri, temalar, anonsçular ve karakterler</string>
     <string name="tm_themes_import_title">İçe aktar</string>
-    <string name="tm_themes_import_desc">StepMania Archive\'den ya da başka bir yerden bir nota görünümü, tema veya anonsçu: ZIP, .smzip veya 7z. Trypt Mania okları, değerlendirmeleri, komboyu, yazı tiplerini, bir arka planı ve sesleri alır; menüleri olduğu gibi kalır.</string>
+    <string name="tm_themes_import_desc">StepMania Archive\'den ya da başka bir yerden bir nota görünümü, tema veya anonsçu: ZIP, .smzip, 7z veya RAR. Trypt Mania okları, değerlendirmeleri, komboyu, yazı tiplerini, bir arka planı ve sesleri alır; menüleri olduğu gibi kalır.</string>
     <string name="tm_themes_import_button">Bir dosya içe aktar</string>
     <string name="tm_themes_themes">Temalar</string>
     <string name="tm_themes_themes_desc">Bir oyundaki değerlendirmeler, kombo, yazı tipleri, arka plan ve vuruş sesleri.</string>
@@ -3335,7 +3335,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">Bir indirmeye dokun: arka planda Trypt Mania\'ya aktarılır.</string>
     <string name="tm_themes_archive_queued">%1$s içe aktarılıyor. Göz atmaya devam et.</string>
-    <string name="tm_themes_archive_rar">Bu bir RAR, içe aktarılamaz. Bir bilgisayarda aç, klasörü ZIP\'le ve ZIP\'i içe aktar.</string>
     <string name="tm_themes_characters">Karakterler</string>
     <string name="tm_themes_characters_desc">Alanın arkasında şarkının temposunda dans eden bir StepMania karakteri.</string>
     <string name="tm_themes_no_character">Yok</string>

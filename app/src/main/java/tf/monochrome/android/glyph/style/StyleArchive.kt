@@ -19,8 +19,9 @@ import org.apache.commons.compress.archivers.sevenz.SevenZFile
  * each kind of file has a size bound checked as it inflates, the whole is
  * bounded by [maxTotalBytes], and `__MACOSX` and `._` files are skipped.
  *
- * ZIP and `.smzip` (StepMania's own, a ZIP) and 7z. RAR is refused with what
- * to do instead: its decoders carry the unRAR licence, which is not GPL's.
+ * ZIP and `.smzip` (StepMania's own, a ZIP), 7z, and RAR (RAR4 and RAR5)
+ * through libarchive's own readers ([RarNative]), which, unlike unRAR's,
+ * are BSD-licensed and fit a GPL app. A password-protected RAR is refused.
  */
 class StyleArchive(
     private val maxTotalBytes: Long = 1024L * 1024 * 1024,
@@ -33,12 +34,10 @@ class StyleArchive(
         into.mkdirs()
         val head = archive.inputStream().use { stream -> ByteArray(8).also { stream.read(it) } }
         return when {
-            head.startsWith(RAR) -> throw StyleImportException(
-                "RAR archives can't be opened here. Unpack it on a computer and zip the folder, then import the ZIP.",
-            )
+            head.startsWith(RAR) -> extractRar(archive, into, isActive)
             head.startsWith(SEVEN_Z) -> extract7z(archive, into, isActive)
             head.startsWith(ZIP) -> extractZip(archive, into, isActive)
-            else -> throw StyleImportException("That file is not a ZIP, .smzip or 7z archive.")
+            else -> throw StyleImportException("That file is not a ZIP, .smzip, 7z or RAR archive.")
         }
     }
 
@@ -72,6 +71,49 @@ class StyleArchive(
             }
         }
         return writer.kept()
+    }
+
+    private fun extractRar(archive: File, into: File, isActive: () -> Boolean): List<String> {
+        if (!RarNative.ensureLoaded()) throw StyleImportException("RAR archives can't be opened on this phone.")
+        val writer = Writer(into)
+        val reader = try {
+            RarNative.Reader(archive)
+        } catch (error: IOException) {
+            throw StyleImportException(rarProblem(error))
+        }
+        reader.use { rar ->
+            // What the archive says it unpacks to, all of it: a file passed over
+            // in a solid RAR is still unpacked to reach the next, so this, not
+            // only what is written, bounds the work.
+            var declared = 0L
+            while (true) {
+                if (!isActive()) throw StyleImportException("The import was cancelled.")
+                val name = try {
+                    rar.next()
+                } catch (error: IOException) {
+                    throw StyleImportException(rarProblem(error))
+                } ?: break
+                declared += rar.declaredSize.coerceAtLeast(0)
+                if (declared > maxTotalBytes * RAR_UNPACK_FACTOR) throw StyleImportException("That archive is too large to import.")
+                try {
+                    writer.write(name) { rar.stream() }
+                } catch (error: StyleImportException) {
+                    throw error
+                } catch (error: IOException) {
+                    throw StyleImportException(rarProblem(error))
+                }
+            }
+        }
+        return writer.kept()
+    }
+
+    private fun rarProblem(error: IOException): String {
+        val message = error.message.orEmpty()
+        return if (message.contains("encrypt", ignoreCase = true) || message.contains("passphrase", ignoreCase = true)) {
+            "That RAR is password protected, so it can't be imported."
+        } else {
+            "That RAR could not be read ($message)."
+        }
     }
 
     /** Writes entries into [root], with every bound above. */
@@ -119,6 +161,8 @@ class StyleArchive(
         private val SEVEN_Z = byteArrayOf(0x37, 0x7A, 0xBC.toByte(), 0xAF.toByte(), 0x27, 0x1C)
         private val RAR = byteArrayOf(0x52, 0x61, 0x72, 0x21)
         private const val MAX_SEGMENT = 120
+        /** How much more than [maxTotalBytes] a RAR may unpack to, counting what is passed over. */
+        private const val RAR_UNPACK_FACTOR = 4
         private const val MB = 1024L * 1024
 
         /** What is kept, and how big each may be; null for what is skipped. */

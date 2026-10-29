@@ -3234,7 +3234,7 @@
     <string name="tm_themes_title">主题</string>
     <string name="tm_themes_menu_subtitle">StepMania 音符皮肤、主题、播报员和角色</string>
     <string name="tm_themes_import_title">导入</string>
-    <string name="tm_themes_import_desc">来自 StepMania Archive 或其他地方的音符皮肤、主题或播报员：ZIP、.smzip 或 7z。Trypt Mania 会使用箭头、判定、连击、字体、背景和声音；菜单保持不变。</string>
+    <string name="tm_themes_import_desc">来自 StepMania Archive 或其他地方的音符皮肤、主题或播报员：ZIP、.smzip、7z 或 RAR。Trypt Mania 会使用箭头、判定、连击、字体、背景和声音；菜单保持不变。</string>
     <string name="tm_themes_import_button">导入文件</string>
     <string name="tm_themes_themes">主题</string>
     <string name="tm_themes_themes_desc">游戏中的判定、连击、字体、背景和击打音效。</string>
@@ -3257,7 +3257,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">点按下载：它会在后台导入 Trypt Mania。</string>
     <string name="tm_themes_archive_queued">正在导入 %1$s。可以继续浏览。</string>
-    <string name="tm_themes_archive_rar">这是 RAR 文件，无法导入。请在电脑上解压，将文件夹压缩为 ZIP 后再导入。</string>
     <string name="tm_themes_characters">角色</string>
     <string name="tm_themes_characters_desc">一个 StepMania 角色在谱面后方随歌曲节奏起舞。</string>
     <string name="tm_themes_no_character">无</string>

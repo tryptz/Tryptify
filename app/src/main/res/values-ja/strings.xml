@@ -3234,7 +3234,7 @@
     <string name="tm_themes_title">テーマ</string>
     <string name="tm_themes_menu_subtitle">StepMania のノートスキン、テーマ、アナウンサー、キャラクター</string>
     <string name="tm_themes_import_title">読み込み</string>
-    <string name="tm_themes_import_desc">StepMania Archive などのノートスキン、テーマ、アナウンサー（ZIP、.smzip、7z）。Trypt Mania は矢印、判定、コンボ、フォント、背景、サウンドを使い、メニューはそのままです。</string>
+    <string name="tm_themes_import_desc">StepMania Archive などのノートスキン、テーマ、アナウンサー（ZIP、.smzip、7z、RAR）。Trypt Mania は矢印、判定、コンボ、フォント、背景、サウンドを使い、メニューはそのままです。</string>
     <string name="tm_themes_import_button">ファイルを読み込む</string>
     <string name="tm_themes_themes">テーマ</string>
     <string name="tm_themes_themes_desc">プレイ中の判定、コンボ、フォント、背景、ヒット音。</string>
@@ -3257,7 +3257,6 @@
     <string name="tm_themes_archive_title">StepMania Archive</string>
     <string name="tm_themes_archive_hint">ダウンロードをタップすると、バックグラウンドで Trypt Mania に読み込まれます。</string>
     <string name="tm_themes_archive_queued">%1$s を読み込み中です。そのまま閲覧を続けられます。</string>
-    <string name="tm_themes_archive_rar">これは RAR なので読み込めません。パソコンで展開してフォルダを ZIP にし、その ZIP を読み込んでください。</string>
     <string name="tm_themes_characters">キャラクター</string>
     <string name="tm_themes_characters_desc">StepMania のキャラクターがフィールドの後ろで曲のテンポに合わせて踊ります。</string>
     <string name="tm_themes_no_character">なし</string>
