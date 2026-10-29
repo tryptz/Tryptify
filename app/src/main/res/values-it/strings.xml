@@ -3345,4 +3345,11 @@
         <item quantity="many">e %d altri in attesa</item>
         <item quantity="other">e %d altri in attesa</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">La correzione delle tue cuffie, come in Impostazioni › Audio</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Loudness Oxford; accende con sé il motore DSP</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">Ogni brano alla stessa loudness</string>
+    <string name="tm_audio_shared">Le impostazioni dell\'app: anche il lettore principale le segue, e il gioco suona con lo stesso motore.</string>
 </resources>

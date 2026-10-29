@@ -108,6 +108,8 @@ class DspEngineManager @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val saveSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Fires on every change to the engine's state (a knob, a bus, a plugin): for whoever keeps a copy of it in step. */
+    val stateChanges: kotlinx.coroutines.flow.SharedFlow<Unit> = saveSignal
 
     init {
         // The Music links page's master switch pauses the knobs too.

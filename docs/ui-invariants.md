@@ -1919,7 +1919,28 @@ the DAC to Android's kernel driver and the main player's next start fails.
 A taken-over or fresh stream fades in from silence over about half a second,
 as any stream on this path does; the timing is untouched, since the position
 the game's clock reads is the sink's played frames. The metronome and the
-wheel's swish are raw AudioTracks and stay on Android's output. Only while
+wheel's swish are raw AudioTracks and stay on Android's output. Each game
+player also runs the app's DSP engine, a `DspChain` copy of its own (the
+mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and
+the Parametric EQ; never the taps, which show the main player's song), on
+the DAC and on Android's output alike, and it follows the app's settings
+live: `PlaybackService` publishes a `DspSeed` to `UsbGameAudio` whenever a
+setting lands on its singletons. The main player's stages are never shared
+with the game: they hold one stream's state. A game song has no gain tags,
+so ReplayGain on measures it as it plays, as for an untagged song. The
+engine's own latency (the Inflator's band split is a few milliseconds)
+is what the Sync tab's offset absorbs, as for any output.
+
+**Trypt Mania's Audio tab switches the app's own audio settings.** Settings
+› Audio in the game has three `GlyphSwitchRow`s, AutoEQ, Oxford Inflator and
+ReplayGain, and a line saying the main player follows them too: they are
+the app's settings (`eq_enabled` with the system-wide correction cleared,
+`InflatorEffect.effectIn`, `replaygain_mode` SMART or OFF), not a second
+set for the game, since one engine plays both. Switching the Inflator on
+also switches the DSP engine on (`dsp_enabled`), without which the Oxford
+stages are bypassed and the switch would do nothing audible. The tab's rows
+are string resources in all eight languages; the tab labels stay the
+screen's hard-coded English like the four before it. Only while
 the game's sound is on Android's output instead (no DAC, or one that
 refused its format, when the sink passes through to Android as before) does
 `GlyphViewModel` tell `BypassVolumeController` (`androidStreamAudible`),

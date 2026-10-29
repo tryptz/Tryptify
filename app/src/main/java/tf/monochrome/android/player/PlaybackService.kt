@@ -36,6 +36,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import tf.monochrome.android.audio.dsp.seed
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -77,6 +79,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
+    /** Trypt Mania's players run copies of the chain, kept in step by [publishGameSeed]. */
+    @Inject lateinit var gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
     @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
@@ -685,8 +689,20 @@ class PlaybackService : MediaSessionService() {
                 applyReplayGain()
             }
         }
-        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
-        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it; publishGameSeed() } }
+        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it; publishGameSeed() } }
+        // The rest of what a game chain follows: the Oxford stages and the
+        // Crossfeed, set from their screens straight onto the singletons, and
+        // the engine's own state. Debounced: a knob being dragged is many
+        // changes, and each seed reads the engine's state back.
+        serviceScope.launch {
+            kotlinx.coroutines.flow.merge(
+                inflatorEffect.state.map { },
+                compressorEffect.state.map { },
+                crossfeedEffect.state.map { },
+                dspManager.stateChanges,
+            ).debounce(120L).collect { publishGameSeed() }
+        }
         serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
         // "Play alongside other apps" (issue #131). With focus handling off the
@@ -1777,26 +1793,21 @@ class PlaybackService : MediaSessionService() {
      * DSP graph and EQ curves as the track that is already playing. Released
      * with the blend, which destroys its native engine — see [DspChain].
      */
+    /**
+     * The chain's settings as they stand, for a copy to follow (the blend's
+     * tail once, the game's players as they change). Reads the engine's
+     * state back, so not for every frame.
+     */
     @OptIn(UnstableApi::class)
-    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
-        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
-        // Built while the outgoing track still plays on the main chain (see
-        // CrossfadeController.start), so this is that track's gain, and its
-        // tail keeps it while the main chain moves to the next track's.
-        // The level it is at, which for a measured song is not the gain set.
-        // And the tail starts there: started by the mode, a raised song would
-        // drop to unity and glide back up just as the blend begins.
-        val level = replayGainProcessor.appliedGain
-        chain.replayGain.setGain(level)
-        chain.replayGain.seedLevel(level)
+    private fun currentDspSeed(): tf.monochrome.android.audio.dsp.DspSeed {
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
-        chain.seedFrom(
-            // Without the upmix switch: the tail runs its own chain, which
+        return tf.monochrome.android.audio.dsp.DspSeed(
+            // Without the upmix switch: a copy runs its own chain, which
             // has no upmix stage, and the engine needs only the buses.
             dspStateJson = runCatching {
                 // Without the knob links too: they are handed over apart from
-                // the state, and the tail plays out at the knobs' own values.
+                // the state, and a copy plays at the knobs' own values.
                 tf.monochrome.android.audio.dsp.model.KnobLinkCodec.strip(
                     tf.monochrome.android.audio.dsp.model.MixUpmix.strip(dspManager.getStateJson()),
                 )
@@ -1809,13 +1820,34 @@ class PlaybackService : MediaSessionService() {
             parametricPreamp = paramEq.preamp,
             parametricEnabled = paramEq.enabled,
             // Straight off the live singletons — whatever is playing right now.
-            inflatorState = inflatorEffect.state.value,
-            compressorState = compressorEffect.state.value,
-            crossfeedState = crossfeedEffect.state.value,
+            inflator = inflatorEffect.state.value,
+            compressor = compressorEffect.state.value,
+            crossfeed = crossfeedEffect.state.value,
             blockSize = dspBlockSize,
             dspEnabled = dspEnabled,
-            autoEqPitchRatio = lastPitchRatio * 2f.pow(lastSemitones / 12f),
         )
+    }
+
+    /** Hands the settings as they stand to Trypt Mania's chains; called wherever one lands on the singletons. */
+    @OptIn(UnstableApi::class)
+    private fun publishGameSeed() {
+        if (!::gameAudio.isInitialized) return
+        gameAudio.publishSeed(currentDspSeed())
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
+        // Built while the outgoing track still plays on the main chain (see
+        // CrossfadeController.start), so this is that track's gain, and its
+        // tail keeps it while the main chain moves to the next track's.
+        // The level it is at, which for a measured song is not the gain set.
+        // And the tail starts there: started by the mode, a raised song would
+        // drop to unity and glide back up just as the blend begins.
+        val level = replayGainProcessor.appliedGain
+        chain.replayGain.setGain(level)
+        chain.replayGain.seedLevel(level)
+        chain.seed(currentDspSeed(), lastPitchRatio * 2f.pow(lastSemitones / 12f))
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.
         chain.observeEngine(serviceScope)
@@ -2438,6 +2470,7 @@ class PlaybackService : MediaSessionService() {
             if (cfg.systemWide) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
+                publishGameSeed()
                 lastEqInput = cfg
                 return
             }
@@ -2468,6 +2501,7 @@ class PlaybackService : MediaSessionService() {
             autoEqProcessor.applyBands(bandsL, bandsR, preamp, active)
             lastAutoEq = AppliedEq(bandsL, bandsR, preamp, active)
             lastEqInput = cfg
+            publishGameSeed()
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }
@@ -2511,6 +2545,7 @@ class PlaybackService : MediaSessionService() {
             }
             parametricEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
             lastParametricEq = AppliedEq(bands, bands, preamp.toFloat(), enabled)
+            publishGameSeed()
             lastParametricEqInput = input
         } catch (_: Exception) { }
     }

@@ -3189,4 +3189,11 @@
     <plurals name="tm_charting_more_waiting">
         <item quantity="other">ほか %d 曲が待機中</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">ヘッドホンの補正。設定 › オーディオと同じ</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Oxford ラウドネス。DSP エンジンも一緒にオンになります</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">すべての曲を同じ音量に</string>
+    <string name="tm_audio_shared">アプリ本体の設定です。メインプレーヤーも同じ設定に従い、ゲームも同じエンジンで再生します。</string>
 </resources>

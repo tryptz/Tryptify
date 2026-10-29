@@ -100,6 +100,8 @@ data class GlyphUiState(
     val keys: GlyphKeyBindings = GlyphKeyBindings.DEFAULT,
     /** How late the sound reaches the player, in ms; every judgement and the field allow for it. */
     val audioOffsetMs: Int = 0,
+    /** The app's audio settings the Settings' Audio tab switches: the game plays through the same engine. */
+    val audio: GlyphAudioUi = GlyphAudioUi(),
     /** The output that offset belongs to, by name, or null for one with no slot. */
     val syncOutput: String? = null,
     /** Settings opened on its Sync tab from Settings › Audio, to measure the output. */
@@ -133,6 +135,17 @@ enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, CHAR
 
 /** Whether the song list is choosing a song to play, a chart to edit, or a chart for the room. */
 enum class GlyphSongListMode { PLAY, EDIT, ROOM }
+
+/**
+ * The three audio settings the game's Settings switch, as the app has them:
+ * AutoEQ on (and not handed to the system's), the Oxford Inflator in, and
+ * ReplayGain on in any mode.
+ */
+data class GlyphAudioUi(
+    val autoEq: Boolean = false,
+    val inflator: Boolean = false,
+    val replayGain: Boolean = false,
+)
 
 /**
  * Multiplayer: the rooms server's session as the rooms screen and the game

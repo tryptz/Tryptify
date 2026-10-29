@@ -144,8 +144,10 @@ class GlyphViewModel @Inject constructor(
     /** Makes a song too big for the rooms server into a smaller copy before it is shared. */
     private val shareShrinker: tf.monochrome.android.audio.share.ShareShrinker,
     private val supabaseAuth: SupabaseAuthManager,
-    /** Read only, for the player's own look behind the play ([backdropLook]). */
-    preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    /** The player's own look behind the play ([backdropLook]), and the audio settings the Settings' Audio tab switches. */
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    /** The Oxford Inflator's switch, which lives on its singleton, not in the preferences. */
+    private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     /**
      * How late the output playing now plays: the game's audio offset is that
      * output's, and the Sync tab measures and saves it for the whole app.
@@ -232,8 +234,12 @@ class GlyphViewModel @Inject constructor(
         engineArmed = true
     }
 
-    val transport = GlyphAudioTransport(context, gameAudio.renderersFactory(context)).also { t ->
+    /** The run's sink and DSP chain (UsbGameAudio); released with the view model. */
+    private val transportAudio = gameAudio.player(context)
+    val transport = GlyphAudioTransport(context, transportAudio.renderers).also { t ->
         t.onPlayingChanged = { playing -> transportAudible = playing; publishAudible() }
+        t.onPrepared = { uri -> transportAudio.songStarts(uri.toString()) }
+        t.onPitchRatio = transportAudio::setPitchRatio
     }
 
     // With a DAC claimed the mode plays through it (UsbGameAudio), and the
@@ -311,12 +317,18 @@ class GlyphViewModel @Inject constructor(
     /** A failed run's hold under FAILED before its results; cancelled by leaving or restarting. */
     private var failJob: Job? = null
 
+    /** The preview's sink and DSP chain, built with the preview. */
+    private val previewAudioLazy = lazy { gameAudio.player(context) }
+    private val previewAudio by previewAudioLazy
+
     /** The song list's preview from the drop; built on first use. */
-    private val preview by lazy {
-        GlyphPreviewPlayer(context, viewModelScope, gameAudio.renderersFactory(context)).also { p ->
+    private val previewLazy = lazy {
+        GlyphPreviewPlayer(context, viewModelScope, previewAudio.renderers).also { p ->
             p.onPlayingChanged = { playing -> previewAudible = playing; publishAudible() }
+            p.onPrepared = { uri -> previewAudio.songStarts(uri.toString()) }
         }
     }
+    private val preview by previewLazy
     private var previewJob: Job? = null
 
     private var tickJob: Job? = null
@@ -353,6 +365,7 @@ class GlyphViewModel @Inject constructor(
         loadOptions()
         watchOutputSync()
         watchDacStream()
+        watchAudioSettings()
         watchCharts()
         watchChartServers()
         watchPlayRequests()
@@ -454,6 +467,24 @@ class GlyphViewModel @Inject constructor(
                 stopPreview()
                 leaderboardFrom = _ui.value.screen
                 openLeaderboard()
+            }
+            // The app's settings, as Settings › Audio and the player's panel set them.
+            is GlyphEvent.SetAutoEq -> viewModelScope.launch {
+                preferences.setEqEnabled(event.on)
+                // The app's own correction, not the system's, either way.
+                preferences.setSystemWideAutoEqEnabled(false)
+            }
+            is GlyphEvent.SetInflator -> {
+                inflatorEffect.setEffectIn(event.on)
+                // The Oxford stages run inside the DSP engine, which is off by
+                // default: an Inflator switched on with the engine off is silent.
+                if (event.on) viewModelScope.launch { preferences.setDspEnabled(true) }
+            }
+            is GlyphEvent.SetReplayGain -> viewModelScope.launch {
+                preferences.setReplayGainMode(
+                    if (event.on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+                    else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+                )
             }
             is GlyphEvent.SetPreviews -> {
                 prefs.edit().putBoolean(PREF_PREVIEWS, event.on).apply()
@@ -2280,6 +2311,28 @@ class GlyphViewModel @Inject constructor(
         _ui.value = _ui.value.copy(audioOffsetMs = clamped)
     }
 
+    /**
+     * The Audio tab's three switches show the app's own settings, which the
+     * main player follows too; the game's chains follow them through
+     * PlaybackService's seed.
+     */
+    private fun watchAudioSettings() {
+        viewModelScope.launch {
+            combine(
+                preferences.eqEnabled,
+                preferences.systemWideAutoEqEnabled,
+                inflatorEffect.state,
+                preferences.replayGainSettings,
+            ) { eq, systemWide, inflator, replayGain ->
+                GlyphAudioUi(
+                    autoEq = eq && !systemWide,
+                    inflator = inflator.effectIn,
+                    replayGain = replayGain.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+                )
+            }.collect { audio -> _ui.value = _ui.value.copy(audio = audio) }
+        }
+    }
+
     /** The offset follows the output: other headphones, another delay. */
     private fun watchOutputSync() {
         viewModelScope.launch {
@@ -3171,7 +3224,8 @@ class GlyphViewModel @Inject constructor(
     override fun onCleared() {
         bypassVolume.setAndroidStreamAudible(false)
         previewJob?.cancel()
-        preview.release()
+        if (previewLazy.isInitialized()) preview.release()
+        if (previewAudioLazy.isInitialized()) previewAudio.release()
         stopRoomFrames()
         rooms.disconnect()
         // The socket is closed, so any room with it: its song goes too, as
@@ -3181,6 +3235,7 @@ class GlyphViewModel @Inject constructor(
         replaceEngine(null)
         metronome.release()
         transport.release()
+        transportAudio.release()
         super.onCleared()
     }
 

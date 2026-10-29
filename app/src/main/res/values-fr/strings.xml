@@ -3345,4 +3345,11 @@
         <item quantity="many">et %d autres en attente</item>
         <item quantity="other">et %d autres en attente</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">La correction de votre casque, comme dans Paramètres › Audio</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Sonie Oxford ; active le moteur DSP avec lui</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">Chaque morceau à la même sonie</string>
+    <string name="tm_audio_shared">Les réglages de l\'app : le lecteur principal les suit aussi, et le jeu joue par le même moteur.</string>
 </resources>

@@ -166,6 +166,11 @@ sealed interface GlyphEvent {
     data class SetPreviews(val on: Boolean) : GlyphEvent
     data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent
 
+    // ── audio: the app's own settings, switched from the game ───────────
+    data class SetAutoEq(val on: Boolean) : GlyphEvent
+    data class SetInflator(val on: Boolean) : GlyphEvent
+    data class SetReplayGain(val on: Boolean) : GlyphEvent
+
     // ── transport ───────────────────────────────────────────────────────
     data object StartPlay : GlyphEvent
     data object StartTraining : GlyphEvent

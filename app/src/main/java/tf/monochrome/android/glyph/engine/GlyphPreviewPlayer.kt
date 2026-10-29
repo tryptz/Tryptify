@@ -42,6 +42,9 @@ class GlyphPreviewPlayer(
     /** Told when a preview starts or stops sounding, on the main thread: for whoever routes the volume keys. */
     var onPlayingChanged: ((Boolean) -> Unit)? = null
 
+    /** Told which song a preview was just prepared for: for the chain's per-song stages (ReplayGain). */
+    var onPrepared: ((Uri) -> Unit)? = null
+
     /**
      * Where in the song the preview is now, or null when it is not playing:
      * what the options screen's playfield follows, so its arrows move with the
@@ -85,6 +88,7 @@ class GlyphPreviewPlayer(
         )
         p.volume = 0f
         p.prepare()
+        onPrepared?.invoke(uri)
         p.playWhenReady = true
         // The volume follows the position inside the clip, so every loop fades
         // in from its start and out into its end, as StepMania's samples do.

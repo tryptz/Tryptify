@@ -63,6 +63,12 @@ class GlyphAudioTransport(
     /** Told when the song starts or stops sounding, on the main thread: for whoever routes the volume keys. */
     var onPlayingChanged: ((Boolean) -> Unit)? = null
 
+    /** Told which song was just prepared: for the chain's per-song stages (ReplayGain). */
+    var onPrepared: ((Uri) -> Unit)? = null
+
+    /** Told the pitch ratio the speed makes (the speed when pitch follows it, 1 otherwise): for AutoEQ's pre-warp. */
+    var onPitchRatio: ((Float) -> Unit)? = null
+
     init {
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -76,6 +82,7 @@ class GlyphAudioTransport(
         player.prepare()
         isPrepared = true
         clock.reset()
+        onPrepared?.invoke(uri)
     }
 
     fun play() {
@@ -120,6 +127,7 @@ class GlyphAudioTransport(
         val safe = speed.coerceIn(GlyphClock.MIN_SPEED, GlyphClock.MAX_SPEED)
         pitchFollowsSpeed = linkPitch
         player.playbackParameters = PlaybackParameters(safe, if (linkPitch) safe else 1f)
+        onPitchRatio?.invoke(if (linkPitch) safe else 1f)
         // The clock has to be told, or it keeps extrapolating at the old rate
         // and the notes drift away from the music within seconds.
         clock.setSpeed(safe, System.nanoTime())

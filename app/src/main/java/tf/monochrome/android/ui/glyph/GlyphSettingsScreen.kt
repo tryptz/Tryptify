@@ -242,6 +242,7 @@ fun GlyphSettingsScreen(
                 )
                 SettingsTab.SYNC -> SyncTab(state, onEvent)
                 SettingsTab.GRAPHICS -> GraphicsTab(state, onEvent, assets, palette)
+                SettingsTab.AUDIO -> AudioTab(state, onEvent)
                 SettingsTab.MORE -> MoreTab(state, onEvent)
             }
             Spacer(Modifier.height(LocalBottomChromeInset.current + MonoDimens.spacingLg))
@@ -253,7 +254,41 @@ private enum class SettingsTab(val label: String) {
     CONTROLS("Controls"),
     SYNC("Sync"),
     GRAPHICS("Graphics"),
+    AUDIO("Audio"),
     MORE("More"),
+}
+
+/**
+ * Quick switches for the app's audio settings, here because the game plays
+ * through the same engine: AutoEQ, the Oxford Inflator and ReplayGain, as
+ * Settings › Audio and the player's panel have them. The main player follows
+ * them too; the text under the rows says so.
+ */
+@Composable
+private fun AudioTab(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
+    GlyphSwitchRow(
+        label = stringResource(R.string.tm_audio_autoeq),
+        checked = state.audio.autoEq,
+        onChange = { onEvent(GlyphEvent.SetAutoEq(it)) },
+        note = stringResource(R.string.tm_audio_autoeq_note),
+    )
+    GlyphSwitchRow(
+        label = stringResource(R.string.tm_audio_inflator),
+        checked = state.audio.inflator,
+        onChange = { onEvent(GlyphEvent.SetInflator(it)) },
+        note = stringResource(R.string.tm_audio_inflator_note),
+    )
+    GlyphSwitchRow(
+        label = stringResource(R.string.tm_audio_replaygain),
+        checked = state.audio.replayGain,
+        onChange = { onEvent(GlyphEvent.SetReplayGain(it)) },
+        note = stringResource(R.string.tm_audio_replaygain_note),
+    )
+    Text(
+        text = stringResource(R.string.tm_audio_shared),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

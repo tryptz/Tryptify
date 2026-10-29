@@ -3345,4 +3345,11 @@
         <item quantity="many">y %d más en espera</item>
         <item quantity="other">y %d más en espera</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">La corrección de tus auriculares, como en Ajustes › Audio</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Sonoridad Oxford; enciende el motor DSP con él</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">Cada canción a la misma sonoridad</string>
+    <string name="tm_audio_shared">Son los ajustes de la app: el reproductor principal también los sigue, y el juego suena por el mismo motor.</string>
 </resources>

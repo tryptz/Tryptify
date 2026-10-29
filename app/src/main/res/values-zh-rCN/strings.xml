@@ -3189,4 +3189,11 @@
     <plurals name="tm_charting_more_waiting">
         <item quantity="other">还有 %d 首等待中</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">耳机校正，与设置 › 音频中相同</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Oxford 响度；随之开启 DSP 引擎</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">每首歌曲的响度相同</string>
+    <string name="tm_audio_shared">这些是应用的设置：主播放器也会跟随，游戏使用同一引擎播放。</string>
 </resources>

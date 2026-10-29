@@ -3267,4 +3267,11 @@
         <item quantity="one">ve %d tane daha bekliyor</item>
         <item quantity="other">ve %d tane daha bekliyor</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">Kulaklık düzeltmeniz, Ayarlar › Ses\'teki gibi</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Oxford ses yüksekliği; DSP motorunu da açar</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">Her şarkı aynı ses yüksekliğinde</string>
+    <string name="tm_audio_shared">Uygulamanın kendi ayarları: ana oynatıcı da bunlara uyar ve oyun aynı motorla çalar.</string>
 </resources>

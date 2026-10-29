@@ -3267,4 +3267,11 @@
         <item quantity="one">und %d weiterer wartet</item>
         <item quantity="other">und %d weitere warten</item>
     </plurals>
+    <string name="tm_audio_autoeq">AutoEQ</string>
+    <string name="tm_audio_autoeq_note">Die Korrektur deiner Kopfhörer, wie unter Einstellungen › Audio</string>
+    <string name="tm_audio_inflator">Oxford Inflator</string>
+    <string name="tm_audio_inflator_note">Oxford-Lautheit; schaltet die DSP-Engine mit ein</string>
+    <string name="tm_audio_replaygain">ReplayGain</string>
+    <string name="tm_audio_replaygain_note">Jeder Song gleich laut</string>
+    <string name="tm_audio_shared">Die Einstellungen der App: Der Hauptplayer folgt ihnen auch, und das Spiel spielt über dieselbe Engine.</string>
 </resources>
