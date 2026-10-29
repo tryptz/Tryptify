@@ -2329,6 +2329,17 @@ StepMania's own art — the grade, the judgement and FULL COMBO sprites — is f
 on a card; its colours as text go through `menuAccent`. Its typefaces belong to
 the playfield (the HUD, the judgement and the combo), not the menus.
 
+**A judgement lands, then holds and fades.** `GlyphJudgementFx` draws the
+word up to 84 dp tall and 86% of the field's width, so a theme's sprite is
+read at a glance, small pixel art enlarged square-edged (`FilterQuality.None`
+under 64 px). Each judgement lands larger than it rests and springs back
+(1.45× for a Marvelous, 1.3× a Perfect or Great, 1.12× the rest); a miss
+sinks and tips away instead. All of it is read in the layer, so the
+animation redraws and never recomposes; with reduced motion it is still,
+StepMania's sleep then fade. An imported theme's judgement cells are trimmed
+to their letters, at import and as they load, since a cell is often mostly
+empty and the word came out a third of its size.
+
 **A choice of a few is `GlyphSegmented`, and the chosen one is filled.** A
 `materialSurface` pill track with a solid thumb in `onSurface` and the chosen label
 knocked out in `surface`; the options' and Settings' tabs are the same control.

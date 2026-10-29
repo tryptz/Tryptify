@@ -125,8 +125,10 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
             for ((row, window) in JUDGEMENT_ROWS.withIndex()) {
                 val early = cut(image, sheet.cols, sheet.rows, row * sheet.cols) ?: continue
                 val late = if (sheet.cols >= 2) cut(image, sheet.cols, sheet.rows, row * sheet.cols + 1) ?: early else early
-                savePng(File(out, "judgment_${window}_early.png"), early)
-                savePng(File(out, "judgment_${window}_late.png"), late)
+                // A cell is often mostly empty around small letters: trimmed to
+                // them, so the game sizes the word, not the cell.
+                savePng(File(out, "judgment_${window}_early.png"), trimmed(early))
+                savePng(File(out, "judgment_${window}_late.png"), trimmed(late))
             }
             kept += 1
         }
@@ -246,6 +248,28 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         return Bitmap.createBitmap(art, 0, 0, art.width, art.height, matrix, false)
     }
 
+    /** [art] cut to its visible pixels, with a pixel or two of room; as it is when all clear. */
+    private fun trimmed(art: Bitmap): Bitmap {
+        val w = art.width
+        val h = art.height
+        val pixels = IntArray(w * h)
+        art.getPixels(pixels, 0, w, 0, 0, w, h)
+        var left = w; var top = h; var right = -1; var bottom = -1
+        for (y in 0 until h) for (x in 0 until w) {
+            if ((pixels[y * w + x] ushr 24) > TRIM_ALPHA) {
+                if (x < left) left = x
+                if (x > right) right = x
+                if (y < top) top = y
+                if (y > bottom) bottom = y
+            }
+        }
+        if (right < left || bottom < top) return art
+        val pad = maxOf(1, minOf(w, h) / 32)
+        left = (left - pad).coerceAtLeast(0); top = (top - pad).coerceAtLeast(0)
+        right = (right + pad).coerceAtMost(w - 1); bottom = (bottom + pad).coerceAtMost(h - 1)
+        return Bitmap.createBitmap(art, left, top, right - left + 1, bottom - top + 1)
+    }
+
     private fun fit(image: Bitmap, max: Int): Bitmap {
         val scale = minOf(1f, max.toFloat() / maxOf(image.width, image.height))
         if (scale >= 1f) return image
@@ -291,6 +315,8 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         private const val MAX_SIDE = 4096
         private const val BACKGROUND_MAX = 1920
         private const val MAX_CLIPS = 16
+        /** Pixels fainter than this are empty when a judgement is trimmed. */
+        private const val TRIM_ALPHA = 8
 
         const val STYLE_FILE = "style.json"
         const val COMBO_DIGITS = "combo_digits.png"

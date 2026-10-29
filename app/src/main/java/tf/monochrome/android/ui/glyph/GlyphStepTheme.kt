@@ -133,7 +133,12 @@ object GlyphStepArt {
         val themed = themeDir?.let { File(it, name) }?.takeIf { it.isFile }
         runCatching {
             if (themed != null) {
-                BitmapFactory.decodeFile(themed.path)?.asImageBitmap()
+                // A theme's judgement cell is often mostly empty around its
+                // letters; trimmed, the word is sized, not the cell. Done here
+                // too for themes imported before the import trimmed them.
+                BitmapFactory.decodeFile(themed.path)
+                    ?.let { if (name.startsWith("judgment_")) trimmedToInk(it) else it }
+                    ?.asImageBitmap()
             } else {
                 context.assets.open("$ROOT/$name").use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
             }
@@ -240,3 +245,30 @@ private const val FONTS = "stepmania/theme/fonts"
  * colours; the menus take the app's theme.
  */
 val StepPlayerColour = Color(0xFF4B82DC)
+
+/** [art] cut to its visible pixels with a little room; as it is when all clear. */
+private fun trimmedToInk(art: android.graphics.Bitmap): android.graphics.Bitmap {
+    val w = art.width
+    val h = art.height
+    val pixels = IntArray(w * h)
+    art.getPixels(pixels, 0, w, 0, 0, w, h)
+    var left = w
+    var top = h
+    var right = -1
+    var bottom = -1
+    for (y in 0 until h) for (x in 0 until w) {
+        if ((pixels[y * w + x] ushr 24) > 8) {
+            if (x < left) left = x
+            if (x > right) right = x
+            if (y < top) top = y
+            if (y > bottom) bottom = y
+        }
+    }
+    if (right < left || bottom < top) return art
+    val pad = maxOf(1, minOf(w, h) / 32)
+    left = (left - pad).coerceAtLeast(0)
+    top = (top - pad).coerceAtLeast(0)
+    right = (right + pad).coerceAtMost(w - 1)
+    bottom = (bottom + pad).coerceAtMost(h - 1)
+    return android.graphics.Bitmap.createBitmap(art, left, top, right - left + 1, bottom - top + 1)
+}
