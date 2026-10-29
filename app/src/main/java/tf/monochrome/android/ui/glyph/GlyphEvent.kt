@@ -166,6 +166,9 @@ sealed interface GlyphEvent {
     data class SetPreviews(val on: Boolean) : GlyphEvent
     data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent
 
+    /** A song in the charting screen's history, tapped: open it in the song list. */
+    data class OpenChartedSong(val title: String) : GlyphEvent
+
     // ── audio: the app's own settings, switched from the game ───────────
     data class SetAutoEq(val on: Boolean) : GlyphEvent
     data class SetInflator(val on: Boolean) : GlyphEvent

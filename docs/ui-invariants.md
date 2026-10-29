@@ -1901,7 +1901,14 @@ dollars, which is what Creem charges wherever the listener is. The account
 comes from `ChartingAccountStore`, Tryptify Cloud's answer
 (`GET /v1/charting/account`), read when the screen opens and whenever it
 comes back in front (`LifecycleResumeEffect`): a checkout opens in the
-browser, and the minutes are there when the listener returns. Signed out,
+browser, and the minutes are there when the listener returns. A song's line
+in the history is a button (`HistoryRow`, an arrow at its end, the press in
+the row's own rounded shape): it opens the song list on that song, picked
+as a tap on the wheel picks it, out of any search (`OpenChartedSong`). The
+history knows a song only by the title it was charted under, so the
+library's song of that title is taken, a charted one first; one no longer on
+the phone leaves the screen as it is with a notice. A pack bought is no song
+and takes no tap, with the arrow's room kept so the minutes line up. Signed out,
 the screen says so with Sign in, as Multiplayer does, and the free-song panel
 is gone; a pack with no product yet answers Buy with a notice panel, never a
 dead button. The song list needs nothing new: while the listener has minutes

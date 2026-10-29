@@ -59,6 +59,10 @@ import tf.monochrome.android.audio.stepmania.ChartingPack
 import tf.monochrome.android.audio.stepmania.ChartingPacks
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.theme.MonoDimens
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 
 /**
  * Charting by the minute: the listener's minutes as a meter, the free first
@@ -283,7 +287,9 @@ fun GlyphChartingScreen(
                         color = scheme.onSurfaceVariant,
                     )
                 } else {
-                    account.history.forEach { entry -> HistoryRow(entry) }
+                    account.history.forEach { entry ->
+                        HistoryRow(entry, onOpen = { onEvent(GlyphEvent.OpenChartedSong(entry.title)) })
+                    }
                 }
             }
 
@@ -432,15 +438,33 @@ private fun LineRow(title: String, stage: String, dim: Boolean) {
     }
 }
 
+/**
+ * One line of the history. A song's line opens it in the song list; a pack
+ * bought is no song and takes no tap. The press fills the row's own shape,
+ * as a list row's does, with the arrow saying where it goes.
+ */
 @Composable
-private fun HistoryRow(entry: ChartingEntry) {
+private fun HistoryRow(entry: ChartingEntry, onOpen: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val song = entry.kind != ChartingEntry.Kind.BOUGHT
+    val openLabel = stringResource(R.string.tm_charting_open_song)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = MonoDimens.spacingXs),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .then(if (song) Modifier.clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen) else Modifier)
+            .padding(vertical = MonoDimens.spacingSm, horizontal = MonoDimens.spacingXs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val title = if (entry.kind == ChartingEntry.Kind.BOUGHT) stringResource(packNameOf(entry.title)) else entry.title
-        Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(MonoDimens.spacingSm))
         val minutes = when (entry.kind) {
             ChartingEntry.Kind.BOUGHT -> "+" + count(entry.minutes)
             ChartingEntry.Kind.CHARTED -> "−" + count(entry.minutes)
@@ -451,6 +475,18 @@ private fun HistoryRow(entry: ChartingEntry) {
             style = MaterialTheme.typography.bodyMedium,
             color = if (entry.kind == ChartingEntry.Kind.BOUGHT) menuAccent(scheme.primary) else scheme.onSurface,
         )
+        if (song) {
+            Spacer(Modifier.width(MonoDimens.spacingXs))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = scheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        } else {
+            // The arrow's room, so the minutes line up down the list.
+            Spacer(Modifier.width(MonoDimens.spacingXs + 20.dp))
+        }
     }
 }
 

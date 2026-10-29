@@ -3359,4 +3359,6 @@
     <string name="tm_audio_replaygain">ReplayGain</string>
     <string name="tm_audio_replaygain_note">Cada canción a la misma sonoridad</string>
     <string name="tm_audio_shared">Son los ajustes de la app: el reproductor principal también los sigue, y el juego suena por el mismo motor.</string>
+    <string name="tm_charting_open_song">Abrir en la lista de canciones</string>
+    <string name="tm_charting_song_gone">Esa canción ya no está en este teléfono.</string>
 </resources>

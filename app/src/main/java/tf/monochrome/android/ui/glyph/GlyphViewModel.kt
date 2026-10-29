@@ -543,6 +543,7 @@ class GlyphViewModel @Inject constructor(
                 viewModelScope.launch { chartingAccount.refresh() }
             }
             GlyphEvent.CloseCharting -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.OpenChartedSong -> openChartedSong(event.title)
             GlyphEvent.RefreshCharting -> viewModelScope.launch { chartingAccount.refresh() }
             is GlyphEvent.BuyMinutes -> viewModelScope.launch {
                 val pack = _ui.value.charting.account.packs.firstOrNull { it.id == event.packId } ?: return@launch
@@ -698,6 +699,36 @@ class GlyphViewModel @Inject constructor(
      * quickly, and the conversion ran against the song you had selected before.
      * That is the whole reason this is split in two.
      */
+    /**
+     * A history row tapped: the song list, on that song, picked as a tap on
+     * the wheel would pick it. History knows a song only by the title it was
+     * charted under, so the library's song of that title is taken, a charted
+     * one first; a song no longer on the phone says so and stays here.
+     */
+    private fun openChartedSong(title: String) {
+        val wanted = title.trim()
+        val song = _ui.value.songs
+            .filter { it.title.trim().equals(wanted, ignoreCase = true) }
+            .sortedWith(compareBy({ !it.hasChart }, { it.pack != null }))
+            .firstOrNull()
+        if (song == null) {
+            _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = R.string.tm_charting_song_gone))
+            return
+        }
+        if (_ui.value.previews) preview.warm()
+        // Out of any search, which could hide it from the wheel.
+        _ui.value = _ui.value.copy(
+            screen = GlyphScreen.HOME,
+            songListMode = GlyphSongListMode.PLAY,
+            songQuery = "",
+            charting = _ui.value.charting.copy(notice = null),
+        )
+        wheelFocusJob?.cancel()
+        focusWheel(GlyphWheel.songKey(song.trackId))
+        wheelFocusJob?.cancel()
+        selectSong(song.trackId)
+    }
+
     private fun selectSong(trackId: String) {
         val song = _ui.value.songs.firstOrNull { it.trackId == trackId } ?: return
         _ui.value = _ui.value.copy(
