@@ -39,7 +39,7 @@ import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.audio.stepmania.ChartPace
 import tf.monochrome.android.audio.stepmania.ChartQueue
 import tf.monochrome.android.audio.stepmania.ChartingAccountStore
-import tf.monochrome.android.audio.stepmania.ChartingPacks
+import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
 import tf.monochrome.android.glyph.pack.GlyphPackLibrary
@@ -469,14 +469,24 @@ class GlyphViewModel @Inject constructor(
                 wheelFocusJob?.cancel()
                 stopPreview()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.CHARTING)
+                viewModelScope.launch { chartingAccount.refresh() }
             }
             GlyphEvent.CloseCharting -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            GlyphEvent.RefreshCharting -> viewModelScope.launch { chartingAccount.refresh() }
             is GlyphEvent.BuyMinutes -> viewModelScope.launch {
-                val pack = ChartingPacks.ALL.firstOrNull { it.id == event.packId } ?: return@launch
-                if (!chartingAccount.buy(pack)) {
-                    _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = R.string.tm_charting_not_on_sale))
-                }
+                val pack = _ui.value.charting.account.packs.firstOrNull { it.id == event.packId } ?: return@launch
+                chartingAccount.buy(pack)
+                    .onSuccess { url -> _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(checkoutUrl = url)) }
+                    .onFailure { failure ->
+                        val notice = when (failure) {
+                            is CloudError.SignedOut -> R.string.tm_charting_sign_in
+                            is CloudError.NotSetUp -> R.string.tm_charting_not_on_sale
+                            else -> R.string.tm_charting_unreachable
+                        }
+                        _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = notice))
+                    }
             }
+            GlyphEvent.ChartingUrlOpened -> _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(checkoutUrl = null))
             GlyphEvent.DismissChartingNotice ->
                 _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = null))
 

@@ -108,8 +108,8 @@ players know are free or give free songs every month. A free song every month
   Its link is kept out of this public repository.
 - The listener's screen is in the app (`GlyphChartingScreen`, from "Generate
   charts" on Trypt Mania's menu): the meter, the free song, the packs and the
-  history, read from `ChartingAccountStore`. The store is empty and Buy says
-  packs are not on sale until Cloud holds the minutes and the Creem checkout.
+  history, read from Cloud through `ChartingAccountStore`; Buy opens the
+  Creem checkout in the browser.
 
 ## The fixed cost (measured; fixed in Parser `03ff903`, not yet deployed)
 
@@ -126,14 +126,22 @@ when the branch is merged to `main`. Railway's Serverless setting (sleep
 after about 10 idle minutes) would take idle to zero, for a cold start of a
 few seconds more on the next song.
 
-## Where it runs
+## Where it runs (built 2026-10-29, Cloud `1472f3e`)
 
-- The Parser stays as it is for the listener's own servers. Paid charting
-  adds a signed-in route: the app sends its Supabase token, the Parser asks
-  Cloud (`tryptify-servers/cloud/`, which holds credits and the trial in D1)
-  to take a credit, charts, and gives the credit back if it fails.
-- Railway builds the Parser from `main` on push, so work on a branch does
-  not deploy until it is merged.
+- The Parser is untouched. Cloud (`tryptify-servers/cloud/src/charting.ts`)
+  holds the minutes, the free song and the packs in D1, and
+  `POST /v1/charting/analyze` takes a song's minutes, forwards the song to
+  the Parser (`PARSER_URL`, a Worker secret: the app never sees the address)
+  and settles from its answer. The app's stems client treats
+  `/v1/charting` as a stem server, signed in with the session.
+- To switch it on: run `migrations/2026-10-29-charting.sql` against D1,
+  `wrangler secret put PARSER_URL`, make the three one-time products in
+  Creem and put their ids in `wrangler.toml`, deploy. Until the products
+  exist, the app says packs are not on sale; until `PARSER_URL` is set,
+  charting there answers `charting_not_set_up` and the app falls back to the
+  listener's own servers.
+- Railway builds the Parser from `main` on push, so the idle-memory fix
+  (`03ff903`) deploys when that branch is merged.
 
 ## Open decisions for the owner
 

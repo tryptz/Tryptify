@@ -49,11 +49,13 @@ class StepManiaConversionService @Inject constructor(
         destination: Uri,
         request: StepManiaRequest,
         mode: ChartMode,
+        /** The song's length, for Tryptify's own server, which takes its minutes first; 0 when unknown. */
+        durationSeconds: Int = 0,
         onProgress: (StepManiaConversionProgress) -> Unit = {},
     ): Result<StepManiaConversionResult> = try {
         val plan = remoteStems.plan(mode)
         if (plan.isEmpty()) throw IOException(noServer(mode))
-        val remote = separate(plan, source, onProgress)
+        val remote = separate(plan, source, request.title, durationSeconds, onProgress)
         finish(remote, request, destination, onProgress)
     } catch (cancelled: CancellationException) {
         throw cancelled
@@ -65,18 +67,21 @@ class StepManiaConversionService @Inject constructor(
     private suspend fun separate(
         plan: List<ApiServer>,
         source: Uri,
+        title: String,
+        durationSeconds: Int,
         onProgress: (StepManiaConversionProgress) -> Unit,
     ): RemoteEnvelopes {
         var lastFailure: Throwable? = null
         for (server in plan) {
-            val where = when (server.separatesOnGpu) {
-                true -> "the GPU"
-                false -> "the CPU server"
-                null -> RemoteStemAnalysis.hostOf(server.url)
+            val where = when {
+                remoteStems.isTryptify(server.url) -> "Tryptify's server"
+                server.separatesOnGpu == true -> "the GPU"
+                server.separatesOnGpu == false -> "the CPU server"
+                else -> RemoteStemAnalysis.hostOf(server.url)
             }
             onProgress(StepManiaConversionProgress(0.02f, "Separating on $where"))
             try {
-                val remote = remoteStems.analyze(server.url, source)
+                val remote = remoteStems.analyze(server.url, source, title, durationSeconds)
                 Log.i(TAG, "Separated on ${remote.label}")
                 remoteStems.learnDevice(server.url, remote.run.device)
                 return remote

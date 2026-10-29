@@ -8,6 +8,8 @@ import android.provider.OpenableColumns
 import dagger.hilt.android.qualifiers.ApplicationContext
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
+import io.ktor.client.request.bearerAuth
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -36,6 +38,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import tf.monochrome.android.data.api.ApiServer
 import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.cloud.CloudRepository
 import tf.monochrome.android.data.preferences.PreferencesManager
 
 /**
@@ -58,6 +61,8 @@ class RemoteStemAnalysis @Inject constructor(
     private val httpClient: HttpClient,
     private val preferences: PreferencesManager,
     private val json: Json,
+    private val cloud: CloudRepository,
+    private val charting: ChartingAccountStore,
 ) {
 
     /** Every server under Settings › Connections that separates stems, in the list's order. */
@@ -67,7 +72,23 @@ class RemoteStemAnalysis @Inject constructor(
     suspend fun stemServers(): List<ApiServer> = stemServerFlow.first()
 
     /** The servers [mode] tries, in the order it tries them; empty when it has none. */
-    suspend fun plan(mode: ChartMode): List<ApiServer> = planFor(stemServers(), mode)
+    suspend fun plan(mode: ChartMode): List<ApiServer> = tryptify() + planFor(stemServers(), mode)
+
+    /**
+     * Tryptify's own server, first in either mode, while the signed-in
+     * listener has minutes or their free song (ChartingAccount). It is
+     * reached through Cloud (`/v1/charting`), never by an address of its
+     * own; it charts on a CPU, so Slow may use it too.
+     */
+    private suspend fun tryptify(): List<ApiServer> {
+        if (!charting.account.value.loaded) charting.refresh()
+        val account = charting.account.value
+        val canChart = account.signedIn && (account.freeSongAvailable || account.minutesLeft >= ChartingAccount.MIN_SONG_MINUTES)
+        return if (canChart) listOf(ApiServer(url = cloud.chartingServerUrl, services = setOf(ApiService.STEMS), stemDevice = "cpu")) else emptyList()
+    }
+
+    /** Whether [server] is Tryptify's own, reached through Cloud. */
+    fun isTryptify(server: String): Boolean = server == cloud.chartingServerUrl
 
     /**
      * Remembers what [server] separates on, from its own answer: a server
@@ -80,9 +101,21 @@ class RemoteStemAnalysis @Inject constructor(
         preferences.setApiServers(servers.map { if (it.url == server) it.copy(stemDevice = device) else it })
     }
 
-    suspend fun analyze(server: String, source: Uri): RemoteEnvelopes {
+    /**
+     * The song separated on [server]. Tryptify's own server also needs the
+     * song's [title] and length in [seconds]: Cloud takes its minutes first,
+     * signed in with the session, and answers like any server.
+     */
+    suspend fun analyze(server: String, source: Uri, title: String = "", seconds: Int = 0): RemoteEnvelopes {
+        val tryptify = isTryptify(server)
+        if (tryptify && seconds <= 0) throw IOException("Tryptify's server needs the song's length")
         val length = sizeOf(source)
-        val response = httpClient.post("$server/api/stems/analyze") {
+        suspend fun attempt(bearer: String?) = httpClient.post(if (tryptify) "$server/analyze" else "$server/api/stems/analyze") {
+            if (tryptify) {
+                parameter("seconds", seconds)
+                parameter("title", title.take(200))
+                bearerAuth(bearer!!)
+            }
             // The server says nothing until the song is done: minutes on a CPU
             // host, seconds on a warm GPU, plus a cold start when it slept.
             timeout {
@@ -97,11 +130,22 @@ class RemoteStemAnalysis @Inject constructor(
                         .toByteReadChannel()
             })
         }
+        val token = if (tryptify) cloud.bearer() else null
+        var response = attempt(token)
+        if (tryptify && response.status.value == 401) response = attempt(cloud.bearer(stale = token))
         val body = response.bodyAsText()
+        if (tryptify) {
+            // Whatever happened, the account moved: a song charted or a reservation given back.
+            runCatching { charting.refresh() }
+            when (response.status.value) {
+                402 -> throw IOException("No minutes left on Tryptify's server; buy a pack under Generate charts")
+                413 -> throw IOException("Tryptify's server charts songs up to ${ChartingAccount.MAX_SONG_MINUTES} minutes")
+            }
+        }
         if (!response.status.isSuccess() && !body.trimStart().startsWith("{")) {
             throw IOException("The server answered HTTP ${response.status.value}")
         }
-        return parse(json, body, hostOf(server))
+        return parse(json, body, if (tryptify) "Tryptify" else hostOf(server))
     }
 
     private fun sizeOf(source: Uri): Long? = runCatching {

@@ -9,6 +9,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.audio.stepmania.ChartingAccount
+import tf.monochrome.android.audio.stepmania.ChartingEntry
 import tf.monochrome.android.data.local.db.LocalTrackEntity
 import java.io.File
 import java.nio.file.Files
@@ -55,6 +57,7 @@ class CloudTest {
         val mapped = listOf(
             "signed_out", "no_plan", "read_only", "over_quota", "not_audio", "file_too_big", "cover_too_big",
             "trial_used", "too_many_uploads", "not_set_up", "billing_not_set_up", "storage_not_set_up",
+            "charting_not_set_up", "no_minutes", "song_too_long", "charting_unreachable", "charting_failed",
         )
         val sent = contractList("errors")
         for (code in mapped) assertTrue("server never sends $code", code in sent)
@@ -71,6 +74,38 @@ class CloudTest {
         assertTrue(other is CloudError.Server && other.code == "http_500")
         val unknown = CloudError.of(400, """{"error":"size_mismatch"}""")
         assertTrue(unknown is CloudError.Server && unknown.code == "size_mismatch")
+    }
+
+    @Test
+    fun `the charting account decodes from what the server sends, and a pack is asked for by name`() {
+        val dto = json.decodeFromString<CloudChartingAccount>(
+            """{"minutesBought":500,"minutesUsed":4,"minutesReserved":10,"minutesLeft":486,"songsCharted":2,
+               "freeSongUsed":true,"freeSongAvailable":false,"minSongMinutes":2,"maxSongSeconds":600,
+               "packs":[{"id":"starter","minutes":150,"priceCents":299,"onSale":true},
+                        {"id":"library","minutes":500,"priceCents":999,"onSale":true},
+                        {"id":"big","minutes":1000,"priceCents":1999,"onSale":false}],
+               "history":[{"kind":"charted","title":"Short","minutes":4,"at":"2026-10-29T10:00:00.000Z"},
+                          {"kind":"bought","title":"library","minutes":500,"at":"2026-10-29T09:00:00.000Z"},
+                          {"kind":"free","title":"First","minutes":0,"at":"2026-10-29T08:00:00.000Z"}]}""",
+        )
+        val account = ChartingAccount.of(dto)
+        assertTrue(account.signedIn)
+        assertEquals(486, account.minutesLeft)
+        assertEquals(121, account.songsLeft)
+        assertEquals(listOf(true, true, false), account.packs.map { it.onSale })
+        assertEquals(
+            listOf(ChartingEntry.Kind.CHARTED, ChartingEntry.Kind.BOUGHT, ChartingEntry.Kind.FREE),
+            account.history.map { it.kind },
+        )
+        assertTrue(account.canChart(240))
+        assertFalse(account.canChart(11 * 60))
+        // The server's rounding: a minute and a second is two minutes, at least two.
+        assertEquals(2, ChartingAccount.minutesFor(61))
+        assertEquals(3, ChartingAccount.minutesFor(121))
+        // An empty answer still shows the packs as priced.
+        assertEquals(3, ChartingAccount.of(json.decodeFromString<CloudChartingAccount>("{}")).packs.size)
+        assertTrue("pack" in contractList("bodyFields"))
+        assertEquals("""{"pack":"library"}""", json.encodeToString(ChartingCheckoutRequest.serializer(), ChartingCheckoutRequest("library")))
     }
 
     @Test

@@ -3191,4 +3191,6 @@
     <string name="tm_charting_history_empty">まだ何も生成していません。</string>
     <string name="tm_charting_own_server">または「設定 › 接続」で追加した自分のサーバーで無料で生成できます。</string>
     <string name="tm_charting_fail_refund">失敗した曲の分は戻ります。</string>
+    <string name="tm_charting_sign_in">Tryptify のサーバーでの譜面生成は Tryptify アカウントで行います。サインインして無料の 1 曲を受け取り、分を購入できます。</string>
+    <string name="tm_charting_unreachable">Tryptify のサーバーに接続できません。接続を確認してもう一度お試しください。</string>
 </resources>

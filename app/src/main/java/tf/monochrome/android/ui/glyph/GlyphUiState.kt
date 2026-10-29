@@ -497,6 +497,8 @@ data class GlyphChartingUi(
     val account: tf.monochrome.android.audio.stepmania.ChartingAccount = tf.monochrome.android.audio.stepmania.ChartingAccount(),
     /** A line to show once, as a string resource; null when there is none. */
     @androidx.annotation.StringRes val notice: Int? = null,
+    /** A Creem checkout the screen opens in the browser, once. */
+    val checkoutUrl: String? = null,
 )
 
 /**

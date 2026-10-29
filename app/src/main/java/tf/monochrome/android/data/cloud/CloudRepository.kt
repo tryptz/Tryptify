@@ -92,6 +92,31 @@ class CloudRepository @Inject constructor(
         json.decodeFromString<CheckoutUrl>(send(HttpMethod.Post, "billing-portal").bodyAsText()).url
     }
 
+    // ── Charting by the minute (tryptify-servers/cloud/src/charting.ts) ──
+
+    /** Where Trypt Mania's charting by the minute is asked, as a stem server's address: `/v1/charting`. */
+    val chartingServerUrl: String get() = BASE.trimEnd('/') + "/v1/charting"
+
+    suspend fun chartingAccount(): Result<CloudChartingAccount> = call {
+        json.decodeFromString<CloudChartingAccount>(send(HttpMethod.Get, "charting", "account").bodyAsText())
+    }
+
+    /** A Creem checkout for a pack of minutes; [CloudError.NotSetUp] while the pack is not on sale. */
+    suspend fun chartingCheckoutUrl(pack: String): Result<String> = call {
+        val body = json.encodeToString(ChartingCheckoutRequest(pack))
+        json.decodeFromString<CheckoutUrl>(send(HttpMethod.Post, "charting", "checkout", body = body).bodyAsText()).url
+    }
+
+    /**
+     * The session's token, for a `/v1` call made outside this class (the
+     * stems client's upload); [stale] is the one a 401 just refused, so
+     * the next is a refreshed one.
+     */
+    suspend fun bearer(stale: String? = null): String {
+        val now = auth.supabase.auth.currentAccessTokenOrNull() ?: throw CloudError.SignedOut()
+        return if (stale != null && stale == now) refreshed(stale) else now
+    }
+
     /** True when [server] is this cloud, rather than a server the listener runs. */
     fun isCloud(server: SubsonicServer?): Boolean =
         server != null && server.url.trimEnd('/') == BASE.trimEnd('/')

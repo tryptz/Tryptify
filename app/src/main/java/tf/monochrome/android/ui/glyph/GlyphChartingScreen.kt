@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -45,6 +47,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import java.text.NumberFormat
 import java.util.Locale
 import tf.monochrome.android.R
@@ -69,12 +72,25 @@ import tf.monochrome.android.ui.theme.MonoDimens
 fun GlyphChartingScreen(
     state: GlyphUiState,
     onEvent: (GlyphEvent) -> Unit,
+    onSignIn: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val account = state.charting.account
-    var picked by rememberSaveable { mutableStateOf(ChartingPacks.MOST_PICKED.id) }
-    val pack = ChartingPacks.ALL.firstOrNull { it.id == picked } ?: ChartingPacks.MOST_PICKED
+    var picked by rememberSaveable { mutableStateOf(ChartingPacks.MOST_PICKED) }
+    val pack = account.packs.firstOrNull { it.id == picked } ?: account.packs.first()
+    val signedOut = account.loaded && !account.signedIn
     BackHandler { onEvent(GlyphEvent.CloseCharting) }
+    // A checkout goes to the browser; coming back from it, the account is read again.
+    val uriHandler = LocalUriHandler.current
+    LaunchedEffect(state.charting.checkoutUrl) {
+        val url = state.charting.checkoutUrl ?: return@LaunchedEffect
+        runCatching { uriHandler.openUri(url) }
+        onEvent(GlyphEvent.ChartingUrlOpened)
+    }
+    LifecycleResumeEffect(Unit) {
+        onEvent(GlyphEvent.RefreshCharting)
+        onPauseOrDispose { }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
@@ -107,8 +123,21 @@ fun GlyphChartingScreen(
                 UsageMeter(account)
             }
 
+            // ── signed out: nothing here is theirs yet ──────────────────
+            if (signedOut) {
+                GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(R.string.tm_charting_sign_in),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    GlyphButton(text = stringResource(R.string.tm_mp_sign_in_button), primary = true, onClick = onSignIn)
+                }
+            }
+
             // ── the free song ───────────────────────────────────────────
-            if (!account.freeSongUsed) {
+            if (account.freeSongAvailable || (!account.loaded && !account.freeSongUsed)) {
                 GlyphPanel(modifier = Modifier.fillMaxWidth()) {
                     SectionTitle(stringResource(R.string.tm_charting_free_title))
                     Text(
@@ -167,7 +196,7 @@ fun GlyphChartingScreen(
                     modifier = Modifier.selectableGroup(),
                     verticalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm),
                 ) {
-                    ChartingPacks.ALL.forEach { option ->
+                    account.packs.forEach { option ->
                         PackRow(option, selected = option.id == picked, onPick = { picked = option.id })
                     }
                 }
@@ -255,7 +284,7 @@ private fun UsageMeter(account: ChartingAccount) {
         }
     }
     Spacer(Modifier.height(MonoDimens.spacingSm))
-    if (account.minutesBought == 0 && !account.freeSongUsed) {
+    if (account.minutesBought == 0 && account.freeSongAvailable) {
         Text(
             text = stringResource(R.string.tm_charting_no_minutes),
             style = MaterialTheme.typography.bodySmall,
@@ -282,13 +311,7 @@ private fun UsageMeter(account: ChartingAccount) {
 @Composable
 private fun PackRow(pack: ChartingPack, selected: Boolean, onPick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
-    val name = stringResource(
-        when (pack.id) {
-            ChartingPacks.STARTER.id -> R.string.tm_charting_pack_starter
-            ChartingPacks.LIBRARY.id -> R.string.tm_charting_pack_library
-            else -> R.string.tm_charting_pack_big
-        },
-    )
+    val name = stringResource(packNameOf(pack.id))
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -305,7 +328,7 @@ private fun PackRow(pack: ChartingPack, selected: Boolean, onPick: () -> Unit) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {
                 Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                if (pack == ChartingPacks.MOST_PICKED) {
+                if (pack.id == ChartingPacks.MOST_PICKED) {
                     Text(
                         text = stringResource(R.string.tm_charting_most_picked).uppercase(Locale.getDefault()),
                         style = MaterialTheme.typography.labelSmall,
@@ -331,7 +354,8 @@ private fun HistoryRow(entry: ChartingEntry) {
         modifier = Modifier.fillMaxWidth().padding(vertical = MonoDimens.spacingXs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(entry.title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        val title = if (entry.kind == ChartingEntry.Kind.BOUGHT) stringResource(packNameOf(entry.title)) else entry.title
+        Text(title, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         val minutes = when (entry.kind) {
             ChartingEntry.Kind.BOUGHT -> "+" + count(entry.minutes)
             ChartingEntry.Kind.CHARTED -> "−" + count(entry.minutes)
@@ -353,6 +377,12 @@ private fun SectionTitle(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(bottom = MonoDimens.spacingXs).semantics { heading() },
     )
+}
+
+private fun packNameOf(id: String): Int = when (id) {
+    ChartingPacks.STARTER.id -> R.string.tm_charting_pack_starter
+    ChartingPacks.LIBRARY.id -> R.string.tm_charting_pack_library
+    else -> R.string.tm_charting_pack_big
 }
 
 private fun count(n: Int): String = NumberFormat.getIntegerInstance().format(n)

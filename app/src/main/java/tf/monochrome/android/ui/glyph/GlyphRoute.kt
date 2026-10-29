@@ -238,6 +238,7 @@ fun GlyphRoute(
             GlyphScreen.CHARTING -> GlyphChartingScreen(
                 state = state,
                 onEvent = viewModel::onEvent,
+                onSignIn = onSignIn,
                 modifier = Modifier.fillMaxSize(),
             )
 

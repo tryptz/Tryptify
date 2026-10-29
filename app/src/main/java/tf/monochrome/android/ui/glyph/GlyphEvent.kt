@@ -125,6 +125,10 @@ sealed interface GlyphEvent {
     // ── charting by the minute ──────────────────────────────────────────
     data object OpenCharting : GlyphEvent
     data object CloseCharting : GlyphEvent
+    /** The screen is back in front (after a checkout in the browser): read the account again. */
+    data object RefreshCharting : GlyphEvent
+    /** The checkout link was handed to the browser. */
+    data object ChartingUrlOpened : GlyphEvent
     /** Buy a pack of minutes, by its [tf.monochrome.android.audio.stepmania.ChartingPack.id]. */
     data class BuyMinutes(val packId: String) : GlyphEvent
     data object DismissChartingNotice : GlyphEvent

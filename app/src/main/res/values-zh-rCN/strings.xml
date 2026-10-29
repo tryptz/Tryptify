@@ -3191,4 +3191,6 @@
     <string name="tm_charting_history_empty">这里还没有生成过谱面。</string>
     <string name="tm_charting_own_server">或者在「设置 › 连接」中添加你自己的服务器，免费生成。</string>
     <string name="tm_charting_fail_refund">生成失败的歌曲会退还分钟。</string>
+    <string name="tm_charting_sign_in">在 Tryptify 服务器上生成谱面需要你的 Tryptify 账号。登录即可获得免费歌曲并购买分钟。</string>
+    <string name="tm_charting_unreachable">无法连接 Tryptify 的服务器。请检查网络后重试。</string>
 </resources>

@@ -1904,8 +1904,17 @@ bought the track is empty and the line says the first song is free. The packs
 are rows picked like radio buttons (`selectable`, a 2 dp accent border on the
 one picked), and one filled Buy button names the picked pack and its price in
 dollars, which is what Creem charges wherever the listener is. The account
-comes from `ChartingAccountStore`; until Tryptify Cloud holds it, every
-account is empty and Buy answers with a notice panel, never a dead button.
+comes from `ChartingAccountStore`, Tryptify Cloud's answer
+(`GET /v1/charting/account`), read when the screen opens and whenever it
+comes back in front (`LifecycleResumeEffect`): a checkout opens in the
+browser, and the minutes are there when the listener returns. Signed out,
+the screen says so with Sign in, as Multiplayer does, and the free-song panel
+is gone; a pack with no product yet answers Buy with a notice panel, never a
+dead button. The song list needs nothing new: while the listener has minutes
+or their free song, Tryptify's server is first in both Fast and Slow
+(`RemoteStemAnalysis.plan`), reached through Cloud and never by an address
+of its own, and the batch confirmation reads "Separating on Tryptify's
+server" for it.
 
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a

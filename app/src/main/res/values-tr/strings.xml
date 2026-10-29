@@ -3268,4 +3268,6 @@
     <string name="tm_charting_history_empty">Burada henüz bir şey oluşturulmadı.</string>
     <string name="tm_charting_own_server">Ya da Ayarlar › Bağlantılar’da eklediğin bir sunucuda ücretsiz oluştur.</string>
     <string name="tm_charting_fail_refund">Başarısız olan şarkının dakikaları geri gelir.</string>
+    <string name="tm_charting_sign_in">Tryptify sunucusunda chart oluşturmak Tryptify hesabınla olur. Ücretsiz şarkını almak ve dakika satın almak için giriş yap.</string>
+    <string name="tm_charting_unreachable">Tryptify sunucusuna ulaşılamadı. Bağlantını kontrol edip tekrar dene.</string>
 </resources>

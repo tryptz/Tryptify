@@ -3345,4 +3345,6 @@
     <string name="tm_charting_history_empty">Aquí no se ha generado nada todavía.</string>
     <string name="tm_charting_own_server">O genera partituras gratis en un servidor que añadas en Ajustes › Conexiones.</string>
     <string name="tm_charting_fail_refund">Una canción que falla devuelve sus minutos.</string>
+    <string name="tm_charting_sign_in">Generar partituras en el servidor de Tryptify va con tu cuenta de Tryptify. Inicia sesión para recibir tu canción gratis y comprar minutos.</string>
+    <string name="tm_charting_unreachable">No se pudo conectar con el servidor de Tryptify. Comprueba tu conexión e inténtalo de nuevo.</string>
 </resources>

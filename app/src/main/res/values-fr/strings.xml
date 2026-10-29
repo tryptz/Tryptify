@@ -3345,4 +3345,6 @@
     <string name="tm_charting_history_empty">Rien de charté ici pour l’instant.</string>
     <string name="tm_charting_own_server">Ou chartez gratuitement sur un serveur ajouté dans Paramètres › Connexions.</string>
     <string name="tm_charting_fail_refund">Un titre qui échoue rend ses minutes.</string>
+    <string name="tm_charting_sign_in">Charter sur le serveur de Tryptify passe par votre compte Tryptify. Connectez-vous pour recevoir votre titre offert et acheter des minutes.</string>
+    <string name="tm_charting_unreachable">Impossible de joindre le serveur de Tryptify. Vérifiez votre connexion et réessayez.</string>
 </resources>

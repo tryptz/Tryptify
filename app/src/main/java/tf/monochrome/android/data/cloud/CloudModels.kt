@@ -135,6 +135,33 @@ internal data class KeyRequest(val label: String? = null)
 @Serializable
 internal data class SubsonicKey(val server: String, val username: String, val password: String)
 
+// ── Charting by the minute (tryptify-servers/cloud/src/charting.ts) ─────────
+
+@Serializable
+data class CloudChartingPack(val id: String, val minutes: Int, val priceCents: Int, val onSale: Boolean = false)
+
+@Serializable
+data class CloudChartingEntry(val kind: String, val title: String, val minutes: Int, val at: String)
+
+/** The listener's minutes and free song, as `GET /v1/charting/account` says them. */
+@Serializable
+data class CloudChartingAccount(
+    val minutesBought: Int = 0,
+    val minutesUsed: Int = 0,
+    val minutesReserved: Int = 0,
+    val minutesLeft: Int = 0,
+    val songsCharted: Int = 0,
+    val freeSongUsed: Boolean = false,
+    val freeSongAvailable: Boolean = false,
+    val minSongMinutes: Int = 2,
+    val maxSongSeconds: Int = 600,
+    val packs: List<CloudChartingPack> = emptyList(),
+    val history: List<CloudChartingEntry> = emptyList(),
+)
+
+@Serializable
+internal data class ChartingCheckoutRequest(val pack: String)
+
 /** Why a cloud call failed, in terms the screen can word. */
 sealed class CloudError(message: String) : Exception(message) {
     class SignedOut : CloudError("signed out")
@@ -162,7 +189,7 @@ sealed class CloudError(message: String) : Exception(message) {
             "file_too_big", "cover_too_big" -> TooBig()
             "trial_used" -> TrialUsed()
             "too_many_uploads" -> Busy()
-            "not_set_up", "billing_not_set_up", "storage_not_set_up" -> NotSetUp()
+            "not_set_up", "billing_not_set_up", "storage_not_set_up", "charting_not_set_up" -> NotSetUp()
             null -> if (status == 401) SignedOut() else Server("http_$status")
             else -> Server(code)
         }

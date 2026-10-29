@@ -3268,4 +3268,6 @@
     <string name="tm_charting_history_empty">Hier wurde noch nichts gechartet.</string>
     <string name="tm_charting_own_server">Oder charte gratis auf einem Server, den du unter Einstellungen › Verbindungen hinzufügst.</string>
     <string name="tm_charting_fail_refund">Ein Song, der fehlschlägt, gibt seine Minuten zurück.</string>
+    <string name="tm_charting_sign_in">Charts auf Tryptifys Server laufen über dein Tryptify-Konto. Melde dich an, um deinen Gratis-Song zu bekommen und Minuten zu kaufen.</string>
+    <string name="tm_charting_unreachable">Tryptifys Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.</string>
 </resources>
