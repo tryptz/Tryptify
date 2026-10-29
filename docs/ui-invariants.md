@@ -1978,7 +1978,15 @@ the song's picture under it are soft colour rather than text bent at its rim.
 The radar is drawn in a well sunk into the card (`glassWell`: darker than the
 glass, its far wall's shadow inside its top, its near lip lit), as one with
 it; it used to sit on a second slab of glass over the card, a pane on a pane.
-The density graph has a shallower well of its own. The meter is twelve stars
+Its five axis names are set in the card's own label voice (the theme's
+`labelSmall` face, small and spaced as small capitals, in `onSurfaceVariant`),
+never a bare `TextStyle`, which fell back to the system's sans and made them
+the one text on the card in another face. Each name sits past its axis's tip
+with its near edge at the tip (above STREAM, beside VOLTAGE and CHAOS, below
+AIR and FREEZE); where the well is too tight for that, the name is pushed in
+over the web on a patch of the well's own floor, so the lines and the shape
+run under it, not through its letters. The density graph has a shallower
+well of its own. The meter is twelve stars
 cut through the card (`StarHoles`, the slab's `punch` with `punchThrough`):
 the cut goes through the frost as well as the slab, so an unlit star is a real
 hole with the page behind it sharp, the shader bevelling its edge. A lit star
