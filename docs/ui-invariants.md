@@ -2290,6 +2290,12 @@ leaves the mode when it closes. The lyrics (`LyricClock`), every visual link
 driver and the visualizer's bus wait the same amount (`LocalOutputSyncMs`,
 `OutputSyncRepository.delayMs`): one number per device, never three that
 drift apart. The old lyrics and visualizer sliders are a line pointing here.
+Both nudges, the Sync tab's `GlyphStepper` and the Bluetooth sync row's,
+keep stepping while held (`Modifier.holdToRepeat`: after 400 ms, faster as
+the hold goes on, cancelled by sliding away), since an offset of a few
+hundred milliseconds at 5 ms a tap was thirty-odd taps. A short press is
+still one tap with its own feedback, and a hold that stepped does not add
+the click under it on release.
 
 **Charting is a line, and a batch is asked before it starts.** Generate puts
 the song in `ChartQueue` and never cancels the one being charted; while a song
