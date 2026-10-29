@@ -111,7 +111,7 @@ players know are free or give free songs every month. A free song every month
   history, read from Cloud through `ChartingAccountStore`; Buy opens the
   Creem checkout in the browser.
 
-## The fixed cost (measured; fixed in Parser `03ff903`, not yet deployed)
+## The fixed cost (measured; fixed in Parser `03ff903`, live 2026-10-29)
 
 Railway's metrics for the Parser service over the 7 days to 2026-10-28:
 6.5 vCPU and 11.4 GB used on average (limits 24 and 24), about **$129 + $114
@@ -121,10 +121,11 @@ with or without paid charting, and packs only cover it with enough buyers.
 The 72 hours before showed the same: about 10 GB held while CPU averaged under
 one core. The cause: the model stayed loaded for good after a song, and glibc
 kept what each separation thread freed. The Parser now unloads it after a
-minute idle and hands the memory back. Not yet measured on Railway: it ships
-when the branch is merged to `main`. Railway's Serverless setting (sleep
-after about 10 idle minutes) would take idle to zero, for a cold start of a
-few seconds more on the next song.
+minute idle and hands the memory back. Merged to `main` and deployed by
+Railway on 2026-10-29 01:18 UTC: an hour later the service held **0.05 GB**
+idle, down from about 10 GB. Railway's Serverless setting (sleep after about
+10 idle minutes) would take idle to zero, for a cold start of a few seconds
+more on the next song.
 
 ## Where it runs (built 2026-10-29, Cloud `1472f3e`)
 
@@ -140,15 +141,15 @@ few seconds more on the next song.
   exist, the app says packs are not on sale; until `PARSER_URL` is set,
   charting there answers `charting_not_set_up` and the app falls back to the
   listener's own servers.
-- Railway builds the Parser from `main` on push, so the idle-memory fix
-  (`03ff903`) deploys when that branch is merged.
+- Railway builds the Parser from `main` on push; the idle-memory fix
+  (`03ff903`) is live there since 2026-10-29. The app no longer asks any
+  server to time lyrics (`cc414473`): the Parser's Whisper went with the fix.
 
 ## Open decisions for the owner
 
 1. The three minute packs and prices above, or other sizes.
 2. Trial daily cap: 500?
-3. Merge the Parser fix to `main` (deploys it), and switch on Railway's
-   Serverless sleep?
+3. Switch on Railway's Serverless sleep for the Parser?
 
 Sources: [Railway pricing plans](https://docs.railway.com/pricing/plans),
 [Railway: understanding your bill](https://docs.railway.com/pricing/understanding-your-bill).
