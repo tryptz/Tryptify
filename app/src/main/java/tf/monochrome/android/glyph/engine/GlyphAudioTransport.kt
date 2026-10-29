@@ -7,7 +7,9 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.RenderersFactory
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
 /**
@@ -23,10 +25,18 @@ import tf.monochrome.android.glyph.training.GlyphLoopSegment
  * The transport owns *time*, and [GlyphClock] is how anything else asks about
  * it: [pump] takes a real position from the player and hands it to the clock,
  * which interpolates between pumps. Nothing else may write the clock.
+ *
+ * Where the sound goes is the [renderers]' audio sink's business: the app
+ * hands in one that plays through the exclusive USB DAC when one is claimed
+ * (`UsbGameAudio`), and Android's output otherwise. The position read here
+ * is the sink's either way, so the clock follows what is heard.
  */
-class GlyphAudioTransport(context: Context) {
+class GlyphAudioTransport(
+    context: Context,
+    renderers: RenderersFactory = DefaultRenderersFactory(context),
+) {
 
-    private val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+    private val player: ExoPlayer = ExoPlayer.Builder(context, renderers).build().apply {
         // No repeat: looping is done by seeking, because ExoPlayer's own repeat
         // restarts the item rather than a segment inside it.
         repeatMode = Player.REPEAT_MODE_OFF

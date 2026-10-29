@@ -135,6 +135,7 @@ class GlyphViewModel @Inject constructor(
     private val chartPace: ChartPace,
     private val chartingAccount: ChartingAccountStore,
     private val bypassVolume: BypassVolumeController,
+    private val gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio,
     private val remoteStems: RemoteStemAnalysis,
     private val trackLocator: tf.monochrome.android.player.LocalTrackLocator,
     private val packLibrary: GlyphPackLibrary,
@@ -231,16 +232,38 @@ class GlyphViewModel @Inject constructor(
         engineArmed = true
     }
 
-    val transport = GlyphAudioTransport(context).also { t ->
+    val transport = GlyphAudioTransport(context, gameAudio.renderersFactory(context)).also { t ->
         t.onPlayingChanged = { playing -> transportAudible = playing; publishAudible() }
     }
 
-    // The mode plays on Android's output, never the DAC: while its song or a
-    // preview sounds, the volume keys must move Android's volume, not the
-    // DAC level that nothing heard follows (BypassVolumeController).
+    // With a DAC claimed the mode plays through it (UsbGameAudio), and the
+    // volume keys move the DAC level as for the main player. Only while its
+    // song or a preview sounds on Android's output instead (no stream on the
+    // DAC for it) must the keys move Android's volume, where that sound is
+    // (BypassVolumeController.androidStreamAudible).
     private var transportAudible = false
     private var previewAudible = false
-    private fun publishAudible() = bypassVolume.setAndroidStreamAudible(transportAudible || previewAudible)
+    private fun publishAudible() =
+        bypassVolume.setAndroidStreamAudible((transportAudible || previewAudible) && !gameAudio.gameOnDac())
+
+    /**
+     * The DAC's one stream changes hands. The main player took it back (play
+     * from the notification under a run): the run pauses and a preview stops,
+     * as their sound stopped with it; and the keys' target follows either way.
+     */
+    private fun watchDacStream() {
+        viewModelScope.launch {
+            gameAudio.holder.collect { holder ->
+                publishAudible()
+                if (holder != tf.monochrome.android.audio.usb.StreamClaimant.PLAYER) return@collect
+                stopPreview()
+                val gameplay = _ui.value.gameplay
+                val screen = _ui.value.screen
+                val inRun = screen == GlyphScreen.GAMEPLAY || screen == GlyphScreen.TRAINING
+                if (inRun && !gameplay.isPaused && !gameplay.failStops) togglePause()
+            }
+        }
+    }
 
     private val ghostRecorder = GlyphGhostRecorder()
     private val metronome = GlyphMetronome()
@@ -290,7 +313,7 @@ class GlyphViewModel @Inject constructor(
 
     /** The song list's preview from the drop; built on first use. */
     private val preview by lazy {
-        GlyphPreviewPlayer(context, viewModelScope).also { p ->
+        GlyphPreviewPlayer(context, viewModelScope, gameAudio.renderersFactory(context)).also { p ->
             p.onPlayingChanged = { playing -> previewAudible = playing; publishAudible() }
         }
     }
@@ -329,6 +352,7 @@ class GlyphViewModel @Inject constructor(
         }
         loadOptions()
         watchOutputSync()
+        watchDacStream()
         watchCharts()
         watchChartServers()
         watchPlayRequests()

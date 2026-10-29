@@ -538,6 +538,17 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             bypassVolumeController.levelDb.collect { forwardingPlayer.onDeviceVolumeChanged() }
         }
+        // The DAC has one stream. Trypt Mania taking it (a run's song, a
+        // preview) pauses the player, as any other sound taking the output
+        // would; nothing resumes it, and its next play takes the stream back
+        // (LibusbAudioSink, StreamLease).
+        serviceScope.launch {
+            libusbDriver.streamHolder.collect { holder ->
+                if (holder == tf.monochrome.android.audio.usb.StreamClaimant.GAME && player.playWhenReady) {
+                    player.pause()
+                }
+            }
+        }
 
         // Scrobbles by time heard, checked every couple of seconds: see
         // ScrobbleTracker for why not on the track's end. Only while playing,
@@ -1820,7 +1831,12 @@ class PlaybackService : MediaSessionService() {
             dspChainFactory = ::buildSeededDspChain,
             // While the DAC is exclusively ours, the tail is mixed into the
             // main stream instead of playing through Android.
-            usbMix = { usbCrossfadeMix.takeIf { libusbDriver.isStreaming.value } },
+            usbMix = {
+                usbCrossfadeMix.takeIf {
+                    libusbDriver.isStreaming.value &&
+                        libusbDriver.holdsStream(tf.monochrome.android.audio.usb.StreamClaimant.PLAYER)
+                }
+            },
         ) { gain ->
             crossfadeGain = gain
             pushVolume()

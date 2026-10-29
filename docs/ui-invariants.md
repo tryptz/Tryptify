@@ -1902,16 +1902,32 @@ flight with its stage verbatim from the service, the waiting ones dimmed
 list's generation panel shows, read from the same `ChartQueueState`, never a
 second count.
 
-**Trypt Mania's volume keys move Android's volume, never the DAC's level.**
-The mode plays on Android's output, not the DAC: its transport and its
-preview are plain ExoPlayers, kept out of the shared player on purpose, and
-the exclusive USB DAC path carries only the main player's stream. While
-either sounds, `GlyphViewModel` tells `BypassVolumeController`
-(`androidStreamAudible`), `steersOutput` is false, and the keys fall through
-to `STREAM_MUSIC`, the media session reports a local device again, and the
-DAC's glass pop-up stays away. Before, with a DAC claimed and the main player
-parked under a preview, the keys stepped the DAC level, which nothing audible
-followed, and the game's volume could not be changed at all.
+**Trypt Mania plays through the exclusive USB DAC, and the DAC has one
+stream.** Its transport and its preview stay plain ExoPlayers, kept out of
+the shared player on purpose, but each gets a `LibusbAudioSink` of its own
+(`UsbGameAudio`), so with a DAC claimed a run's song and a preview come out
+of the DAC at the DAC level, and the volume keys move that level as for the
+main player. The driver carries a single stream, so who plays is a lease
+(`StreamLease`, `LibusbUacDriver.streamHolder`): the last player to start
+the stream holds it, the other one's writes, parks and flushes do nothing,
+and it takes the stream back on its own next play. Starting a run or a
+preview pauses the main player (`PlaybackService` watches the holder) and
+nothing resumes it; play from the notification under a run pauses the run
+and stops the preview (`GlyphViewModel.watchDacStream`). The game lets go
+by parking the stream, never stopping it: releasing the USB interface hands
+the DAC to Android's kernel driver and the main player's next start fails.
+A taken-over or fresh stream fades in from silence over about half a second,
+as any stream on this path does; the timing is untouched, since the position
+the game's clock reads is the sink's played frames. The metronome and the
+wheel's swish are raw AudioTracks and stay on Android's output. Only while
+the game's sound is on Android's output instead (no DAC, or one that
+refused its format, when the sink passes through to Android as before) does
+`GlyphViewModel` tell `BypassVolumeController` (`androidStreamAudible`),
+so `steersOutput` is false, the keys fall through to `STREAM_MUSIC`, the
+media session reports a local device again, and the DAC's glass pop-up
+stays away. Before 2026-10-29 the mode always played on the phone beside a
+claimed DAC, and before that fix the keys stepped the DAC level, which
+nothing audible followed, and the game's volume could not be changed at all.
 
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a

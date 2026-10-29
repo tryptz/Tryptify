@@ -68,6 +68,18 @@ class LibusbAudioSink(
      * is mixed here rather than by Android.
      */
     private val crossfadeMix: UsbCrossfadeMix? = null,
+    /**
+     * Who this sink plays for ([StreamLease]): the main player, or Trypt
+     * Mania ([UsbGameAudio]). The DAC has one stream; the last of the two
+     * to start it holds it, and the other waits for its own next play().
+     */
+    private val claimant: StreamClaimant = StreamClaimant.PLAYER,
+    /**
+     * The gain is this player's own [setVolume] under the DAC level, not
+     * [BypassVolumeController.getVolume], which carries the main player's.
+     * For Trypt Mania, whose preview fades in and out by volume.
+     */
+    private val ownsVolume: Boolean = false,
 ) : ForwardingAudioSink(delegate) {
 
     // Last, after the speed stages: off unless the DAC refused the song's rate.
@@ -150,6 +162,19 @@ class LibusbAudioSink(
 
     private var bypassActive = false
     private var configuredFormat: Format? = null
+
+    /**
+     * The other player holds the DAC's stream (it started one while this
+     * sink had it, or had it when this sink was configured paused). The
+     * buffers wait rather than go to Android's output: the first after
+     * this sink's own [play] takes the stream back ([retakeStream]).
+     */
+    private var yielded = false
+    /** [play] came since the stream was lost: this player's turn again. */
+    private var playedSinceYield = false
+
+    /** This player's own gain while [ownsVolume]; see [targetGain]. */
+    @Volatile private var ownGain = 1f
 
     /**
      * Stride of the PCM the chain hands us — 4 bytes/sample for float, 2 for
@@ -319,7 +344,7 @@ class LibusbAudioSink(
             // The main stream is silence here (gain 0, nothing to ramp); the
             // tail is mixed in at its own gain under the DAC level.
             val packed = packForUsb(silence, frames, 0f, 0f, 0f, 0f)
-            val written = driver.write(packed.slice().order(ByteOrder.nativeOrder()), frames)
+            val written = driver.write(claimant, packed.slice().order(ByteOrder.nativeOrder()), frames)
             if (tailPeeked > 0) {
                 if (written > 0) mix.consume(minOf(written, tailPeeked), rate)
                 tailPeeked = 0
@@ -354,7 +379,18 @@ class LibusbAudioSink(
      * the next claim.
      */
     private fun publishDacCarriesStream() {
+        // The other player's stream is what the DAC carries then: its sink says.
+        if (driver.streamHeldByAnother(claimant)) return
         volumeController.setDacCarriesStream(bypassActive || !driver.isOpen.value)
+    }
+
+    /** The gain the DAC's samples get: this player's own under the DAC level, or the main player's. */
+    private fun targetGain(): Float =
+        if (ownsVolume) ownGain * volumeController.getDacGain() else volumeController.getVolume()
+
+    override fun setVolume(volume: Float) {
+        if (ownsVolume) ownGain = volume.coerceIn(0f, 1f)
+        super.setVolume(volume)
     }
 
     private fun configureStream(
@@ -408,6 +444,21 @@ class LibusbAudioSink(
         // 16-bit was fine only because both paths agree on 16 bits.
         if (!driver.isOpen.value) {
             bypassActive = false
+            return
+        }
+
+        // Paused under the other player's stream (a track skipped from the
+        // notification during a run, a run readied under a song): the stream
+        // stays theirs, and the buffers wait for this sink's own play().
+        // Lost while playing and not played since (a track ending as the
+        // other started): still theirs, however the transport stands.
+        val waiting = yielded && !playedSinceYield
+        yielded = false
+        if (driver.streamHeldByAnother(claimant) && (paused || waiting)) {
+            bypassActive = false
+            yielded = true
+            playedSinceYield = false
+            Log.i(TAG, "configured under ${driver.streamHolder.value}'s stream while paused — waiting for play")
             return
         }
 
@@ -553,17 +604,26 @@ class LibusbAudioSink(
         refused: MutableMap<Int, List<ClockRateRange>>? = null,
     ): Boolean {
         for (bits in depths) {
-            val reused = driver.isStreamingFormat(rate, bits, channels)
+            var reused = driver.isStreamingFormat(rate, bits, channels)
+            // The other player's stream, at this very format: taken over as
+            // it runs rather than stopped and started (a DAC may click at
+            // the alt change). Gone meanwhile, and it is started afresh.
+            var taken = false
+            if (reused && !driver.holdsStream(claimant)) {
+                taken = driver.takeOverStream(claimant)
+                if (taken) Log.i(TAG, "$claimant took over the stream ($rate/${bits}b/${channels}ch)")
+                else reused = false
+            }
             // A stream parked during a pause still has this format but sends
             // nothing until it is resumed. play() resumes it; a song that
             // arrives while playing (after one the delegate played, say) has
             // to, or it would be written into a ring nothing drains.
             val unpark = reused && !paused && driver.isPumpParked()
-            if (reused && !unpark) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
+            if (reused && !unpark && !taken) Log.i(TAG, "reused active stream ($rate/${bits}b/${channels}ch)")
             val up = when {
-                unpark -> driver.resumePump()
+                unpark -> driver.resumePump(claimant)
                 reused -> true
-                else -> driver.start(rate, bits, channels)
+                else -> driver.start(claimant, rate, bits, channels)
             }
             if (!up) {
                 refused?.put(bits, driver.supportedRates.value)
@@ -571,7 +631,8 @@ class LibusbAudioSink(
             }
             // A stream the DAC starts from silence fades in from silence;
             // one it carries on with (gapless, same format) keeps its level.
-            if (!reused || unpark) appliedGain = 0f
+            // One taken over fades in too: it is another song.
+            if (!reused || unpark || taken) appliedGain = 0f
             outSampleRate = rate
             adoptNegotiatedFormat(bits, channels, encoding)
             // Integer PCM reaches the DAC untouched, so its stride has to
@@ -616,6 +677,13 @@ class LibusbAudioSink(
         presentationTimeUs: Long,
         encodedAccessUnitCount: Int,
     ): Boolean {
+        // Lost to the other player (it started a stream under this one):
+        // nothing of this sink's reaches the DAC until it plays again.
+        if (bypassActive && driver.streamHeldByAnother(claimant)) loseStream()
+        if (yielded) {
+            if (paused || !playedSinceYield || !retakeStream()) return false
+        }
+
         tryLazyEngage()
         checkDriverStillOwned()
 
@@ -705,7 +773,7 @@ class LibusbAudioSink(
 
         // The volume, reached a frame at a time (GainRamp): a slider move or a
         // key press is a slope, not a step, and a fresh stream fades in.
-        val gain = volumeController.getVolume()
+        val gain = targetGain()
         val startGain = appliedGain
         val rise = GainRamp.risePerFrame(gain, outSampleRate)
         val fall = GainRamp.fallPerFrame(outSampleRate)
@@ -722,7 +790,7 @@ class LibusbAudioSink(
         }
 
         val positionedView = toWrite.slice().order(ByteOrder.nativeOrder())
-        val written = driver.write(positionedView, framesAvailable)
+        val written = driver.write(claimant, positionedView, framesAvailable)
         // Where the ramp got to in the frames the DAC actually took; a partial
         // write resumes from there.
         if (written > 0) appliedGain = GainRamp.after(startGain, gain, written, rise, fall)
@@ -1045,8 +1113,59 @@ class LibusbAudioSink(
         resetWatchdog()
     }
 
+    /**
+     * The other player started a stream under this sink's. The chain stays
+     * configured and nothing goes to Android's output: the buffers wait
+     * ([yielded]). The main player pauses meanwhile (PlaybackService watches
+     * the holder), and Trypt Mania pauses its run.
+     */
+    private fun loseStream() {
+        Log.i(TAG, "${driver.streamHolder.value} took the DAC's stream from $claimant — waiting for play")
+        bypassActive = false
+        yielded = true
+        playedSinceYield = false
+        pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+        lastEngageFailHash = 0
+        resetWatchdog()
+    }
+
+    /**
+     * This sink's turn again ([play] came since [loseStream]): the stream
+     * is taken back for the configured format, from the other player's
+     * stream (parked or running) or from none. The DAC refusing it is the
+     * one way to Android's output, as from configure.
+     */
+    private fun retakeStream(): Boolean {
+        yielded = false
+        val fmt = configuredFormat ?: return false
+        val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
+        if (input.sampleRate <= 0 || input.channelCount <= 0 || sourceBytesPerSample(input.encoding) <= 0) return false
+        val chainOut = configureChain(input)
+        val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
+        val dacOut = if (out.sampleRate > 0 && out.channelCount > 0 && sourceBytesPerSample(out.encoding) > 0) {
+            synchronized(writeLock) { engageForChain(input, out) }
+        } else null
+        bypassActive = dacOut != null
+        if (dacOut != null) {
+            lastEngageFailHash = 0
+            pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
+            resetStreamAccounting()
+            crossfadeMix?.setConsumer(dacOut.sampleRate, dacOut.channelCount)
+            Log.i(TAG, "$claimant took the DAC's stream back (chain ${out.sampleRate}/${encodingLabel(out.encoding)}/" +
+                "${out.channelCount}ch -> DAC ${dacOut.sampleRate}/${outBitsPerSample}b)")
+        } else {
+            lastEngageFailHash = engageHash(input.sampleRate, input.channelCount, input.encoding)
+            Log.w(TAG, "the DAC refused $claimant's stream back — delegate takes over")
+            handProcessorsToDelegate()
+        }
+        publishDacCarriesStream()
+        return dacOut != null
+    }
+
     private fun tryLazyEngage() {
         if (bypassActive || !driver.isOpen.value) return
+        // Not from under the other player while paused; see configureStream.
+        if (paused && driver.streamHeldByAnother(claimant)) return
 
         val fmt = configuredFormat ?: return
         val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
@@ -1179,7 +1298,7 @@ class LibusbAudioSink(
         paused = true
         if (bypassActive) {
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
-            driver.flushRing()
+            driver.flushRing(claimant)
             framesWritten = 0L
             startTimeUs = C.TIME_UNSET
             positionPlayedBaseFrames = 0L
@@ -1197,6 +1316,9 @@ class LibusbAudioSink(
         // down even if bypass happened to be off when the user hit play.
         paused = false
         advancingReported = false
+        // Lost the stream to the other player: this is the turn that takes it
+        // back, on the next buffer (retakeStream).
+        playedSinceYield = true
         if (bypassActive) {
             resumeParkedPump()
             resetWatchdog()
@@ -1222,7 +1344,7 @@ class LibusbAudioSink(
                 // Stale if play(), reset() or another arm came since. A
                 // stream that went away meanwhile is not parked: parkPump
                 // finds nothing running.
-                if (generation == parkGeneration && driver.parkPump()) {
+                if (generation == parkGeneration && driver.parkPump(claimant)) {
                     Log.i(TAG, "paused ${PAUSE_IDLE_MS / 1000} s: DAC stream parked (alt 0, interface kept)")
                 }
             }
@@ -1248,7 +1370,7 @@ class LibusbAudioSink(
     private fun resumeParkedPump() {
         synchronized(writeLock) {
             if (!driver.isPumpParked()) return
-            if (driver.resumePump()) {
+            if (driver.resumePump(claimant)) {
                 appliedGain = 0f
                 Log.i(TAG, "resumed the parked DAC stream")
             } else {
@@ -1400,7 +1522,7 @@ class LibusbAudioSink(
         advancingReported = false
         if (bypassActive) {
             synchronized(writeLock) {
-                driver.flushRing()
+                driver.flushRing(claimant)
                 tailOnlyQueued = false
             }
             framesWritten = 0L
@@ -1423,12 +1545,14 @@ class LibusbAudioSink(
         resetHalTiming()
         usbTimeline.clear()
         disarmIdlePark()
-        if (driver.isStreaming.value) driver.stop()
+        letGoOfStream()
 
         bypassActive = false
+        yielded = false
         // No stream, so nothing has gone elsewhere: a key press before the
-        // next one starts still sets the DAC.
-        volumeController.setDacCarriesStream(true)
+        // next one starts still sets the DAC. Unless the other player's
+        // stream is what the DAC carries now, which is its sink's to say.
+        if (!driver.streamHeldByAnother(claimant)) volumeController.setDacCarriesStream(true)
         paused = false
         pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
         framesWritten = 0L
@@ -1466,7 +1590,21 @@ class LibusbAudioSink(
         halPending = AudioProcessor.EMPTY_BUFFER
         super.release()
         disarmIdlePark()
-        if (driver.isStreaming.value) driver.stop()
+        letGoOfStream()
+    }
+
+    /**
+     * This player is done with the stream. The main player ends it, as it
+     * always has (its queue cleared, the service gone). Trypt Mania only
+     * parks it and lets go ([LibusbUacDriver.yieldStream]): ending it would
+     * release the interface, after which the main player's next start finds
+     * the kernel holding the DAC.
+     */
+    private fun letGoOfStream() {
+        when (claimant) {
+            StreamClaimant.PLAYER -> if (driver.isStreaming.value) driver.stop(claimant)
+            StreamClaimant.GAME -> driver.yieldStream(claimant)
+        }
     }
 
     private fun resetStreamAccounting() {
