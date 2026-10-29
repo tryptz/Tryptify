@@ -236,15 +236,6 @@
     <string name="action_set">Imposta</string>
     <string name="dock_mixer_fx">Mixer/FX</string>
     <string name="lyrics_none_short">Nessun testo disponibile per questo brano</string>
-    <string name="lyrics_server_sync">Sincronizza il testo sul server</string>
-    <string name="lyrics_server_failed">Il server non è riuscito a sincronizzare il testo: %1$s</string>
-    <string name="lyrics_server_no_file">Il server ha bisogno del file del brano: scaricalo prima.</string>
-    <string name="lyrics_server_no_server">Nessun server in Impostazioni › Connessioni sincronizza i testi.</string>
-    <string name="lyrics_server_waiting">In attesa di sincronizzazione</string>
-    <string name="lyrics_server_downloading">Prima scarico il brano…</string>
-    <string name="lyrics_server_sending">Invio del brano a %1$s…</string>
-    <string name="lyrics_server_hearing">%1$s sta ascoltando ogni parola… qualche minuto su un server CPU</string>
-    <string name="lyrics_server_cancel">Annulla</string>
     <string name="action_edit_lyrics">Modifica testo</string>
     <string name="lyrics_editor_title">Editor del testo</string>
     <string name="lyrics_editor_no_song">Riproduci un brano per modificarne il testo</string>
@@ -882,8 +873,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Traslittera i testi giapponesi in caratteri latini</string>
     <string name="settings_word_level_lyrics_provider">Provider di testi sincronizzati parola per parola</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Fonti di sincronizzazione karaoke per i brani per cui la tua istanza non ha testi a tempo di parola. Tutto = tutte le fonti contemporaneamente; vince la migliore sincronizzazione.</string>
-    <string name="settings_server_lyrics">Testi dal server</string>
-    <string name="settings_server_lyrics_subtitle">I brani senza testo sincronizzato parola per parola vengono inviati al tuo server delle chart, che ascolta la voce e sincronizza ogni parola. Solo brani scaricati e locali.</string>
     <string name="settings_view_mode">Modalità di visualizzazione</string>
     <string name="settings_dynamic_player_color">Colore dinamico del player</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Tinge il player con la copertina dell’album (richiede Colori dinamici); disattivato, mantiene il colore del tema</string>

@@ -1026,16 +1026,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
         }
     }
 
-    // Server lyrics — a song the race leaves without word timing goes to the
-    // chart server, which hears the vocals and times every word (ServerLyricsEngine).
-    val serverLyrics by viewModel.serverLyrics.collectAsStateWithLifecycle()
-    SettingSwitchItem(
-        title = stringResource(R.string.settings_server_lyrics),
-        subtitle = stringResource(R.string.settings_server_lyrics_subtitle),
-        checked = serverLyrics,
-        onCheckedChange = { viewModel.setServerLyrics(it) }
-    )
-
 
     Spacer(modifier = Modifier.height(16.dp))
 }

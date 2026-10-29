@@ -67,8 +67,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.R
 import tf.monochrome.android.data.api.LrcFormat
-import tf.monochrome.android.data.repository.LyricsStage
-import tf.monochrome.android.data.repository.ServerLyricsStatus
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.ui.glyph.GlyphButton
 import tf.monochrome.android.ui.mixer.GlassChoiceChip
@@ -106,8 +104,6 @@ fun LyricsEditorScreen(
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     val note by viewModel.note.collectAsStateWithLifecycle()
     val fx by viewModel.lyricsFx.collectAsStateWithLifecycle()
-    val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
-    val hasServer by viewModel.hasServer.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
     // Held as State: the play head ticks four times a second, and more at
     // lyric boundaries. Read here it recomposed the whole editor for the
@@ -290,18 +286,7 @@ fun LyricsEditorScreen(
                         },
                         enabled = lines.isNotEmpty(),
                     ) { Text(stringResource(R.string.lyrics_editor_export)) }
-                    if (hasServer) {
-                        val busy = serverStatus is ServerLyricsStatus.Working || serverStatus == ServerLyricsStatus.Waiting
-                        if (busy) {
-                            TextButton(onClick = viewModel::cancelServer) { Text(stringResource(R.string.lyrics_server_cancel)) }
-                        } else {
-                            TextButton(onClick = viewModel::timeOnServer) { Text(stringResource(R.string.lyrics_server_sync)) }
-                        }
-                    }
                     TextButton(onClick = viewModel::forgetSaved) { Text(stringResource(R.string.lyrics_editor_forget)) }
-                }
-                serverStatusText(serverStatus)?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 }
                 note?.let {
                     val text = when (it) {
@@ -386,19 +371,6 @@ fun LyricsEditorScreen(
 
 private fun lines(draft: tf.monochrome.android.domain.model.Lyrics?): List<LyricLine> = draft?.lines.orEmpty()
 
-@Composable
-private fun serverStatusText(status: ServerLyricsStatus?): String? = when (status) {
-    ServerLyricsStatus.Waiting -> stringResource(R.string.lyrics_server_waiting)
-    is ServerLyricsStatus.Working -> when (status.stage) {
-        LyricsStage.DOWNLOADING -> stringResource(R.string.lyrics_server_downloading)
-        LyricsStage.SENDING -> stringResource(R.string.lyrics_server_sending, status.host)
-        LyricsStage.HEARING -> stringResource(R.string.lyrics_server_hearing, status.host)
-    }
-    is ServerLyricsStatus.Failed -> stringResource(R.string.lyrics_server_failed, status.reason)
-    ServerLyricsStatus.NoFile -> stringResource(R.string.lyrics_server_no_file)
-    ServerLyricsStatus.NoServer -> stringResource(R.string.lyrics_server_no_server)
-    null -> null
-}
 
 @Composable
 private fun Transport(isPlaying: Boolean, position: State<Long>, durationMs: Long, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {

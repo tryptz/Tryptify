@@ -228,15 +228,6 @@
     <string name="action_set">设置</string>
     <string name="dock_mixer_fx">混音/效果</string>
     <string name="lyrics_none_short">这首歌暂无歌词</string>
-    <string name="lyrics_server_sync">在服务器上同步歌词</string>
-    <string name="lyrics_server_failed">服务器无法同步歌词：%1$s</string>
-    <string name="lyrics_server_no_file">服务器需要这首歌的文件：请先下载。</string>
-    <string name="lyrics_server_no_server">设置 › 连接 中没有能同步歌词的服务器。</string>
-    <string name="lyrics_server_waiting">排队等待同步</string>
-    <string name="lyrics_server_downloading">正在先下载歌曲…</string>
-    <string name="lyrics_server_sending">正在把歌曲发送到 %1$s…</string>
-    <string name="lyrics_server_hearing">%1$s 正在逐字听取… CPU 服务器需要几分钟</string>
-    <string name="lyrics_server_cancel">取消</string>
     <string name="action_edit_lyrics">编辑歌词</string>
     <string name="lyrics_editor_title">歌词编辑器</string>
     <string name="lyrics_editor_no_song">播放一首歌以编辑它的歌词</string>
@@ -806,8 +797,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">将日语歌词转写为拉丁字母</string>
     <string name="settings_word_level_lyrics_provider">逐字歌词来源</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">当你的实例没有逐字同步歌词时使用的卡拉 OK 时间来源。“全部”= 同时查询所有来源，采用最精确的时间。</string>
-    <string name="settings_server_lyrics">服务器歌词</string>
-    <string name="settings_server_lyrics_subtitle">没有逐字同步歌词的歌曲会发送到你的谱面服务器，由它听取人声并为每个词定时。仅限已下载和本地歌曲。</string>
     <string name="settings_view_mode">视图模式</string>
     <string name="settings_dynamic_player_color">播放器动态颜色</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">根据专辑封面为播放器着色（需开启动态颜色）；关闭后播放器使用主题颜色</string>

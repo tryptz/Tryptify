@@ -297,9 +297,9 @@ The phone's separators were removed: ONNX Runtime with Qualcomm's QNN (the NPU a
 
 Charting is a line, `ChartQueue`, kept on disk and drained by one `StepManiaGenerationWorker`, with as many songs in flight as the server says it separates at once plus one uploading ahead, at most 43 (`StepManiaGenerationWorker.lanes`, held by `ChartPaceTest`). Generate joins the line; a folder heading's pill and "Chart every song without one" put many in at once, after `GlyphBatchDialog` shows each mode's time and cost (`ChartPace`, learned from the servers' own timings and `pricePerHour`/`idleSeconds`, never by waking one to ask). A song's failure is counted and the batch goes on. `ChartQueueTest` holds the rule that a song added as the worker stops still gets a worker.
 
-The server's envelopes are a port of `TransientEnvelopeBuilder`, held to it by `stemsapi/envelope_parity.json`, which both repositories test against (`EnvelopeParityTest` here): change the builder and the server's port with it, regenerate the fixture there, and copy it here. `STEMS` is not a catalog, and neither are `LYRICS` (the same servers timing lyrics) and `MULTIPLAYER` (the rooms server): every `when` over `ApiService` gives them no search and no quality, and a `STEMS` pill says GPU or CPU.
+The server's envelopes are a port of `TransientEnvelopeBuilder`, held to it by `stemsapi/envelope_parity.json`, which both repositories test against (`EnvelopeParityTest` here): change the builder and the server's port with it, regenerate the fixture there, and copy it here. `STEMS` is not a catalog, and neither is `MULTIPLAYER` (the rooms server): every `when` over `ApiService` gives them no search and no quality, and a `STEMS` pill says GPU or CPU.
 
-Lyrics timing runs on the same servers: `ServerLyricsEngine` keeps its own line, drained by `LyricsSyncWorker`, the way charts are, and a song with no file on the phone is downloaded first.
+Lyrics are no longer timed on a server (removed 2026-10-29, with the Parser's Whisper): word-timed lyrics come from the editor, and `TimedLyricsStore` keeps them, and the rows a server timed before, for good.
 
 ## Engineering Gates
 

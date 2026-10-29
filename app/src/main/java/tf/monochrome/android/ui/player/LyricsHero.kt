@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.TextButton
-import tf.monochrome.android.data.repository.LyricsStage
-import tf.monochrome.android.data.repository.ServerLyricsStatus
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -331,9 +329,6 @@ internal fun LyricsHeroBox(
     positionMs: StateFlow<Long>,
     onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    serverStatus: ServerLyricsStatus? = null,
-    onSyncOnServer: (() -> Unit)? = null,
-    onCancelServer: (() -> Unit)? = null,
 ) {
     Box(modifier = modifier.lyricsEdgeFade()) {
         when {
@@ -355,7 +350,6 @@ internal fun LyricsHeroBox(
                     color = Color.White.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,
                 )
-                ServerLyricsNote(serverStatus, onSyncOnServer, onCancelServer)
             }
             lyrics.isSynced -> SyncedLyricsView(
                 lines = lyrics.lines,
@@ -364,48 +358,6 @@ internal fun LyricsHeroBox(
                 onSeekTo = onSeekTo,
             )
             else -> UnsyncedLyricsView(lines = lyrics.lines)
-        }
-    }
-}
-
-/**
- * The server's word under the empty state, and the one action: text under
- * text, no pane (docs/ui-invariants.md, "Lyrics"). The button is offered
- * only while no job runs and a lyrics server is configured ([onSync] null).
- */
-@Composable
-private fun ServerLyricsNote(status: ServerLyricsStatus?, onSync: (() -> Unit)?, onCancel: (() -> Unit)?) {
-    val note = when (status) {
-        ServerLyricsStatus.Waiting -> stringResource(R.string.lyrics_server_waiting)
-        is ServerLyricsStatus.Working -> when (status.stage) {
-            LyricsStage.DOWNLOADING -> stringResource(R.string.lyrics_server_downloading)
-            LyricsStage.SENDING -> stringResource(R.string.lyrics_server_sending, status.host)
-            LyricsStage.HEARING -> stringResource(R.string.lyrics_server_hearing, status.host)
-        }
-        is ServerLyricsStatus.Failed -> stringResource(R.string.lyrics_server_failed, status.reason)
-        ServerLyricsStatus.NoFile -> stringResource(R.string.lyrics_server_no_file)
-        ServerLyricsStatus.NoServer -> stringResource(R.string.lyrics_server_no_server)
-        null -> null
-    }
-    if (note != null) {
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = note,
-            style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.6f),
-            textAlign = TextAlign.Center,
-        )
-    }
-    val busy = status is ServerLyricsStatus.Working || status == ServerLyricsStatus.Waiting
-    if (busy && onCancel != null) {
-        Spacer(Modifier.height(4.dp))
-        TextButton(onClick = onCancel) {
-            Text(stringResource(R.string.lyrics_server_cancel), color = Color.White.copy(alpha = 0.85f))
-        }
-    } else if (onSync != null && !busy) {
-        Spacer(Modifier.height(4.dp))
-        TextButton(onClick = onSync) {
-            Text(stringResource(R.string.lyrics_server_sync), color = Color.White.copy(alpha = 0.85f))
         }
     }
 }

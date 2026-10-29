@@ -530,31 +530,12 @@ The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The
 low-performance glass switch drops the rays with the glass.
 
-**The lyrics view's empty state carries the server's word, and one action.**
-Under "No lyrics available" the view says where a server timing stands
-(`ServerLyricsStatus`: timing on which host, failed and why, no file to send,
-no server) in the same dim white as the empty text, and offers one text
-button, "Time lyrics on the server", only while no job runs and a lyrics
-server is configured. The same action sits in the player's overflow menu, so a
-song that has plain or line-timed lyrics can still be sent. Nothing here is a
-pane, a chip or a card: it is text under text, as the empty state was. The
-timing itself never joins the lyrics race, which has fifteen seconds; it runs
-in `ServerLyricsEngine` after the race, outlives the track, and its answer is
-kept in `cached_lyrics` and read before any race from then on.
-
-**Timing lyrics is a Trypt Mania job, not a spinner.** Songs go in a line
-(`ServerLyricsEngine.request`) and `LyricsSyncWorker` drains it as
-`StepManiaGenerationWorker` drains the chart queue: an ongoing notification
-naming the song and its stage (downloading, sending, hearing), then a note
-that can be swiped away saying which songs got their words. A song with no
-file on the phone is downloaded through the app's own downloads first and
-kept, as Trypt Mania charts only what is on the phone. The lyrics view shows
-the same stage under the empty state, with "Cancel" while the line runs and
-"Time lyrics on the server" when it does not. By itself a song joins the line
-only after fifteen seconds of play (`SERVER_LYRICS_AFTER_MS`): on a phone
-skipping through a playlist, every song passed over was downloaded and timed
-for nobody. The worker runs up to eight songs at once, as many as the chart
-server said it has copies, like a chart batch's lanes.
+**The lyrics view's empty state is text, and nothing else.** Under "No lyrics
+available" nothing is offered: the server timing that used to stand there
+(a Whisper on the chart server, removed 2026-10-29 with the Parser's lyrics)
+is gone, and nothing here is a pane, a chip or a card. Word-timed lyrics
+still come from the editor, and the rows a server timed before still read
+(`TimedLyricsStore`), kept for good and read before any race.
 
 **The lyrics editor is built as the Player Visuals Studio is.** `StudioPreview`
 (the real renderer, condensed, with the listener's own Lyrics FX) pinned up
@@ -564,8 +545,8 @@ pane), and every setting below in `StudioSection`s with `FxToggle` and
 `FxNudge`. It reaches the song through the shared `PlayerViewModel`, passed in
 from the nav host as the other tool screens get it, so a stamp is the song's
 own position and a tapped line seeks. Saving goes through
-`ServerLyricsEngine.publish`: the same `cached_lyrics` row a server would
-write, the player's lyrics replaced at once, and the download's `.lrc`
+`TimedLyricsStore.publish`: a `cached_lyrics` row in the shape a server once
+wrote, the player's lyrics replaced at once, and the download's `.lrc`
 rewritten with word times. The row list pads its bottom by
 `LocalBottomChromeInset`, like the Studio.
 

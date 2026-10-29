@@ -232,15 +232,6 @@
     <string name="action_set">Festlegen</string>
     <string name="dock_mixer_fx">Mixer/FX</string>
     <string name="lyrics_none_short">Für diesen Titel ist kein Songtext verfügbar</string>
-    <string name="lyrics_server_sync">Songtext auf dem Server timen</string>
-    <string name="lyrics_server_failed">Der Server konnte den Songtext nicht timen: %1$s</string>
-    <string name="lyrics_server_no_file">Der Server braucht die Datei des Titels: lade ihn zuerst herunter.</string>
-    <string name="lyrics_server_no_server">Kein Server unter Einstellungen › Verbindungen timt Songtexte.</string>
-    <string name="lyrics_server_waiting">Wartet aufs Timen</string>
-    <string name="lyrics_server_downloading">Titel wird zuerst heruntergeladen…</string>
-    <string name="lyrics_server_sending">Titel wird an %1$s gesendet…</string>
-    <string name="lyrics_server_hearing">%1$s hört jedes Wort… auf einem CPU-Server ein paar Minuten</string>
-    <string name="lyrics_server_cancel">Abbrechen</string>
     <string name="action_edit_lyrics">Songtext bearbeiten</string>
     <string name="lyrics_editor_title">Songtext-Editor</string>
     <string name="lyrics_editor_no_song">Spiel einen Titel ab, um seinen Songtext zu bearbeiten</string>
@@ -844,8 +835,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Japanische Songtexte in lateinische Schrift umschreiben</string>
     <string name="settings_word_level_lyrics_provider">Anbieter für wortgenaue Songtexte</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Quellen für Karaoke-Timing, wenn deine Instanz keine wortgenauen Songtexte hat. Alle = alle Quellen gleichzeitig; das beste Timing gewinnt.</string>
-    <string name="settings_server_lyrics">Server-Songtexte</string>
-    <string name="settings_server_lyrics_subtitle">Titel ohne wortgenauen Songtext werden an deinen Chart-Server geschickt, der den Gesang hört und jedes Wort timt. Nur heruntergeladene und lokale Titel.</string>
     <string name="settings_view_mode">Ansicht</string>
     <string name="settings_dynamic_player_color">Dynamische Player-Farbe</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Färbt den Player nach dem Albumcover (Dynamische Farben müssen an sein); aus: Player bleibt in der Farbe des Schemas</string>

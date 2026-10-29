@@ -232,15 +232,6 @@
     <string name="action_set">Ayarla</string>
     <string name="dock_mixer_fx">Mikser/FX</string>
     <string name="lyrics_none_short">Bu parça için şarkı sözü yok</string>
-    <string name="lyrics_server_sync">Şarkı sözünü sunucuda zamanla</string>
-    <string name="lyrics_server_failed">Sunucu şarkı sözünü zamanlayamadı: %1$s</string>
-    <string name="lyrics_server_no_file">Sunucunun parçanın dosyasına ihtiyacı var: önce indirin.</string>
-    <string name="lyrics_server_no_server">Ayarlar › Bağlantılar altında şarkı sözü zamanlayan sunucu yok.</string>
-    <string name="lyrics_server_waiting">Zamanlama sırasında</string>
-    <string name="lyrics_server_downloading">Önce parça indiriliyor…</string>
-    <string name="lyrics_server_sending">Parça %1$s sunucusuna gönderiliyor…</string>
-    <string name="lyrics_server_hearing">%1$s her kelimeyi dinliyor… CPU sunucusunda birkaç dakika sürer</string>
-    <string name="lyrics_server_cancel">İptal</string>
     <string name="action_edit_lyrics">Şarkı sözünü düzenle</string>
     <string name="lyrics_editor_title">Şarkı sözü düzenleyici</string>
     <string name="lyrics_editor_no_song">Sözlerini düzenlemek için bir parça çal</string>
@@ -844,8 +835,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Japonca şarkı sözlerini Latin harflerine çevir</string>
     <string name="settings_word_level_lyrics_provider">Kelime düzeyinde şarkı sözü sağlayıcısı</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Örneğinizde kelime bazlı senkronize şarkı sözü yoksa karaoke zamanlamasının kaynakları. Tümü = tüm kaynaklar aynı anda; en iyi zamanlama kazanır.</string>
-    <string name="settings_server_lyrics">Sunucu şarkı sözleri</string>
-    <string name="settings_server_lyrics_subtitle">Kelime bazlı senkronize sözü olmayan parçalar chart sunucunuza gönderilir; sunucu vokali dinler ve her kelimeyi zamanlar. Yalnızca indirilmiş ve yerel parçalar.</string>
     <string name="settings_view_mode">Görünüm modu</string>
     <string name="settings_dynamic_player_color">Dinamik oynatıcı rengi</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Oynatıcıyı albüm kapağına göre renklendirir (Dinamik renkler açık olmalı); kapalıyken oynatıcı tema renginde kalır</string>

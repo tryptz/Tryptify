@@ -236,15 +236,6 @@
     <string name="action_set">Establecer</string>
     <string name="dock_mixer_fx">Mezclador/FX</string>
     <string name="lyrics_none_short">No hay letra disponible para esta canción</string>
-    <string name="lyrics_server_sync">Sincronizar la letra en el servidor</string>
-    <string name="lyrics_server_failed">El servidor no pudo sincronizar la letra: %1$s</string>
-    <string name="lyrics_server_no_file">El servidor necesita el archivo de la canción: descárgala primero.</string>
-    <string name="lyrics_server_no_server">Ningún servidor en Ajustes › Conexiones sincroniza letras.</string>
-    <string name="lyrics_server_waiting">En cola para sincronizar</string>
-    <string name="lyrics_server_downloading">Descargando la canción primero…</string>
-    <string name="lyrics_server_sending">Enviando la canción a %1$s…</string>
-    <string name="lyrics_server_hearing">%1$s está escuchando cada palabra… unos minutos en un servidor de CPU</string>
-    <string name="lyrics_server_cancel">Cancelar</string>
     <string name="action_edit_lyrics">Editar letra</string>
     <string name="lyrics_editor_title">Editor de letras</string>
     <string name="lyrics_editor_no_song">Reproduce una canción para editar su letra</string>
@@ -882,8 +873,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Transliterar las letras japonesas al alfabeto latino</string>
     <string name="settings_word_level_lyrics_provider">Proveedor de letras palabra a palabra</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Fuentes de sincronización karaoke cuando tu instancia no tiene letras sincronizadas por palabra. Todas = todas las fuentes a la vez; gana la mejor sincronización.</string>
-    <string name="settings_server_lyrics">Letras del servidor</string>
-    <string name="settings_server_lyrics_subtitle">Las canciones sin letra sincronizada por palabra se envían a tu servidor de charts, que escucha la voz y sincroniza cada palabra. Solo canciones descargadas y locales.</string>
     <string name="settings_view_mode">Modo de vista</string>
     <string name="settings_dynamic_player_color">Color dinámico del reproductor</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Tiñe el reproductor con la portada (requiere Colores dinámicos); desactivado, el reproductor mantiene el color del tema</string>

@@ -236,15 +236,6 @@
     <string name="action_set">Définir</string>
     <string name="dock_mixer_fx">Mixeur/FX</string>
     <string name="lyrics_none_short">Aucunes paroles disponibles pour ce titre</string>
-    <string name="lyrics_server_sync">Synchroniser les paroles sur le serveur</string>
-    <string name="lyrics_server_failed">Le serveur n’a pas pu synchroniser les paroles : %1$s</string>
-    <string name="lyrics_server_no_file">Le serveur a besoin du fichier du titre : téléchargez-le d’abord.</string>
-    <string name="lyrics_server_no_server">Aucun serveur dans Réglages › Connexions ne synchronise les paroles.</string>
-    <string name="lyrics_server_waiting">En attente de synchronisation</string>
-    <string name="lyrics_server_downloading">Téléchargement du titre d’abord…</string>
-    <string name="lyrics_server_sending">Envoi du titre à %1$s…</string>
-    <string name="lyrics_server_hearing">%1$s écoute chaque mot… quelques minutes sur un serveur CPU</string>
-    <string name="lyrics_server_cancel">Annuler</string>
     <string name="action_edit_lyrics">Modifier les paroles</string>
     <string name="lyrics_editor_title">Éditeur de paroles</string>
     <string name="lyrics_editor_no_song">Lancez un titre pour modifier ses paroles</string>
@@ -882,8 +873,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Translittérer les paroles japonaises en caractères latins</string>
     <string name="settings_word_level_lyrics_provider">Source des paroles mot à mot</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Sources du minutage karaoké quand votre instance n’a pas de paroles synchronisées mot à mot. Toutes = toutes les sources à la fois ; le meilleur minutage l’emporte.</string>
-    <string name="settings_server_lyrics">Paroles du serveur</string>
-    <string name="settings_server_lyrics_subtitle">Les titres sans paroles synchronisées mot à mot sont envoyés à votre serveur de charts, qui écoute la voix et minute chaque mot. Titres téléchargés et locaux seulement.</string>
     <string name="settings_view_mode">Mode d’affichage</string>
     <string name="settings_dynamic_player_color">Couleur dynamique du lecteur</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Teinte le lecteur d’après la pochette (nécessite Couleurs dynamiques) ; désactivé, le lecteur garde la couleur du thème</string>

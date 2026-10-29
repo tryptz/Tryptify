@@ -32,7 +32,7 @@ import javax.inject.Singleton
 class MusicRepository @Inject constructor(
     private val apiClient: HiFiApiClient,
     private val lyricsResolver: LyricsResolver,
-    private val serverLyrics: ServerLyricsEngine,
+    private val timedLyrics: TimedLyricsStore,
     private val localLyrics: LocalLyrics,
     private val subsonic: tf.monochrome.android.data.subsonic.SubsonicRepository,
     private val preferences: PreferencesManager,
@@ -182,9 +182,9 @@ class MusicRepository @Inject constructor(
         val wordProvider = preferences.lyricsWordProvider.first()
         val cacheKey = LyricsCacheKey(trackId, skipTidal, romajiEnabled, wordProvider)
         synchronized(lyricsCache) { lyricsCache[cacheKey] }?.let { return@runCatching it }
-        // Lyrics a server timed for this song, word by word, are kept for
-        // good and beat any race: no catalogue times this recording better.
-        serverLyrics.cached(trackId, romajiEnabled)?.let { timed ->
+        // Word-timed lyrics kept for this song (the editor's, or a server's
+        // from before) beat any race: no catalogue times this recording better.
+        timedLyrics.cached(trackId, romajiEnabled)?.let { timed ->
             synchronized(lyricsCache) { lyricsCache[cacheKey] = timed }
             return@runCatching timed
         }

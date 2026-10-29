@@ -233,15 +233,6 @@
     <string name="action_set">Set</string>
     <string name="dock_mixer_fx">Mixer/FX</string>
     <string name="lyrics_none_short">No lyrics available for this track</string>
-    <string name="lyrics_server_sync">Time lyrics on the server</string>
-    <string name="lyrics_server_failed">The server could not time the lyrics: %1$s</string>
-    <string name="lyrics_server_no_file">The server needs the song’s file: download it first.</string>
-    <string name="lyrics_server_no_server">No server under Settings › Connections times lyrics.</string>
-    <string name="lyrics_server_waiting">In line to be timed</string>
-    <string name="lyrics_server_downloading">Downloading the song first…</string>
-    <string name="lyrics_server_sending">Sending the song to %1$s…</string>
-    <string name="lyrics_server_hearing">%1$s is hearing every word… a few minutes on a CPU server</string>
-    <string name="lyrics_server_cancel">Cancel</string>
     <string name="action_edit_lyrics">Edit lyrics</string>
     <string name="lyrics_editor_title">Lyrics editor</string>
     <string name="lyrics_editor_no_song">Play a song to edit its lyrics</string>
@@ -845,8 +836,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">Transliterate Japanese lyrics to Latin characters</string>
     <string name="settings_word_level_lyrics_provider">Word-level lyrics provider</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">Karaoke-timing sources for songs your instance has no word-timed lyrics for. All = every source at once; the best timing wins.</string>
-    <string name="settings_server_lyrics">Server lyrics</string>
-    <string name="settings_server_lyrics_subtitle">Songs with no word-timed lyrics are sent to your chart server, which hears the vocals and times every word. Downloaded and local songs only.</string>
     <string name="settings_view_mode">View Mode</string>
     <string name="settings_dynamic_player_color">Dynamic Player Color</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">Tint the player from album art (needs Dynamic Colors on); off keeps the player on the theme color</string>

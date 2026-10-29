@@ -228,15 +228,6 @@
     <string name="action_set">設定</string>
     <string name="dock_mixer_fx">ミキサー/FX</string>
     <string name="lyrics_none_short">この曲の歌詞はありません</string>
-    <string name="lyrics_server_sync">サーバーで歌詞を同期</string>
-    <string name="lyrics_server_failed">サーバーで歌詞を同期できませんでした: %1$s</string>
-    <string name="lyrics_server_no_file">サーバーには曲のファイルが必要です。先にダウンロードしてください。</string>
-    <string name="lyrics_server_no_server">設定 › 接続 に歌詞を同期するサーバーがありません。</string>
-    <string name="lyrics_server_waiting">同期待ち</string>
-    <string name="lyrics_server_downloading">先に曲をダウンロード中…</string>
-    <string name="lyrics_server_sending">%1$s に曲を送信中…</string>
-    <string name="lyrics_server_hearing">%1$s が一語ずつ聞き取り中… CPU サーバーでは数分かかります</string>
-    <string name="lyrics_server_cancel">キャンセル</string>
     <string name="action_edit_lyrics">歌詞を編集</string>
     <string name="lyrics_editor_title">歌詞エディター</string>
     <string name="lyrics_editor_no_song">歌詞を編集するには曲を再生してください</string>
@@ -806,8 +797,6 @@
     <string name="settings_transliterate_japanese_lyrics_to_latin">日本語の歌詞をローマ字に変換</string>
     <string name="settings_word_level_lyrics_provider">単語単位の歌詞の提供元</string>
     <string name="settings_karaoke_timing_source_when_your_instance_has_no">インスタンスに単語単位の同期歌詞がないときのカラオケタイミングの取得元。「すべて」= すべての取得元を同時に検索し、最も精密なタイミングを採用します。</string>
-    <string name="settings_server_lyrics">サーバー歌詞</string>
-    <string name="settings_server_lyrics_subtitle">単語単位の同期歌詞がない曲をチャートサーバーへ送り、ボーカルを聞き取って各単語のタイミングを付けます。ダウンロード済みとローカルの曲のみ。</string>
     <string name="settings_view_mode">表示モード</string>
     <string name="settings_dynamic_player_color">プレーヤーのダイナミックカラー</string>
     <string name="settings_tint_the_player_from_album_art_needs_dynamic">アルバムアートでプレーヤーを染めます（ダイナミックカラーがオンの場合）。オフにするとテーマの色のままです</string>

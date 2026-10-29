@@ -346,8 +346,6 @@ class SettingsViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5000),
             tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH
         )
-    val serverLyrics: StateFlow<Boolean> = preferences.serverLyrics
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val lyrics3dRotation: StateFlow<Float> = preferences.lyrics3dRotation
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 12f)
     val lyrics3dWaveSpeed: StateFlow<Float> = preferences.lyrics3dWaveSpeed
@@ -626,7 +624,6 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsWordProvider(mode: tf.monochrome.android.data.preferences.LyricsWordProvider) {
         viewModelScope.launch { preferences.setLyricsWordProvider(mode) }
     }
-    fun setServerLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setServerLyrics(enabled) } }
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) { viewModelScope.launch { preferences.setNowPlayingViewMode(mode) } }
     fun setVisualizerEngineEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerEngineEnabled(enabled) } }
     fun setVisualizerRotationSeconds(seconds: Int) { viewModelScope.launch { preferences.setVisualizerRotationSeconds(seconds) } }

@@ -1,6 +1,12 @@
 package tf.monochrome.android.data.api
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.SetSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 
 /**
  * A streaming service a server can answer for.
@@ -25,14 +31,6 @@ enum class ApiService(val label: String, val probePath: String) {
     STEMS("Stem separation", "/api/stems/info"),
 
     /**
-     * Synced lyrics from the same TryptMania Parser server: it separates the
-     * vocals, hears them with Whisper and sends back when every word is
-     * sung, as lines of timed words. Given the plain lyrics the app already
-     * found, it keeps them word for word and only adds the times.
-     */
-    LYRICS("Synced lyrics", "/api/lyrics/info"),
-
-    /**
      * Trypt Mania's rooms (TryptMania-Parser's `multiplayer/` service, in
      * Rust): a host picks a chart, everyone with the song plays it from the
      * same moment, scores live, results shared. Its socket is `/ws` beside
@@ -41,8 +39,22 @@ enum class ApiService(val label: String, val probePath: String) {
     MULTIPLAYER("Multiplayer", "/api/multiplayer/info"),
 }
 
-/** What a TryptMania Parser server serves: Trypt Mania's charts, lyric times and rooms, never a catalog. */
-val TRYPT_MANIA_SERVICES: Set<ApiService> = setOf(ApiService.STEMS, ApiService.LYRICS, ApiService.MULTIPLAYER)
+/** What a TryptMania Parser server serves: Trypt Mania's charts and rooms, never a catalog. */
+val TRYPT_MANIA_SERVICES: Set<ApiService> = setOf(ApiService.STEMS, ApiService.MULTIPLAYER)
+
+/**
+ * A server's services as saved: names, and a name this build no longer has
+ * (`LYRICS`, the lyrics timing removed 2026-10-29) is dropped rather than
+ * failing the whole list, which fell back to the legacy keys and lost every
+ * server the listener had added.
+ */
+object ApiServiceSetSerializer : KSerializer<Set<ApiService>> {
+    private val names = SetSerializer(String.serializer())
+    override val descriptor: SerialDescriptor = names.descriptor
+    override fun serialize(encoder: Encoder, value: Set<ApiService>) = names.serialize(encoder, value.mapTo(LinkedHashSet()) { it.name })
+    override fun deserialize(decoder: Decoder): Set<ApiService> =
+        names.deserialize(decoder).mapNotNullTo(LinkedHashSet()) { name -> ApiService.entries.firstOrNull { it.name == name } }
+}
 
 /**
  * One API the user added under Settings › Connections, and what it was found
@@ -55,7 +67,7 @@ val TRYPT_MANIA_SERVICES: Set<ApiService> = setOf(ApiService.STEMS, ApiService.L
 @Serializable
 data class ApiServer(
     val url: String,
-    val services: Set<ApiService> = emptySet(),
+    val services: @Serializable(with = ApiServiceSetSerializer::class) Set<ApiService> = emptySet(),
     /** When [services] was last established, epoch millis; 0 = never checked. */
     val checkedAt: Long = 0L,
     /**

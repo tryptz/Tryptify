@@ -71,8 +71,6 @@ fun PlayerTopBar(
     onSendFile: () -> Unit,
     onOpenLyricsStudio: () -> Unit,
     onOpenSettings: () -> Unit,
-    /** Null when no server under Settings › Connections times lyrics: the item is not shown. */
-    onSyncLyricsOnServer: (() -> Unit)? = null,
     onEditLyrics: (() -> Unit)? = null,
     onGoToArtist: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -228,13 +226,6 @@ fun PlayerTopBar(
                         onClick = { onSendFile(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     )
-                    if (onSyncLyricsOnServer != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.lyrics_server_sync)) },
-                            onClick = { onSyncLyricsOnServer(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.Lyrics, contentDescription = null) },
-                        )
-                    }
                     if (onEditLyrics != null) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_edit_lyrics)) },

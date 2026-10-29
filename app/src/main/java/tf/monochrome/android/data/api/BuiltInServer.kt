@@ -86,15 +86,15 @@ object BuiltInServer {
         builtIn.any { own -> ApiServers.normalizeUrl(own)?.let { it == url } == true }
 
     /**
-     * The entry as added: a CPU stem and lyrics server, as it says of itself,
+     * The entry as added: a CPU stem server, as it says of itself,
      * so Slow finds it before it has been asked, and Fast tries it last; a
      * rooms server says nothing of a device.
      */
     fun entry(url: String, services: Set<ApiService> = SERVICES): ApiServer =
         ApiServer(url = url, services = services, stemDevice = if (ApiService.STEMS in services) "cpu" else null)
 
-    /** What the build's chart server serves: it separates for charts and times lyrics. */
-    private val SERVICES = setOf(ApiService.STEMS, ApiService.LYRICS)
+    /** What the build's chart server serves: it separates for charts. */
+    private val SERVICES = setOf(ApiService.STEMS)
 
     /** What the build's rooms server serves. */
     private val ROOMS_SERVICES = setOf(ApiService.MULTIPLAYER)

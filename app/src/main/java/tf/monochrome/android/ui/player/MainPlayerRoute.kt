@@ -150,8 +150,6 @@ fun MainPlayerRoute(
     val isDownloaded = isDownloadedRemote || isLocalTrack
     val lyrics by playerViewModel.currentLyrics.collectAsStateWithLifecycle()
     val isLyricsLoading by playerViewModel.isLyricsLoading.collectAsStateWithLifecycle()
-    val serverLyricsStatus by playerViewModel.serverLyricsStatus.collectAsStateWithLifecycle()
-    val hasLyricsServer by playerViewModel.hasLyricsServer.collectAsStateWithLifecycle()
     val viewMode by playerViewModel.nowPlayingViewMode.collectAsStateWithLifecycle()
     val blurredBackground by playerViewModel.playerBlurredBackground.collectAsStateWithLifecycle()
     val playbackSpeed by playerViewModel.playbackSpeed.collectAsStateWithLifecycle()
@@ -718,7 +716,6 @@ fun MainPlayerRoute(
             onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onSyncLyricsOnServer = if (hasLyricsServer) playerViewModel::syncLyricsOnServer else null,
             onEditLyrics = { navController.navigateTool(Screen.LyricsEditor) },
             onGoToArtist = navController.trackArtistAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
             onGoToAlbum = navController.trackAlbumAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
@@ -978,9 +975,6 @@ fun MainPlayerRoute(
                     isLoading = isLyricsLoading,
                     albumColors = AlbumColors(dominantFade.value, vibrantFade.value),
                     positionMs = playerViewModel.positionMs,
-                    serverStatus = serverLyricsStatus,
-                    onSyncOnServer = if (hasLyricsServer) playerViewModel::syncLyricsOnServer else null,
-                    onCancelServer = playerViewModel::cancelServerLyrics,
                     // One element, two states: compact taps expand
                     // (synced lyrics only); expanded line taps seek and
                     // gap taps collapse.

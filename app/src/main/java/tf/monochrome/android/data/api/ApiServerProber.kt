@@ -59,7 +59,7 @@ class ApiServerProber @Inject constructor(
     /** Null when [service] answered; otherwise why not. [onBody] hears an answer's text. */
     private suspend fun probeOne(url: String, service: ApiService, onBody: (String) -> Unit = {}): String? {
         // A sleeping GPU server takes its cold start to answer.
-        val timeout = if (service == ApiService.STEMS || service == ApiService.LYRICS) STEMS_PROBE_TIMEOUT_MS else PROBE_TIMEOUT_MS
+        val timeout = if (service == ApiService.STEMS) STEMS_PROBE_TIMEOUT_MS else PROBE_TIMEOUT_MS
         val response = withTimeoutOrNull(timeout) {
             runCatching {
                 val res = httpClient.get(url + service.probePath)

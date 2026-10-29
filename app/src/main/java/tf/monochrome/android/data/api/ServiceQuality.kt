@@ -66,7 +66,7 @@ object ServiceQuality {
         ApiService.QOBUZ -> listOf(QOBUZ_HI_RES, CD_FLAC, MP3_320)
         ApiService.DEEZER -> listOf(DEEZER_CD_FLAC, MP3_320)
         ApiService.APPLE -> emptyList()
-        ApiService.STEMS, ApiService.LYRICS, ApiService.MULTIPLAYER -> emptyList()
+        ApiService.STEMS, ApiService.MULTIPLAYER -> emptyList()
     }
 
     /**
