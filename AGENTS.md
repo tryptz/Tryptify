@@ -92,16 +92,19 @@ with the NDK and run under qemu for both ARM ABIs when the NDK and
 `qemu-user-static` are present (`apt-get install qemu-user-static`);
 otherwise that step says it skipped.
 
-Two more native suites are CMake projects of their own, built and run on the
+Three more native suites are CMake projects of their own, built and run on the
 desktop the same way: the Atmos renderer's (`atmos/tests/`, eighteen tests; the
-script above runs only `channel_placer_test` from it) and Trypt Mania's game
-engine (`glyph/tests/`, held to the same rules as its Kotlin twin):
+script above runs only `channel_placer_test` from it), Trypt Mania's game
+engine (`glyph/tests/`, held to the same rules as its Kotlin twin) and the
+motion blur behind the note trails and the lyric glide (`motion/tests/`):
 
 ```
 cmake -S app/src/main/cpp/atmos/tests -B build/atmos-tests
 cmake --build build/atmos-tests && ctest --test-dir build/atmos-tests --output-on-failure
 cmake -S app/src/main/cpp/glyph/tests -B build/glyph-tests
 cmake --build build/glyph-tests && ctest --test-dir build/glyph-tests --output-on-failure
+cmake -S app/src/main/cpp/motion/tests -B build/motion-tests
+cmake --build build/motion-tests && ctest --test-dir build/motion-tests --output-on-failure
 ```
 
 Nothing runs any of these automatically: the one CI workflow

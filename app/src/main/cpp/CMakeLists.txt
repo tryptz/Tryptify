@@ -126,6 +126,30 @@ target_link_libraries(monochrome_glyph
     log
 )
 
+# ── Motion blur ───────────────────────────────────────────────────────────
+# The speed tracker and the trail and blur plans behind Trypt Mania's note
+# trails and the lyric glide's blur. Its own small .so, loaded the first time
+# either is switched on. motion_blur.cpp carries no Android headers, so
+# motion/tests builds it on a desktop; only motion_jni.cpp does.
+add_library(monochrome_motion SHARED
+    motion/motion_blur.cpp
+    motion/motion_jni.cpp
+)
+
+target_include_directories(monochrome_motion PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/motion
+)
+
+target_compile_features(monochrome_motion PRIVATE cxx_std_17)
+
+# No -ffast-math: the plans check their inputs with isfinite, which fast-math
+# is free to fold away (see dsp/util/finite.h).
+target_compile_options(monochrome_motion PRIVATE
+    -O2 -fno-exceptions -fno-rtti
+)
+
+set_target_properties(monochrome_motion PROPERTIES DEBUG_POSTFIX "")
+
 # ── libusb (USB Audio Class direct output) ────────────────────────────────
 # Vendored at third_party/libusb. Upstream uses autotools + Android.mk;
 # we list the platform source files directly here so the existing CMake

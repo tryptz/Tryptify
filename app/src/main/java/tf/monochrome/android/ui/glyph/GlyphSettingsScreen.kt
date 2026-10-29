@@ -90,6 +90,7 @@ import tf.monochrome.android.glyph.data.GlyphCalibration
 import tf.monochrome.android.glyph.data.GlyphSyncTrack
 import tf.monochrome.android.glyph.data.GlyphTapSync
 import tf.monochrome.android.glyph.engine.GlyphGraphics
+import tf.monochrome.android.motion.MotionBlurQuality
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphTurn
 import tf.monochrome.android.glyph.engine.GlyphTvShader
@@ -673,6 +674,20 @@ private fun GraphicsTab(
         checked = graphics.comboBurst,
         onChange = { set(graphics.copy(comboBurst = it)) },
         note = "A burst across the field every fifty combo",
+    )
+    GlyphSlider(
+        label = "Motion blur",
+        value = graphics.motionBlur.toFloat(),
+        reading = GlyphGraphics.motionBlurLabel(graphics.motionBlur),
+        range = MotionBlurQuality.OFF.toFloat()..MotionBlurQuality.MAX.toFloat(),
+        steps = MotionBlurQuality.MAX - 1,
+        note = "A faded trail behind each moving note. Further right is smoother, at more GPU work. " +
+            "Only drawn while notes move fast, and off under reduced motion.",
+        default = MotionBlurQuality.OFF.toFloat(),
+        onChange = { v ->
+            val level = MotionBlurQuality.coerce(v.roundToInt())
+            if (level != graphics.motionBlur) set(graphics.copy(motionBlur = level))
+        },
     )
     Column {
         GlyphControlHeader("TV shader", "Android 13 and later")

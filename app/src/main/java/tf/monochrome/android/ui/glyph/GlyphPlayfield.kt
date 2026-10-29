@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
+import kotlin.math.sign
 import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
@@ -48,6 +49,8 @@ import tf.monochrome.android.glyph.engine.GlyphGameplayEngine
 import tf.monochrome.android.glyph.engine.GlyphGraphics
 import tf.monochrome.android.glyph.engine.GlyphScrollMode
 import tf.monochrome.android.glyph.engine.GlyphVisibleFrame
+import tf.monochrome.android.motion.MotionBlurQuality
+import tf.monochrome.android.motion.rememberMotionBlur
 import tf.monochrome.android.ui.navigation.LocalMiniPlayerGlass
 
 /**
@@ -194,6 +197,13 @@ fun GlyphPlayfield(
         val raysOn = rememberHitRaysAvailable(reducedMotion) && look.graphics.hitRays
         val hitLight = remember { GlyphHitLight() }
 
+        // Motion blur: a native tracker (cpp/motion) reads how fast the field
+        // scrolls and plans a few faded copies behind each moving note. Off,
+        // under reduced motion, or with the song paused: no tracker, and not
+        // one extra draw.
+        val blurLevel = if (reducedMotion) MotionBlurQuality.OFF else look.graphics.motionBlur
+        val motionBlur = rememberMotionBlur(blurLevel > MotionBlurQuality.OFF).takeIf { running }
+
         val laneNames = remember {
             GlyphLane.entries.joinToString(", ") { it.label }
         }
@@ -247,6 +257,29 @@ fun GlyphPlayfield(
             // One unit is a beat's worth of gap at 1×; the mode decides how many
             // units lie between two moments, and this turns units into pixels.
             val pixelsPerUnit = fieldLengthPx / GlyphScrollMode.UNITS_ON_SCREEN
+
+            // The trail: how many copies, how far apart (signed, in screen px)
+            // and how faded. The tracker is fed how far the field has scrolled;
+            // only the change counts, and a field's length in one frame is a
+            // seek or a restart, not a speed.
+            var trailTaps = 0
+            var trailStep = 0f
+            var trailAlpha = 0f
+            if (motionBlur != null) {
+                motionBlur.step(
+                    frameNanos = frameTick.value,
+                    positionPx = scrollMode.scrollUnits(timing, 0f, position) * pixelsPerUnit,
+                    jumpPx = fieldLengthPx,
+                    quality = blurLevel,
+                    spriteSizePx = noteSizePx.toFloat(),
+                    sprites = frame.count,
+                )
+                trailTaps = motionBlur.taps
+                // The notes move down as the scroll grows (up, reversed), and
+                // the trail lies behind them.
+                trailStep = -motionBlur.spacingPx * direction * sign(motionBlur.velocity)
+                trailAlpha = motionBlur.alpha
+            }
 
             // Pass one: hold and roll bodies, underneath everything. Their
             // ends arrive already placed by the engine.
@@ -395,6 +428,33 @@ fun GlyphPlayfield(
                 }
             }
 
+            // Trails, in a pass of their own under every sharp note, so one
+            // note's smear never lies over another's face: the note's own art,
+            // faded, no light. A held head sits still on the receptor and
+            // leaves none.
+            if (trailTaps > 0) {
+                for (i in 0 until frame.count) {
+                    if (frame.isHeld(i)) continue
+                    val note = notes[frame.noteIndex(i)]
+                    val travelled = frame.drawnUnits(i, note.type.isHoldLike) * pixelsPerUnit
+                    val y = receptorYPx - travelled * direction
+                    if (y < -noteSizePx * 2 || y > size.height + noteSizePx * 2) continue
+                    val shown = look.appearance.alphaAt(travelled / fieldLengthPx)
+                    if (shown <= 0f) continue
+                    val image = noteArt(art, note.type, note.lane.ordinal, note.division) ?: continue
+                    val x = (note.lane.ordinal * laneWidthPx + (laneWidthPx - noteSizePx) / 2f).roundToInt()
+                    val top = y - noteSizePx / 2f
+                    for (k in 1..trailTaps) {
+                        drawImage(
+                            image = image,
+                            dstOffset = IntOffset(x, (top + trailStep * k).roundToInt()),
+                            dstSize = IntSize(noteSizePx, noteSizePx),
+                            alpha = trailAlpha * shown,
+                        )
+                    }
+                }
+            }
+
             // Pass three: heads and taps, above the receptors. A hit hold's
             // head rides the top of its body, as StepMania's does: held, it
             // sits on the receptor and covers the body's cut end; let go, it
@@ -402,11 +462,7 @@ fun GlyphPlayfield(
             // showed under the receptor for the whole hold.
             for (i in 0 until frame.count) {
                 val note = notes[frame.noteIndex(i)]
-                val units = if (note.type.isHoldLike && frame.isHeadJudged(i)) {
-                    frame.bodyHeadUnits(i)
-                } else {
-                    frame.headUnits(i)
-                }
+                val units = frame.drawnUnits(i, note.type.isHoldLike)
 
                 val travelled = units * pixelsPerUnit
                 val y = receptorYPx - travelled * direction
@@ -612,6 +668,13 @@ private fun rememberFrameTick(enabled: Boolean, running: Boolean, lastFlashNanos
 
 /** The longest anything on the field moves after its moment: the combo burst. */
 private val SETTLED_NANOS = (COMBO_BURST_SECONDS * 1e9f).toLong()
+
+/**
+ * Where a note's head is drawn, in scroll units from the receptor: a hit
+ * hold's head rides the top of its body, everything else its own time.
+ */
+private fun GlyphVisibleFrame.drawnUnits(i: Int, holdLike: Boolean): Float =
+    if (holdLike && isHeadJudged(i)) bodyHeadUnits(i) else headUnits(i)
 
 /** Which artwork a note uses. Special notes ignore the beat palette. */
 private fun noteArt(

@@ -1987,6 +1987,13 @@
     <string name="fx_god_ray_tilt_desc">Cuánto mueve la luz inclinar el teléfono.</string>
     <string name="fx_god_ray_samples_value">%1$d muestras</string>
     <string name="fx_god_ray_quality_desc">Muestras por píxel: haces más limpios frente al coste de GPU.</string>
+    <string name="fx_motion_blur">Desenfoque de movimiento</string>
+    <string name="fx_motion_blur_desc">Difumina la letra mientras se desliza a la siguiente línea. Más a la derecha es más suave, con más trabajo de GPU mientras se mueve. Android 12 o posterior.</string>
+    <string name="fx_motion_blur_off">Desactivado</string>
+    <string name="fx_motion_blur_light">Ligero</string>
+    <string name="fx_motion_blur_balanced">Equilibrado</string>
+    <string name="fx_motion_blur_smooth">Suave</string>
+    <string name="fx_motion_blur_cinematic">Cinematográfico</string>
     <string name="fx_god_ray_follow_word">Seguir la palabra cantada</string>
     <string name="fx_god_ray_follow_word_desc">Con letras sincronizadas por palabra, solo brilla la palabra que se canta y la luz avanza palabra a palabra. Las letras sincronizadas por línea mantienen toda la línea.</string>
     <string name="fx_god_ray_all_lyrics">Toda la letra brilla</string>

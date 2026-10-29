@@ -1987,6 +1987,13 @@
     <string name="fx_god_ray_tilt_desc">Di quanto l’inclinazione del telefono sposta la luce.</string>
     <string name="fx_god_ray_samples_value">%1$d campioni</string>
     <string name="fx_god_ray_quality_desc">Campioni per pixel: fasci più nitidi al costo di un maggior carico sulla GPU.</string>
+    <string name="fx_motion_blur">Sfocatura di movimento</string>
+    <string name="fx_motion_blur_desc">Sfuma il testo mentre scorre alla riga successiva. Più a destra è più fluido, con più lavoro della GPU durante il movimento. Android 12 e successivi.</string>
+    <string name="fx_motion_blur_off">Disattivato</string>
+    <string name="fx_motion_blur_light">Leggero</string>
+    <string name="fx_motion_blur_balanced">Bilanciato</string>
+    <string name="fx_motion_blur_smooth">Fluido</string>
+    <string name="fx_motion_blur_cinematic">Cinematografico</string>
     <string name="fx_god_ray_follow_word">Segui la parola cantata</string>
     <string name="fx_god_ray_follow_word_desc">Nei testi sincronizzati parola per parola, solo la parola cantata brilla e la luce si sposta di parola in parola. Nei testi sincronizzati per riga, l’intera riga rimane illuminata.</string>
     <string name="fx_god_ray_all_lyrics">Tutto il testo brilla</string>

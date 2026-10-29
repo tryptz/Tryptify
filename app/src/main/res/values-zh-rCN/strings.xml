@@ -1885,6 +1885,13 @@
     <string name="fx_god_ray_tilt_desc">倾斜手机时光源摆动的幅度。</string>
     <string name="fx_god_ray_samples_value">%1$d 个采样</string>
     <string name="fx_god_ray_quality_desc">每像素采样数：光束更干净，但 GPU 开销更大。</string>
+    <string name="fx_motion_blur">动态模糊</string>
+    <string name="fx_motion_blur_desc">歌词滑向下一行时带出拖影。越往右越平滑，滚动时 GPU 开销越大。需要 Android 12 及以上。</string>
+    <string name="fx_motion_blur_off">关</string>
+    <string name="fx_motion_blur_light">轻微</string>
+    <string name="fx_motion_blur_balanced">均衡</string>
+    <string name="fx_motion_blur_smooth">平滑</string>
+    <string name="fx_motion_blur_cinematic">电影感</string>
     <string name="fx_god_ray_follow_word">跟随正在演唱的字词</string>
     <string name="fx_god_ray_follow_word_desc">对于逐字计时的歌词，只有正在演唱的字词发光，光线逐字移动。逐行计时的歌词仍整行发光。</string>
     <string name="fx_god_ray_all_lyrics">所有歌词都发光</string>

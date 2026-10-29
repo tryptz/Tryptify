@@ -232,6 +232,15 @@ data class LyricsFxSettings(
      * theme preset is applied.
      */
     val godRayQuality: Int = 2,
+
+    // ── Motion ─────────────────────────────────────────────────────────
+    /**
+     * The glide's motion blur, 0 (off) to 4: how smooth and how far the
+     * lyrics smear while they slide to the next line. Higher costs more GPU
+     * while they move, nothing while they rest. Device/perf setting, like
+     * [godRayQuality] — preserved when a theme preset is applied.
+     */
+    val motionBlurQuality: Int = 0,
 ) {
     /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float
@@ -309,6 +318,7 @@ data class LyricsFxSettings(
             godRaySway = godRaySway.c(0f, 1f, d.godRaySway),
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
             godRayQuality = godRayQuality.coerceIn(1, 4),
+            motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
         )
     }
 
@@ -360,6 +370,7 @@ data class LyricsFxSettings(
         artGlowRadiusDp = other.artGlowRadiusDp,
         artGlowBrightness = other.artGlowBrightness,
         godRayQuality = other.godRayQuality,
+        motionBlurQuality = other.motionBlurQuality,
     )
 
     /**

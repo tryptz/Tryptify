@@ -577,6 +577,19 @@ recomposed at every word start and end.
 the native scope every frame, because the scope's clock re-places the window
 after half a second without a render, and a full stop would jump on resume.
 
+**The glide's motion blur is one layer on the plain letters, and only while
+they move.** Studio › 3D letter wave › Motion blur, off by default and a
+personal setting (a theme neither sets nor shares it). `lyricMotionBlur` is
+the innermost modifier on the lyric list, so the copy, the glass, the shadow
+and the rays all take the smeared letters as they are, and it is one layer for
+the whole list: a layer per line cut each line's blur off flat at its own box.
+The blur is along y only, its sigma from the native tracker (`cpp/motion`) fed
+how far the lines travelled. A blur of 0 sets no effect at all, so a resting
+list is never taken offscreen, and frames run only while the list scrolls and
+until the blur has faded. It exposes for a 1/30 s frame at every refresh rate:
+the glide is slow, and exposed per frame its smear was under a pixel at
+120 Hz. Android 12 and later; off with the app's animations off.
+
 ### Music links
 
 A setting that "moves with the music" never moves its saved value. The visual
@@ -1993,6 +2006,20 @@ music under FAILED. Nor do the lanes: a step under FAILED was still judged at
 the stopped music, and the results count the engine's judgements. Imm. Continue shakes and plays on. Leaving or restarting
 cancels the hold. Reduced motion keeps all of it still: the intro, roll, pop,
 fall and shake are skipped, and FAILED shows at once.
+
+**Motion blur trails a note, it never blurs one.** Graphics › Motion blur,
+off by default, from Off to Cinematic. A note's face is where the player reads
+its timing, so the sharp note is drawn as always and a few faded copies of its
+own art lie behind it, under every sharp note in a pass of their own (drawn
+with each note, one note's smear lay over the next one's face). The native
+tracker (`cpp/motion`) measures the field's scroll, and the plan holds three
+things a slider move must not undo: every level starts the trail equally
+opaque, so a level changes grain and reach, not weight; the trail is capped at
+a share of the note's size, so a fast scroll makes a streak, not a second note;
+and a frame's copies are budgeted across the notes on screen, so a dense chart
+gets coarser trails, never a slower frame. A seek, a restart or a pause is a
+jump, not a speed. No trail on a held head (it is still), under reduced motion,
+or while the song is paused.
 
 **The TV shader is over the game, never over a menu.** `glyphTvShader`, off by
 default, goes on the gameplay picture (the playfield, the judgements and the
