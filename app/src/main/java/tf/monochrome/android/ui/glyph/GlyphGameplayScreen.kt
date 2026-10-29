@@ -186,11 +186,25 @@ fun GlyphGameplayScreen(
                 // The player's background, under everything and across the
                 // whole screen, the field's column included: seen through the
                 // TV with the rest, and still, so the arrows are what moves.
-                GlyphPlayerBackground(
-                    coverUri = gameplayCoverUri(state.selectedSong),
-                    albumColored = backdropLook.albumColored,
-                    colorTransitionMs = backdropLook.colorTransitionMs,
-                )
+                // An imported StepMania theme's own gameplay background, dimmed as
+                // StepMania dims a song's, so the arrows stay what reads; the
+                // player's album wash otherwise.
+                val themeBackground = rememberStepThemeArt(tf.monochrome.android.glyph.style.StepManiaStyleBaker.BACKGROUND)
+                if (themeBackground != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = themeBackground,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = THEME_BACKGROUND_DIM)))
+                } else {
+                    GlyphPlayerBackground(
+                        coverUri = gameplayCoverUri(state.selectedSong),
+                        albumColored = backdropLook.albumColored,
+                        colorTransitionMs = backdropLook.colorTransitionMs,
+                    )
+                }
 
                 GlyphPlayfield(
                     engine = engine,
@@ -734,3 +748,6 @@ private fun PauseOverlay(
 /** Room board cards: all of a room's first places upright would sit on the lanes. */
 private const val BOARD_ROWS_PORTRAIT = 5
 private const val BOARD_ROWS_LANDSCAPE = 8
+
+/** How far an imported theme's gameplay background is darkened under the field. */
+private const val THEME_BACKGROUND_DIM = 0.45f

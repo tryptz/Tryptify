@@ -3387,4 +3387,26 @@
     <string name="whats_new_1951_offset_hold_body">Lo scostamento audio nella scheda Sincronia di Trypt Mania e in Impostazioni › Audio › Sincronia Bluetooth continua a cambiare finché tieni premuto + o −.</string>
     <string name="whats_new_1951_chart_lyrics_title">Testi sincronizzati su un server</string>
     <string name="whats_new_1951_chart_lyrics_body">I testi non vengono più sincronizzati su un server di chart. Quelli sincronizzati prima, e quelli che sincronizzi nell\'editor dei testi, restano.</string>
+    <string name="tm_themes_title">Temi</string>
+    <string name="tm_themes_menu_subtitle">Skin delle note, temi e annunciatori di StepMania</string>
+    <string name="tm_themes_import_title">Importa</string>
+    <string name="tm_themes_import_desc">Una skin delle note, un tema o un annunciatore dallo StepMania Archive o da altrove: ZIP, .smzip o 7z. Trypt Mania prende le frecce, i giudizi, la combo, i caratteri, uno sfondo e i suoni; i suoi menu restano com\'erano.</string>
+    <string name="tm_themes_import_button">Importa un file</string>
+    <string name="tm_themes_themes">Temi</string>
+    <string name="tm_themes_themes_desc">I giudizi, la combo, i caratteri, lo sfondo e i suoni dei colpi di una partita.</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">L\'aspetto predefinito di StepMania, come lo porta Trypt Mania</string>
+    <string name="tm_themes_noteskins">Skin delle note</string>
+    <string name="tm_themes_noteskins_desc">Le frecce. Si scelgono anche in Opzioni giocatore › Note e nel menu di pausa.</string>
+    <string name="tm_themes_none_yet">Ancora nessuno.</string>
+    <string name="tm_themes_announcers">Annunciatori</string>
+    <string name="tm_themes_announcers_desc">Una voce a READY e GO, ogni cento di combo, a una combo interrotta, a un fallimento, a un superamento e al tuo voto.</string>
+    <string name="tm_themes_no_announcer">Nessuno</string>
+    <string name="tm_themes_use">Usa</string>
+    <string name="tm_themes_in_use">In uso</string>
+    <string name="tm_themes_remove">Rimuovi</string>
+    <string name="tm_themes_keep">Tieni</string>
+    <string name="tm_themes_remove_title">Rimuovere %1$s?</string>
+    <string name="tm_themes_remove_desc">Le sue immagini e i suoi suoni vengono eliminati dall\'app. I tuoi punteggi restano.</string>
+    <string name="tm_themes_rights">Immagini e suoni importati appartengono ai loro autori. Ognuno conserva una nota sulla sua provenienza.</string>
 </resources>

@@ -3387,4 +3387,26 @@
     <string name="whats_new_1951_offset_hold_body">Le décalage audio de l\'onglet Synchro de Trypt Mania et de Paramètres › Audio › Synchro Bluetooth continue d\'avancer tant que vous maintenez + ou −.</string>
     <string name="whats_new_1951_chart_lyrics_title">Paroles synchronisées sur un serveur</string>
     <string name="whats_new_1951_chart_lyrics_body">Les paroles ne sont plus synchronisées sur un serveur de charts. Celles synchronisées avant, et celles que vous synchronisez dans l\'éditeur de paroles, restent.</string>
+    <string name="tm_themes_title">Thèmes</string>
+    <string name="tm_themes_menu_subtitle">Skins de notes, thèmes et annonceurs StepMania</string>
+    <string name="tm_themes_import_title">Importer</string>
+    <string name="tm_themes_import_desc">Un skin de notes, un thème ou un annonceur de la StepMania Archive ou d\'ailleurs : ZIP, .smzip ou 7z. Trypt Mania prend les flèches, les jugements, le combo, les polices, un fond et les sons ; ses menus restent tels quels.</string>
+    <string name="tm_themes_import_button">Importer un fichier</string>
+    <string name="tm_themes_themes">Thèmes</string>
+    <string name="tm_themes_themes_desc">Les jugements, le combo, les polices, le fond et les sons de frappe d\'une partie.</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">L\'aspect par défaut de StepMania, tel que Trypt Mania le livre</string>
+    <string name="tm_themes_noteskins">Skins de notes</string>
+    <string name="tm_themes_noteskins_desc">Les flèches. Aussi au choix dans Options du joueur › Notes, et dans le menu de pause.</string>
+    <string name="tm_themes_none_yet">Aucun pour l\'instant.</string>
+    <string name="tm_themes_announcers">Annonceurs</string>
+    <string name="tm_themes_announcers_desc">Une voix à READY et GO, tous les cent combos, à un combo brisé, un échec, une réussite et votre note.</string>
+    <string name="tm_themes_no_announcer">Aucun</string>
+    <string name="tm_themes_use">Utiliser</string>
+    <string name="tm_themes_in_use">Utilisé</string>
+    <string name="tm_themes_remove">Supprimer</string>
+    <string name="tm_themes_keep">Garder</string>
+    <string name="tm_themes_remove_title">Supprimer %1$s ?</string>
+    <string name="tm_themes_remove_desc">Ses images et ses sons sont supprimés de l\'app. Vos scores restent.</string>
+    <string name="tm_themes_rights">Les images et les sons importés appartiennent à leurs auteurs. Chacun garde une note de sa provenance.</string>
 </resources>

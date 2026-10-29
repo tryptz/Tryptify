@@ -3231,4 +3231,26 @@
     <string name="whats_new_1951_offset_hold_body">+ または − を押し続けると、Trypt Mania の同期タブと 設定 › オーディオ › Bluetooth 同期 の音声オフセットが続けて変わります。</string>
     <string name="whats_new_1951_chart_lyrics_title">サーバーでの歌詞タイミング</string>
     <string name="whats_new_1951_chart_lyrics_body">譜面サーバーで歌詞のタイミングを取ることはなくなりました。以前にタイミングを取った歌詞と、歌詞エディターで付けたものは残ります。</string>
+    <string name="tm_themes_title">テーマ</string>
+    <string name="tm_themes_menu_subtitle">StepMania のノートスキン、テーマ、アナウンサー</string>
+    <string name="tm_themes_import_title">読み込み</string>
+    <string name="tm_themes_import_desc">StepMania Archive などのノートスキン、テーマ、アナウンサー（ZIP、.smzip、7z）。Trypt Mania は矢印、判定、コンボ、フォント、背景、サウンドを使い、メニューはそのままです。</string>
+    <string name="tm_themes_import_button">ファイルを読み込む</string>
+    <string name="tm_themes_themes">テーマ</string>
+    <string name="tm_themes_themes_desc">プレイ中の判定、コンボ、フォント、背景、ヒット音。</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">Trypt Mania 付属の StepMania 標準の見た目</string>
+    <string name="tm_themes_noteskins">ノートスキン</string>
+    <string name="tm_themes_noteskins_desc">矢印。プレイヤーオプション › ノートや一時停止メニューでも選べます。</string>
+    <string name="tm_themes_none_yet">まだありません。</string>
+    <string name="tm_themes_announcers">アナウンサー</string>
+    <string name="tm_themes_announcers_desc">READY と GO、100 コンボごと、コンボが途切れたとき、失敗、クリア、評価で流れる声。</string>
+    <string name="tm_themes_no_announcer">なし</string>
+    <string name="tm_themes_use">使う</string>
+    <string name="tm_themes_in_use">使用中</string>
+    <string name="tm_themes_remove">削除</string>
+    <string name="tm_themes_keep">残す</string>
+    <string name="tm_themes_remove_title">%1$s を削除しますか？</string>
+    <string name="tm_themes_remove_desc">画像とサウンドはアプリから削除されます。スコアは残ります。</string>
+    <string name="tm_themes_rights">読み込んだ画像とサウンドは作者のものです。それぞれ入手元の記録が残ります。</string>
 </resources>

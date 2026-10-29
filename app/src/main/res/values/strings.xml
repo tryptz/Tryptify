@@ -3312,4 +3312,26 @@
     <string name="whats_new_1951_offset_hold_body">The audio offset in Trypt Mania\'s Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while you hold + or −.</string>
     <string name="whats_new_1951_chart_lyrics_title">Lyrics timed on a server</string>
     <string name="whats_new_1951_chart_lyrics_body">Lyrics are no longer timed on a chart server. The ones timed before, and those you time in the lyrics editor, stay.</string>
+    <string name="tm_themes_title">Themes</string>
+    <string name="tm_themes_menu_subtitle">StepMania noteskins, themes and announcers</string>
+    <string name="tm_themes_import_title">Import</string>
+    <string name="tm_themes_import_desc">A noteskin, theme or announcer from the StepMania Archive or anywhere else: a ZIP, .smzip or 7z. Trypt Mania takes the arrows, the judgements, the combo, the fonts, a background and the sounds; its menus stay as they are.</string>
+    <string name="tm_themes_import_button">Import a file</string>
+    <string name="tm_themes_themes">Themes</string>
+    <string name="tm_themes_themes_desc">The judgements, the combo, the fonts, the background and the hit sounds of a run.</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">StepMania\'s default look, as Trypt Mania ships it</string>
+    <string name="tm_themes_noteskins">Noteskins</string>
+    <string name="tm_themes_noteskins_desc">The arrows. Also picked under Player options › Notes, and in the pause menu.</string>
+    <string name="tm_themes_none_yet">None yet.</string>
+    <string name="tm_themes_announcers">Announcers</string>
+    <string name="tm_themes_announcers_desc">A voice at READY and GO, every hundred combo, a broken combo, a fail, a clear and your grade.</string>
+    <string name="tm_themes_no_announcer">None</string>
+    <string name="tm_themes_use">Use</string>
+    <string name="tm_themes_in_use">In use</string>
+    <string name="tm_themes_remove">Remove</string>
+    <string name="tm_themes_keep">Keep</string>
+    <string name="tm_themes_remove_title">Remove %1$s?</string>
+    <string name="tm_themes_remove_desc">Its art and sounds are deleted from the app. Your scores stay.</string>
+    <string name="tm_themes_rights">Imported art and sounds belong to their authors. Each keeps a note of where it came from.</string>
 </resources>

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -62,8 +63,19 @@ class GlyphStepFonts(val condensed: FontFamily, val numbers: FontFamily) {
 @Composable
 fun rememberStepFonts(): GlyphStepFonts {
     val context = LocalContext.current
-    return remember(context) {
+    val theme = GlyphStepArt.themeDir
+    return remember(context, theme) {
         val assets = context.assets
+        // An imported theme's own typeface, for the playfield's text: the
+        // combo, the scores, the HUD. The menus keep the app's.
+        val themeFont = theme?.let { File(it, "fonts/${tf.monochrome.android.glyph.style.StepManiaStyleBaker.FONT}") }
+            ?.takeIf { it.isFile }
+        if (themeFont != null) {
+            runCatching {
+                val family = FontFamily(Font(themeFont))
+                return@remember GlyphStepFonts(condensed = family, numbers = family)
+            }
+        }
         runCatching {
             GlyphStepFonts(
                 condensed = FontFamily(
@@ -88,6 +100,21 @@ fun rememberStepFonts(): GlyphStepFonts {
 object GlyphStepArt {
     private val cache = ConcurrentHashMap<String, ImageBitmap>()
 
+    /**
+     * The imported StepMania theme in use (Trypt Mania › Themes), or null for
+     * the app's own. Its art stands in for the app's by name, file by file,
+     * and anything it has not is the app's, so a theme with only judgements
+     * changes only the judgements.
+     */
+    var themeDir: File? by mutableStateOf(null)
+        private set
+
+    fun useTheme(dir: File?) {
+        if (dir == themeDir) return
+        themeDir = dir
+        cache.clear()
+    }
+
     fun judgement(judgement: GlyphJudgement, early: Boolean): String {
         val window = when (judgement) {
             GlyphJudgement.MARVELOUS -> "w1"
@@ -103,9 +130,23 @@ object GlyphStepArt {
     fun cached(name: String): ImageBitmap? = cache[name]
 
     suspend fun load(context: Context, name: String): ImageBitmap? = cache[name] ?: withContext(Dispatchers.IO) {
+        val themed = themeDir?.let { File(it, name) }?.takeIf { it.isFile }
         runCatching {
-            context.assets.open("$ROOT/$name").use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
+            if (themed != null) {
+                BitmapFactory.decodeFile(themed.path)?.asImageBitmap()
+            } else {
+                context.assets.open("$ROOT/$name").use { BitmapFactory.decodeStream(it) }?.asImageBitmap()
+            }
         }.getOrNull()?.also { cache[name] = it }
+    }
+
+    /** The theme's own art by [name] only (its combo digits, label, background); null for the app's own theme. */
+    suspend fun loadThemeOnly(name: String): ImageBitmap? {
+        val file = themeDir?.let { File(it, name) }?.takeIf { it.isFile } ?: return null
+        cache["theme:$name"]?.let { return it }
+        return withContext(Dispatchers.IO) {
+            runCatching { BitmapFactory.decodeFile(file.path)?.asImageBitmap() }.getOrNull()?.also { cache["theme:$name"] = it }
+        }
     }
 
     /** Every judgement sprite, so the first hit of a run is never drawn late. */
@@ -124,10 +165,46 @@ object GlyphStepArt {
 fun rememberStepArt(name: String?): ImageBitmap? {
     if (name == null) return null
     val context = LocalContext.current
-    var image by remember(name) { mutableStateOf(GlyphStepArt.cached(name)) }
-    LaunchedEffect(name) {
+    val theme = GlyphStepArt.themeDir
+    var image by remember(name, theme) { mutableStateOf(GlyphStepArt.cached(name)) }
+    LaunchedEffect(name, theme) {
         if (image == null) image = GlyphStepArt.load(context, name)
     }
+    return image
+}
+
+/** The theme's combo digits: one bitmap font page, and which cell each digit is. */
+class StepComboDigits(val page: ImageBitmap, val cols: Int, val rows: Int, val cells: Map<Char, Int>) {
+    val cellWidth: Int get() = page.width / cols
+    val cellHeight: Int get() = page.height / rows
+}
+
+/** The imported theme's combo digits, or null (the app's own, or a theme without them). */
+@Composable
+fun rememberStepComboDigits(): StepComboDigits? {
+    val theme = GlyphStepArt.themeDir ?: return null
+    var digits by remember(theme) { mutableStateOf<StepComboDigits?>(null) }
+    LaunchedEffect(theme) {
+        val page = GlyphStepArt.loadThemeOnly(tf.monochrome.android.glyph.style.StepManiaStyleBaker.COMBO_DIGITS) ?: return@LaunchedEffect
+        val info = withContext(Dispatchers.IO) {
+            runCatching {
+                kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    .decodeFromString<tf.monochrome.android.glyph.style.StepManiaStyleBaker.ComboDigits>(
+                        File(theme, tf.monochrome.android.glyph.style.StepManiaStyleBaker.COMBO_DIGITS_INFO).readText(),
+                    )
+            }.getOrNull()
+        } ?: return@LaunchedEffect
+        digits = StepComboDigits(page, info.cols, info.rows, info.cells.mapKeys { it.key.first() })
+    }
+    return digits
+}
+
+/** One of the imported theme's own images by [name], or null with the app's own theme. */
+@Composable
+fun rememberStepThemeArt(name: String): ImageBitmap? {
+    val theme = GlyphStepArt.themeDir ?: return null
+    var image by remember(theme, name) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(theme, name) { image = GlyphStepArt.loadThemeOnly(name) }
     return image
 }
 

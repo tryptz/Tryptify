@@ -458,13 +458,25 @@ private fun NoteOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
     }
     Column {
         GlyphControlHeader("Noteskin", null)
-        GlyphSegmented(
-            options = GlyphSkin.entries.toList(),
-            selected = modifiers.skin,
-            label = { it.label },
-            onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
-            description = "Noteskin",
-        )
+        val skins = GlyphSkin.all()
+        // The app's three are a choice of a few; with imported StepMania
+        // noteskins beside them, the list scrolls, as the pause panel's does.
+        if (skins.size <= GlyphSkin.entries.size) {
+            GlyphSegmented(
+                options = skins,
+                selected = modifiers.skin,
+                label = { it.label },
+                onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
+                description = "Noteskin",
+            )
+        } else {
+            GlyphChipRow(
+                options = skins,
+                selected = modifiers.skin,
+                label = { it.label },
+                onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
+            )
+        }
     }
 }
 

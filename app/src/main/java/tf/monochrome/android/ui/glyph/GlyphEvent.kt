@@ -166,6 +166,17 @@ sealed interface GlyphEvent {
     data class SetPreviews(val on: Boolean) : GlyphEvent
     data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent
 
+    // ── themes: imported StepMania noteskins, themes and announcers ─────
+    data object OpenThemes : GlyphEvent
+    data object CloseThemes : GlyphEvent
+    data class ImportStyle(val uri: android.net.Uri) : GlyphEvent
+    /** The theme to wear, by id; null for Tryptify's own. */
+    data class UseTheme(val id: String?) : GlyphEvent
+    /** The announcer to hear, by id; null for none. */
+    data class UseAnnouncer(val id: String?) : GlyphEvent
+    data class RemoveStyle(val style: tf.monochrome.android.glyph.style.GlyphStyleLibrary.Style) : GlyphEvent
+    data object DismissThemesMessage : GlyphEvent
+
     /** A song in the charting screen's history, tapped: open it in the song list. */
     data class OpenChartedSong(val title: String) : GlyphEvent
 

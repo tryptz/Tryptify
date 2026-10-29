@@ -3231,4 +3231,26 @@
     <string name="whats_new_1951_offset_hold_body">按住 + 或 − 时，Trypt Mania 同步标签页和设置 › 音频 › 蓝牙同步中的音频偏移会持续调整。</string>
     <string name="whats_new_1951_chart_lyrics_title">服务器计时歌词</string>
     <string name="whats_new_1951_chart_lyrics_body">不再在谱面服务器上为歌词计时。之前已计时的歌词，以及你在歌词编辑器中计时的歌词都会保留。</string>
+    <string name="tm_themes_title">主题</string>
+    <string name="tm_themes_menu_subtitle">StepMania 音符皮肤、主题和播报员</string>
+    <string name="tm_themes_import_title">导入</string>
+    <string name="tm_themes_import_desc">来自 StepMania Archive 或其他地方的音符皮肤、主题或播报员：ZIP、.smzip 或 7z。Trypt Mania 会使用箭头、判定、连击、字体、背景和声音；菜单保持不变。</string>
+    <string name="tm_themes_import_button">导入文件</string>
+    <string name="tm_themes_themes">主题</string>
+    <string name="tm_themes_themes_desc">游戏中的判定、连击、字体、背景和击打音效。</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">Trypt Mania 自带的 StepMania 默认外观</string>
+    <string name="tm_themes_noteskins">音符皮肤</string>
+    <string name="tm_themes_noteskins_desc">箭头。也可在玩家选项 › 音符和暂停菜单中选择。</string>
+    <string name="tm_themes_none_yet">还没有。</string>
+    <string name="tm_themes_announcers">播报员</string>
+    <string name="tm_themes_announcers_desc">在 READY 和 GO、每一百连击、连击中断、失败、通关以及评级时的语音。</string>
+    <string name="tm_themes_no_announcer">无</string>
+    <string name="tm_themes_use">使用</string>
+    <string name="tm_themes_in_use">使用中</string>
+    <string name="tm_themes_remove">移除</string>
+    <string name="tm_themes_keep">保留</string>
+    <string name="tm_themes_remove_title">移除 %1$s？</string>
+    <string name="tm_themes_remove_desc">它的图像和声音会从应用中删除。你的成绩会保留。</string>
+    <string name="tm_themes_rights">导入的图像和声音归其作者所有。每一项都会记下它的来源。</string>
 </resources>

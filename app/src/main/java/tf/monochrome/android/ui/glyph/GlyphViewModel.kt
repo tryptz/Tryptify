@@ -137,6 +137,8 @@ class GlyphViewModel @Inject constructor(
     private val chartingAccount: ChartingAccountStore,
     private val bypassVolume: BypassVolumeController,
     private val gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio,
+    /** Imported StepMania noteskins, themes and announcers; read before the saved skin is. */
+    private val styleLibrary: tf.monochrome.android.glyph.style.GlyphStyleLibrary,
     private val remoteStems: RemoteStemAnalysis,
     private val trackLocator: tf.monochrome.android.player.LocalTrackLocator,
     private val packLibrary: GlyphPackLibrary,
@@ -234,6 +236,9 @@ class GlyphViewModel @Inject constructor(
         armedLoop = loop
         engineArmed = true
     }
+
+    /** A run's sounds from the imported theme and announcer in use; silent with neither. */
+    private val styleSounds = tf.monochrome.android.glyph.style.GlyphStyleSounds(context)
 
     /** The run's sink and DSP chain (UsbGameAudio); released with the view model. */
     private val transportAudio = gameAudio.player(context)
@@ -367,6 +372,7 @@ class GlyphViewModel @Inject constructor(
         watchOutputSync()
         watchDacStream()
         watchAudioSettings()
+        watchStyles()
         watchCharts()
         watchChartServers()
         watchPlayRequests()
@@ -534,6 +540,26 @@ class GlyphViewModel @Inject constructor(
                 refreshOwnCount()
             }
             GlyphEvent.ClosePacks -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            GlyphEvent.OpenThemes -> {
+                wheelFocusJob?.cancel()
+                _ui.value = _ui.value.copy(screen = GlyphScreen.THEMES)
+            }
+            GlyphEvent.CloseThemes -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.ImportStyle -> importStyle(event.uri)
+            is GlyphEvent.UseTheme -> useTheme(event.id)
+            is GlyphEvent.UseAnnouncer -> useAnnouncer(event.id)
+            is GlyphEvent.RemoveStyle -> viewModelScope.launch {
+                styleLibrary.remove(event.style)
+                val themes = _ui.value.themes
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME && themes.themeId == event.style.id) useTheme(null)
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER && themes.announcerId == event.style.id) useAnnouncer(null)
+                // A removed noteskin in use: the default, as for any skin the phone no longer has.
+                val skin = _ui.value.gameplay.modifiers.skin
+                if (skin.isFile && skin !in tf.monochrome.android.glyph.asset.GlyphSkin.all()) {
+                    updateModifiers { it.copy(skin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT) }
+                }
+            }
+            GlyphEvent.DismissThemesMessage -> _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(message = null))
 
             GlyphEvent.OpenCharting -> {
                 wheelFocusJob?.cancel()
@@ -888,6 +914,7 @@ class GlyphViewModel @Inject constructor(
     /** The app left the foreground: a preview, or the editor's song, must not play on behind it. */
     fun onBackground() {
         foreground = false
+        styleSounds.stopVoice()
         // A song the wheel was about to choose would start its preview behind
         // the app once its delay ran out.
         wheelFocusJob?.cancel()
@@ -1543,8 +1570,10 @@ class GlyphViewModel @Inject constructor(
         introJob?.cancel()
         failJob?.cancel()
         if (intro) {
+            styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.READY)
             introJob = viewModelScope.launch {
                 delay(playAtMs?.let { (it - System.currentTimeMillis()).coerceAtLeast(0L) } ?: INTRO_MILLIS)
+                styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.GO)
                 transport.play()
                 startTick()
                 _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(introStartedAtMs = 0L))
@@ -1659,6 +1688,8 @@ class GlyphViewModel @Inject constructor(
                         // re-fire the explosion its head already produced.
                         if (!event.isTail) {
                             laneFlashes.set(event.lane, atNanos = System.nanoTime(), isHit = event.judgement.isHit)
+                            // The imported theme's hit or miss; nothing with the app's own.
+                            styleSounds.judged(event.judgement.isHit)
                         }
                         ghostRecorder.record(
                             songSeconds = event.songSeconds,
@@ -1672,6 +1703,12 @@ class GlyphViewModel @Inject constructor(
                     // The combo alone: a full snapshot here would be built
                     // 125 times a second to read one number.
                     val combo = running.combo
+                    // The announcer: every hundred, and a long combo broken.
+                    if (combo / ANNOUNCE_COMBO_EVERY > liveCombo / ANNOUNCE_COMBO_EVERY && combo >= ANNOUNCE_COMBO_EVERY) {
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.COMBO)
+                    } else if (combo < liveCombo && liveCombo >= ANNOUNCE_BROKEN_FROM) {
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.COMBO_STOPPED)
+                    }
                     liveCombo = combo
                     val milestone = combo / COMBO_MILESTONE
                     if (milestone > lastComboMilestone) {
@@ -1707,6 +1744,7 @@ class GlyphViewModel @Inject constructor(
                     ) {
                         publish(position, running, judged)
                         val at = System.currentTimeMillis()
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.FAILED)
                         _ui.value = _ui.value.copy(
                             gameplay = _ui.value.gameplay.copy(failedAtMs = at, failStops = keeper.stopsRun),
                         )
@@ -2345,6 +2383,69 @@ class GlyphViewModel @Inject constructor(
      * main player follows too; the game's chains follow them through
      * PlaybackService's seed.
      */
+    // ── themes ───────────────────────────────────────────────────────────
+
+    /** What was imported, and the saved theme and announcer put back in use. */
+    private fun watchStyles() {
+        val themeId = prefs.getString(PREF_THEME, null)
+        val announcerId = prefs.getString(PREF_ANNOUNCER, null)
+        applyTheme(themeId)
+        applyAnnouncer(announcerId)
+        viewModelScope.launch {
+            styleLibrary.styles.collect { styles ->
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(styles = styles))
+            }
+        }
+    }
+
+    private fun useTheme(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_THEME) else putString(PREF_THEME, id) }.apply()
+        applyTheme(id)
+    }
+
+    private fun useAnnouncer(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_ANNOUNCER) else putString(PREF_ANNOUNCER, id) }.apply()
+        applyAnnouncer(id)
+    }
+
+    private fun applyTheme(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME, id)
+        GlyphStepArt.useTheme(style?.dir)
+        styleSounds.useTheme(style?.dir)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(themeId = style?.id))
+    }
+
+    private fun applyAnnouncer(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER, id)
+        styleSounds.useAnnouncer(style?.dir)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(announcerId = style?.id))
+    }
+
+    private fun importStyle(uri: android.net.Uri) {
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
+        viewModelScope.launch {
+            val message = try {
+                val result = styleLibrary.import(uri)
+                buildList {
+                    if (result.noteskins > 0) add("${result.noteskins} noteskin${if (result.noteskins == 1) "" else "s"}")
+                    if (result.themes > 0) add("${result.themes} theme${if (result.themes == 1) "" else "s"}")
+                    if (result.announcers > 0) add("${result.announcers} announcer${if (result.announcers == 1) "" else "s"}")
+                }.let { got ->
+                    when {
+                        got.isEmpty() -> "Nothing in that file could be used: " + result.skipped.joinToString().ifEmpty { "no arrows, judgements or voices were found" } + "."
+                        result.skipped.isEmpty() -> "Imported " + got.joinToString(" and ") + "."
+                        else -> "Imported " + got.joinToString(" and ") + ". Left out: " + result.skipped.joinToString() + "."
+                    }
+                }
+            } catch (failure: kotlinx.coroutines.CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                failure.message ?: "That file could not be imported."
+            }
+            _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = false, message = message))
+        }
+    }
+
     private fun watchAudioSettings() {
         viewModelScope.launch {
             combine(
@@ -2797,6 +2898,37 @@ class GlyphViewModel @Inject constructor(
             training = _ui.value.training.copy(hasGhost = true),
             bestGrades = bestGradesIn(history),
         )
+        announceResult(keeper?.grade)
+    }
+
+    /** The announcer at a run's end: cleared (a fail was announced as it happened), then the grade. */
+    private fun announceResult(grade: tf.monochrome.android.glyph.engine.GlyphStepGrade?) {
+        grade ?: return
+        if (grade != tf.monochrome.android.glyph.engine.GlyphStepGrade.FAILED) styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.CLEARED)
+        val event = when (grade) {
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER01 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AAAA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER02 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AAA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER03,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER04,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER05 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER06,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER07,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER08 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_A
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER09,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER10,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER11 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_B
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER12,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER13,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER14 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_C
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER15,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER16,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER17 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_D
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.FAILED -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_E
+        }
+        viewModelScope.launch {
+            delay(ANNOUNCE_GRADE_AFTER_MILLIS)
+            if (_ui.value.screen == GlyphScreen.RESULTS) styleSounds.announce(event)
+        }
     }
 
     /**
@@ -3263,6 +3395,7 @@ class GlyphViewModel @Inject constructor(
         stopTick()
         replaceEngine(null)
         metronome.release()
+        styleSounds.release()
         transport.release()
         transportAudio.release()
         super.onCleared()
@@ -3290,6 +3423,8 @@ class GlyphViewModel @Inject constructor(
 
         const val PREFS_NAME = "trypt_mania"
         const val PREF_SKIN = "skin"
+        const val PREF_THEME = "style_theme"
+        const val PREF_ANNOUNCER = "style_announcer"
         const val PREF_SCROLL_FAMILY = "scroll_family"
         const val PREF_SCROLL_VALUE = "scroll_value"
         const val PREF_TURN = "turn"
@@ -3376,6 +3511,11 @@ class GlyphViewModel @Inject constructor(
          */
         /** Every this many combo, the playfield marks it. */
         const val COMBO_MILESTONE = 50
+        /** The announcer's combo calls: every hundred, and a combo of fifty or more broken. */
+        const val ANNOUNCE_COMBO_EVERY = 100
+        const val ANNOUNCE_BROKEN_FROM = 50
+        /** The grade is read after the cleared call has had its moment. */
+        const val ANNOUNCE_GRADE_AFTER_MILLIS = 1_800L
 
         const val TICK_MILLIS = 8L
 

@@ -102,6 +102,8 @@ data class GlyphUiState(
     val audioOffsetMs: Int = 0,
     /** The app's audio settings the Settings' Audio tab switches: the game plays through the same engine. */
     val audio: GlyphAudioUi = GlyphAudioUi(),
+    /** Imported StepMania noteskins, themes and announcers, and the ones in use (the Themes screen). */
+    val themes: GlyphThemesUi = GlyphThemesUi(),
     /** The output that offset belongs to, by name, or null for one with no slot. */
     val syncOutput: String? = null,
     /** Settings opened on its Sync tab from Settings › Audio, to measure the output. */
@@ -131,10 +133,21 @@ data class GlyphBackdrop(val trackId: String, val imageUri: String?)
  * Where the mode is. [MENU] is the front door; [HOME] is the song list, which
  * Play and the map editor both pick a song from.
  */
-enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, CHARTING, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
+enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, THEMES, CHARTING, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
 
 /** Whether the song list is choosing a song to play, a chart to edit, or a chart for the room. */
 enum class GlyphSongListMode { PLAY, EDIT, ROOM }
+
+/** What the Themes screen shows: what was imported, what is in use, and an import's progress or outcome. */
+data class GlyphThemesUi(
+    val styles: tf.monochrome.android.glyph.style.GlyphStyleLibrary.Styles = tf.monochrome.android.glyph.style.GlyphStyleLibrary.Styles(),
+    /** The imported theme in use, by id; null is Tryptify's own. */
+    val themeId: String? = null,
+    /** The imported announcer who speaks, by id; null is none. */
+    val announcerId: String? = null,
+    val importing: Boolean = false,
+    val message: String? = null,
+)
 
 /**
  * The three audio settings the game's Settings switch, as the app has them:

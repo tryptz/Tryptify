@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +62,9 @@ fun GlyphJudgementFx(
 ) {
     if (judgement == null) return
     val sprite = rememberStepArt(GlyphStepArt.judgement(judgement, early))
+    // An imported theme's own combo digits and label, when it has them.
+    val digits = rememberStepComboDigits()
+    val comboLabel = rememberStepThemeArt(tf.monochrome.android.glyph.style.StepManiaStyleBaker.COMBO_LABEL)
 
     // The combo pops on every step it gains, harder at every fifty, and a
     // broken combo drops away in red rather than blinking out.
@@ -127,13 +131,7 @@ fun GlyphJudgementFx(
                     transformOrigin = TransformOrigin(0.5f, 0.8f)
                 },
             ) {
-                Text(text = combo.toString(), style = fonts.combo, color = comboColour(fullCombo))
-                Text(
-                    text = " COMBO",
-                    style = fonts.rowTitle,
-                    color = comboColour(fullCombo).copy(alpha = 0.85f),
-                    modifier = Modifier.graphicsLayer { translationY = -8f },
-                )
+                ComboLine(combo, comboColour(fullCombo), fonts, digits, comboLabel)
             }
         } else if (broken >= SHOW_COMBO_AT && fall.isRunning) {
             // The combo that was, falling and fading.
@@ -146,13 +144,7 @@ fun GlyphJudgementFx(
                     this.alpha = 1f - f
                 },
             ) {
-                Text(text = broken.toString(), style = fonts.combo, color = BROKEN)
-                Text(
-                    text = " COMBO",
-                    style = fonts.rowTitle,
-                    color = BROKEN.copy(alpha = 0.85f),
-                    modifier = Modifier.graphicsLayer { translationY = -8f },
-                )
+                ComboLine(broken, BROKEN, fonts, digits, comboLabel)
             }
         }
     }
@@ -184,3 +176,59 @@ private const val HOLD_MILLIS = 500L
 private const val HOLD_W1_MILLIS = 800L
 private const val FADE_MILLIS = 100
 private val JUDGEMENT_HEIGHT = 56.dp
+
+/**
+ * The combo and its word: the theme's own digits and label when an imported
+ * theme has them (drawn in their own colours, as StepMania draws a bitmap
+ * font), else the number in the theme's typeface and " COMBO".
+ */
+@Composable
+private fun ComboLine(
+    value: Int,
+    colour: Color,
+    fonts: GlyphStepFonts,
+    digits: StepComboDigits?,
+    label: androidx.compose.ui.graphics.ImageBitmap?,
+) {
+    val text = value.toString()
+    if (digits != null && text.all { it in digits.cells }) {
+        val height = with(androidx.compose.ui.platform.LocalDensity.current) { fonts.combo.fontSize.toDp() }
+        val width = height * (digits.cellWidth.toFloat() / digits.cellHeight.coerceAtLeast(1)) * text.length
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .size(width = width, height = height)
+                .semantics { contentDescription = "$value combo" },
+        ) {
+            val cellW = size.width / text.length
+            text.forEachIndexed { i, ch ->
+                val cell = digits.cells[ch] ?: return@forEachIndexed
+                drawImage(
+                    image = digits.page,
+                    srcOffset = androidx.compose.ui.unit.IntOffset((cell % digits.cols) * digits.cellWidth, (cell / digits.cols) * digits.cellHeight),
+                    srcSize = androidx.compose.ui.unit.IntSize(digits.cellWidth, digits.cellHeight),
+                    dstOffset = androidx.compose.ui.unit.IntOffset((i * cellW).toInt(), 0),
+                    dstSize = androidx.compose.ui.unit.IntSize(cellW.toInt(), size.height.toInt()),
+                )
+            }
+        }
+    } else {
+        Text(text = text, style = fonts.combo, color = colour)
+    }
+    if (label != null) {
+        Image(
+            bitmap = label,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(COMBO_LABEL_HEIGHT).graphicsLayer { translationY = -8f },
+        )
+    } else {
+        Text(
+            text = " COMBO",
+            style = fonts.rowTitle,
+            color = colour.copy(alpha = 0.85f),
+            modifier = Modifier.graphicsLayer { translationY = -8f },
+        )
+    }
+}
+
+private val COMBO_LABEL_HEIGHT = 22.dp

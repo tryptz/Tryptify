@@ -612,7 +612,7 @@ fun GlyphSkinControl(
         ControlHeader(label = "Notes", value = skin.label)
         Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
-            options = GlyphSkin.entries.toList(),
+            options = GlyphSkin.all(),
             selected = skin,
             label = { it.label },
             onSelect = onSelect,
@@ -624,6 +624,7 @@ fun GlyphSkinControl(
                     "StepMania's retro arrows in the app's glass, from your UI panel glass settings."
                 GlyphSkin.RETRO -> "StepMania's retro arrows, as StepMania draws them."
                 GlyphSkin.CLASSIC -> "Trypt Mania's own vector arrows."
+                else -> "A StepMania noteskin you imported, under Themes."
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

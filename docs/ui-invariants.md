@@ -2338,6 +2338,33 @@ their accent. Never a selection told apart by an accent-coloured label: where a
 theme's accent is grey, the chosen chip's label was the dimmest thing in the row
 and every selection, Start included, read as disabled.
 
+**Imported StepMania styles are baked into the game's own layouts, and change only the playfield.**
+Trypt Mania › Themes (`GlyphThemesScreen`, a menu built like Packs: top bar,
+`GlyphPanel`s, `GlyphButton`s) imports a ZIP, `.smzip` or 7z
+(`StyleArchive`, the song packs' rules: nothing outside the folder, each
+kind of file bounded, RAR refused with what to do) and finds its
+noteskins, themes and announcers by StepMania's own file names
+(`StepManiaStyleScan`), never running its Lua. At import, never while
+playing, `StepManiaStyleBaker` turns them into what the game already draws:
+a noteskin into the retro skin's layout (a PNG per lane and part and a
+`GlyphSkinManifest`, the Down arrow turned per lane, a quantized sheet a row
+per division, hold bodies and caps flipped, parts a variant lacks taken from
+the skin its metrics.ini falls back on, `NoteSkinResolver`), listed beside
+the app's skins in every noteskin picker (`GlyphSkin.all()`; the options'
+three-way `GlyphSegmented` turns into the pause panel's `GlyphChipRow` only
+once there are more); a theme into the names `GlyphStepArt` loads (its
+judgement sheet, its combo digits and label, its font, a gameplay
+background, a hit and a miss sound), each standing in for the app's by name
+so whatever a theme lacks stays the app's; an announcer into a folder of
+clips per moment a run has (`AnnouncerEvent`). Tryptify's own theme and no
+announcer are the defaults, so nothing changes until one is picked. A
+theme never reaches the menus: its font is the playfield's (the combo, the
+HUD), its background is behind the field only, dimmed, and the game's
+screens stay the app's. Theme and announcer sounds are game sounds
+(`GlyphStyleSounds`, `USAGE_GAME`) on Android's output, not through an
+exclusive USB DAC. Every baked folder keeps a `LICENSE.txt` naming its
+source: the art is its authors'.
+
 **The options' preview is the game's playfield, not a picture of one.**
 `GlyphPreviewField` draws a real engine played by `GlyphAutoplay` with the
 player's modifiers, following the song preview's own clock when it plays, and

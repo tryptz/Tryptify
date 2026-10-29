@@ -3309,4 +3309,26 @@
     <string name="whats_new_1951_offset_hold_body">Der Audio-Versatz im Sync-Tab von Trypt Mania und unter Einstellungen › Audio › Bluetooth-Sync läuft weiter, solange du + oder − hältst.</string>
     <string name="whats_new_1951_chart_lyrics_title">Songtext-Timing auf einem Server</string>
     <string name="whats_new_1951_chart_lyrics_body">Songtexte werden nicht mehr auf einem Chart-Server getimt. Die zuvor getimten und die, die du im Songtext-Editor timest, bleiben.</string>
+    <string name="tm_themes_title">Themes</string>
+    <string name="tm_themes_menu_subtitle">StepMania-Noteskins, Themes und Ansager</string>
+    <string name="tm_themes_import_title">Importieren</string>
+    <string name="tm_themes_import_desc">Ein Noteskin, Theme oder Ansager aus dem StepMania Archive oder von anderswo: ZIP, .smzip oder 7z. Trypt Mania nimmt die Pfeile, die Bewertungen, die Kombo, die Schriften, einen Hintergrund und die Klänge; seine Menüs bleiben, wie sie sind.</string>
+    <string name="tm_themes_import_button">Datei importieren</string>
+    <string name="tm_themes_themes">Themes</string>
+    <string name="tm_themes_themes_desc">Die Bewertungen, die Kombo, die Schriften, der Hintergrund und die Trefferklänge eines Laufs.</string>
+    <string name="tm_themes_own_theme">Tryptify</string>
+    <string name="tm_themes_own_theme_desc">StepManias Standardlook, wie Trypt Mania ihn mitbringt</string>
+    <string name="tm_themes_noteskins">Noteskins</string>
+    <string name="tm_themes_noteskins_desc">Die Pfeile. Auch unter Spieleroptionen › Noten und im Pausenmenü wählbar.</string>
+    <string name="tm_themes_none_yet">Noch keine.</string>
+    <string name="tm_themes_announcers">Ansager</string>
+    <string name="tm_themes_announcers_desc">Eine Stimme bei READY und GO, alle hundert Kombo, bei gerissener Kombo, Scheitern, Bestehen und deiner Note.</string>
+    <string name="tm_themes_no_announcer">Keiner</string>
+    <string name="tm_themes_use">Verwenden</string>
+    <string name="tm_themes_in_use">In Gebrauch</string>
+    <string name="tm_themes_remove">Entfernen</string>
+    <string name="tm_themes_keep">Behalten</string>
+    <string name="tm_themes_remove_title">%1$s entfernen?</string>
+    <string name="tm_themes_remove_desc">Seine Bilder und Klänge werden aus der App gelöscht. Deine Punkte bleiben.</string>
+    <string name="tm_themes_rights">Importierte Bilder und Klänge gehören ihren Urhebern. Jedes behält einen Vermerk, woher es stammt.</string>
 </resources>

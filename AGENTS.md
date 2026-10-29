@@ -135,6 +135,11 @@ judgement, grade and full-combo art with its typefaces
 them with those scripts rather than editing the PNGs; each writes the licence
 StepMania's notice requires next to the art.
 
+Noteskins, themes and announcers the listener imports from StepMania
+downloads are not shipped art: they are baked on the phone at import
+(`glyph/style/`), each with a `LICENSE.txt` naming where it came from, and
+never added to the repository.
+
 ## Trypt Mania's built-in servers are build secrets
 
 A release ships with one TryptMania Parser server built in, the rooms server

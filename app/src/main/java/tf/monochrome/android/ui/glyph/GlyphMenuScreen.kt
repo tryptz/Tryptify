@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Leaderboard
@@ -207,6 +208,13 @@ fun GlyphMenuScreen(
                     subtitle = stringResource(R.string.tm_charting_menu_subtitle),
                     icon = Icons.Default.AutoAwesome,
                     onClick = { onEvent(GlyphEvent.OpenCharting) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                MenuPill(
+                    title = stringResource(R.string.tm_themes_title),
+                    subtitle = stringResource(R.string.tm_themes_menu_subtitle),
+                    icon = Icons.Default.Palette,
+                    onClick = { onEvent(GlyphEvent.OpenThemes) },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(MonoDimens.spacingSm)) {

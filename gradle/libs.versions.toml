@@ -27,6 +27,9 @@ nextlibMedia3ext = "0.8.4"
 profileinstaller = "1.4.1"
 jaudiotagger = "3.0.1"
 zxing = "3.5.3"
+# StepMania themes, noteskins and announcers as 7z (zip needs nothing).
+commonsCompress = "1.27.1"
+xz = "1.10"
 junit = "4.13.2"
 robolectric = "4.14.1"
 
@@ -36,6 +39,8 @@ androidxTestJunit = "1.2.1"
 uiautomator = "2.3.0"
 
 [libraries]
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 # Compose
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }

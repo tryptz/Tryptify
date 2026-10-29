@@ -216,7 +216,7 @@ class GlyphAssetRepository @Inject constructor(
         if (root in missingSkins) return null
         return withContext(Dispatchers.IO) {
             runCatching {
-                context.assets.open("$root/manifest.json").use { stream ->
+                openSkinFile("$root/manifest.json").use { stream ->
                     json.decodeFromString<GlyphSkinManifest>(stream.readBytes().decodeToString())
                 }
             }.onFailure {
@@ -248,7 +248,7 @@ class GlyphAssetRepository @Inject constructor(
         if (path in failed) return null
         return withContext(Dispatchers.IO) {
             runCatching {
-                context.assets.open(path).use { stream ->
+                openSkinFile(path).use { stream ->
                     BitmapFactory.decodeStream(stream, null, BitmapFactory.Options().apply {
                         inPreferredConfig = Bitmap.Config.ARGB_8888
                         inScaled = false
@@ -259,6 +259,10 @@ class GlyphAssetRepository @Inject constructor(
             }.getOrNull()?.also { skinSources[path] = it }
         }
     }
+
+    /** A skin's file: from the app's assets, or from the phone for an imported noteskin. */
+    private fun openSkinFile(path: String): java.io.InputStream =
+        if (skin.isFile) java.io.File(path).inputStream() else context.assets.open(path)
 
     private fun glassed(source: Bitmap, look: GlyphGlassLook, tile: Boolean, openBottom: Boolean): Bitmap {
         val w = source.width

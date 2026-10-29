@@ -449,6 +449,9 @@ dependencies {
     implementation(libs.androidx.paging.compose)
     implementation(libs.room.paging)
     implementation(libs.profileinstaller)
+    // Trypt Mania's StepMania styles (noteskins, themes, announcers) packed as 7z.
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
     // Where the generated profile comes from. profileinstaller above is the
     // runtime half — it installs a profile at first launch — and until this
     // existed the only profiles it had to install were the ones the AndroidX
