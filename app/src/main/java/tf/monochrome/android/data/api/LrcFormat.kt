@@ -57,7 +57,8 @@ object LrcFormat {
             // A stamp with nothing after it clears a player's screen; it is no line.
             val body = line.substring(position).replace(END_STAMP, "")
             if (body.isBlank()) continue
-            for (tag in lead) lines.add(lineOf(body, msOf(tag), offsetMs))
+            val first = msOf(lead.first())
+            for (tag in lead) lines.add(lineOf(body, msOf(tag), msOf(tag) - first, offsetMs))
         }
         if (lines.isEmpty()) return null
         val timed = lines.any { line -> line.timeMs > 0 || line.words.any { it.startMs > 0 } }
@@ -65,20 +66,33 @@ object LrcFormat {
         return Lyrics(lines = lines.sortedBy { it.timeMs }, isSynced = true)
     }
 
-    private fun lineOf(body: String, start: Long, offsetMs: Long): LyricLine {
+    /**
+     * One line at [start]. [shift] is how far this stamp is from the line's
+     * first one: the word stamps were written for the first time the words
+     * are sung, so a chorus repeated by a second line stamp moves its words
+     * with it (they used to light at the first chorus's times, seen on device).
+     */
+    private fun lineOf(body: String, start: Long, shift: Long, offsetMs: Long): LyricLine {
         val tags = WORD.findAll(body).toList()
         if (tags.isEmpty()) {
             return LyricLine(timeMs = (start - offsetMs).coerceAtLeast(0), text = body.trim())
         }
         // Each word runs from its tag to the next; a tag with nothing after it
         // closes the last word. The line's text is the words with their spaces.
+        // Some files stamp the words from the line's start rather than the
+        // song's: the first word at zero on a line that is not.
+        val base = if (msOf(tags.first()) < 1_000 && start >= 2_000) start else shift
         val words = mutableListOf<LyricWord>()
+        var floor = 0L
         for ((i, tag) in tags.withIndex()) {
             val textEnd = if (i + 1 < tags.size) tags[i + 1].range.first else body.length
             val text = body.substring(tag.range.last + 1, textEnd)
-            val from = msOf(tag) - offsetMs
-            val to = if (i + 1 < tags.size) msOf(tags[i + 1]) - offsetMs else from + 2_000
-            if (text.isNotBlank()) words.add(LyricWord(startMs = from.coerceAtLeast(0), endMs = to.coerceAtLeast(from), text = text.trim()))
+            // Never earlier than the word before: a stamp out of order made
+            // the highlight jump back and forth along the line.
+            val from = maxOf(msOf(tag) + base - offsetMs, floor).coerceAtLeast(0)
+            val to = if (i + 1 < tags.size) maxOf(msOf(tags[i + 1]) + base - offsetMs, from) else from + 2_000
+            floor = from
+            if (text.isNotBlank()) words.add(LyricWord(startMs = from, endMs = to, text = text.trim()))
         }
         val lineText = tags.indices.joinToString("") { i ->
             val textEnd = if (i + 1 < tags.size) tags[i + 1].range.first else body.length

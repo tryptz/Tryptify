@@ -567,7 +567,11 @@ own position and a tapped line seeks. Saving goes through
 `ServerLyricsEngine.publish`: the same `cached_lyrics` row a server would
 write, the player's lyrics replaced at once, and the download's `.lrc`
 rewritten with word times. The row list pads its bottom by
-`LocalBottomChromeInset`, like the Studio.
+`LocalBottomChromeInset`, like the Studio. Its chip and button rows (the
+modes and steps, the selected line's words, the actions under each section)
+wrap in a `FlowRow`, never scroll sideways: a scrolling row hid the last
+chips (the 500 ms step, a line's first words, the server's button) past the
+edge, with nothing to say they were there.
 
 **Only the sung karaoke line reads the play head.** An inactive line takes 0,
 since its colours never use the position; given it, every visible line

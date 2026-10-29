@@ -41,14 +41,22 @@ object LyricsEdit {
     /**
      * The word at [word] of line [index] sung from [ms]: the word before it
      * ends there, and the first word's time is the line's.
+     *
+     * Where the words after it would then start before it, they move with
+     * it, keeping their spacing: stamping a line's first word at 0:47 left
+     * the rest at the 0:34 the source had, and the highlight jumped back.
      */
     fun setWordTime(lyrics: Lyrics, index: Int, word: Int, ms: Long): Lyrics = update(lyrics, index) { line ->
         if (word !in line.words.indices) return@update line
         val at = ms.coerceAtLeast(0)
+        val old = line.words[word]
+        val delta = at - old.startMs
+        val carry = line.words.drop(word + 1).any { it.startMs < at }
         val words = line.words.mapIndexed { i, w ->
-            when (i) {
-                word -> w.copy(startMs = at, endMs = maxOf(w.endMs, at + 1))
-                word - 1 -> w.copy(endMs = at.coerceAtLeast(w.startMs))
+            when {
+                i == word -> w.copy(startMs = at, endMs = if (carry) maxOf(old.endMs + delta, at + 1) else maxOf(w.endMs, at + 1))
+                i == word - 1 -> w.copy(endMs = at.coerceAtLeast(w.startMs))
+                i > word && carry -> w.copy(startMs = (w.startMs + delta).coerceAtLeast(at), endMs = (w.endMs + delta).coerceAtLeast(at))
                 else -> w
             }
         }
