@@ -6,6 +6,7 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.URLUtil
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -126,6 +127,14 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
                                 note = queuedLine.format(name.ifBlank { "…" })
                             }
                             webViewClient = object : WebViewClient() {
+                                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                                    if (isArchiveStylesheet(request.url)) archiveStylesheet(request.url) else null
+
+                                // The tab follows the page, wherever the site's own links went.
+                                override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                                    sectionOf(url)?.let { section = it }
+                                }
+
                                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                     val url = request.url
                                     if (url.scheme == "https" && isArchiveDownload(url)) {
@@ -175,6 +184,56 @@ private val ARCHIVE_SECTIONS = listOf(
 )
 
 private const val ARCHIVE = "https://josevarela.net/SMArchive/"
+
+/** The section a page of the archive is in, by its path; null outside them. */
+private fun sectionOf(url: String?): String? {
+    val path = url?.let { Uri.parse(it) }?.takeIf { isArchive(it) }?.path ?: return null
+    return ARCHIVE_SECTIONS.firstOrNull { path.startsWith("/SMArchive/${it.path}/", ignoreCase = true) }?.path
+}
+
+private fun isArchiveStylesheet(url: Uri): Boolean =
+    url.scheme == "https" && isArchive(url) && url.path.orEmpty().endsWith("/theme.css", ignoreCase = true)
+
+/**
+ * The archive's stylesheet with its names shown on a phone. Below 660 pixels
+ * it hides the third column of every download table, meant for its builds'
+ * tables but on NoteSkins' (five columns) that is the name, leaving only the
+ * author, mostly "?". Themes' tables (four columns, a date third) are left
+ * as they are. Fetched here, never run; null loads the page's own.
+ */
+private fun archiveStylesheet(url: Uri): WebResourceResponse? = runCatching {
+    val connection = (java.net.URL(url.toString()).openConnection() as java.net.HttpURLConnection).apply {
+        instanceFollowRedirects = false
+        connectTimeout = 15_000
+        readTimeout = 15_000
+    }
+    try {
+        if (connection.responseCode != 200) return null
+        val css = connection.inputStream.use { input ->
+            val bytes = input.readNBytesCompat(MAX_STYLESHEET_BYTES) ?: return null
+            String(bytes, Charsets.UTF_8)
+        }
+        WebResourceResponse("text/css", "utf-8", (css + NAME_COLUMN_SHOWN).byteInputStream())
+    } finally {
+        connection.disconnect()
+    }
+}.getOrNull()
+
+/** The whole stream when it is at most [limit] bytes; null when larger. */
+private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray? {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(16 * 1024)
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) return out.toByteArray()
+        if (out.size() + read > limit) return null
+        out.write(buffer, 0, read)
+    }
+}
+
+private const val MAX_STYLESHEET_BYTES = 512 * 1024
+
+private const val NAME_COLUMN_SHOWN = "\n.TableBuildSet tr:has(> td:nth-child(5)) > td:nth-child(3) { display: table-cell !important; }\n"
 
 private fun isArchive(url: Uri): Boolean {
     val host = url.host?.lowercase() ?: return false

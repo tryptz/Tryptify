@@ -2386,7 +2386,11 @@ full-screen dialog like Packs' StepMania Online one, no JavaScript, only the
 archive's pages) with a `GlyphChipRow` of its Themes, NoteSkins, Announcers
 and Characters; a ZIP, `.smzip`, 7z or RAR link tapped is downloaded (https
 only, a few redirects, `GlyphStyleLibrary.importUrl`) and imported in the
-background.
+background. The site's own phone stylesheet hides the third column of
+its download tables, which on NoteSkins is the name, leaving a column of "?"
+authors; the browser fetches `theme.css` itself and adds one rule showing it
+again on those five-column tables only (no JavaScript is turned on for it).
+The tab chips follow the page, wherever the site's own links went.
 
 **A character dances off the field's frame.** An imported StepMania character
 (MilkShape's text model, read by `Milkshape`, posed by `CharacterPose`: rigid
