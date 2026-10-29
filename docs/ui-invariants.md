@@ -1890,6 +1890,23 @@ column, with nothing to jump between.
   for the whole route; the bottom insets follow, so the wheel and the pills
   take its place.
 
+**Charting by the minute is a menu pill and one screen.** "Generate charts"
+sits under Multiplayer on the start menu as a `MenuPill` like the others (a
+glass pill with a line under its name), never a button of its own style, and
+opens `GlyphChartingScreen` (`GlyphScreen.CHARTING`): a pushed menu like
+Packs, with a top bar and Back, the theme's page and ink, `GlyphPanel`s. Its
+meter reads like a plan's usage bar: minutes left over minutes bought on one
+line, one 8 dp track under them (`surfaceVariant`) with the share used filled
+in the accent, and the share and about how many songs are left under that.
+The fill turns `error` only when the minutes are gone; a second colour for
+"running low" made the bar look broken at every pack's end. With nothing
+bought the track is empty and the line says the first song is free. The packs
+are rows picked like radio buttons (`selectable`, a 2 dp accent border on the
+one picked), and one filled Buy button names the picked pack and its price in
+dollars, which is what Creem charges wherever the listener is. The account
+comes from `ChartingAccountStore`; until Tryptify Cloud holds it, every
+account is empty and Buy answers with a notice panel, never a dead button.
+
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a
 density graph, from `GlyphChartStats`. The radar is StepMania's own

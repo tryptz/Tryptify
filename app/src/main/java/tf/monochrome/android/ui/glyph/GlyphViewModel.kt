@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.R
 import tf.monochrome.android.audio.sampler.PcmDecoder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -37,6 +38,8 @@ import tf.monochrome.android.audio.stepmania.ChartJob
 import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.audio.stepmania.ChartPace
 import tf.monochrome.android.audio.stepmania.ChartQueue
+import tf.monochrome.android.audio.stepmania.ChartingAccountStore
+import tf.monochrome.android.audio.stepmania.ChartingPacks
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
 import tf.monochrome.android.glyph.pack.GlyphPackLibrary
@@ -129,6 +132,7 @@ class GlyphViewModel @Inject constructor(
     private val attempts: GlyphAttemptStore,
     private val chartQueue: ChartQueue,
     private val chartPace: ChartPace,
+    private val chartingAccount: ChartingAccountStore,
     private val remoteStems: RemoteStemAnalysis,
     private val trackLocator: tf.monochrome.android.player.LocalTrackLocator,
     private val packLibrary: GlyphPackLibrary,
@@ -317,6 +321,11 @@ class GlyphViewModel @Inject constructor(
         watchPacks()
         watchRooms()
         viewModelScope.launch {
+            chartingAccount.account.collect { account ->
+                _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(account = account))
+            }
+        }
+        viewModelScope.launch {
             songs.songs()
                 .catch { failure ->
                     Log.w(TAG, "song list failed: ${failure.message}")
@@ -455,6 +464,21 @@ class GlyphViewModel @Inject constructor(
                 refreshOwnCount()
             }
             GlyphEvent.ClosePacks -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+
+            GlyphEvent.OpenCharting -> {
+                wheelFocusJob?.cancel()
+                stopPreview()
+                _ui.value = _ui.value.copy(screen = GlyphScreen.CHARTING)
+            }
+            GlyphEvent.CloseCharting -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.BuyMinutes -> viewModelScope.launch {
+                val pack = ChartingPacks.ALL.firstOrNull { it.id == event.packId } ?: return@launch
+                if (!chartingAccount.buy(pack)) {
+                    _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = R.string.tm_charting_not_on_sale))
+                }
+            }
+            GlyphEvent.DismissChartingNotice ->
+                _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = null))
 
             GlyphEvent.OpenMultiplayer -> openMultiplayer()
             GlyphEvent.CloseMultiplayer -> closeMultiplayer()

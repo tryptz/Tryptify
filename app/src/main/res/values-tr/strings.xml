@@ -3236,4 +3236,36 @@
     <string name="whats_new_1951_one_clock_dac_body">Nothing Ear (1) gibi yalnızca 48 ve 96 kHz’de çalışan bir USB DAC, CD hızındaki şarkıları en yakın hızına yeniden örnekleyerek özel modda çalar. Desteklediği hızlar bit-perfect kalır.</string>
     <string name="whats_new_1951_lrc_fixes_title">LRC sözleri doğru okunur</string>
     <string name="whats_new_1951_lrc_fixes_body">Bayt sırası işaretiyle başlayan bir dosya ilk satırını korur, sondaki zaman damgası bir zamandır, tamamen sıfır olan bir dosya düz söz olarak görünür ve LRCLib’in kısa damgaları, kaydırmaları ve kelime zamanlaması başka yerlerdeki gibi okunur.</string>
+    <string name="tm_charting_menu_title">Chart oluştur</string>
+    <string name="tm_charting_menu_subtitle">Şarkıların, dakika başına</string>
+    <string name="tm_charting_title">Şarkılarına chart oluştur</string>
+    <string name="tm_charting_minutes">Dakika</string>
+    <string name="tm_charting_of_minutes">%1$s / %2$s dk</string>
+    <string name="tm_charting_used_percent">%%%1$d kullanıldı</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="one">Yaklaşık %d şarkı kaldı</item>
+        <item quantity="other">Yaklaşık %d şarkı kaldı</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">Henüz dakika yok. İlk şarkın ücretsiz.</string>
+    <string name="tm_charting_free_title">İlk şarkın ücretsiz</string>
+    <string name="tm_charting_free_body">Tryptify’ın sunucusunda chart oluştur: kurulum yok, kart yok. %1$d dakikaya kadar şarkılar. Chart başarısız olursa ücretsiz şarkın kalır.</string>
+    <string name="tm_charting_free_action">Ücretsiz şarkımı oluştur</string>
+    <string name="tm_charting_stat_songs">Oluşturulan şarkı</string>
+    <string name="tm_charting_stat_minutes">Kullanılan dakika</string>
+    <string name="tm_charting_stat_free">Ücretsiz şarkı</string>
+    <string name="tm_charting_free_available">Kullanılabilir</string>
+    <string name="tm_charting_free_spent">Kullanıldı</string>
+    <string name="tm_charting_packs_title">Dakika paketleri</string>
+    <string name="tm_charting_packs_note">Her şarkı, süresi dakikaya yukarı yuvarlanarak sayılır, en az %1$d dakika. Şarkılar %2$d dakika olarak tahmin edilir. Dakikalar asla dolmaz.</string>
+    <string name="tm_charting_pack_line">%1$s dk · yaklaşık %2$s şarkı</string>
+    <string name="tm_charting_buy">%1$s dk satın al · %2$s</string>
+    <string name="tm_charting_not_on_sale">Dakika paketleri henüz satışta değil.</string>
+    <string name="tm_charting_pack_starter">Başlangıç</string>
+    <string name="tm_charting_pack_library">Kitaplık</string>
+    <string name="tm_charting_pack_big">Büyük kitaplık</string>
+    <string name="tm_charting_most_picked">En çok seçilen</string>
+    <string name="tm_charting_history">Geçmiş</string>
+    <string name="tm_charting_history_empty">Burada henüz bir şey oluşturulmadı.</string>
+    <string name="tm_charting_own_server">Ya da Ayarlar › Bağlantılar’da eklediğin bir sunucuda ücretsiz oluştur.</string>
+    <string name="tm_charting_fail_refund">Başarısız olan şarkının dakikaları geri gelir.</string>
 </resources>

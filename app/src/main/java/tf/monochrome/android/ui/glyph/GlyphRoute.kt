@@ -135,6 +135,7 @@ fun GlyphRoute(
             GlyphScreen.HOME -> viewModel.onEvent(GlyphEvent.BackToMenu)
             GlyphScreen.SETTINGS -> viewModel.onEvent(GlyphEvent.CloseSettings)
             GlyphScreen.PACKS -> viewModel.onEvent(GlyphEvent.ClosePacks)
+            GlyphScreen.CHARTING -> viewModel.onEvent(GlyphEvent.CloseCharting)
             GlyphScreen.EDITOR -> viewModel.onEvent(GlyphEvent.CloseEditor)
             // The rooms screen's own handler leaves a room first; this is
             // what is left once it has, or when there was none.
@@ -229,6 +230,12 @@ fun GlyphRoute(
             )
 
             GlyphScreen.PACKS -> GlyphPacksScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GlyphScreen.CHARTING -> GlyphChartingScreen(
                 state = state,
                 onEvent = viewModel::onEvent,
                 modifier = Modifier.fillMaxSize(),

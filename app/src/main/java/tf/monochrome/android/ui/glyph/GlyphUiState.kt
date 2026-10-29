@@ -62,6 +62,8 @@ data class GlyphUiState(
     val selectedDifficulty: StepManiaDifficulty? = null,
     val generation: GlyphGenerationState? = null,
     val packs: GlyphPacksUi = GlyphPacksUi(),
+    /** Charting on Tryptify's server by the minute: the listener's minutes and packs. */
+    val charting: GlyphChartingUi = GlyphChartingUi(),
     /** Fast (a GPU server) or Slow (a CPU server); kept between sessions. */
     val chartMode: tf.monochrome.android.audio.stepmania.ChartMode = tf.monochrome.android.audio.stepmania.ChartMode.FAST,
     /** The separation servers there are, for what each mode can do. */
@@ -127,7 +129,7 @@ data class GlyphBackdrop(val trackId: String, val imageUri: String?)
  * Where the mode is. [MENU] is the front door; [HOME] is the song list, which
  * Play and the map editor both pick a song from.
  */
-enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
+enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, CHARTING, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
 
 /** Whether the song list is choosing a song to play, a chart to edit, or a chart for the room. */
 enum class GlyphSongListMode { PLAY, EDIT, ROOM }
@@ -489,6 +491,16 @@ data class GlyphSectionResult(
 
 /**
  * StepMania packs: the ones imported, the one importing, and the player's own
+ * pack — the charts made in the app, saved as a pack in a folder they chose.
+ */
+data class GlyphChartingUi(
+    val account: tf.monochrome.android.audio.stepmania.ChartingAccount = tf.monochrome.android.audio.stepmania.ChartingAccount(),
+    /** A line to show once, as a string resource; null when there is none. */
+    @androidx.annotation.StringRes val notice: Int? = null,
+)
+
+/**
+ * The Packs screen: the packs imported, an import under way, and the own
  * pack — the charts made in the app, saved as a pack in a folder they chose.
  */
 data class GlyphPacksUi(

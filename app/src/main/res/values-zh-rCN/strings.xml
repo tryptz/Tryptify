@@ -3160,4 +3160,35 @@
     <string name="whats_new_1951_one_clock_dac_body">只支持 48 和 96 kHz 的 USB DAC（如 Nothing Ear (1)）会以独占模式播放 CD 采样率的歌曲，并重采样到最接近的采样率。它支持的采样率仍保持比特精确。</string>
     <string name="whats_new_1951_lrc_fixes_title">LRC 歌词正确读取</string>
     <string name="whats_new_1951_lrc_fixes_body">以字节顺序标记开头的文件会保留第一行，结尾时间戳按时间读取，全为零的文件显示为纯文本歌词，LRCLib 的短时间戳、偏移和逐字计时也与其他来源一样读取。</string>
+    <string name="tm_charting_menu_title">生成谱面</string>
+    <string name="tm_charting_menu_subtitle">你的歌曲，按分钟计费</string>
+    <string name="tm_charting_title">为你的歌曲生成谱面</string>
+    <string name="tm_charting_minutes">分钟</string>
+    <string name="tm_charting_of_minutes">%1$s / %2$s 分钟</string>
+    <string name="tm_charting_used_percent">已用 %1$d%%</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="other">约剩 %d 首歌</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">还没有分钟。你的第一首歌免费。</string>
+    <string name="tm_charting_free_title">你的第一首歌免费</string>
+    <string name="tm_charting_free_body">在 Tryptify 的服务器上生成谱面：无需设置，无需银行卡。歌曲最长 %1$d 分钟。生成失败不会用掉免费歌曲。</string>
+    <string name="tm_charting_free_action">生成我的免费歌曲</string>
+    <string name="tm_charting_stat_songs">已生成歌曲</string>
+    <string name="tm_charting_stat_minutes">已用分钟</string>
+    <string name="tm_charting_stat_free">免费歌曲</string>
+    <string name="tm_charting_free_available">可用</string>
+    <string name="tm_charting_free_spent">已用</string>
+    <string name="tm_charting_packs_title">分钟包</string>
+    <string name="tm_charting_packs_note">每首歌按时长向上取整到分钟计算，至少 %1$d 分钟。按每首 %2$d 分钟估算。分钟永不过期。</string>
+    <string name="tm_charting_pack_line">%1$s 分钟 · 约 %2$s 首歌</string>
+    <string name="tm_charting_buy">购买 %1$s 分钟 · %2$s</string>
+    <string name="tm_charting_not_on_sale">分钟包尚未开售。</string>
+    <string name="tm_charting_pack_starter">入门</string>
+    <string name="tm_charting_pack_library">曲库</string>
+    <string name="tm_charting_pack_big">大曲库</string>
+    <string name="tm_charting_most_picked">最多人选</string>
+    <string name="tm_charting_history">记录</string>
+    <string name="tm_charting_history_empty">这里还没有生成过谱面。</string>
+    <string name="tm_charting_own_server">或者在「设置 › 连接」中添加你自己的服务器，免费生成。</string>
+    <string name="tm_charting_fail_refund">生成失败的歌曲会退还分钟。</string>
 </resources>

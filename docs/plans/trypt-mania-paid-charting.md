@@ -106,8 +106,10 @@ players know are free or give free songs every month. A free song every month
   per minute and the packs are worked out from Railway's rates and the pack
   list; sales and minutes show "not recorded yet" until Cloud records them.
   Its link is kept out of this public repository.
-- The listener's screens are mocked up (free song, packs, a batch, usage);
-  not built in the app yet.
+- The listener's screen is in the app (`GlyphChartingScreen`, from "Generate
+  charts" on Trypt Mania's menu): the meter, the free song, the packs and the
+  history, read from `ChartingAccountStore`. The store is empty and Buy says
+  packs are not on sale until Cloud holds the minutes and the Creem checkout.
 
 ## The fixed cost (measured; fixed in Parser `03ff903`, not yet deployed)
 

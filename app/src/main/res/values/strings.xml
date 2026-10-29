@@ -3239,4 +3239,36 @@
     <string name="whats_new_1951_one_clock_dac_body">A USB DAC that runs only 48 and 96 kHz, like the Nothing Ear (1), plays CD-rate songs in exclusive mode, resampled to its nearest rate. Rates it takes stay bit-perfect.</string>
     <string name="whats_new_1951_lrc_fixes_title">LRC lyrics read right</string>
     <string name="whats_new_1951_lrc_fixes_body">A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib\'s short stamps, offsets and word timing read as elsewhere.</string>
+    <string name="tm_charting_menu_title">Generate charts</string>
+    <string name="tm_charting_menu_subtitle">Your songs, charted by the minute</string>
+    <string name="tm_charting_title">Chart your songs</string>
+    <string name="tm_charting_minutes">Minutes</string>
+    <string name="tm_charting_of_minutes">%1$s of %2$s min</string>
+    <string name="tm_charting_used_percent">%1$d%% used</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="one">About %d song left</item>
+        <item quantity="other">About %d songs left</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">No minutes yet. Your first song is free.</string>
+    <string name="tm_charting_free_title">Your first song is free</string>
+    <string name="tm_charting_free_body">Chart it on Tryptify\'s server: no setup, no card. Songs up to %1$d minutes. If the chart fails, you keep your free song.</string>
+    <string name="tm_charting_free_action">Chart my free song</string>
+    <string name="tm_charting_stat_songs">Songs charted</string>
+    <string name="tm_charting_stat_minutes">Minutes used</string>
+    <string name="tm_charting_stat_free">Free song</string>
+    <string name="tm_charting_free_available">Available</string>
+    <string name="tm_charting_free_spent">Used</string>
+    <string name="tm_charting_packs_title">Minute packs</string>
+    <string name="tm_charting_packs_note">A song counts its length rounded up to the minute, at least %1$d minutes. Songs are estimated at %2$d minutes. Minutes never run out.</string>
+    <string name="tm_charting_pack_line">%1$s min · about %2$s songs</string>
+    <string name="tm_charting_buy">Buy %1$s min · %2$s</string>
+    <string name="tm_charting_not_on_sale">Minute packs are not on sale yet.</string>
+    <string name="tm_charting_pack_starter">Starter</string>
+    <string name="tm_charting_pack_library">Library</string>
+    <string name="tm_charting_pack_big">Big library</string>
+    <string name="tm_charting_most_picked">Most picked</string>
+    <string name="tm_charting_history">History</string>
+    <string name="tm_charting_history_empty">Nothing charted here yet.</string>
+    <string name="tm_charting_own_server">Or chart free on a server you add in Settings › Connections.</string>
+    <string name="tm_charting_fail_refund">A song that fails gives its minutes back.</string>
 </resources>

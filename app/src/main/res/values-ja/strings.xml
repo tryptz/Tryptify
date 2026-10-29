@@ -3160,4 +3160,35 @@
     <string name="whats_new_1951_one_clock_dac_body">Nothing Ear (1) のように 48 kHz と 96 kHz だけで動く USB DAC でも、CD レートの曲を最も近いレートにリサンプリングして排他モードで再生します。DAC が受け付けるレートはビットパーフェクトのままです。</string>
     <string name="whats_new_1951_lrc_fixes_title">LRC 歌詞を正しく読み込み</string>
     <string name="whats_new_1951_lrc_fixes_body">バイトオーダーマークで始まるファイルは最初の行が残り、末尾のタイムスタンプは時刻として読まれ、すべてゼロのファイルはテキスト歌詞として表示され、LRCLib の短いタイムスタンプ、オフセット、単語単位の同期も他と同じように読まれます。</string>
+    <string name="tm_charting_menu_title">譜面を生成</string>
+    <string name="tm_charting_menu_subtitle">あなたの曲を、分単位で</string>
+    <string name="tm_charting_title">曲の譜面を生成</string>
+    <string name="tm_charting_minutes">分</string>
+    <string name="tm_charting_of_minutes">%1$s / %2$s 分</string>
+    <string name="tm_charting_used_percent">%1$d%% 使用</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="other">残り約 %d 曲</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">まだ分がありません。最初の 1 曲は無料です。</string>
+    <string name="tm_charting_free_title">最初の 1 曲は無料</string>
+    <string name="tm_charting_free_body">Tryptify のサーバーで譜面を生成：設定もカードも不要。曲は %1$d 分まで。失敗しても無料枠は残ります。</string>
+    <string name="tm_charting_free_action">無料の 1 曲を生成</string>
+    <string name="tm_charting_stat_songs">生成した曲</string>
+    <string name="tm_charting_stat_minutes">使用した分</string>
+    <string name="tm_charting_stat_free">無料の 1 曲</string>
+    <string name="tm_charting_free_available">利用可能</string>
+    <string name="tm_charting_free_spent">使用済み</string>
+    <string name="tm_charting_packs_title">分パック</string>
+    <string name="tm_charting_packs_note">曲は長さを分単位に切り上げて数えます（最低 %1$d 分）。1 曲は %2$d 分として見積もります。分に期限はありません。</string>
+    <string name="tm_charting_pack_line">%1$s 分 · 約 %2$s 曲</string>
+    <string name="tm_charting_buy">%1$s 分を購入 · %2$s</string>
+    <string name="tm_charting_not_on_sale">分パックはまだ販売していません。</string>
+    <string name="tm_charting_pack_starter">スターター</string>
+    <string name="tm_charting_pack_library">ライブラリ</string>
+    <string name="tm_charting_pack_big">ビッグライブラリ</string>
+    <string name="tm_charting_most_picked">人気</string>
+    <string name="tm_charting_history">履歴</string>
+    <string name="tm_charting_history_empty">まだ何も生成していません。</string>
+    <string name="tm_charting_own_server">または「設定 › 接続」で追加した自分のサーバーで無料で生成できます。</string>
+    <string name="tm_charting_fail_refund">失敗した曲の分は戻ります。</string>
 </resources>

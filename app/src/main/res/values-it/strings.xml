@@ -3312,4 +3312,37 @@
     <string name="whats_new_1951_one_clock_dac_body">Un DAC USB che funziona solo a 48 e 96 kHz, come il Nothing Ear (1), riproduce i brani a frequenza CD in modalità esclusiva, ricampionati alla frequenza più vicina. Le frequenze che accetta restano bit-perfect.</string>
     <string name="whats_new_1951_lrc_fixes_title">I testi LRC si leggono bene</string>
     <string name="whats_new_1951_lrc_fixes_body">Un file che inizia con un byte order mark mantiene la prima riga, un timestamp finale è un tempo, un file tutto a zero appare come testo semplice, e i timestamp brevi, gli offset e la sincronizzazione per parola di LRCLib si leggono come altrove.</string>
+    <string name="tm_charting_menu_title">Genera chart</string>
+    <string name="tm_charting_menu_subtitle">I tuoi brani, al minuto</string>
+    <string name="tm_charting_title">Chart per i tuoi brani</string>
+    <string name="tm_charting_minutes">Minuti</string>
+    <string name="tm_charting_of_minutes">%1$s di %2$s min</string>
+    <string name="tm_charting_used_percent">%1$d %% usato</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="one">Circa %d brano rimasto</item>
+        <item quantity="many">Circa %d brani rimasti</item>
+        <item quantity="other">Circa %d brani rimasti</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">Ancora nessun minuto. Il tuo primo brano è gratis.</string>
+    <string name="tm_charting_free_title">Il tuo primo brano è gratis</string>
+    <string name="tm_charting_free_body">Genera la sua chart sul server di Tryptify: niente da configurare, nessuna carta. Brani fino a %1$d minuti. Se la chart fallisce, il brano gratis resta tuo.</string>
+    <string name="tm_charting_free_action">Genera il mio brano gratis</string>
+    <string name="tm_charting_stat_songs">Brani generati</string>
+    <string name="tm_charting_stat_minutes">Minuti usati</string>
+    <string name="tm_charting_stat_free">Brano gratis</string>
+    <string name="tm_charting_free_available">Disponibile</string>
+    <string name="tm_charting_free_spent">Usato</string>
+    <string name="tm_charting_packs_title">Pacchetti di minuti</string>
+    <string name="tm_charting_packs_note">Ogni brano conta la sua durata arrotondata al minuto, almeno %1$d minuti. I brani sono stimati a %2$d minuti. I minuti non scadono mai.</string>
+    <string name="tm_charting_pack_line">%1$s min · circa %2$s brani</string>
+    <string name="tm_charting_buy">Compra %1$s min · %2$s</string>
+    <string name="tm_charting_not_on_sale">I pacchetti di minuti non sono ancora in vendita.</string>
+    <string name="tm_charting_pack_starter">Base</string>
+    <string name="tm_charting_pack_library">Libreria</string>
+    <string name="tm_charting_pack_big">Libreria grande</string>
+    <string name="tm_charting_most_picked">Il più scelto</string>
+    <string name="tm_charting_history">Cronologia</string>
+    <string name="tm_charting_history_empty">Qui non è stato ancora generato nulla.</string>
+    <string name="tm_charting_own_server">Oppure genera chart gratis su un server aggiunto in Impostazioni › Connessioni.</string>
+    <string name="tm_charting_fail_refund">Un brano che fallisce restituisce i suoi minuti.</string>
 </resources>

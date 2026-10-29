@@ -3312,4 +3312,37 @@
     <string name="whats_new_1951_one_clock_dac_body">Un DAC USB qui ne fonctionne qu’à 48 et 96 kHz, comme le Nothing Ear (1), lit les titres en qualité CD en mode exclusif, rééchantillonnés à sa fréquence la plus proche. Les fréquences qu’il accepte restent bit-perfect.</string>
     <string name="whats_new_1951_lrc_fixes_title">Les paroles LRC se lisent correctement</string>
     <string name="whats_new_1951_lrc_fixes_body">Un fichier commençant par une marque d’ordre des octets garde sa première ligne, un horodatage de fin est un temps, un fichier tout à zéro s’affiche en paroles simples, et les horodatages courts, décalages et synchronisation au mot de LRCLib se lisent comme ailleurs.</string>
+    <string name="tm_charting_menu_title">Générer des charts</string>
+    <string name="tm_charting_menu_subtitle">Vos titres, chartés à la minute</string>
+    <string name="tm_charting_title">Charter vos titres</string>
+    <string name="tm_charting_minutes">Minutes</string>
+    <string name="tm_charting_of_minutes">%1$s sur %2$s min</string>
+    <string name="tm_charting_used_percent">%1$d %% utilisés</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="one">Environ %d titre restant</item>
+        <item quantity="many">Environ %d titres restants</item>
+        <item quantity="other">Environ %d titres restants</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">Pas encore de minutes. Votre premier titre est offert.</string>
+    <string name="tm_charting_free_title">Votre premier titre est offert</string>
+    <string name="tm_charting_free_body">Chartez-le sur le serveur de Tryptify : rien à configurer, pas de carte. Titres jusqu’à %1$d minutes. Si la chart échoue, vous gardez votre titre offert.</string>
+    <string name="tm_charting_free_action">Charter mon titre offert</string>
+    <string name="tm_charting_stat_songs">Titres chartés</string>
+    <string name="tm_charting_stat_minutes">Minutes utilisées</string>
+    <string name="tm_charting_stat_free">Titre offert</string>
+    <string name="tm_charting_free_available">Disponible</string>
+    <string name="tm_charting_free_spent">Utilisé</string>
+    <string name="tm_charting_packs_title">Packs de minutes</string>
+    <string name="tm_charting_packs_note">Un titre compte sa durée arrondie à la minute supérieure, %1$d minutes au moins. Les titres sont estimés à %2$d minutes. Les minutes n’expirent jamais.</string>
+    <string name="tm_charting_pack_line">%1$s min · environ %2$s titres</string>
+    <string name="tm_charting_buy">Acheter %1$s min · %2$s</string>
+    <string name="tm_charting_not_on_sale">Les packs de minutes ne sont pas encore en vente.</string>
+    <string name="tm_charting_pack_starter">Démarrage</string>
+    <string name="tm_charting_pack_library">Bibliothèque</string>
+    <string name="tm_charting_pack_big">Grande bibliothèque</string>
+    <string name="tm_charting_most_picked">Le plus choisi</string>
+    <string name="tm_charting_history">Historique</string>
+    <string name="tm_charting_history_empty">Rien de charté ici pour l’instant.</string>
+    <string name="tm_charting_own_server">Ou chartez gratuitement sur un serveur ajouté dans Paramètres › Connexions.</string>
+    <string name="tm_charting_fail_refund">Un titre qui échoue rend ses minutes.</string>
 </resources>

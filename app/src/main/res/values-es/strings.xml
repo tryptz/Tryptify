@@ -3312,4 +3312,37 @@
     <string name="whats_new_1951_one_clock_dac_body">Un DAC USB que solo funciona a 48 y 96 kHz, como el Nothing Ear (1), reproduce canciones a frecuencia de CD en modo exclusivo, remuestreadas a su frecuencia más cercana. Las frecuencias que acepta siguen siendo bit-perfect.</string>
     <string name="whats_new_1951_lrc_fixes_title">Las letras LRC se leen bien</string>
     <string name="whats_new_1951_lrc_fixes_body">Un archivo que empieza con una marca de orden de bytes conserva su primera línea, una marca de tiempo final es un tiempo, un archivo todo a cero se muestra como letra simple, y las marcas cortas, desfases y sincronización por palabra de LRCLib se leen como en otros sitios.</string>
+    <string name="tm_charting_menu_title">Generar partituras</string>
+    <string name="tm_charting_menu_subtitle">Tus canciones, por minuto</string>
+    <string name="tm_charting_title">Partituras para tus canciones</string>
+    <string name="tm_charting_minutes">Minutos</string>
+    <string name="tm_charting_of_minutes">%1$s de %2$s min</string>
+    <string name="tm_charting_used_percent">%1$d %% usado</string>
+    <plurals name="tm_charting_songs_left">
+        <item quantity="one">Queda aproximadamente %d canción</item>
+        <item quantity="many">Quedan aproximadamente %d canciones</item>
+        <item quantity="other">Quedan aproximadamente %d canciones</item>
+    </plurals>
+    <string name="tm_charting_no_minutes">Aún no tienes minutos. Tu primera canción es gratis.</string>
+    <string name="tm_charting_free_title">Tu primera canción es gratis</string>
+    <string name="tm_charting_free_body">Genera su partitura en el servidor de Tryptify: sin configurar nada, sin tarjeta. Canciones de hasta %1$d minutos. Si falla, conservas tu canción gratis.</string>
+    <string name="tm_charting_free_action">Generar mi canción gratis</string>
+    <string name="tm_charting_stat_songs">Canciones generadas</string>
+    <string name="tm_charting_stat_minutes">Minutos usados</string>
+    <string name="tm_charting_stat_free">Canción gratis</string>
+    <string name="tm_charting_free_available">Disponible</string>
+    <string name="tm_charting_free_spent">Usada</string>
+    <string name="tm_charting_packs_title">Packs de minutos</string>
+    <string name="tm_charting_packs_note">Cada canción cuenta su duración redondeada al minuto, mínimo %1$d minutos. Las canciones se estiman en %2$d minutos. Los minutos nunca caducan.</string>
+    <string name="tm_charting_pack_line">%1$s min · unas %2$s canciones</string>
+    <string name="tm_charting_buy">Comprar %1$s min · %2$s</string>
+    <string name="tm_charting_not_on_sale">Los packs de minutos aún no están a la venta.</string>
+    <string name="tm_charting_pack_starter">Inicial</string>
+    <string name="tm_charting_pack_library">Biblioteca</string>
+    <string name="tm_charting_pack_big">Biblioteca grande</string>
+    <string name="tm_charting_most_picked">El más elegido</string>
+    <string name="tm_charting_history">Historial</string>
+    <string name="tm_charting_history_empty">Aquí no se ha generado nada todavía.</string>
+    <string name="tm_charting_own_server">O genera partituras gratis en un servidor que añadas en Ajustes › Conexiones.</string>
+    <string name="tm_charting_fail_refund">Una canción que falla devuelve sus minutos.</string>
 </resources>

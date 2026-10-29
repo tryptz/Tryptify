@@ -122,6 +122,13 @@ sealed interface GlyphEvent {
     /** A player without the song: the one the host shared, fetched and readied with. */
     data object FetchRoomSong : GlyphEvent
 
+    // ── charting by the minute ──────────────────────────────────────────
+    data object OpenCharting : GlyphEvent
+    data object CloseCharting : GlyphEvent
+    /** Buy a pack of minutes, by its [tf.monochrome.android.audio.stepmania.ChartingPack.id]. */
+    data class BuyMinutes(val packId: String) : GlyphEvent
+    data object DismissChartingNotice : GlyphEvent
+
     // ── packs ───────────────────────────────────────────────────────────
     data object OpenPacks : GlyphEvent
     data object ClosePacks : GlyphEvent
