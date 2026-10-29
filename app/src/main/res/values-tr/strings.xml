@@ -3284,4 +3284,9 @@
     <string name="tm_charting_open_song">Şarkı listesinde aç</string>
     <string name="tm_charting_song_gone">Bu şarkı artık bu telefonda değil.</string>
     <string name="replaygain_detail">Her şarkı aynı ses yüksekliğinde. Ayarlamak için basılı tutun</string>
+    <string name="music_links_preset_default_name">Bağlantılarım</string>
+    <string name="music_links_preset_save_title">Bu bağlantıları kaydet</string>
+    <string name="music_links_presets_hint">Bu sayfadaki tüm bağlantıların yerine yüklemek için birine dokunun. Kaydet buradaki bağlantıları bir adla saklar; mikserinkiler mikser hazır ayarlarıyla gider.</string>
+    <string name="music_links_presets_empty">Bu sayfadaki bağlantıları daha sonra geri getirmek için bir adla kaydedin veya bir dosyadan bir set içe aktarın.</string>
+    <string name="music_links_preset_loaded">%1$s yüklendi</string>
 </resources>

@@ -3362,4 +3362,9 @@
     <string name="tm_charting_open_song">Apri nell\'elenco dei brani</string>
     <string name="tm_charting_song_gone">Quel brano non è più su questo telefono.</string>
     <string name="replaygain_detail">Ogni brano alla stessa loudness. Tieni premuto per configurare</string>
+    <string name="music_links_preset_default_name">I miei link</string>
+    <string name="music_links_preset_save_title">Salva questi link</string>
+    <string name="music_links_presets_hint">Tocca uno per caricarlo al posto di tutti i link di questa pagina. Salva tiene i link qui con un nome; quelli del mixer viaggiano con i preset del mixer.</string>
+    <string name="music_links_presets_empty">Salva i link di questa pagina con un nome per riaverli più tardi, o importa un insieme da un file.</string>
+    <string name="music_links_preset_loaded">%1$s caricato</string>
 </resources>

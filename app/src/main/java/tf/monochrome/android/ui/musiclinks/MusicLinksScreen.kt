@@ -46,6 +46,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.unit.sp
+import tf.monochrome.android.domain.model.MusicLinkPresets
+import tf.monochrome.android.domain.model.MusicLinkPreset
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -84,12 +89,111 @@ import javax.inject.Inject
 
 @HiltViewModel
 class MusicLinksViewModel @Inject constructor(
-    repository: MusicLinksRepository,
+    private val repository: MusicLinksRepository,
     preferences: PreferencesManager,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val dsp: tf.monochrome.android.audio.dsp.DspEngineManager,
+    private val presetStore: tf.monochrome.android.data.repository.MusicLinkPresetStore,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
     val editing = VisualLinkEditing(viewModelScope, repository)
+
+    // ── presets ─────────────────────────────────────────────────────────
+
+    /** The listener's saved sets of links. */
+    val presets: StateFlow<List<MusicLinkPreset>> = presetStore.presets
+
+    /** A preset just loaded and the links it replaced, while its undo is on offer. */
+    val loaded = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, List<VisualLink>>?>(null)
+
+    /** What the last save, export or import said; null when there is nothing to say. */
+    val message = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Keeps the links on the page under [name]; one of that name is replaced. */
+    fun saveAs(name: String) {
+        viewModelScope.launch {
+            val links = repository.visualLinks.first()
+            presetStore.save(MusicLinkPreset(name.trim().take(MusicLinkPresets.MAX_NAME), links))
+            message.value = null
+        }
+    }
+
+    /**
+     * Puts [preset]'s links in place of every link on the page, in one write,
+     * with the ones it replaced kept for Undo. An editor left open is closed
+     * first, so it cannot save a link back over the preset.
+     */
+    fun load(preset: MusicLinkPreset) {
+        viewModelScope.launch {
+            val before = repository.visualLinks.first()
+            repository.editing.value = null
+            repository.replaceAll(preset.links)
+            loaded.value = preset.name to before
+            message.value = null
+        }
+    }
+
+    fun undoLoad() {
+        val (_, before) = loaded.value ?: return
+        loaded.value = null
+        viewModelScope.launch { repository.replaceAll(before) }
+    }
+
+    fun delete(preset: MusicLinkPreset) {
+        viewModelScope.launch { presetStore.delete(preset.name) }
+    }
+
+    /** Writes [preset] to the file at [uri]. */
+    fun export(preset: MusicLinkPreset, uri: android.net.Uri) {
+        viewModelScope.launch {
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri, "wt")?.use {
+                        it.write(MusicLinkPresets.export(preset).toByteArray(Charsets.UTF_8))
+                    } ?: error("no stream")
+                }.isSuccess
+            }
+            message.value = context.getString(
+                if (ok) R.string.crt_preset_exported else R.string.crt_preset_export_failed,
+                preset.name,
+            )
+        }
+    }
+
+    /** Reads the preset file at [uri], keeps it with the listener's presets and loads it; or says why not. */
+    fun import(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        // A few kilobytes at most: anything big is not a preset.
+                        val bytes = stream.readNBytesUpTo(MAX_PRESET_BYTES + 1)
+                        require(bytes.size <= MAX_PRESET_BYTES) { "too big to be a preset" }
+                        String(bytes, Charsets.UTF_8)
+                    } ?: error("could not open the file")
+                }.mapCatching { MusicLinkPresets.import(it).getOrThrow() }
+            }
+            result
+                .onSuccess { preset ->
+                    presetStore.save(preset)
+                    load(preset)
+                }
+                .onFailure {
+                    message.value = context.getString(R.string.crt_preset_import_failed, it.message ?: "unreadable")
+                }
+        }
+    }
+
+    private fun java.io.InputStream.readNBytesUpTo(limit: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (out.size() < limit) {
+            val read = read(buffer, 0, minOf(buffer.size, limit - out.size()))
+            if (read < 0) break
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
 
     /** The mixer's knob links, each with the name of its effect, knob and bus. */
     val knobLinks: StateFlow<List<KnobLinkRowModel>> =
@@ -124,6 +228,9 @@ class MusicLinksViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StudioLook())
 }
 
+/** The largest preset file read: every target linked is a few kilobytes. */
+private const val MAX_PRESET_BYTES = 256 * 1024
+
 /** A knob link as the Music links page lists it. */
 data class KnobLinkRowModel(
     val link: tf.monochrome.android.audio.dsp.model.KnobLink,
@@ -151,7 +258,21 @@ fun MusicLinksScreen(
     val draft by editing.draft.collectAsStateWithLifecycle()
     val look by viewModel.look.collectAsStateWithLifecycle()
     val knobs by viewModel.knobLinks.collectAsStateWithLifecycle()
+    val presets by viewModel.presets.collectAsStateWithLifecycle()
+    val loadedPreset by viewModel.loaded.collectAsStateWithLifecycle()
+    val presetMessage by viewModel.message.collectAsStateWithLifecycle()
     val ui = remember { StudioLinkUi() }
+    var naming by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // The preset these links are, if they are one; else what Export writes.
+    val inUse = presets.firstOrNull { MusicLinkPresets.matches(it, links) }
+    val current = inUse ?: MusicLinkPreset(context.getString(R.string.music_links_preset_default_name), links)
+    val exporter = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri -> if (uri != null) viewModel.export(current, uri) }
+    val importer = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.import(uri) }
     // The knob link just removed and its name, while its undo is on offer.
     var removedKnob by remember { mutableStateOf<Pair<tf.monochrome.android.audio.dsp.model.KnobLink, String>?>(null) }
 
@@ -210,6 +331,22 @@ fun MusicLinksScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Switch(checked = !allPaused, onCheckedChange = { editing.setAllPaused(!it) })
                             }
+                        }
+                    }
+                    item(key = "presets") {
+                        LinkCard(backdrop) {
+                            PresetsCard(
+                                presets = presets,
+                                inUse = inUse,
+                                hasLinks = links.isNotEmpty(),
+                                message = presetMessage,
+                                hazeState = backdrop,
+                                onLoad = viewModel::load,
+                                onSave = { naming = true },
+                                onImport = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) },
+                                onExport = { exporter.launch(MusicLinkPresets.fileName(current.name)) },
+                                onDelete = viewModel::delete,
+                            )
                         }
                     }
                     if (links.isEmpty() && knobs.isEmpty()) {
@@ -323,6 +460,19 @@ fun MusicLinksScreen(
             )
         }
 
+        val justLoaded = loadedPreset
+        if (justLoaded != null && d == null) {
+            androidx.compose.runtime.LaunchedEffect(justLoaded) {
+                kotlinx.coroutines.delay(6000)
+                if (viewModel.loaded.value == justLoaded) viewModel.loaded.value = null
+            }
+            UndoBar(
+                text = stringResource(R.string.music_links_preset_loaded, justLoaded.first),
+                hazeState = overlay,
+                onUndo = viewModel::undoLoad,
+            )
+        }
+
         val goneKnob = removedKnob
         if (goneKnob != null && d == null) {
             androidx.compose.runtime.LaunchedEffect(goneKnob) {
@@ -356,6 +506,128 @@ fun MusicLinksScreen(
             )
         }
     }
+
+    if (naming) {
+        // A dialog, so opaque (see Glass): a name is typed, nothing behind it is read.
+        var name by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(inUse?.name.orEmpty()) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text(stringResource(R.string.music_links_preset_save_title)) },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(MusicLinkPresets.MAX_NAME) },
+                    label = { Text(stringResource(R.string.crt_preset_name)) },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    enabled = name.isNotBlank(),
+                    onClick = {
+                        viewModel.saveAs(name)
+                        naming = false
+                    },
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { naming = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
+    }
+}
+
+/**
+ * The page's saved sets of links: a chip each, tapped to load (every link on
+ * the page replaced at once, with Undo); Save keeps the links on the page
+ * under a name; Import and Export move one through a file. The one in use is
+ * marked, and only it can be deleted, so a delete never names the wrong one.
+ */
+@Composable
+private fun PresetsCard(
+    presets: List<MusicLinkPreset>,
+    inUse: MusicLinkPreset?,
+    hasLinks: Boolean,
+    message: String?,
+    hazeState: HazeState,
+    onLoad: (MusicLinkPreset) -> Unit,
+    onSave: () -> Unit,
+    onImport: () -> Unit,
+    onExport: () -> Unit,
+    onDelete: (MusicLinkPreset) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(stringResource(R.string.crt_presets), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(if (presets.isEmpty()) R.string.music_links_presets_empty else R.string.music_links_presets_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalContentColor.current.copy(alpha = 0.8f),
+        )
+        if (presets.isNotEmpty()) {
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                presets.forEach { preset ->
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = preset.name,
+                        selected = preset == inUse,
+                        accent = musicLinkColor(),
+                        onClick = { onLoad(preset) },
+                    )
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PresetPill(stringResource(R.string.action_save), hazeState, enabled = hasLinks, onClick = onSave)
+            PresetPill(stringResource(R.string.crt_preset_import), hazeState, onClick = onImport)
+            PresetPill(stringResource(R.string.crt_preset_export), hazeState, enabled = hasLinks, onClick = onExport)
+        }
+        if (inUse != null) {
+            androidx.compose.material3.TextButton(onClick = { onDelete(inUse) }) {
+                Text(stringResource(R.string.crt_preset_delete, inUse.name), color = MaterialTheme.colorScheme.error)
+            }
+        }
+        if (message != null) {
+            Text(message, style = MaterialTheme.typography.bodySmall, color = LocalContentColor.current.copy(alpha = 0.85f))
+        }
+    }
+}
+
+/** One of the presets card's three glass buttons: equal widths, a label that shrinks before it is cut. */
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.PresetPill(
+    label: String,
+    hazeState: HazeState,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    GlassPill(onClick = onClick, hazeState = hazeState, height = 44.dp, enabled = enabled, modifier = Modifier.weight(1f)) {
+        PillLabel(label)
+    }
+}
+
+/**
+ * A pill's label on one line: smaller before it is cut, and cut with an
+ * ellipsis, never at a word break. A plain Text with maxLines = 1 wrapped
+ * "Resume the link" after "the" and showed only that line.
+ */
+@Composable
+private fun PillLabel(label: String) {
+    val style = androidx.compose.material3.LocalTextStyle.current
+    Text(
+        label,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        softWrap = false,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+            minFontSize = 9.sp,
+            maxFontSize = style.fontSize,
+            stepSize = 0.5.sp,
+        ),
+    )
 }
 
 @Composable
@@ -423,11 +695,7 @@ private fun LinkRow(
                             modifier = Modifier.size(18.dp),
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(if (link.paused) R.string.music_link_resume else R.string.music_link_pause),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
+                        PillLabel(stringResource(if (link.paused) R.string.music_link_resume else R.string.music_link_pause))
                     }
                 }
                 GlassPill(
@@ -490,11 +758,7 @@ private fun KnobRow(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (link.paused) Icons.Default.PlayArrow else Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            stringResource(if (link.paused) R.string.music_link_resume else R.string.music_link_pause),
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
+                        PillLabel(stringResource(if (link.paused) R.string.music_link_resume else R.string.music_link_pause))
                     }
                 }
                 GlassPill(onClick = onRemove, hazeState = hazeState, height = 44.dp, onClickLabel = stringResource(R.string.music_link_remove)) {

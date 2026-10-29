@@ -3206,4 +3206,9 @@
     <string name="tm_charting_open_song">在歌曲列表中打开</string>
     <string name="tm_charting_song_gone">这首歌已不在此手机上。</string>
     <string name="replaygain_detail">每首歌曲响度一致。长按可设置</string>
+    <string name="music_links_preset_default_name">我的链接</string>
+    <string name="music_links_preset_save_title">保存这些链接</string>
+    <string name="music_links_presets_hint">点按一个即可加载，替换此页面上的所有链接。保存会以名称保留此处的链接；混音器的链接随混音器预设保存。</string>
+    <string name="music_links_presets_empty">将此页面上的链接以名称保存以便稍后恢复，或从文件导入一组链接。</string>
+    <string name="music_links_preset_loaded">已加载 %1$s</string>
 </resources>

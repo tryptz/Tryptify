@@ -3362,4 +3362,9 @@
     <string name="tm_charting_open_song">Ouvrir dans la liste des morceaux</string>
     <string name="tm_charting_song_gone">Ce morceau n\'est plus sur ce téléphone.</string>
     <string name="replaygain_detail">Chaque morceau à la même sonie. Maintenez pour configurer</string>
+    <string name="music_links_preset_default_name">Mes liens</string>
+    <string name="music_links_preset_save_title">Enregistrer ces liens</string>
+    <string name="music_links_presets_hint">Touchez-en un pour le charger à la place de tous les liens de cette page. Enregistrer garde les liens d\'ici sous un nom ; ceux du mixeur suivent les préréglages du mixeur.</string>
+    <string name="music_links_presets_empty">Enregistrez les liens de cette page sous un nom pour les retrouver plus tard, ou importez-en un ensemble depuis un fichier.</string>
+    <string name="music_links_preset_loaded">%1$s chargé</string>
 </resources>

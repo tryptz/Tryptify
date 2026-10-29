@@ -3206,4 +3206,9 @@
     <string name="tm_charting_open_song">曲リストで開く</string>
     <string name="tm_charting_song_gone">その曲はもうこのスマートフォンにありません。</string>
     <string name="replaygain_detail">すべての曲を同じ音量に。長押しで設定</string>
+    <string name="music_links_preset_default_name">マイリンク</string>
+    <string name="music_links_preset_save_title">これらのリンクを保存</string>
+    <string name="music_links_presets_hint">タップすると、このページのすべてのリンクの代わりに読み込みます。保存はここのリンクに名前を付けて残します。ミキサーのリンクはミキサーのプリセットと一緒に保存されます。</string>
+    <string name="music_links_presets_empty">このページのリンクに名前を付けて保存すると後で戻せます。ファイルから読み込むこともできます。</string>
+    <string name="music_links_preset_loaded">%1$s を読み込みました</string>
 </resources>

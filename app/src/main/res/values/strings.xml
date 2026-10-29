@@ -3287,4 +3287,9 @@
     <string name="tm_charting_open_song">Open in the song list</string>
     <string name="tm_charting_song_gone">That song is no longer on this phone.</string>
     <string name="replaygain_detail">Every song at one loudness. Hold to configure</string>
+    <string name="music_links_preset_default_name">My links</string>
+    <string name="music_links_preset_save_title">Save these links</string>
+    <string name="music_links_presets_hint">Tap one to load it in place of every link on this page. Save keeps the links here under a name; the mixer\'s travel with mixer presets.</string>
+    <string name="music_links_presets_empty">Save the links on this page under a name to bring them back later, or import a set from a file.</string>
+    <string name="music_links_preset_loaded">Loaded %1$s</string>
 </resources>

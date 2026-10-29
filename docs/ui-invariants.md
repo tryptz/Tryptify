@@ -603,6 +603,24 @@ Studio's and the Music links page's, never a second copy. The curve and tilt
 link in both places (taps follow them; see the CRT paragraph below); the zoom
 stays unlinked.
 
+**The Music links page keeps presets of its links.** A presets card under
+the master switch: a `GlassChoiceChip` per saved set (tapped, it replaces
+every visual link on the page in one write, `MusicLinksRepository.replaceAll`,
+with an editor left open closed first and an Undo bar for the set it
+replaced), and three equal glass pills, Save, Import and Export. A preset is
+the page's visual links with each one's pause, never the mixer's knob
+links, which name a mix's own effect slots and travel with mixer presets.
+The set in use is marked by its links, in any order (`MusicLinkPresets.
+matches`), and only it can be deleted. Saved sets live in one file on the
+phone (`MusicLinkPresetStore`, like the CRT presets), and do not sync; a
+file is `tryptify-music-links` version 1, cleaned by `VisualLinkCodec.
+sanitize` on the way in, so a newer one opens as far as this build
+understands it and one left with no links is refused rather than clearing
+the page (`MusicLinkPresetsTest`). The name prompt is an opaque dialog (see
+Glass). Every pill label on this page is one line that shrinks before it is
+cut and is cut with an ellipsis (`PillLabel`); a plain `maxLines = 1`
+wrapped "Resume the link" after "the" and showed only that line.
+
 The link sheet and the editor are in-window glass, siblings of their screen's
 haze source, never a dialog or a `ModalBottomSheet` (see Glass). The live
 reach and position on a slider or knob are drawn in the draw phase from

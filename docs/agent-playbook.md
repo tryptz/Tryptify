@@ -115,6 +115,8 @@ Use for anything that makes a setting move with the music: a visual link (a Stud
 2. Check the drivers that run links: the app's (`MainActivity`: `panels.` and `tv.`), the player's (`MainPlayerRoute`: `player.`, `lyrics.`, `visualizer.`), and the Studio's preview (which `StudioMusicLinkScope` also runs over Settings › Appearance).
 3. Walk the edges: the master pause, a link paused on its own, an editor closed without saving, a theme pack applied and undone.
 
+4. Presets of the page's visual links (`MusicLinkPresets`, `MusicLinkPresetStore`): loading one is `MusicLinksRepository.replaceAll` with Undo; knob links stay with mixer presets. `MusicLinkPresetsTest` holds the file and the list.
+
 ### Completion gates
 
 - `VisualLinkTargetsTest` (every target reads and writes its own setting, moves nothing else, stays in range, has its slider) and `MusicLinkFollowerTest` pass; for knobs, `run_host_tests.sh` runs `mod_route_test` against the same numbers.

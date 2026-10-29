@@ -3284,4 +3284,9 @@
     <string name="tm_charting_open_song">In der Songliste öffnen</string>
     <string name="tm_charting_song_gone">Dieser Song ist nicht mehr auf diesem Handy.</string>
     <string name="replaygain_detail">Jeder Song gleich laut. Gedrückt halten zum Einrichten</string>
+    <string name="music_links_preset_default_name">Meine Links</string>
+    <string name="music_links_preset_save_title">Diese Links speichern</string>
+    <string name="music_links_presets_hint">Tippe auf eines, um es anstelle aller Links dieser Seite zu laden. Speichern behält die Links hier unter einem Namen; die des Mixers reisen mit Mixer-Presets.</string>
+    <string name="music_links_presets_empty">Speichere die Links dieser Seite unter einem Namen, um sie später zurückzuholen, oder importiere einen Satz aus einer Datei.</string>
+    <string name="music_links_preset_loaded">%1$s geladen</string>
 </resources>
