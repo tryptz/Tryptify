@@ -3211,4 +3211,24 @@
     <string name="music_links_presets_hint">タップすると、このページのすべてのリンクの代わりに読み込みます。保存はここのリンクに名前を付けて残します。ミキサーのリンクはミキサーのプリセットと一緒に保存されます。</string>
     <string name="music_links_presets_empty">このページのリンクに名前を付けて保存すると後で戻せます。ファイルから読み込むこともできます。</string>
     <string name="music_links_preset_loaded">%1$s を読み込みました</string>
+    <string name="whats_new_section_trypt_mania">Trypt Mania</string>
+    <string name="whats_new_section_music_links">ミュージックリンク</string>
+    <string name="whats_new_1951_rg_panel_title">プレーヤーの ReplayGain</string>
+    <string name="whats_new_1951_rg_panel_body">プレーヤーのオーディオパネルの Crossfeed の下に ReplayGain スイッチを追加。長押しで設定 › オーディオを開き、モードと目標ラウドネスを設定できます。</string>
+    <string name="whats_new_1951_charting_title">自分の曲を譜面に</string>
+    <string name="whats_new_1951_charting_body">Trypt Mania › 譜面を生成 で、Tryptify のサーバーで曲の譜面を作れます。最初の1曲は無料、その後は分パックの分数を使います（150分で $2.99）。失敗した曲は分数が戻り、自分のサーバーは引き続き無料です。</string>
+    <string name="whats_new_1951_tm_dac_title">USB DAC で Trypt Mania</string>
+    <string name="whats_new_1951_tm_dac_body">DAC が排他モードのとき、ゲームの曲とプレビューは AutoEQ と DSP を通ってその DAC で再生され、音量は音量キーで設定したレベルになります。プレイを始めると音楽は一時停止します。</string>
+    <string name="whats_new_1951_tm_audio_title">ゲーム内のオーディオ設定</string>
+    <string name="whats_new_1951_tm_audio_body">Trypt Mania › 設定 › オーディオ で AutoEQ、Oxford Inflator、ReplayGain を切り替えられます。プレーヤーと同じ設定です。</string>
+    <string name="whats_new_1951_motion_blur_title">モーションブラー</string>
+    <string name="whats_new_1951_motion_blur_body">ノーツが短い残像を残し、歌詞はスライド中にぼやけます。Trypt Mania › グラフィックと、プレーヤービジュアルスタジオの 3D 文字ウェーブで。初期設定はオフ。</string>
+    <string name="whats_new_1951_link_presets_title">ミュージックリンクのプリセット</string>
+    <string name="whats_new_1951_link_presets_body">ミュージックリンクのページのすべてのリンクに名前を付けて保存し、ワンタップで読み込み（元に戻すも可）、ファイルで共有できます。</string>
+    <string name="whats_new_1951_lighter_title">バッテリーとメモリーにやさしく</string>
+    <string name="whats_new_1951_lighter_body">音楽再生中の CPU とメモリーの使用が減り、画面がよりなめらかに。USB DAC がスマートフォンを起こす回数も大幅に減り、一時停止中はストリームが休みます。</string>
+    <string name="whats_new_1951_offset_hold_title">長押しでオフセットを調整</string>
+    <string name="whats_new_1951_offset_hold_body">+ または − を押し続けると、Trypt Mania の同期タブと 設定 › オーディオ › Bluetooth 同期 の音声オフセットが続けて変わります。</string>
+    <string name="whats_new_1951_chart_lyrics_title">サーバーでの歌詞タイミング</string>
+    <string name="whats_new_1951_chart_lyrics_body">譜面サーバーで歌詞のタイミングを取ることはなくなりました。以前にタイミングを取った歌詞と、歌詞エディターで付けたものは残ります。</string>
 </resources>

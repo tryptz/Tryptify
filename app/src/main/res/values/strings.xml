@@ -3292,4 +3292,24 @@
     <string name="music_links_presets_hint">Tap one to load it in place of every link on this page. Save keeps the links here under a name; the mixer\'s travel with mixer presets.</string>
     <string name="music_links_presets_empty">Save the links on this page under a name to bring them back later, or import a set from a file.</string>
     <string name="music_links_preset_loaded">Loaded %1$s</string>
+    <string name="whats_new_section_trypt_mania">Trypt Mania</string>
+    <string name="whats_new_section_music_links">Music links</string>
+    <string name="whats_new_1951_rg_panel_title">ReplayGain in the player</string>
+    <string name="whats_new_1951_rg_panel_body">The player\'s audio panel has a ReplayGain switch under Crossfeed. Hold it to open Settings › Audio, for its modes and the target loudness.</string>
+    <string name="whats_new_1951_charting_title">Chart your own songs</string>
+    <string name="whats_new_1951_charting_body">Trypt Mania › Generate charts charts a song on Tryptify\'s server: your first song is free, then minutes from a pack, 150 for $2.99. A song that fails gives its minutes back, and a server of your own stays free.</string>
+    <string name="whats_new_1951_tm_dac_title">Trypt Mania on your USB DAC</string>
+    <string name="whats_new_1951_tm_dac_body">With a DAC in exclusive mode, the game\'s songs and previews play through it, through your AutoEQ and DSP, at the level your volume keys set. Starting a run pauses your music.</string>
+    <string name="whats_new_1951_tm_audio_title">Audio settings in the game</string>
+    <string name="whats_new_1951_tm_audio_body">Trypt Mania › Settings › Audio switches AutoEQ, the Oxford Inflator and ReplayGain: the same settings the player uses.</string>
+    <string name="whats_new_1951_motion_blur_title">Motion blur</string>
+    <string name="whats_new_1951_motion_blur_body">Notes can leave a short trail and the lyrics blur as they glide: Trypt Mania › Graphics, and the Player Visuals Studio\'s 3D letter wave. Off by default.</string>
+    <string name="whats_new_1951_link_presets_title">Music links presets</string>
+    <string name="whats_new_1951_link_presets_body">Save every link on the Music links page under a name, load a set back in one tap with Undo, and share one as a file.</string>
+    <string name="whats_new_1951_lighter_title">Lighter on battery and memory</string>
+    <string name="whats_new_1951_lighter_body">Less CPU while music plays, less memory and smoother screens, and a USB DAC wakes the phone far less, resting its stream while paused.</string>
+    <string name="whats_new_1951_offset_hold_title">Hold to nudge the offset</string>
+    <string name="whats_new_1951_offset_hold_body">The audio offset in Trypt Mania\'s Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while you hold + or −.</string>
+    <string name="whats_new_1951_chart_lyrics_title">Lyrics timed on a server</string>
+    <string name="whats_new_1951_chart_lyrics_body">Lyrics are no longer timed on a chart server. The ones timed before, and those you time in the lyrics editor, stay.</string>
 </resources>

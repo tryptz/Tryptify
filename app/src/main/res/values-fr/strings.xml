@@ -3367,4 +3367,24 @@
     <string name="music_links_presets_hint">Touchez-en un pour le charger à la place de tous les liens de cette page. Enregistrer garde les liens d\'ici sous un nom ; ceux du mixeur suivent les préréglages du mixeur.</string>
     <string name="music_links_presets_empty">Enregistrez les liens de cette page sous un nom pour les retrouver plus tard, ou importez-en un ensemble depuis un fichier.</string>
     <string name="music_links_preset_loaded">%1$s chargé</string>
+    <string name="whats_new_section_trypt_mania">Trypt Mania</string>
+    <string name="whats_new_section_music_links">Liens musicaux</string>
+    <string name="whats_new_1951_rg_panel_title">ReplayGain dans le lecteur</string>
+    <string name="whats_new_1951_rg_panel_body">Le panneau audio du lecteur a un interrupteur ReplayGain sous Crossfeed. Maintenez-le pour ouvrir Paramètres › Audio, ses modes et le niveau cible.</string>
+    <string name="whats_new_1951_charting_title">Créez les charts de vos morceaux</string>
+    <string name="whats_new_1951_charting_body">Trypt Mania › Générer des charts crée le chart d\'un morceau sur le serveur de Tryptify : le premier est gratuit, puis des minutes d\'un pack, 150 pour 2,99 $. Un échec rend ses minutes, et votre propre serveur reste gratuit.</string>
+    <string name="whats_new_1951_tm_dac_title">Trypt Mania sur votre DAC USB</string>
+    <string name="whats_new_1951_tm_dac_body">Avec un DAC en mode exclusif, les morceaux et les aperçus du jeu passent par lui, par votre AutoEQ et votre DSP, au niveau réglé par les touches de volume. Lancer une partie met votre musique en pause.</string>
+    <string name="whats_new_1951_tm_audio_title">Réglages audio dans le jeu</string>
+    <string name="whats_new_1951_tm_audio_body">Trypt Mania › Paramètres › Audio active AutoEQ, l\'Oxford Inflator et ReplayGain : les mêmes réglages que le lecteur.</string>
+    <string name="whats_new_1951_motion_blur_title">Flou de mouvement</string>
+    <string name="whats_new_1951_motion_blur_body">Les notes peuvent laisser une courte traînée et les paroles se flouter en glissant : Trypt Mania › Graphismes, et la vague de lettres 3D du studio visuel du lecteur. Désactivé par défaut.</string>
+    <string name="whats_new_1951_link_presets_title">Préréglages de liens musicaux</string>
+    <string name="whats_new_1951_link_presets_body">Enregistrez tous les liens de la page Liens musicaux sous un nom, rechargez un ensemble d\'un geste avec Annuler, et partagez-en un en fichier.</string>
+    <string name="whats_new_1951_lighter_title">Plus léger pour la batterie et la mémoire</string>
+    <string name="whats_new_1951_lighter_body">Moins de processeur pendant la lecture, moins de mémoire, des écrans plus fluides, et un DAC USB réveille bien moins le téléphone, son flux au repos en pause.</string>
+    <string name="whats_new_1951_offset_hold_title">Maintenez pour ajuster le décalage</string>
+    <string name="whats_new_1951_offset_hold_body">Le décalage audio de l\'onglet Synchro de Trypt Mania et de Paramètres › Audio › Synchro Bluetooth continue d\'avancer tant que vous maintenez + ou −.</string>
+    <string name="whats_new_1951_chart_lyrics_title">Paroles synchronisées sur un serveur</string>
+    <string name="whats_new_1951_chart_lyrics_body">Les paroles ne sont plus synchronisées sur un serveur de charts. Celles synchronisées avant, et celles que vous synchronisez dans l\'éditeur de paroles, restent.</string>
 </resources>

@@ -84,6 +84,8 @@ object WhatsNew {
         CONNECTIONS -> R.string.whats_new_section_connections
         LYRICS -> R.string.whats_new_section_lyrics
         USB_DAC -> R.string.whats_new_section_usb_dac
+        TRYPT_MANIA -> R.string.whats_new_section_trypt_mania
+        MUSIC_LINKS -> R.string.whats_new_section_music_links
         else -> 0
     }
 
@@ -212,6 +214,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "ReplayGain in the player",
+                    body = "The player's audio panel has a ReplayGain switch under Crossfeed. Hold it to open Settings › Audio, for its modes and the target loudness.",
+                    titleRes = R.string.whats_new_1951_rg_panel_title,
+                    bodyRes = R.string.whats_new_1951_rg_panel_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYLISTS,
                     title = "Sort your playlists",
                     body = "Library › Playlists has a sort button beside New playlist: last edited, name or date created. Playback walks your playlists in that order.",
@@ -267,6 +277,46 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_1951_server_lyrics_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Chart your own songs",
+                    body = "Trypt Mania › Generate charts charts a song on Tryptify's server: your first song is free, then minutes from a pack, 150 for $2.99. A song that fails gives its minutes back, and a server of your own stays free.",
+                    titleRes = R.string.whats_new_1951_charting_title,
+                    bodyRes = R.string.whats_new_1951_charting_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Trypt Mania on your USB DAC",
+                    body = "With a DAC in exclusive mode, the game's songs and previews play through it, through your AutoEQ and DSP, at the level your volume keys set. Starting a run pauses your music.",
+                    titleRes = R.string.whats_new_1951_tm_dac_title,
+                    bodyRes = R.string.whats_new_1951_tm_dac_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Audio settings in the game",
+                    body = "Trypt Mania › Settings › Audio switches AutoEQ, the Oxford Inflator and ReplayGain: the same settings the player uses.",
+                    titleRes = R.string.whats_new_1951_tm_audio_title,
+                    bodyRes = R.string.whats_new_1951_tm_audio_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Motion blur",
+                    body = "Notes can leave a short trail and the lyrics blur as they glide: Trypt Mania › Graphics, and the Player Visuals Studio's 3D letter wave. Off by default.",
+                    titleRes = R.string.whats_new_1951_motion_blur_title,
+                    bodyRes = R.string.whats_new_1951_motion_blur_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MUSIC_LINKS,
+                    title = "Music links presets",
+                    body = "Save every link on the Music links page under a name, load a set back in one tap with Undo, and share one as a file.",
+                    titleRes = R.string.whats_new_1951_link_presets_title,
+                    bodyRes = R.string.whats_new_1951_link_presets_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = USB_DAC,
                     title = "DACs with one clock stay exclusive",
@@ -281,6 +331,30 @@ object WhatsNew {
                     body = "A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib's short stamps, offsets and word timing read as elsewhere.",
                     titleRes = R.string.whats_new_1951_lrc_fixes_title,
                     bodyRes = R.string.whats_new_1951_lrc_fixes_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Lighter on battery and memory",
+                    body = "Less CPU while music plays, less memory and smoother screens, and a USB DAC wakes the phone far less, resting its stream while paused.",
+                    titleRes = R.string.whats_new_1951_lighter_title,
+                    bodyRes = R.string.whats_new_1951_lighter_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Hold to nudge the offset",
+                    body = "The audio offset in Trypt Mania's Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while you hold + or −.",
+                    titleRes = R.string.whats_new_1951_offset_hold_title,
+                    bodyRes = R.string.whats_new_1951_offset_hold_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.REMOVED,
+                    section = LYRICS,
+                    title = "Lyrics timed on a server",
+                    body = "Lyrics are no longer timed on a chart server. The ones timed before, and those you time in the lyrics editor, stay.",
+                    titleRes = R.string.whats_new_1951_chart_lyrics_title,
+                    bodyRes = R.string.whats_new_1951_chart_lyrics_body,
                 ),
             ),
         ),

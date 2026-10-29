@@ -3289,4 +3289,24 @@
     <string name="music_links_presets_hint">Bu sayfadaki tüm bağlantıların yerine yüklemek için birine dokunun. Kaydet buradaki bağlantıları bir adla saklar; mikserinkiler mikser hazır ayarlarıyla gider.</string>
     <string name="music_links_presets_empty">Bu sayfadaki bağlantıları daha sonra geri getirmek için bir adla kaydedin veya bir dosyadan bir set içe aktarın.</string>
     <string name="music_links_preset_loaded">%1$s yüklendi</string>
+    <string name="whats_new_section_trypt_mania">Trypt Mania</string>
+    <string name="whats_new_section_music_links">Müzik bağlantıları</string>
+    <string name="whats_new_1951_rg_panel_title">Oynatıcıda ReplayGain</string>
+    <string name="whats_new_1951_rg_panel_body">Oynatıcının ses panelinde Crossfeed\'in altında bir ReplayGain anahtarı var. Modları ve hedef ses yüksekliği için Ayarlar › Ses\'i açmak üzere basılı tutun.</string>
+    <string name="whats_new_1951_charting_title">Kendi şarkılarının haritasını çıkar</string>
+    <string name="whats_new_1951_charting_body">Trypt Mania › Harita oluştur, bir şarkının haritasını Tryptify\'ın sunucusunda çıkarır: ilk şarkı ücretsiz, sonra bir paketten dakikalar, 150 dakika 2,99 $. Başarısız şarkı dakikalarını geri verir; kendi sunucun ücretsiz kalır.</string>
+    <string name="whats_new_1951_tm_dac_title">USB DAC\'ında Trypt Mania</string>
+    <string name="whats_new_1951_tm_dac_body">Özel moddaki bir DAC ile oyunun şarkıları ve önizlemeleri onun üzerinden, AutoEQ ve DSP\'nden geçerek, ses tuşlarının ayarladığı seviyede çalar. Bir oyuna başlamak müziğini duraklatır.</string>
+    <string name="whats_new_1951_tm_audio_title">Oyunda ses ayarları</string>
+    <string name="whats_new_1951_tm_audio_body">Trypt Mania › Ayarlar › Ses; AutoEQ, Oxford Inflator ve ReplayGain\'i açıp kapatır: oynatıcının kullandığı ayarların aynısı.</string>
+    <string name="whats_new_1951_motion_blur_title">Hareket bulanıklığı</string>
+    <string name="whats_new_1951_motion_blur_body">Notalar kısa bir iz bırakabilir ve şarkı sözleri kayarken bulanıklaşır: Trypt Mania › Grafik ve oynatıcı görsel stüdyosunun 3D harf dalgası. Varsayılan olarak kapalı.</string>
+    <string name="whats_new_1951_link_presets_title">Müzik bağlantıları hazır ayarları</string>
+    <string name="whats_new_1951_link_presets_body">Müzik bağlantıları sayfasındaki tüm bağlantıları bir adla kaydet, bir seti tek dokunuşla Geri al ile yükle ve birini dosya olarak paylaş.</string>
+    <string name="whats_new_1951_lighter_title">Pil ve bellek için daha hafif</string>
+    <string name="whats_new_1951_lighter_body">Müzik çalarken daha az işlemci, daha az bellek ve daha akıcı ekranlar; USB DAC telefonu çok daha az uyandırır ve duraklatıldığında akışı dinlenir.</string>
+    <string name="whats_new_1951_offset_hold_title">Kaydırmayı ayarlamak için basılı tut</string>
+    <string name="whats_new_1951_offset_hold_body">Trypt Mania\'nın Senkron sekmesindeki ve Ayarlar › Ses › Bluetooth senkronundaki ses kaydırması, + veya −\'ye basılı tuttukça değişmeye devam eder.</string>
+    <string name="whats_new_1951_chart_lyrics_title">Sunucuda zamanlanan şarkı sözleri</string>
+    <string name="whats_new_1951_chart_lyrics_body">Şarkı sözleri artık bir harita sunucusunda zamanlanmıyor. Daha önce zamanlananlar ve sözler düzenleyicisinde zamanladıkların kalır.</string>
 </resources>

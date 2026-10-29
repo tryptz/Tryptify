@@ -3367,4 +3367,24 @@
     <string name="music_links_presets_hint">Toca uno para cargarlo en lugar de todos los enlaces de esta página. Guardar conserva los enlaces de aquí con un nombre; los del mezclador van con los ajustes del mezclador.</string>
     <string name="music_links_presets_empty">Guarda los enlaces de esta página con un nombre para recuperarlos después, o importa un conjunto desde un archivo.</string>
     <string name="music_links_preset_loaded">%1$s cargado</string>
+    <string name="whats_new_section_trypt_mania">Trypt Mania</string>
+    <string name="whats_new_section_music_links">Enlaces musicales</string>
+    <string name="whats_new_1951_rg_panel_title">ReplayGain en el reproductor</string>
+    <string name="whats_new_1951_rg_panel_body">El panel de audio del reproductor tiene un interruptor de ReplayGain bajo Crossfeed. Mantenlo pulsado para abrir Ajustes › Audio, con sus modos y la sonoridad objetivo.</string>
+    <string name="whats_new_1951_charting_title">Crea charts de tus canciones</string>
+    <string name="whats_new_1951_charting_body">Trypt Mania › Generar charts crea el chart de una canción en el servidor de Tryptify: la primera es gratis, luego minutos de un paquete, 150 por 2,99 $. Si falla, devuelve sus minutos, y tu propio servidor sigue gratis.</string>
+    <string name="whats_new_1951_tm_dac_title">Trypt Mania en tu DAC USB</string>
+    <string name="whats_new_1951_tm_dac_body">Con un DAC en modo exclusivo, las canciones y vistas previas del juego suenan por él, con tu AutoEQ y DSP, al nivel que fijan las teclas de volumen. Empezar una partida pausa tu música.</string>
+    <string name="whats_new_1951_tm_audio_title">Ajustes de audio en el juego</string>
+    <string name="whats_new_1951_tm_audio_body">Trypt Mania › Ajustes › Audio activa AutoEQ, el Oxford Inflator y ReplayGain: los mismos ajustes que usa el reproductor.</string>
+    <string name="whats_new_1951_motion_blur_title">Desenfoque de movimiento</string>
+    <string name="whats_new_1951_motion_blur_body">Las notas pueden dejar una estela corta y la letra se desenfoca al deslizarse: Trypt Mania › Gráficos, y la ola de letras 3D del estudio visual del reproductor. Desactivado por defecto.</string>
+    <string name="whats_new_1951_link_presets_title">Ajustes predefinidos de enlaces musicales</string>
+    <string name="whats_new_1951_link_presets_body">Guarda todos los enlaces de la página Enlaces musicales con un nombre, carga un conjunto con un toque y Deshacer, y comparte uno como archivo.</string>
+    <string name="whats_new_1951_lighter_title">Más ligero con la batería y la memoria</string>
+    <string name="whats_new_1951_lighter_body">Menos CPU mientras suena la música, menos memoria y pantallas más fluidas; un DAC USB despierta mucho menos el teléfono y su flujo descansa en pausa.</string>
+    <string name="whats_new_1951_offset_hold_title">Mantén pulsado para ajustar el desfase</string>
+    <string name="whats_new_1951_offset_hold_body">El desfase de audio en la pestaña Sincronizar de Trypt Mania y en Ajustes › Audio › Sincronización Bluetooth sigue cambiando mientras mantienes + o −.</string>
+    <string name="whats_new_1951_chart_lyrics_title">Letras sincronizadas en un servidor</string>
+    <string name="whats_new_1951_chart_lyrics_body">Las letras ya no se sincronizan en un servidor de charts. Las sincronizadas antes, y las que sincronizas en el editor de letras, se quedan.</string>
 </resources>

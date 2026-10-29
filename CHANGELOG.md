@@ -2,35 +2,6 @@
 
 ## [Unreleased]
 
-### Fixed
-- **Continue into the next list keeps going when it should.** After a restart, a long list plays to its end instead of jumping to the next list at song 300; on a weak connection a list that won't load is tried again at the next song's end or Next, rather than taken for the end and replaced by radio, and the wait is at most 15 seconds; right after a restart a Qobuz, Deezer or Apple album is no longer asked for at TIDAL; and folders sorted by date move on without a pause.
-- **Shuffle no longer replays the lists already played.** Turned on after one list has run into the next, it shuffles only what is still to come, and turned off it stays on the same copy of the song.
-- **ReplayGain no longer dips** when a crossfade starts or when you seek in a song it turns up.
-- **ReplayGain keeps its loudness after the update** for anyone who had it on with the pre-amp untouched: -18 LUFS, as before, rather than 4 dB louder at the new default.
-- **What's New is in your language**: the 1.9.51 notes, their headings and sections in all eight.
-- **No crash risk in long sessions with the limiter on.** Its sample counter overflowed after about 12 hours of play (3 at 4× oversampling) and it read outside its buffer.
-- **Bit-perfect stays bit-perfect after a fader move.** The mixer's volume now lands exactly where it is set, so a fader moved and back, or a centred pan, passes the music through untouched again. With the mixer on and nothing changing the sound, 16-bit audio comes out as it went in, without dither.
-- **The safety checks against broken numbers work on the phone.** The phone's compiler quietly removed the checks that stop a NaN from one effect reaching the output; they now hold, on both ARM builds, and in the spatial map's placer too.
-- **A library rescan keeps albums and artists as they were.** Their ids no longer change on each rescan, so an open album, and Continue into the next list into a phone album, keep working after new music is found, and a rescan writes far less.
-- **A mixer preset you load is saved at once.** Before, a restart brought back the mix from before it.
-- **Plugging another USB device in while a DAC streams no longer risks a crash** (the DAC was opened a second time under the running stream).
-- **The chorus no longer reads past its buffer** at 40 ms, full depth and two or more voices, and old audio no longer replays in effect tails after a sample-rate change.
-- **The download queue is saved in order**, so a restart never brings back an older queue, and songs queued before the saved queue loads are kept.
-- **Phone-file covers keep their shape** where they are shown in a spot that isn't square.
-- A listening party that took too long to connect no longer keeps the player service running, and in Trypt Mania a kick during READY in a room no longer starts the music behind the rooms screen.
-
-### Changed
-- **Less CPU while music plays, screen off included.** No new memory per audio buffer; EQs that are off or flat copy the sound straight through; the pitch engine is kept between songs; the Inflator's band-split filters rest while band split is off; reverb, chorus, delay and the other delay-line effects work without a divide per sample; the resampler blends its filter once per frame; the scrobble timer sleeps while paused. The BPM tap stops once it has a tempo, so tapping the number to measure again now takes about ten seconds.
-- **Less memory.** Tapping one song no longer keeps the whole library in memory for the rest of the session (about 28 MB at 20,000 songs); the queue keeps at most 2,000 played songs behind the one playing; the blurred background decodes its cover small, and embedded covers decode at the size shown; Theme Store pictures take at most 12 MB and are let go in the background; the Discover, chart, Atmos and hi-res caches are bounded; the visualizer lets go of its audio feed and GPU memory when the screen turns off, and comes back on the same preset.
-- **Smoother screens.** The mixer's meters, the globe, the About tab's header, the parametric EQ's graph, the Atmos map, the Oxford meters, the lyrics, the colour fade between songs and a paused Wave Candy no longer redraw or rebuild more than what changed.
-- **Downloads** update their progress every 1% or quarter second instead of every 8 KB, and the queue is saved at most once a second while they run.
-- **Trypt Mania**: a paused game stops drawing once it is still, the note art is kept between runs, run history is read once per song and once per run instead of on every song played anywhere, the song list is read off the main thread, and the rooms connection closes in the background when you are not in a room.
-- **Atmos is lighter.** Decoding no longer hands its work to three helper threads 750 times a second (one thread is faster), builds its mixing rows as it needs them instead of a 688 KB table every frame, and runs its filterbank, the binaural renderer and the spatial map's equaliser through FFTs: about a third of the CPU for 7.1.4 to headphones, and under half for the spatial map, with no added delay.
-- **A USB DAC wakes the phone far less.** Transfers carry 4 ms (8 packets on a 1 ms bus) instead of 1 ms, and feedback is read 8 ms at a time: about 375 wakeups a second instead of 2,000 on a high-speed DAC. Paused for more than ten seconds, the stream parks (the DAC is still claimed) and costs nothing until you play. The played position now counts what the DAC has had, not what is queued, and the USB ring is only allocated while a DAC streams.
-- **Hi-res buffering is capped at 16 MB.** The player held at least 30 s of every song, whatever it weighed: up to 84 MB for DSD256. Lossy and CD quality still buffer two minutes; denser formats buffer what fits.
-- **Glass shaders are compiled once.** Every glass pane compiled the 470-line glass shader again on the main thread; now each shader is compiled once for the app and shared, so a screen of chips opens without those compiles.
-- **Background work**: file and network work is no longer held to 4 to 12 threads; album, artist, search and lyrics data are read off the main thread; Discord presence reads only what it needs from each message; the cloud library restore after sign-in is batched.
-
 ## [1.9.51]
 
 ### Added
@@ -60,9 +31,61 @@
 - **It aims at a target loudness, in LUFS**: -23 (EBU R128), -18 (ReplayGain's own), -16, -14 (most streaming services, the default) or -8. A pre-amp chosen before becomes the nearest target. Turning it on or off, or picking another target, changes the song playing at once, with a 50 ms glide.
 - **It never clips.** Loud songs are turned down; a song is turned up only as far as its file's peak tag (`REPLAYGAIN_TRACK_PEAK`, `REPLAYGAIN_ALBUM_PEAK`) leaves room, and not at all without one. A library scanned before reads its peaks once, in the background, after the update; Opus files have no peak tag and are only turned down. It works on every output, the USB DAC included, and with it off (or at 0 dB) the sound passes through untouched, so bit-perfect stays bit-perfect.
 
+- **A ReplayGain switch in the player's audio panel**, last under Crossfeed: on is the smart mode, as Settings › Audio's own switch sets it, and holding it opens Settings › Audio for the other modes and the target.
+
+#### Trypt Mania: chart your own songs
+- **Generate charts** on Trypt Mania's menu opens a screen for charting on Tryptify's own server: a usage bar of minutes left over minutes bought, about how many songs that is, your first song free (once per account), and minute packs bought once through Creem, never a subscription: Starter 150 minutes for $2.99, Library 500 for $9.99, Big library 1,000 for $19.99. A song counts its length rounded up to the minute, at least 2, up to 10 minutes long; a song that fails gives its minutes back.
+- **Charting now** on that screen shows the songs being charted: the batch's count and progress, each song in flight with its stage, the waiting ones, and Cancel all.
+- **The history** lists packs bought and songs charted; tap a song to open it in the song list, picked and ready to play.
+- Charting on a TryptMania Parser server of your own, added under Settings › Connections, stays free; Tryptify's server is tried first only while you have minutes or your free song.
+
+#### Trypt Mania through your USB DAC and the DSP engine
+- **With a DAC in exclusive mode, Trypt Mania plays through it**: a run's song and the song list's previews, at the DAC level the volume keys set. The DAC carries one stream, so starting a run or a preview pauses the music, and the next play in the player takes the DAC back; play from the notification during a run pauses the run. Without a DAC, the game plays on the phone's output as before.
+- **The game plays through the app's DSP engine**: the mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and the parametric EQ, on the DAC and on the phone's output alike, following your settings as you change them. ReplayGain measures a game song as it plays, since its file carries no tags.
+- **Trypt Mania › Settings › Audio** switches AutoEQ, the Oxford Inflator and ReplayGain: the app's own settings, which the player follows too. Turning the Inflator on turns the DSP engine on with it, without which the Oxford stages are silent.
+
+#### Motion blur
+- **Notes can leave a short trail, and the lyrics blur as they glide.** Trypt Mania › Graphics › Motion blur and Player Visuals Studio › 3D letter wave › Motion blur, each with a quality slider from Off to Cinematic, off by default. The note stays sharp; nothing extra is drawn while nothing moves fast, and a dense chart gets coarser trails rather than a slower frame. A personal setting a theme never changes or shares (Android 12 and up).
+
+#### Music links presets
+- **Save the Music links page's links under a name**, load a set back in one tap (every link replaced at once, with Undo), and export or import one as a `.links.json` file. A preset holds each visual link with its pause; the mixer's knob links stay with mixer presets, since they name a mix's own effect slots. A file from a newer version opens as far as this one understands it.
+
+### Changed
+- **Hold to nudge.** The audio offset in Trypt Mania's Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while + or − is held, faster the longer you hold, instead of a tap per 5 ms.
+- **Trypt Mania's Groove Radar** sets its five axis names in the card's own face, beside SPEED and DENSITY, and places each past its axis's tip, so the long names no longer sit across the web.
+- **Less CPU while music plays, screen off included.** No new memory per audio buffer; EQs that are off or flat copy the sound straight through; the pitch engine is kept between songs; the Inflator's band-split filters rest while band split is off; reverb, chorus, delay and the other delay-line effects work without a divide per sample; the resampler blends its filter once per frame; the scrobble timer sleeps while paused. The BPM tap stops once it has a tempo, so tapping the number to measure again now takes about ten seconds.
+- **Less memory.** Tapping one song no longer keeps the whole library in memory for the rest of the session (about 28 MB at 20,000 songs); the queue keeps at most 2,000 played songs behind the one playing; the blurred background decodes its cover small, and embedded covers decode at the size shown; Theme Store pictures take at most 12 MB and are let go in the background; the Discover, chart, Atmos and hi-res caches are bounded; the visualizer lets go of its audio feed and GPU memory when the screen turns off, and comes back on the same preset.
+- **Smoother screens.** The mixer's meters, the globe, the About tab's header, the parametric EQ's graph, the Atmos map, the Oxford meters, the lyrics, the colour fade between songs and a paused Wave Candy no longer redraw or rebuild more than what changed.
+- **Downloads** update their progress every 1% or quarter second instead of every 8 KB, and the queue is saved at most once a second while they run.
+- **Trypt Mania**: a paused game stops drawing once it is still, the note art is kept between runs, run history is read once per song and once per run instead of on every song played anywhere, the song list is read off the main thread, and the rooms connection closes in the background when you are not in a room.
+- **Atmos is lighter.** Decoding no longer hands its work to three helper threads 750 times a second (one thread is faster), builds its mixing rows as it needs them instead of a 688 KB table every frame, and runs its filterbank, the binaural renderer and the spatial map's equaliser through FFTs: about a third of the CPU for 7.1.4 to headphones, and under half for the spatial map, with no added delay.
+- **A USB DAC wakes the phone far less.** Transfers carry 4 ms (8 packets on a 1 ms bus) instead of 1 ms, and feedback is read 8 ms at a time: about 375 wakeups a second instead of 2,000 on a high-speed DAC. Paused for more than ten seconds, the stream parks (the DAC is still claimed) and costs nothing until you play. The played position now counts what the DAC has had, not what is queued, and the USB ring is only allocated while a DAC streams.
+- **Hi-res buffering is capped at 16 MB.** The player held at least 30 s of every song, whatever it weighed: up to 84 MB for DSD256. Lossy and CD quality still buffer two minutes; denser formats buffer what fits.
+- **Glass shaders are compiled once.** Every glass pane compiled the 470-line glass shader again on the main thread; now each shader is compiled once for the app and shared, so a screen of chips opens without those compiles.
+- **Background work**: file and network work is no longer held to 4 to 12 threads; album, artist, search and lyrics data are read off the main thread; Discord presence reads only what it needs from each message; the cloud library restore after sign-in is batched.
+
+### Removed
+- **Lyrics timed on a chart server.** The TryptMania Parser no longer times lyrics, so the app stops asking, and the Server lyrics setting is gone. Lyrics a server timed before, and those you time in the lyrics editor, stay; a saved server that listed lyrics loads without them.
+
 ### Fixed
 - **USB DACs with one clock keep exclusive mode for CD-quality songs.** A DAC that runs only 48 and 96 kHz (the Nothing Ear (1) and Headphone (1)) refused 44.1 kHz, so every CD-rate song fell back to Android's mixer. The song is now resampled to the DAC's nearest rate; rates the DAC takes stay bit-perfect.
 - **LRC lyrics that read wrong now read right**, from LRCLib too: a file starting with a byte order mark keeps its first line, an end stamp (`[00:15.00]` after the words) is a time rather than part of the lyric, a file stamped all `[00:00.00]` shows as plain lyrics instead of every line lighting up at once, and LRCLib's lyrics with `[mm:ss]`, two stamps on a line, `[offset:]` or word timing read as they do everywhere else.
+- **Continue into the next list keeps going when it should.** After a restart, a long list plays to its end instead of jumping to the next list at song 300; on a weak connection a list that won't load is tried again at the next song's end or Next, rather than taken for the end and replaced by radio, and the wait is at most 15 seconds; right after a restart a Qobuz, Deezer or Apple album is no longer asked for at TIDAL; and folders sorted by date move on without a pause.
+- **Shuffle no longer replays the lists already played.** Turned on after one list has run into the next, it shuffles only what is still to come, and turned off it stays on the same copy of the song.
+- **ReplayGain no longer dips** when a crossfade starts or when you seek in a song it turns up.
+- **ReplayGain keeps its loudness after the update** for anyone who had it on with the pre-amp untouched: -18 LUFS, as before, rather than 4 dB louder at the new default.
+- **What's New is in your language**: the 1.9.51 notes, their headings and sections in all eight.
+- **No crash risk in long sessions with the limiter on.** Its sample counter overflowed after about 12 hours of play (3 at 4× oversampling) and it read outside its buffer.
+- **Bit-perfect stays bit-perfect after a fader move.** The mixer's volume now lands exactly where it is set, so a fader moved and back, or a centred pan, passes the music through untouched again. With the mixer on and nothing changing the sound, 16-bit audio comes out as it went in, without dither.
+- **The safety checks against broken numbers work on the phone.** The phone's compiler quietly removed the checks that stop a NaN from one effect reaching the output; they now hold, on both ARM builds, and in the spatial map's placer too.
+- **A library rescan keeps albums and artists as they were.** Their ids no longer change on each rescan, so an open album, and Continue into the next list into a phone album, keep working after new music is found, and a rescan writes far less.
+- **A mixer preset you load is saved at once.** Before, a restart brought back the mix from before it.
+- **Plugging another USB device in while a DAC streams no longer risks a crash** (the DAC was opened a second time under the running stream).
+- **The chorus no longer reads past its buffer** at 40 ms, full depth and two or more voices, and old audio no longer replays in effect tails after a sample-rate change.
+- **The download queue is saved in order**, so a restart never brings back an older queue, and songs queued before the saved queue loads are kept.
+- **Phone-file covers keep their shape** where they are shown in a spot that isn't square.
+- A listening party that took too long to connect no longer keeps the player service running, and in Trypt Mania a kick during READY in a room no longer starts the music behind the rooms screen.
+- **"Resume the link" reads in full** on the Music links page: the label wrapped after "Resume the" and only that line showed. Its pills now keep one line, shrinking before they cut.
 
 ## [1.9.5]
 
