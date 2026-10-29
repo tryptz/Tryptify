@@ -45,6 +45,8 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         val quarter = taps[tf.monochrome.android.glyph.asset.GlyphBeatDivision.QUARTER] ?: return false
         val sheets = HashMap<String, Bitmap?>()
         fun frame(pick: NoteSkinResolver.Pick): Bitmap? {
+            // A model is drawn, once; a sheet is cut.
+            if (pick.image.isModel) return sheets.getOrPut(pick.image.path) { snapshot(resolver, pick.image.path) }
             val sheet = sheets.getOrPut(pick.image.path) { decode(pick.image.path) } ?: return null
             return cut(sheet, pick.image.cols, pick.image.rows, pick.frame)
         }
@@ -287,6 +289,19 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         })
     }.getOrNull()
 
+    /** The noteskin part drawn as the model at [path], with its textures ([ModelSnapshot]). */
+    private fun snapshot(resolver: NoteSkinResolver, path: String): Bitmap? {
+        val model = readText(path)?.let { runCatching { Milkshape.parse(it) }.getOrNull() } ?: return null
+        val pixels = ModelSnapshot.render(model, MODEL_SNAPSHOT) { material ->
+            val texture = model.materials.getOrNull(material)?.texture ?: return@render null
+            val image = resolver.modelTexture(path, texture)?.let(::decode) ?: return@render null
+            val argb = IntArray(image.width * image.height)
+            image.getPixels(argb, 0, image.width, 0, 0, image.width, image.height)
+            ModelSnapshot.Texture(argb, image.width, image.height)
+        } ?: return null
+        return Bitmap.createBitmap(pixels, MODEL_SNAPSHOT, MODEL_SNAPSHOT, Bitmap.Config.ARGB_8888)
+    }
+
     /** Frame [index] of a [cols]×[rows] sheet, across then down. */
     private fun cut(sheet: Bitmap, cols: Int, rows: Int, index: Int): Bitmap? {
         val w = sheet.width / cols
@@ -404,6 +419,8 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
         const val OWN_PREFIX = "own:"
         private val MOVE_FOLDERS = setOf("dance", "rest", "warmup")
         private const val TEXTURE_MAX = 512
+        /** A model part's picture, a side: twice StepMania's 64-unit lane, so it stays sharp. */
+        private const val MODEL_SNAPSHOT = 128
         const val COMBO_DIGITS = "combo_digits.png"
         const val COMBO_DIGITS_INFO = "combo_digits.json"
         const val COMBO_LABEL = "combo_label.png"

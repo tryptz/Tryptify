@@ -15,6 +15,11 @@ import tf.monochrome.android.glyph.asset.GlyphBeatDivision
  *   strings. Read, never run: a skin whose Lua builds its art some other way
  *   resolves to the parts it does name, and the rest fall back.
  *
+ * A part drawn as a 3D model (a MilkShape `.txt`, loaded by `Def.Model`)
+ * resolves to the model itself, [Image.isModel], never to its texture: a
+ * model's texture is a sheet of pieces wrapped round it, not a picture of the
+ * note. The baker draws the model ([ModelSnapshot]).
+ *
  * Every part is the Down arrow's (StepMania draws the other lanes by turning
  * it), then the skin's `Fallback` one. Paths are the archive's, so a redirect
  * into a sibling skin (`../common/...`) resolves too. Pure Kotlin.
@@ -24,8 +29,11 @@ class NoteSkinResolver(
     private val skinDir: String,
     private val read: (String) -> String?,
 ) {
-    /** An image a part resolved to: its path in the archive and its sprite sheet. */
-    data class Image(val path: String, val cols: Int, val rows: Int, val doubleRes: Boolean)
+    /**
+     * An image a part resolved to: its path in the archive and its sprite
+     * sheet; or, when [isModel], a MilkShape model to be drawn.
+     */
+    data class Image(val path: String, val cols: Int, val rows: Int, val doubleRes: Boolean, val isModel: Boolean = false)
 
     private val byDir: Map<String, List<String>> = files.map { it.replace('\\', '/').trim('/') }
         .groupBy { it.substringBeforeLast('/', "") }
@@ -133,8 +141,9 @@ class NoteSkinResolver(
         if (depth > MAX_DEPTH) return null
         val wanted = name.lowercase().trim()
         val candidates = byDir[dir].orEmpty().filter { NoteSkinNames.element(it) == wanted }
-        // An image itself first, then what points at one.
+        // An image itself first, then a model, then what points at one.
         candidates.firstOrNull { NoteSkinNames.isImage(it) }?.let { return image(it) }
+        candidates.firstOrNull { isModel(it) }?.let { return Image(it, 1, 1, doubleRes = false, isModel = true) }
         for (file in candidates.sortedBy { POINTER_ORDER.indexOf(extensionOf(it)).let { i -> if (i < 0) 99 else i } }) {
             val text = read(file) ?: continue
             for (target in targetsIn(file, text)) {
@@ -151,7 +160,11 @@ class NoteSkinResolver(
         val (targetDir, leaf) = join(dir, cleaned)
         // A file named outright.
         byDir[targetDir].orEmpty().firstOrNull { it.substringAfterLast('/').equals(leaf, ignoreCase = true) }?.let { file ->
-            return if (NoteSkinNames.isImage(file)) image(file) else resolve(targetDir, NoteSkinNames.element(file), depth + 1)
+            return when {
+                NoteSkinNames.isImage(file) -> image(file)
+                isModel(file) -> Image(file, 1, 1, doubleRes = false, isModel = true)
+                else -> resolve(targetDir, NoteSkinNames.element(file), depth + 1)
+            }
         }
         val element = NoteSkinNames.element(leaf)
         resolve(targetDir, element, depth + 1)?.let { return it }
@@ -172,6 +185,42 @@ class NoteSkinResolver(
             (files + quoted.filter { NoteSkinNames.isImage(it) } + quoted.filterNot { NoteSkinNames.isImage(it) }).distinct()
         }
     }
+
+    /**
+     * The image a model's material names ([texture], as written in the model,
+     * often with Windows' `\\`), from the model at [model]: beside it or under
+     * it, matched without case. An `.ini` texture is StepMania's animated
+     * one; its first frame is taken.
+     */
+    fun modelTexture(model: String, texture: String): String? {
+        val skin = model.substringBeforeLast('/', "")
+        var base = skin
+        var target = texture
+        // The texture, or an animated texture's .ini and then its first frame.
+        repeat(2) {
+            val file = find(base, target, skin) ?: return null
+            if (NoteSkinNames.isImage(file)) return file
+            if (extensionOf(file) != "ini") return null
+            target = read(file)?.let { ANIMATED_FRAME.find(it)?.groupValues?.get(1) } ?: return null
+            base = file.substringBeforeLast('/', "")
+        }
+        return null
+    }
+
+    /** [target] from [base], or a file of its name anywhere under [skin] (a model naming a folder since flattened). */
+    private fun find(base: String, target: String, skin: String): String? {
+        val (dir, leaf) = join(base, target.replace('\\', '/').trim())
+        if (leaf.isEmpty()) return null
+        fun named(file: String) = file.substringAfterLast('/').equals(leaf, ignoreCase = true)
+        return byDir[dir].orEmpty().firstOrNull(::named)
+            ?: byDir.entries.firstOrNull { (folder, files) ->
+                (skin.isEmpty() || folder == skin || folder.startsWith("$skin/")) && files.any(::named)
+            }?.value?.firstOrNull(::named)
+    }
+
+    /** A MilkShape ASCII model, by its first line. */
+    private fun isModel(path: String): Boolean =
+        extensionOf(path) in MODEL_EXTENSIONS && read(path)?.trimStart()?.startsWith(MILKSHAPE_HEADER, ignoreCase = true) == true
 
     private fun image(path: String): Image {
         val (cols, rows) = NoteSkinNames.sheet(path)
@@ -196,6 +245,9 @@ class NoteSkinResolver(
         private val DIRECTIONS = listOf("down", "left", "up", "right", "upleft", "upright", "center", "fallback")
         private val POINTER_ORDER = listOf("redir", "sprite", "actor", "xml", "lua")
         private const val MAX_DEPTH = 6
+        private val MODEL_EXTENSIONS = setOf("txt", "model")
+        private val ANIMATED_FRAME = Regex("""(?im)^\s*Frame0*\d*\s*=\s*(.+?)\s*$""")
+        private const val MILKSHAPE_HEADER = "// MilkShape 3D ASCII"
         private const val MAX_FALLBACKS = 4
         private val FALLBACK = Regex("""(?im)^\s*FallbackNoteSkin\s*=\s*(.+?)\s*$""")
     }
