@@ -490,8 +490,14 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
 
     // --- The USB DAC's own volume (exclusive output) ---
-    /** Whether a DAC is claimed for exclusive output, which is when its volume bar shows. */
-    val dacExclusive: StateFlow<Boolean> = libusbDriver.isOpen
+    /**
+     * Whether the DAC's level is the volume heard, which is when its volume
+     * bar shows: a DAC is claimed, and Trypt Mania is not playing a stream of
+     * its own on Android's output (BypassVolumeController.androidStreamAudible).
+     */
+    val dacExclusive: StateFlow<Boolean> =
+        combine(libusbDriver.isOpen, bypassVolumeController.androidStreamAudible) { open, audible -> open && !audible }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     /** The DAC level in dB, MIN_DB (muted) to 0; see BypassVolumeController. */
     val dacLevelDb: StateFlow<Float> = bypassVolumeController.levelDb

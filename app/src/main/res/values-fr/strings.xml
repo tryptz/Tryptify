@@ -3336,4 +3336,13 @@
     <string name="tm_charting_fail_refund">Un titre qui échoue rend ses minutes.</string>
     <string name="tm_charting_sign_in">Charter sur le serveur de Tryptify passe par votre compte Tryptify. Connectez-vous pour recevoir votre titre offert et acheter des minutes.</string>
     <string name="tm_charting_unreachable">Impossible de joindre le serveur de Tryptify. Vérifiez votre connexion et réessayez.</string>
+    <string name="tm_charting_now">En cours de chart</string>
+    <string name="tm_charting_now_count">%1$d sur %2$d chartés</string>
+    <string name="tm_charting_waiting">En attente</string>
+    <string name="tm_charting_cancel_all">Tout annuler</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="one">et %d autre en attente</item>
+        <item quantity="many">et %d autres en attente</item>
+        <item quantity="other">et %d autres en attente</item>
+    </plurals>
 </resources>

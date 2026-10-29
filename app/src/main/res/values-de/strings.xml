@@ -3259,4 +3259,12 @@
     <string name="tm_charting_fail_refund">Ein Song, der fehlschlägt, gibt seine Minuten zurück.</string>
     <string name="tm_charting_sign_in">Charts auf Tryptifys Server laufen über dein Tryptify-Konto. Melde dich an, um deinen Gratis-Song zu bekommen und Minuten zu kaufen.</string>
     <string name="tm_charting_unreachable">Tryptifys Server ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="tm_charting_now">Wird gerade gechartet</string>
+    <string name="tm_charting_now_count">%1$d von %2$d gechartet</string>
+    <string name="tm_charting_waiting">Wartet</string>
+    <string name="tm_charting_cancel_all">Alle abbrechen</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="one">und %d weiterer wartet</item>
+        <item quantity="other">und %d weitere warten</item>
+    </plurals>
 </resources>

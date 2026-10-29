@@ -3336,4 +3336,13 @@
     <string name="tm_charting_fail_refund">Una canción que falla devuelve sus minutos.</string>
     <string name="tm_charting_sign_in">Generar partituras en el servidor de Tryptify va con tu cuenta de Tryptify. Inicia sesión para recibir tu canción gratis y comprar minutos.</string>
     <string name="tm_charting_unreachable">No se pudo conectar con el servidor de Tryptify. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="tm_charting_now">Generando ahora</string>
+    <string name="tm_charting_now_count">%1$d de %2$d generadas</string>
+    <string name="tm_charting_waiting">En espera</string>
+    <string name="tm_charting_cancel_all">Cancelar todo</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="one">y %d más en espera</item>
+        <item quantity="many">y %d más en espera</item>
+        <item quantity="other">y %d más en espera</item>
+    </plurals>
 </resources>

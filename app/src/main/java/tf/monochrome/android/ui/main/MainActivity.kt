@@ -124,10 +124,11 @@ class MainActivity : ComponentActivity() {
 
         // Make the system route hardware volume keys to STREAM_MUSIC
         // by default. We re-route them to BypassVolumeController only
-        // when the libusb iso pump is actively streaming (see
-        // dispatchKeyEvent below); otherwise the system handles them
-        // normally and AudioFlinger volume changes apply to the
-        // delegate sink path as expected.
+        // while the DAC level is what is heard (steersOutput: a DAC
+        // claimed, its stream on it, and nothing of the app's own on
+        // Android's output; see dispatchKeyEvent below); otherwise the
+        // system handles them normally and AudioFlinger volume changes
+        // apply to the delegate sink path as expected.
         volumeControlStream = AudioManager.STREAM_MUSIC
 
         // Notification permission waits for onboarding: firing the system

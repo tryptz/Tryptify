@@ -1895,7 +1895,23 @@ dead button. The song list needs nothing new: while the listener has minutes
 or their free song, Tryptify's server is first in both Fast and Slow
 (`RemoteStemAnalysis.plan`), reached through Cloud and never by an address
 of its own, and the batch confirmation reads "Separating on Tryptify's
-server" for it.
+server" for it. While the chart line runs, the screen shows it above the
+stats as "Charting now": the batch's count and one meter, then each song in
+flight with its stage verbatim from the service, the waiting ones dimmed
+(eight at most, then "and N more"), and Cancel all; the same line the song
+list's generation panel shows, read from the same `ChartQueueState`, never a
+second count.
+
+**Trypt Mania's volume keys move Android's volume, never the DAC's level.**
+The mode plays on Android's output, not the DAC: its transport and its
+preview are plain ExoPlayers, kept out of the shared player on purpose, and
+the exclusive USB DAC path carries only the main player's stream. While
+either sounds, `GlyphViewModel` tells `BypassVolumeController`
+(`androidStreamAudible`), `steersOutput` is false, and the keys fall through
+to `STREAM_MUSIC`, the media session reports a local device again, and the
+DAC's glass pop-up stays away. Before, with a DAC claimed and the main player
+parked under a preview, the keys stepped the DAC level, which nothing audible
+followed, and the game's volume could not be changed at all.
 
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a

@@ -499,6 +499,8 @@ data class GlyphChartingUi(
     @androidx.annotation.StringRes val notice: Int? = null,
     /** A Creem checkout the screen opens in the browser, once. */
     val checkoutUrl: String? = null,
+    /** The chart line as it stands: the songs being charted now, the ones waiting, and the batch's count. */
+    val queue: tf.monochrome.android.audio.stepmania.ChartQueueState = tf.monochrome.android.audio.stepmania.ChartQueueState(),
 )
 
 /**

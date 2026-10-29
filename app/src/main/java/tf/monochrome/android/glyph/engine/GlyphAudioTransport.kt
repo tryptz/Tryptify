@@ -50,6 +50,17 @@ class GlyphAudioTransport(context: Context) {
 
     val isPlaying: Boolean get() = player.isPlaying
 
+    /** Told when the song starts or stops sounding, on the main thread: for whoever routes the volume keys. */
+    var onPlayingChanged: ((Boolean) -> Unit)? = null
+
+    init {
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onPlayingChanged?.invoke(isPlaying)
+            }
+        })
+    }
+
     fun prepare(uri: Uri) {
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()

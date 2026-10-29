@@ -126,6 +126,18 @@ class BypassVolumeTest {
     }
 
     @Test
+    fun `a stream of the app's own on Android's output takes the keys back from the DAC`() {
+        val volume = BypassVolumeController()
+        assertTrue(volume.steersOutput(dacClaimed = true))
+        // Trypt Mania's song or a preview is sounding on Android's output.
+        volume.setAndroidStreamAudible(true)
+        assertEquals(false, volume.steersOutput(dacClaimed = true))
+        assertEquals(false, volume.steersOutput(dacClaimed = false))
+        volume.setAndroidStreamAudible(false)
+        assertTrue(volume.steersOutput(dacClaimed = true))
+    }
+
+    @Test
     fun `the DAC level steers only what plays on the DAC`() {
         val volume = BypassVolumeController()
         // No DAC claimed: Android's volume, always.

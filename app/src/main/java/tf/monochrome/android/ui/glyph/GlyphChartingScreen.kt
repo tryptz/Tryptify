@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -41,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -152,6 +154,61 @@ fun GlyphChartingScreen(
                         primary = true,
                         onClick = { onEvent(GlyphEvent.OpenSongs(GlyphSongListMode.PLAY)) },
                         modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            // ── charting now: the line, song by song ────────────────────
+            val queue = state.charting.queue
+            if (queue.active) {
+                GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                    val percent = (queue.fraction * 100).toInt()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.tm_charting_now),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f).semantics { heading() },
+                        )
+                        // A readout that changes while it is read: monospaced, so the digits do not shuffle.
+                        Text(
+                            text = "$percent%",
+                            style = GlyphTypography(rememberStepTechFontFamily()).mono,
+                            color = scheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.tm_charting_now_count, queue.finished.size, queue.total),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    GlyphMeter(
+                        fraction = queue.fraction,
+                        color = scheme.primary,
+                        description = "$percent percent",
+                    )
+                    Spacer(Modifier.height(MonoDimens.spacingSm))
+                    queue.running.forEach { flight ->
+                        LineRow(title = flight.job.title, stage = flight.stage, dim = false)
+                    }
+                    queue.waiting.take(WAITING_SHOWN).forEach { job ->
+                        LineRow(title = job.title, stage = stringResource(R.string.tm_charting_waiting), dim = true)
+                    }
+                    val more = queue.waiting.size - WAITING_SHOWN
+                    if (more > 0) {
+                        Text(
+                            text = pluralStringResource(R.plurals.tm_charting_more_waiting, more, more),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = MonoDimens.spacingXs),
+                        )
+                    }
+                    Spacer(Modifier.height(MonoDimens.spacingMd))
+                    GlyphButton(
+                        text = stringResource(if (queue.total > 1) R.string.tm_charting_cancel_all else R.string.action_cancel),
+                        onClick = { onEvent(GlyphEvent.CancelGeneration) },
+                        height = 40.dp,
                     )
                 }
             }
@@ -347,6 +404,34 @@ private fun PackRow(pack: ChartingPack, selected: Boolean, onPick: () -> Unit) {
     }
 }
 
+/** One song of the line: its title, and what it is at (or that it waits). */
+@Composable
+private fun LineRow(title: String, stage: String, dim: Boolean) {
+    val scheme = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = MonoDimens.spacingXs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (dim) scheme.onSurfaceVariant else scheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(MonoDimens.spacingSm))
+        Text(
+            text = stage,
+            style = MaterialTheme.typography.bodySmall,
+            color = scheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+    }
+}
+
 @Composable
 private fun HistoryRow(entry: ChartingEntry) {
     val scheme = MaterialTheme.colorScheme
@@ -391,3 +476,6 @@ private fun count(n: Int): String = NumberFormat.getIntegerInstance().format(n)
 private fun price(pack: ChartingPack): String = String.format(Locale.ROOT, "$%d.%02d", pack.priceCents / 100, pack.priceCents % 100)
 
 private val METER_HEIGHT = 8.dp
+
+/** Waiting songs listed before "and N more": a long batch is a count, not a wall. */
+private const val WAITING_SHOWN = 8

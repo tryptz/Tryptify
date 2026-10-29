@@ -3259,4 +3259,12 @@
     <string name="tm_charting_fail_refund">Başarısız olan şarkının dakikaları geri gelir.</string>
     <string name="tm_charting_sign_in">Tryptify sunucusunda chart oluşturmak Tryptify hesabınla olur. Ücretsiz şarkını almak ve dakika satın almak için giriş yap.</string>
     <string name="tm_charting_unreachable">Tryptify sunucusuna ulaşılamadı. Bağlantını kontrol edip tekrar dene.</string>
+    <string name="tm_charting_now">Şu anda oluşturuluyor</string>
+    <string name="tm_charting_now_count">%2$d şarkıdan %1$d tanesi oluşturuldu</string>
+    <string name="tm_charting_waiting">Bekliyor</string>
+    <string name="tm_charting_cancel_all">Tümünü iptal et</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="one">ve %d tane daha bekliyor</item>
+        <item quantity="other">ve %d tane daha bekliyor</item>
+    </plurals>
 </resources>

@@ -39,6 +39,7 @@ import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.audio.stepmania.ChartPace
 import tf.monochrome.android.audio.stepmania.ChartQueue
 import tf.monochrome.android.audio.stepmania.ChartingAccountStore
+import tf.monochrome.android.audio.usb.BypassVolumeController
 import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
@@ -133,6 +134,7 @@ class GlyphViewModel @Inject constructor(
     private val chartQueue: ChartQueue,
     private val chartPace: ChartPace,
     private val chartingAccount: ChartingAccountStore,
+    private val bypassVolume: BypassVolumeController,
     private val remoteStems: RemoteStemAnalysis,
     private val trackLocator: tf.monochrome.android.player.LocalTrackLocator,
     private val packLibrary: GlyphPackLibrary,
@@ -229,7 +231,16 @@ class GlyphViewModel @Inject constructor(
         engineArmed = true
     }
 
-    val transport = GlyphAudioTransport(context)
+    val transport = GlyphAudioTransport(context).also { t ->
+        t.onPlayingChanged = { playing -> transportAudible = playing; publishAudible() }
+    }
+
+    // The mode plays on Android's output, never the DAC: while its song or a
+    // preview sounds, the volume keys must move Android's volume, not the
+    // DAC level that nothing heard follows (BypassVolumeController).
+    private var transportAudible = false
+    private var previewAudible = false
+    private fun publishAudible() = bypassVolume.setAndroidStreamAudible(transportAudible || previewAudible)
 
     private val ghostRecorder = GlyphGhostRecorder()
     private val metronome = GlyphMetronome()
@@ -278,7 +289,11 @@ class GlyphViewModel @Inject constructor(
     private var failJob: Job? = null
 
     /** The song list's preview from the drop; built on first use. */
-    private val preview by lazy { GlyphPreviewPlayer(context, viewModelScope) }
+    private val preview by lazy {
+        GlyphPreviewPlayer(context, viewModelScope).also { p ->
+            p.onPlayingChanged = { playing -> previewAudible = playing; publishAudible() }
+        }
+    }
     private var previewJob: Job? = null
 
     private var tickJob: Job? = null
@@ -1252,6 +1267,7 @@ class GlyphViewModel @Inject constructor(
                     generation = generationOf(queue),
                     queuedTracks = queue.waiting.mapTo(HashSet()) { it.trackId } +
                         queue.running.map { it.job.trackId },
+                    charting = _ui.value.charting.copy(queue = queue),
                 )
             }
         }
@@ -3129,6 +3145,7 @@ class GlyphViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        bypassVolume.setAndroidStreamAudible(false)
         previewJob?.cancel()
         preview.release()
         stopRoomFrames()

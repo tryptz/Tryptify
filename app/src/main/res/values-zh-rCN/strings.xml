@@ -3182,4 +3182,11 @@
     <string name="tm_charting_fail_refund">生成失败的歌曲会退还分钟。</string>
     <string name="tm_charting_sign_in">在 Tryptify 服务器上生成谱面需要你的 Tryptify 账号。登录即可获得免费歌曲并购买分钟。</string>
     <string name="tm_charting_unreachable">无法连接 Tryptify 的服务器。请检查网络后重试。</string>
+    <string name="tm_charting_now">正在生成</string>
+    <string name="tm_charting_now_count">%2$d 首中已生成 %1$d 首</string>
+    <string name="tm_charting_waiting">等待中</string>
+    <string name="tm_charting_cancel_all">全部取消</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="other">还有 %d 首等待中</item>
+    </plurals>
 </resources>

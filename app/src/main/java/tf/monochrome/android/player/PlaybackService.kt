@@ -522,12 +522,16 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
-        // The session hears when the DAC is claimed or let go, or a stream
-        // goes to Android's output despite it, and when its level moves, so
-        // the system volume panel follows it. On the main thread, where the
-        // session listens.
+        // The session hears when the DAC is claimed or let go, a stream
+        // goes to Android's output despite it, or Trypt Mania plays its own
+        // there, and when its level moves, so the system volume panel
+        // follows it. On the main thread, where the session listens.
         serviceScope.launch {
-            combine(libusbDriver.isOpen, bypassVolumeController.dacCarriesStream) { open, carries -> open && carries }
+            combine(
+                libusbDriver.isOpen,
+                bypassVolumeController.dacCarriesStream,
+                bypassVolumeController.androidStreamAudible,
+            ) { open, carries, audible -> open && carries && !audible }
                 .distinctUntilChanged()
                 .collect { forwardingPlayer.onExclusiveChanged() }
         }

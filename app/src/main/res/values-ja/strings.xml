@@ -3182,4 +3182,11 @@
     <string name="tm_charting_fail_refund">失敗した曲の分は戻ります。</string>
     <string name="tm_charting_sign_in">Tryptify のサーバーでの譜面生成は Tryptify アカウントで行います。サインインして無料の 1 曲を受け取り、分を購入できます。</string>
     <string name="tm_charting_unreachable">Tryptify のサーバーに接続できません。接続を確認してもう一度お試しください。</string>
+    <string name="tm_charting_now">生成中</string>
+    <string name="tm_charting_now_count">%2$d 曲中 %1$d 曲を生成</string>
+    <string name="tm_charting_waiting">待機中</string>
+    <string name="tm_charting_cancel_all">すべてキャンセル</string>
+    <plurals name="tm_charting_more_waiting">
+        <item quantity="other">ほか %d 曲が待機中</item>
+    </plurals>
 </resources>

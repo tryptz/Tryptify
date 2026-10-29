@@ -34,6 +34,9 @@ class GlyphPreviewPlayer(
     private var clipStartSeconds = 0f
     private var clipLengthSeconds = DEFAULT_LENGTH_SECONDS
 
+    /** Told when a preview starts or stops sounding, on the main thread: for whoever routes the volume keys. */
+    var onPlayingChanged: ((Boolean) -> Unit)? = null
+
     /**
      * Where in the song the preview is now, or null when it is not playing:
      * what the options screen's playfield follows, so its arrows move with the
@@ -112,6 +115,7 @@ class GlyphPreviewPlayer(
         envelope?.cancel()
         player?.release()
         player = null
+        onPlayingChanged?.invoke(false)
     }
 
     private fun build(): ExoPlayer = ExoPlayer.Builder(context)
@@ -123,7 +127,14 @@ class GlyphPreviewPlayer(
             /* handleAudioFocus = */ true,
         )
         .build()
-        .apply { repeatMode = Player.REPEAT_MODE_ONE }
+        .apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    onPlayingChanged?.invoke(isPlaying)
+                }
+            })
+        }
 
     companion object {
         /** StepMania's default #SAMPLELENGTH. */
