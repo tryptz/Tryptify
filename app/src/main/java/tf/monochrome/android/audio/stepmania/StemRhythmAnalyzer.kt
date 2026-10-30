@@ -4,6 +4,7 @@ package tf.monochrome.android.audio.stepmania
 
 import kotlin.math.ceil
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.math.ln
@@ -74,11 +75,12 @@ class StemRhythmAnalyzer(
             "at least $MINIMUM_SECONDS seconds of audio are required"
         }
 
-        val shaped = shape(envelope.raw())
+        val raw = envelope.raw()
+        val shaped = shape(raw)
         val lag = strongestLag(shaped)
-        val phase = strongestPhase(shaped, lag)
-        val bpm = 60f * ENVELOPE_HZ / lag
-        val offsetSeconds = phase.toFloat() / ENVELOPE_HZ
+        val tempo = refineTempo(raw, lag)
+        val bpm = tempo.bpm
+        val offsetSeconds = tempo.phaseFrames / ENVELOPE_HZ
         val durationSeconds = envelope.frames.toFloat() / sampleRate
         val grid = sampleSixteenthGrid(
             envelope = shaped,
@@ -132,25 +134,67 @@ class StemRhythmAnalyzer(
         }
     }
 
-    private fun strongestPhase(envelope: FloatArray, lag: Int): Int {
-        var bestPhase = 0
-        var bestScore = Float.NEGATIVE_INFINITY
-        for (phase in 0 until lag) {
-            var score = 0f
+    private class Tempo(val bpm: Float, val phaseFrames: Float, val score: Double)
+
+    /**
+     * The tempo between whole hops. [strongestLag] can only say 6000 / lag
+     * BPM (150 or 153.8, never 150.5), and a song a fraction off that grid
+     * slides off its arrows: at 150.5 charted as 150, half a beat by 0:45.
+     * So every tempo within half a hop of the lag's is tried, coarsely and
+     * then finely around the best, each at its best phase, scored by how
+     * hard the envelope rises on its beats. Across hundreds of beats that
+     * places the beat far finer than one hop.
+     */
+    private fun refineTempo(raw: FloatArray, lag: Int): Tempo {
+        // Before the song is silence, so a beat on its first hop rises from
+        // nothing; taken as no rise, the grid started a beat late.
+        val onset = FloatArray(raw.size) { index ->
+            max(0f, raw[index] - if (index == 0) 0f else raw[index - 1])
+        }
+        val slowest = max(minimumBpm, 60f * ENVELOPE_HZ / (lag + 0.5f))
+        val fastest = min(maximumBpm, 60f * ENVELOPE_HZ / (lag - 0.5f))
+        var best = Tempo(60f * ENVELOPE_HZ / lag, 0f, Double.NEGATIVE_INFINITY)
+        val coarseSteps = ((fastest - slowest) / COARSE_BPM_STEP).toInt()
+        for (step in 0..coarseSteps) {
+            val tempo = onBeats(onset, slowest + step * COARSE_BPM_STEP)
+            if (tempo.score > best.score) best = tempo
+        }
+        val centre = best.bpm
+        val fineSteps = (COARSE_BPM_STEP / FINE_BPM_STEP).roundToInt()
+        for (step in -fineSteps..fineSteps) {
+            val bpm = centre + step * FINE_BPM_STEP
+            if (bpm < slowest || bpm > fastest) continue
+            val tempo = onBeats(onset, bpm)
+            if (tempo.score > best.score) best = tempo
+        }
+        return best
+    }
+
+    /** [bpm] at the phase whose beats land on the most rise, half a hop at a time. */
+    private fun onBeats(onset: FloatArray, bpm: Float): Tempo {
+        val period = 60.0 * ENVELOPE_HZ / bpm
+        var bestPhase = 0.0
+        var bestScore = Double.NEGATIVE_INFINITY
+        var phase = 0.0
+        while (phase < period) {
+            var score = 0.0
             var count = 0
-            var index = phase
-            while (index < envelope.size) {
-                score += localPeak(envelope, index, 2)
+            var beat = phase
+            while (beat < onset.lastIndex) {
+                val index = beat.toInt()
+                val fraction = beat - index
+                score += onset[index] * (1.0 - fraction) + onset[index + 1] * fraction
                 count += 1
-                index += lag
+                beat += period
             }
             if (count > 0) score /= count
             if (score > bestScore) {
                 bestScore = score
                 bestPhase = phase
             }
+            phase += 0.5
         }
-        return bestPhase
+        return Tempo(bpm, bestPhase.toFloat(), bestScore)
     }
 
     private fun sampleSixteenthGrid(
@@ -213,6 +257,8 @@ class StemRhythmAnalyzer(
         const val ENVELOPE_HZ = 100
         const val MINIMUM_SECONDS = 4
         const val DEFAULT_BPM = 120f
+        const val COARSE_BPM_STEP = 0.05f
+        const val FINE_BPM_STEP = 0.005f
     }
 }
 

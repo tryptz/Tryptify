@@ -34,6 +34,35 @@ class StepManiaMapGeneratorTest {
     }
 
     @Test
+    fun tempoBetweenWholeHopsStaysOnTheBeat() {
+        // 150.5 BPM lies between the lags' 150 and 153.8: charted as 150,
+        // the arrows were half a beat off by 0:45.
+        val sampleRate = 1_000
+        val frames = sampleRate * 120
+        val left = FloatArray(frames)
+        val bpm = 150.5
+        val firstBeat = 0.31
+        var beat = 0
+        while (true) {
+            val frame = Math.round((firstBeat + beat * 60.0 / bpm) * sampleRate).toInt()
+            if (frame + 1 >= frames) break
+            left[frame] = 1f
+            left[frame + 1] = -0.6f
+            beat += 1
+        }
+        val buffer = SampleEdits.Buffer(left, null, sampleRate)
+
+        val result = StemRhythmAnalyzer().analyze(buffer, buffer)
+
+        assertEquals(150.5f, result.bpm, 0.05f)
+        // The grid's beat nearest the song's end is still on the click.
+        val last = firstBeat + (beat - 1) * 60.0 / bpm
+        val beats = Math.round((last - result.offsetSeconds) * result.bpm / 60.0)
+        val predicted = result.offsetSeconds + beats * 60.0 / result.bpm
+        assertEquals(last, predicted, 0.02)
+    }
+
+    @Test
     fun isolatedDrumsFeedAllRequestedDifficulties() {
         val analysis = RhythmAnalysis(
             bpm = 150f,
