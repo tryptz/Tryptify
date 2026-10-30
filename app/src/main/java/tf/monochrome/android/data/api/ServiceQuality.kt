@@ -10,8 +10,8 @@ import kotlin.math.abs
  *
  * TIDAL, Qobuz and Deezer each stream and download in a setting of their own,
  * because one tier means different files on each: "High" is AAC 320 in an
- * .m4a on TIDAL and MP3 320 on Qobuz and Deezer, and Deezer has nothing above
- * CD quality. So every option names the codec and what arrives, and a service
+ * .m4a on TIDAL, MP3 320 on Qobuz and MP3 128 on Deezer, whose server offers
+ * no other lossy file. So every option names the codec and what arrives, and a service
  * only offers the tiers it can actually send. Apple has its own ladder
  * ([tf.monochrome.android.data.preferences.AppleQuality]) and is not here.
  *
@@ -39,10 +39,11 @@ object ServiceQuality {
     private val TIDAL_HI_RES = Option(AudioQuality.HI_RES, "Hi-Res FLAC", R.string.quality_detail_tidal_hi_res)
     private val QOBUZ_HI_RES = Option(AudioQuality.HI_RES, "Hi-Res FLAC", R.string.quality_detail_qobuz_hi_res)
     private val CD_FLAC = Option(AudioQuality.LOSSLESS, "CD FLAC", R.string.quality_detail_cd_flac)
-    private val DEEZER_CD_FLAC = Option(AudioQuality.LOSSLESS, "CD FLAC", R.string.quality_detail_deezer_cd_flac)
+    private val DEEZER_HI_RES = Option(AudioQuality.HI_RES, "Hi-Res FLAC", R.string.quality_detail_deezer_hi_res)
     private val AAC_320 = Option(AudioQuality.HIGH, "AAC 320 kbps", R.string.quality_detail_aac_320)
     private val AAC_96 = Option(AudioQuality.LOW, "AAC 96 kbps", R.string.quality_detail_aac_96)
-    private val MP3_320 = Option(AudioQuality.HIGH, "MP3 320 kbps", R.string.quality_detail_mp3_320)
+    private val MP3_320 = Option(AudioQuality.HIGH, "MP3 320 kbps", R.string.quality_detail_mp3)
+    private val MP3_128 = Option(AudioQuality.HIGH, "MP3 128 kbps", R.string.quality_detail_mp3)
 
     /**
      * TIDAL's Dolby Atmos download choice, listed above its stereo tiers in
@@ -64,7 +65,7 @@ object ServiceQuality {
             if (setting == Setting.DOWNLOAD) listOf(TIDAL_HI_RES, CD_FLAC, AAC_320)
             else listOf(TIDAL_HI_RES, CD_FLAC, AAC_320, AAC_96)
         ApiService.QOBUZ -> listOf(QOBUZ_HI_RES, CD_FLAC, MP3_320)
-        ApiService.DEEZER -> listOf(DEEZER_CD_FLAC, MP3_320)
+        ApiService.DEEZER -> listOf(DEEZER_HI_RES, CD_FLAC, MP3_128)
         ApiService.APPLE -> emptyList()
         ApiService.STEMS, ApiService.MULTIPLAYER -> emptyList()
     }

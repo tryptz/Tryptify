@@ -2,36 +2,40 @@ package tf.monochrome.android.data.api
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import tf.monochrome.android.domain.model.AudioQuality
 
 class DeezerQualityTest {
 
     @Test
-    fun `codes are the ones the endpoint accepts`() {
-        // /api/deezer/download rejects anything but these, as Qobuz does.
-        assertEquals(listOf("5", "6", "7", "27"), DeezerQuality.Tier.entries.map { it.code })
+    fun `codes are ones the endpoint accepts`() {
+        // /api/deezer/download rejects anything but 5, 6, 7 and 27, as Qobuz does.
+        assertTrue(DeezerQuality.Tier.entries.all { it.code in setOf("5", "6", "7", "27") })
     }
 
     @Test
-    fun `lossy settings ask for mp3 320`() {
-        assertEquals(DeezerQuality.Tier.MP3_320, DeezerQuality.tierFor(AudioQuality.LOW))
-        assertEquals(DeezerQuality.Tier.MP3_320, DeezerQuality.tierFor(AudioQuality.HIGH))
+    fun `hi-res asks for deezer's 24-bit file on every track`() {
+        // The catalogue never says which tracks have a hi-res master; the server
+        // falls back to CD FLAC for the rest.
+        assertEquals(DeezerQuality.Tier.FLAC_HI_RES, DeezerQuality.tierFor(AudioQuality.HI_RES))
+        assertEquals("27", DeezerQuality.Tier.FLAC_HI_RES.code)
+        assertEquals(24, DeezerQuality.Tier.FLAC_HI_RES.bitDepth)
+        assertEquals(192.0, DeezerQuality.Tier.FLAC_HI_RES.sampleRateKhz, 0.0)
     }
 
     @Test
-    fun `hi-res is asked for only when the track claims it`() {
-        assertEquals(DeezerQuality.Tier.FLAC_CD, DeezerQuality.tierFor(AudioQuality.HI_RES, hires = false))
-        assertEquals(DeezerQuality.Tier.FLAC_HI_RES, DeezerQuality.tierFor(AudioQuality.HI_RES, hires = true))
-        assertEquals(DeezerQuality.Tier.FLAC_CD, DeezerQuality.tierFor(AudioQuality.LOSSLESS, hires = true))
+    fun `lossless asks for cd flac`() {
+        assertEquals(DeezerQuality.Tier.FLAC_CD, DeezerQuality.tierFor(AudioQuality.LOSSLESS))
+        assertEquals("6", DeezerQuality.Tier.FLAC_CD.code)
     }
 
     @Test
-    fun `a cd-quality track offers mp3 and cd flac only`() {
-        assertEquals(
-            listOf(DeezerQuality.Tier.MP3_320, DeezerQuality.Tier.FLAC_CD),
-            DeezerQuality.available(hires = false),
-        )
+    fun `lossy settings ask for the mp3 the endpoint serves for 5, which is 128`() {
+        assertEquals(DeezerQuality.Tier.MP3_128, DeezerQuality.tierFor(AudioQuality.LOW))
+        assertEquals(DeezerQuality.Tier.MP3_128, DeezerQuality.tierFor(AudioQuality.HIGH))
+        assertEquals("5", DeezerQuality.Tier.MP3_128.code)
+        assertEquals(128, DeezerQuality.Tier.MP3_128.bitrateKbps)
     }
 
     @Test

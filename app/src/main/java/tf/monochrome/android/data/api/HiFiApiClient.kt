@@ -536,14 +536,6 @@ class HiFiApiClient @Inject constructor(
     // whichever added API answers /api/deezer/*; every call fails soft so it
     // never blocks another catalog.
 
-    // Deezer ids whose catalogue item claimed hi-res. Only these are asked for
-    // the top quality codes; everything else tops out at CD FLAC. The most
-    // recently seen [KNOWN_TRACKS_MAX] only: every listing a track appears in
-    // records it again, and an id forgotten from long ago is in the state
-    // every id is in after a restart.
-    private val deezerHiRes: MutableSet<Long> =
-        java.util.Collections.newSetFromMap(boundedLru<Long, Boolean>(KNOWN_TRACKS_MAX))
-
     private suspend fun deezerBaseOrNull(): String? =
         instanceManager.deezerInstanceOrNull()?.url?.trimEnd('/')
 
@@ -565,7 +557,6 @@ class HiFiApiClient @Inject constructor(
     private fun registerDeezerTrackItem(item: QobuzTrackItem) {
         val trackId = item.id ?: return
         qobuzIdRegistry.registerDeezerTrack(trackId)
-        if (item.hires) deezerHiRes.add(trackId)
         item.album?.qobuzId?.let { qobuzIdRegistry.registerDeezerAlbum(it) }
         item.performer?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
         item.album?.artist?.id?.let { qobuzIdRegistry.registerDeezerArtist(it) }
@@ -694,17 +685,21 @@ class HiFiApiClient @Inject constructor(
      * is Blowfish-striped: whoever writes it to disk runs it through
      * DeezerStripeDecryptor first.
      *
+     * Hi-Res asks for Deezer's hi-res FLAC; the server falls back to CD FLAC
+     * for a track without a hi-res master, and names the format it served on
+     * the link (`format=FLAC_24` or `FLAC`).
+     *
      * Null when no instance serves Deezer or the instance refuses the track —
      * it answers 403 "not available for download with current ARL cookie"
      * when its Deezer account can't serve it. A refused FLAC request is
-     * retried once as MP3 320, the way Hi-Res falls back on Qobuz.
+     * retried once as MP3, the way Hi-Res falls back on Qobuz.
      */
     suspend fun getDeezerDownloadUrl(deezerId: Long, quality: AudioQuality): String? {
         val base = deezerBaseOrNull() ?: return null
-        val tier = DeezerQuality.tierFor(quality, hires = deezerId in deezerHiRes)
+        val tier = DeezerQuality.tierFor(quality)
         return resolveDeezerDownloadUrl(base, deezerId, tier)
             ?: tier.takeIf { it.codec == "FLAC" }?.let {
-                resolveDeezerDownloadUrl(base, deezerId, DeezerQuality.Tier.MP3_320)
+                resolveDeezerDownloadUrl(base, deezerId, DeezerQuality.Tier.MP3_128)
             }
     }
 
@@ -2012,7 +2007,7 @@ private fun tf.monochrome.android.data.api.model.ApiAlbum.toDomain() = Album(
  */
 private val knownAtmos: MutableMap<Long, Boolean> = boundedLru<Long, Boolean>(KNOWN_TRACKS_MAX)
 
-/** How many tracks [knownAtmos] and the Deezer hi-res set remember. */
+/** How many tracks [knownAtmos] remembers. */
 private const val KNOWN_TRACKS_MAX = 5_000
 
 /** A map keeping the [max] entries most recently written or read, safe to share between threads. */

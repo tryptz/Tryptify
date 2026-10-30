@@ -1902,10 +1902,10 @@
     <string name="quality_detail_tidal_hi_res">Fino a 24 bit / 192 kHz. Qualità CD quando l\'album non dispone di un master Hi-Res.</string>
     <string name="quality_detail_qobuz_hi_res">24 bit, fino a 192 kHz. Qualità CD quando la versione non dispone di un master Hi-Res.</string>
     <string name="quality_detail_cd_flac">16 bit / 44,1 kHz, lossless.</string>
-    <string name="quality_detail_deezer_cd_flac">16 bit / 44,1 kHz, lossless. La massima qualità di Deezer: non dispone di Hi-Res.</string>
+    <string name="quality_detail_deezer_hi_res">24 bit, fino a 192 kHz, alla frequenza del master del brano. Qualità CD quando il brano non dispone di un master Hi-Res.</string>
     <string name="quality_detail_aac_320">AAC lossy in un file .m4a (MP4).</string>
     <string name="quality_detail_aac_96">AAC lossy, più compatto. Per connessioni lente o a consumo.</string>
-    <string name="quality_detail_mp3_320">MP3 lossy.</string>
+    <string name="quality_detail_mp3">MP3 lossy.</string>
     <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC .m4a, originale non modificato, per i brani con mix Atmos. Il resto viene scaricato in formato FLAC Hi-Res.</string>
     <string name="settings_save_crash_reports">Salva rapporti sui crash</string>
     <string name="settings_save_crash_reports_on">Un arresto anomalo o blocco viene salvato in Download come file .log, da allegare a una segnalazione di bug.</string>
