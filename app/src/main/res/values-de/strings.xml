@@ -3351,4 +3351,5 @@
     <string name="tm_themes_get_dances">Schritte holen</string>
     <string name="tm_themes_dances">Tänze</string>
     <string name="tm_themes_dances_desc">Die Schritte, die Figuren teilen, beim Tanzen über ihren Namen gefunden.</string>
+    <string name="shared_link_failed">Dieser geteilte Link ließ sich nicht abspielen. Prüfe die %1$s-API unter Einstellungen › Verbindungen.</string>
 </resources>

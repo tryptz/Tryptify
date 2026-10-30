@@ -3273,4 +3273,5 @@
     <string name="tm_themes_get_dances">振り付けを入手</string>
     <string name="tm_themes_dances">振り付け</string>
     <string name="tm_themes_dances_desc">キャラクター共通の振り付け。踊るときに名前で探されます。</string>
+    <string name="shared_link_failed">この共有リンクを再生できませんでした。「設定 › 接続」で %1$s の API を確認してください。</string>
 </resources>

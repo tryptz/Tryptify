@@ -3429,4 +3429,5 @@
     <string name="tm_themes_get_dances">Obtenir les pas</string>
     <string name="tm_themes_dances">Danses</string>
     <string name="tm_themes_dances_desc">Les pas que partagent les personnages, trouvés par leur nom quand l\'un danse.</string>
+    <string name="shared_link_failed">Impossible de lire ce lien partagé. Vérifiez l’API %1$s dans Paramètres › Connexions.</string>
 </resources>

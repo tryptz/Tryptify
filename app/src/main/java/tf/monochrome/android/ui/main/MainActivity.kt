@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var spectrumAnalyzer: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
     @Inject lateinit var openedAudio: tf.monochrome.android.data.opened.OpenedAudioRepository
     @Inject lateinit var partyInvites: tf.monochrome.android.party.PartyInvites
+    @Inject lateinit var sharedLinks: tf.monochrome.android.share.SharedLinks
 
     /** Set once the onboarding flag has been read; releases the splash screen. */
     @Volatile private var onboardingGateLoaded = false
@@ -572,8 +573,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Route what other apps send: an audio file opened with Tryptify, a
-     * listening party invite (the rooms server's https link), and the
+     * Route what other apps send: an audio file opened with Tryptify, a song
+     * or album shared from TrypT-hifi (tryptify.com/listen/…, played at once),
+     * a listening party invite (the rooms server's https link), and the
      * auth callback deep-links, Last.fm (tryptify://lastfm-callback) and Supabase
      * (tf.monotrypt.android://login-callback). Handled from BOTH
      * onNewIntent (app already running) and onCreate (cold start after process
@@ -592,10 +594,11 @@ class MainActivity : ComponentActivity() {
             if (openFiles) openedAudio.open(uri, intent.type)
             return
         }
-        // A listening party invite. Only once, as a song opened is: rotated
-        // or reopened from Recents, the same link does not join again.
+        // A shared song, or a listening party invite. Only once, as a song
+        // opened is: rotated or reopened from Recents, the same link does not
+        // play or join again.
         if (scheme == "https") {
-            if (openFiles) partyInvites.offer(uri)
+            if (openFiles && !sharedLinks.offer(uri)) partyInvites.offer(uri)
             return
         }
         lifecycleScope.launch {

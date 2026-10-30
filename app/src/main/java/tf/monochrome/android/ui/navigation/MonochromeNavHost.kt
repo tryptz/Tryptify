@@ -737,6 +737,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         LaunchedEffect(invite) {
             if (invite != null) navController.navigate(Screen.ListeningParty.route) { launchSingleTop = true }
         }
+        // A song or album shared from TrypT-hifi plays at once, through the
+        // album it is on (PlayerViewModel.playSharedLink). Taken first, so it
+        // plays once.
+        val sharedLinks = remember(appContext) {
+            dagger.hilt.android.EntryPointAccessors.fromApplication(
+                appContext,
+                tf.monochrome.android.share.SharedLinksEntryPoint::class.java,
+            ).sharedLinks()
+        }
+        val sharedLink by sharedLinks.link.collectAsStateWithLifecycle()
+        LaunchedEffect(sharedLink) {
+            val link = sharedLink ?: return@LaunchedEffect
+            sharedLinks.clear()
+            playerViewModel.playSharedLink(link)
+        }
         val addToParty: ((tf.monochrome.android.domain.model.Track, String?) -> Unit)? =
             if (partyOn) remember(party) { { track, file -> party.add(track, file) } } else null
         val partyAdder: tf.monochrome.android.ui.party.PartyAdder? = if (partyOn) {

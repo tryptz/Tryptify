@@ -3273,4 +3273,5 @@
     <string name="tm_themes_get_dances">获取舞步</string>
     <string name="tm_themes_dances">舞步</string>
     <string name="tm_themes_dances_desc">角色共享的舞步，在角色跳舞时按名称查找。</string>
+    <string name="shared_link_failed">无法播放此分享链接。请在“设置 › 连接”中检查 %1$s API。</string>
 </resources>

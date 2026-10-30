@@ -3429,4 +3429,5 @@
     <string name="tm_themes_get_dances">Scarica i passi</string>
     <string name="tm_themes_dances">Danze</string>
     <string name="tm_themes_dances_desc">I passi che i personaggi condividono, trovati per nome quando uno balla.</string>
+    <string name="shared_link_failed">Impossibile riprodurre questo link condiviso. Controlla l’API di %1$s in Impostazioni › Connessioni.</string>
 </resources>

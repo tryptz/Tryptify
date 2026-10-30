@@ -3351,4 +3351,5 @@
     <string name="tm_themes_get_dances">Hareketleri al</string>
     <string name="tm_themes_dances">Danslar</string>
     <string name="tm_themes_dances_desc">Karakterlerin paylaştığı hareketler; biri dans ederken adıyla bulunur.</string>
+    <string name="shared_link_failed">Bu paylaşılan bağlantı çalınamadı. Ayarlar › Bağlantılar’dan %1$s API’sini kontrol edin.</string>
 </resources>

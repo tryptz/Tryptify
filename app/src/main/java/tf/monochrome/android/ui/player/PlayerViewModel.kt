@@ -96,6 +96,7 @@ class PlayerViewModel @Inject constructor(
     private val audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor,
     private val playbackPositions: tf.monochrome.android.player.PlaybackPositionSource,
     private val openedAudio: tf.monochrome.android.data.opened.OpenedAudioRepository,
+    private val sharedLinkResolver: tf.monochrome.android.share.SharedLinkResolver,
 ) : ViewModel() {
 
     /**
@@ -938,6 +939,28 @@ class PlayerViewModel @Inject constructor(
     fun takeOpenedFile(item: tf.monochrome.android.data.opened.OpenedAudioRepository.Opened) {
         openedAudio.taken(item)
         if (item is tf.monochrome.android.data.opened.OpenedAudioRepository.Opened.Ready) playOpenedFile(item.track)
+    }
+
+    /**
+     * Plays a song or album shared from TrypT-hifi (a tryptify.com/listen
+     * link) from whichever service this phone has (SharedLinkResolver: the one
+     * it was shared from, else the same song elsewhere), as tapping that song
+     * on its album's page does, so playback carries on through the album. An
+     * album link starts at its first song. Song radio is stopped first, as for
+     * an opened file. When no service here has it, a toast says so.
+     */
+    fun playSharedLink(link: tf.monochrome.android.share.SharedLink) {
+        viewModelScope.launch {
+            val found = sharedLinkResolver.resolve(link)
+            if (found == null) {
+                val text = tf.monochrome.android.locale.AppLanguage.wrap(context)
+                    .getString(R.string.shared_link_failed, link.source.label)
+                android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            radioQueueManager.stopRadio()
+            playTrack(found.start, found.album.tracks, ListRef.Album(found.album.album.id))
+        }
     }
 
     /** True when [track] plays from a file another app opened, not from the library. */

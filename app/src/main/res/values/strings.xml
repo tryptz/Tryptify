@@ -3354,4 +3354,5 @@
     <string name="tm_themes_get_dances">Get the dances</string>
     <string name="tm_themes_dances">Dances</string>
     <string name="tm_themes_dances_desc">The moves characters share, found by name when one dances.</string>
+    <string name="shared_link_failed">Couldn\'t play this shared link. Check the %1$s API in Settings › Connections.</string>
 </resources>

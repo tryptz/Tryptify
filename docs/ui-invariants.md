@@ -2734,6 +2734,20 @@ the bottom, and the field to say something.
   invited to party …", Join and Not now), never a dialog and never by
   leaving on its own. Signed out, the code waits in the Join field. Only the
   code is taken from a link, and an `/api/party/…` address is never one.
+* A shared link from TrypT-hifi's share button
+  (`https://tryptify.com/listen/<source>/album/<album>[/track/<track>]`, on
+  tryptify.com or www.tryptify.com only) plays at once, with no screen of its
+  own and no question, from whichever service this phone has
+  (SharedLinkResolver): the album from the catalog named in the link (an id
+  is never tried in another catalog, ids overlap); else the same recording on
+  Qobuz by the link's ISRC; else the song, or album, by title, artist and
+  length on TIDAL, Qobuz, Deezer and Apple Music, matched as a listening
+  party matches a song. The song plays as tapping it on that album's page
+  does, so playback carries on through the album; an album link starts at its
+  first song. Song radio stops first, as for an opened file. Once only:
+  rotated or reopened from Recents, it does not play again. When no service
+  here has it, a toast says so and names the catalog it came from; nothing
+  else changes.
 * The host's speed is the party's, and at a party it is always vinyl style:
   the pitch rides the speed, whatever the keep-pitch switch says (the
   owner's call: "like vinyl"). The host changes it with the app's own speed

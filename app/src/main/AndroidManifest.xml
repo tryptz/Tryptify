@@ -132,6 +132,24 @@
                 <data android:pathPattern="/.*/party/.*" />
             </intent-filter>
 
+            <!-- Songs and albums shared from TrypT-hifi:
+                 https://tryptify.com/listen/<source>/album/<id>[/track/<id>].
+                 tryptify.com's assetlinks.json covers every path, so these
+                 open here without asking too. Played at once (SharedLinks,
+                 PlayerViewModel.playSharedLink). Its own filter: <data> in
+                 one filter combine, and the party's hosts must not take
+                 /listen/ paths. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="tryptify.com"
+                    android:pathPrefix="/listen/" />
+                <data android:host="www.tryptify.com" />
+            </intent-filter>
+
             <!-- "Open with": an audio file from a file manager, a chat or
                  Downloads. Not BROWSABLE, so a web page cannot start it.
                  OpenedAudio checks every request before anything is read. -->

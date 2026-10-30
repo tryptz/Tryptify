@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Songs shared from TrypT-hifi open here and play, on any service.** A tryptify.com/listen link from TrypT-hifi's share button opens Tryptify and plays that song, then the rest of its album; an album link plays from its first song. It plays from the service it was shared from when you have that one under Settings › Connections, and otherwise finds the same song on one you do have: by its ISRC on Qobuz, else by title, artist and length on TIDAL, Qobuz, Deezer or Apple Music. Pasted in Discord, the same link shows the cover and a 30-second preview.
+
 ## [1.9.51]
 
 ### Added

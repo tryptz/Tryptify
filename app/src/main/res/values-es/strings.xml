@@ -3429,4 +3429,5 @@
     <string name="tm_themes_get_dances">Obtener los pasos</string>
     <string name="tm_themes_dances">Bailes</string>
     <string name="tm_themes_dances_desc">Los pasos que comparten los personajes, buscados por su nombre cuando uno baila.</string>
+    <string name="shared_link_failed">No se pudo reproducir este enlace compartido. Revisa la API de %1$s en Ajustes › Conexiones.</string>
 </resources>
