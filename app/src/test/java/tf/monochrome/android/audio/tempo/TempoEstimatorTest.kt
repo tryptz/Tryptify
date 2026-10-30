@@ -267,6 +267,29 @@ class TempoEstimatorTest {
         assertNull(estimateOf(FloatArray(rate * 12)))
     }
 
+    /** [audio] whole, as [SongTempo] measures a file. */
+    private fun wholeSongOf(audio: FloatArray): Float? {
+        val est = TempoEstimator(rate, (audio.size.toLong() * TempoEstimator.ENVELOPE_HZ / rate).toInt() + 64)
+        est.feed(audio, audio.size)
+        return est.wholeSongEstimate()
+    }
+
+    @Test
+    fun `a whole song places the tempo between steps`() {
+        // 128.37 lies between the 5 ms steps' periods; ten seconds' parabola
+        // only guesses at it, three minutes of beats place it.
+        val bpm = wholeSongOf(SyntheticDrums.render(SyntheticDrums.HOUSE, 128.37f, 180f, rate))
+        assertNotNull(bpm)
+        assertEquals(128.37f, bpm!!, 0.03f)
+    }
+
+    @Test
+    fun `a whole song keeps the octave`() {
+        val bpm = wholeSongOf(SyntheticDrums.render(SyntheticDrums.DNB, 172.6f, 120f, rate))
+        assertNotNull(bpm)
+        assertEquals(172.6f, bpm!!, 0.05f)
+    }
+
     @Test
     fun `a new track starts over`() {
         val est = TempoEstimator(rate)

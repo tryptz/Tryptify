@@ -86,6 +86,16 @@ class BpmTapProcessor @Inject constructor() : AudioProcessor {
         _bpm.value = null
     }
 
+    /**
+     * The whole song is being measured ([SongTempo]): no live measurement,
+     * and nothing shown until [setTempo] brings its answer (or [measure], if
+     * it has none), so the number appears once instead of moving under the
+     * listener from ten seconds' reading to the song's.
+     */
+    fun awaitSong() {
+        request.set(REQUEST_SET)
+    }
+
     /** The listener's own figure for the track's tempo; holds until the track changes. */
     fun setTempo(bpm: Float) {
         request.set(REQUEST_SET)

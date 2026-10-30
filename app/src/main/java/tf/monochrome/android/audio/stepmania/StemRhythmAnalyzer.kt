@@ -2,6 +2,7 @@
 
 package tf.monochrome.android.audio.stepmania
 
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -58,9 +59,16 @@ class StemRhythmAnalyzer(
         return analyze(envelope, layers)
     }
 
-    /** [analyze] of the drums, with what [layers] heard on the same grid. */
-    fun analyze(envelope: TransientEnvelopeBuilder, layers: StemLayerEnvelopes): RhythmAnalysis {
-        val rhythm = analyze(envelope)
+    /**
+     * [analyze] of the drums, with what [layers] heard on the same grid, at
+     * the level of [octaveHint] (see [analyze]).
+     */
+    fun analyze(
+        envelope: TransientEnvelopeBuilder,
+        layers: StemLayerEnvelopes,
+        octaveHint: Float? = null,
+    ): RhythmAnalysis {
+        val rhythm = analyze(envelope, octaveHint)
         return rhythm.copy(stems = StemFeatureExtractor.extract(rhythm, layers.builders))
     }
 
@@ -68,25 +76,45 @@ class StemRhythmAnalyzer(
      * The same analysis from an envelope built as the audio streamed past,
      * for a song that is never in memory whole (see
      * [StepManiaConversionService]).
+     *
+     * [octaveHint] is the whole mix's tempo ([tf.monochrome.android.audio.tempo.SongTempo]),
+     * which settles half or double time. The drums' envelope cannot: it
+     * hears the hats as sharply as the kick, so hats on every eighth make
+     * twice the tempo look as likely as the beat. The mix's estimator splits
+     * the kick and snare from the hats and decides on them. The drums still
+     * place the beat; the hint only picks the level, and one that is no
+     * power of two from the drums' tempo is ignored.
      */
-    fun analyze(envelope: TransientEnvelopeBuilder): RhythmAnalysis {
+    fun analyze(envelope: TransientEnvelopeBuilder, octaveHint: Float? = null): RhythmAnalysis {
         val sampleRate = envelope.sampleRate
         require(envelope.frames >= sampleRate.toLong() * MINIMUM_SECONDS) {
             "at least $MINIMUM_SECONDS seconds of audio are required"
         }
 
+        // Hops a second: 100 only where the rate divides by it (22050 Hz
+        // hops 220 samples, 100.2 a second, and read as 100 the tempo came
+        // out 0.2% slow and the arrows drifted off).
+        val hz = envelope.hopsPerSecond.toFloat()
         val raw = envelope.raw()
         val shaped = shape(raw)
-        val lag = strongestLag(shaped)
-        val tempo = refineTempo(raw, lag)
+        val lag = strongestLag(shaped, hz)
+        // Before the song is silence, so a beat on its first hop rises from
+        // nothing; taken as no rise, the grid started a beat late.
+        val onset = FloatArray(raw.size) { index ->
+            max(0f, raw[index] - if (index == 0) 0f else raw[index - 1])
+        }
+        val tempo = refineTempo(onset, lag, hz).let { drums ->
+            octaveHint?.let { atLevelOf(drums, it, onset, hz) } ?: drums
+        }
         val bpm = tempo.bpm
-        val offsetSeconds = tempo.phaseFrames / ENVELOPE_HZ
+        val offsetSeconds = tempo.phaseFrames / hz
         val durationSeconds = envelope.frames.toFloat() / sampleRate
         val grid = sampleSixteenthGrid(
             envelope = shaped,
             offsetSeconds = offsetSeconds,
             bpm = bpm,
             durationSeconds = durationSeconds,
+            hz = hz,
         )
 
         return RhythmAnalysis(
@@ -110,17 +138,17 @@ class StemRhythmAnalyzer(
         return robustNormalize(widened)
     }
 
-    private fun strongestLag(envelope: FloatArray): Int {
-        val minimumLag = (60f * ENVELOPE_HZ / maximumBpm).roundToInt().coerceAtLeast(1)
-        val maximumLag = (60f * ENVELOPE_HZ / minimumBpm).roundToInt()
+    private fun strongestLag(envelope: FloatArray, hz: Float): Int {
+        val minimumLag = (60f * hz / maximumBpm).roundToInt().coerceAtLeast(1)
+        val maximumLag = (60f * hz / minimumBpm).roundToInt()
             .coerceAtMost(envelope.lastIndex)
-        var bestLag = (60f * ENVELOPE_HZ / DEFAULT_BPM).roundToInt()
+        var bestLag = (60f * hz / DEFAULT_BPM).roundToInt()
         var bestScore = Float.NEGATIVE_INFINITY
 
         for (lag in minimumLag..maximumLag) {
             var score = correlation(envelope, lag)
             if (lag * 2 <= maximumLag) score += correlation(envelope, lag * 2) * 0.2f
-            val bpm = 60f * ENVELOPE_HZ / lag
+            val bpm = 60f * hz / lag
             if (bpm in 85f..190f) score *= 1.025f
             if (score > bestScore) {
                 bestScore = score
@@ -128,7 +156,7 @@ class StemRhythmAnalyzer(
             }
         }
         return if (bestScore <= 1e-4f) {
-            (60f * ENVELOPE_HZ / DEFAULT_BPM).roundToInt()
+            (60f * hz / DEFAULT_BPM).roundToInt()
         } else {
             bestLag
         }
@@ -145,18 +173,13 @@ class StemRhythmAnalyzer(
      * hard the envelope rises on its beats. Across hundreds of beats that
      * places the beat far finer than one hop.
      */
-    private fun refineTempo(raw: FloatArray, lag: Int): Tempo {
-        // Before the song is silence, so a beat on its first hop rises from
-        // nothing; taken as no rise, the grid started a beat late.
-        val onset = FloatArray(raw.size) { index ->
-            max(0f, raw[index] - if (index == 0) 0f else raw[index - 1])
-        }
-        val slowest = max(minimumBpm, 60f * ENVELOPE_HZ / (lag + 0.5f))
-        val fastest = min(maximumBpm, 60f * ENVELOPE_HZ / (lag - 0.5f))
-        var best = Tempo(60f * ENVELOPE_HZ / lag, 0f, Double.NEGATIVE_INFINITY)
+    private fun refineTempo(onset: FloatArray, lag: Int, hz: Float): Tempo {
+        val slowest = max(minimumBpm, 60f * hz / (lag + 0.5f))
+        val fastest = min(maximumBpm, 60f * hz / (lag - 0.5f))
+        var best = Tempo(60f * hz / lag, 0f, Double.NEGATIVE_INFINITY)
         val coarseSteps = ((fastest - slowest) / COARSE_BPM_STEP).toInt()
         for (step in 0..coarseSteps) {
-            val tempo = onBeats(onset, slowest + step * COARSE_BPM_STEP)
+            val tempo = onBeats(onset, slowest + step * COARSE_BPM_STEP, hz)
             if (tempo.score > best.score) best = tempo
         }
         val centre = best.bpm
@@ -164,15 +187,33 @@ class StemRhythmAnalyzer(
         for (step in -fineSteps..fineSteps) {
             val bpm = centre + step * FINE_BPM_STEP
             if (bpm < slowest || bpm > fastest) continue
-            val tempo = onBeats(onset, bpm)
+            val tempo = onBeats(onset, bpm, hz)
             if (tempo.score > best.score) best = tempo
         }
         return best
     }
 
+    /**
+     * [drums] doubled or halved (up to twice either way) to the level of
+     * [hint], with the phase found again at it: which beat of two is the
+     * downbeat is the drums' to say. Null when no level is within
+     * [SAME_LEVEL] of [hint], or none is in range: then the drums' own.
+     */
+    private fun atLevelOf(drums: Tempo, hint: Float, onset: FloatArray, hz: Float): Tempo? {
+        if (!(hint > 0f) || !hint.isFinite()) return null
+        val level = LEVELS
+            .map { drums.bpm * it }
+            .filter { it in minimumBpm..maximumBpm }
+            .minByOrNull { abs(ln(it / hint)) }
+            ?: return null
+        if (abs(level / hint - 1f) > SAME_LEVEL) return null
+        if (level == drums.bpm) return drums
+        return onBeats(onset, level, hz)
+    }
+
     /** [bpm] at the phase whose beats land on the most rise, half a hop at a time. */
-    private fun onBeats(onset: FloatArray, bpm: Float): Tempo {
-        val period = 60.0 * ENVELOPE_HZ / bpm
+    private fun onBeats(onset: FloatArray, bpm: Float, hz: Float): Tempo {
+        val period = 60.0 * hz / bpm
         var bestPhase = 0.0
         var bestScore = Double.NEGATIVE_INFINITY
         var phase = 0.0
@@ -202,6 +243,7 @@ class StemRhythmAnalyzer(
         offsetSeconds: Float,
         bpm: Float,
         durationSeconds: Float,
+        hz: Float,
     ): FloatArray {
         val subdivision = 60f / bpm / 4f
         val count = ceil((durationSeconds - offsetSeconds).coerceAtLeast(0f) / subdivision)
@@ -209,7 +251,7 @@ class StemRhythmAnalyzer(
             .coerceAtLeast(1)
         return FloatArray(count) { tick ->
             val seconds = offsetSeconds + tick * subdivision
-            val frame = (seconds * ENVELOPE_HZ).roundToInt()
+            val frame = (seconds * hz).roundToInt()
             localPeak(envelope, frame, 2).coerceIn(0f, 1f)
         }
     }
@@ -259,6 +301,12 @@ class StemRhythmAnalyzer(
         const val DEFAULT_BPM = 120f
         const val COARSE_BPM_STEP = 0.05f
         const val FINE_BPM_STEP = 0.005f
+
+        /** The levels of one beat [atLevelOf] tries: a quarter of the drums' tempo to four times it. */
+        val LEVELS = floatArrayOf(0.25f, 0.5f, 1f, 2f, 4f)
+
+        /** How near the mix's tempo a level must be to be its level. */
+        const val SAME_LEVEL = 0.06f
     }
 }
 
@@ -282,6 +330,9 @@ class TransientEnvelopeBuilder(val sampleRate: Int) {
     }
 
     private val hop = (sampleRate / StemRhythmAnalyzer.ENVELOPE_HZ).coerceAtLeast(1)
+
+    /** Values a second: [StemRhythmAnalyzer.ENVELOPE_HZ] when the rate divides by it, near it otherwise. */
+    val hopsPerSecond: Double get() = sampleRate.toDouble() / hop
     private var values = FloatArray(1024)
     private var count = 0
     private var previous = 0f

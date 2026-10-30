@@ -12,6 +12,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tf.monochrome.android.audio.tempo.SongTempo
 import tf.monochrome.android.data.api.ApiServer
 
 data class StepManiaConversionProgress(
@@ -40,6 +41,7 @@ data class StepManiaConversionResult(
 class StepManiaConversionService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val remoteStems: RemoteStemAnalysis,
+    private val songTempo: SongTempo,
 ) {
     private val generator = StepManiaMapGenerator()
     private val analyzer = StemRhythmAnalyzer()
@@ -56,7 +58,7 @@ class StepManiaConversionService @Inject constructor(
         val plan = remoteStems.plan(mode)
         if (plan.isEmpty()) throw IOException(noServer(mode))
         val remote = separate(plan, source, request.title, durationSeconds, onProgress)
-        finish(remote, request, destination, onProgress)
+        finish(remote, source, request, destination, onProgress)
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (failure: Throwable) {
@@ -102,13 +104,17 @@ class StepManiaConversionService @Inject constructor(
     /** Charts from the envelopes, written to [destination]. */
     private suspend fun finish(
         remote: RemoteEnvelopes,
+        source: Uri,
         request: StepManiaRequest,
         destination: Uri,
         onProgress: (StepManiaConversionProgress) -> Unit,
     ): Result<StepManiaConversionResult> {
         onProgress(StepManiaConversionProgress(0.88f, "Generating charts"))
+        // The whole mix's tempo, read on the phone, settles half or double
+        // time; without it (a song it cannot read), the drums' own level.
+        val octaveHint = songTempo.of(source)
         val generated = withContext(Dispatchers.Default) {
-            generator.generate(analyzer.analyze(remote.drums, remote.layers), request)
+            generator.generate(analyzer.analyze(remote.drums, remote.layers, octaveHint), request)
         }
         withContext(Dispatchers.IO) {
             onProgress(StepManiaConversionProgress(0.97f, "Writing simfile"))

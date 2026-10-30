@@ -62,6 +62,61 @@ class StepManiaMapGeneratorTest {
         assertEquals(last, predicted, 0.02)
     }
 
+    /**
+     * [seconds] of a hit on every beat at [bpm], first at [firstBeat] seconds:
+     * 40 ms dying away, as a drum does. A two-sample click leaves most of a
+     * slow song's envelope at nothing, and the analyser reads that as no
+     * pulse at all.
+     */
+    private fun clickTrack(bpm: Double, seconds: Int, sampleRate: Int, firstBeat: Double = 0.31): SampleEdits.Buffer {
+        val left = FloatArray(sampleRate * seconds)
+        val length = sampleRate / 25
+        var beat = 0
+        while (true) {
+            val frame = Math.round((firstBeat + beat * 60.0 / bpm) * sampleRate).toInt()
+            if (frame + length >= left.size) break
+            for (j in 0 until length) {
+                val sign = if (j % 2 == 0) 1f else -1f
+                left[frame + j] += sign * Math.exp(-j / (0.008 * sampleRate)).toFloat()
+            }
+            beat += 1
+        }
+        return SampleEdits.Buffer(left, null, sampleRate)
+    }
+
+    private fun envelopeOf(buffer: SampleEdits.Buffer) = TransientEnvelopeBuilder(buffer.sampleRate).apply {
+        add(buffer.left, buffer.right, 0, buffer.frames)
+    }
+
+    @Test
+    fun aRateHundredsDoNotDivideKeepsTheBeat() {
+        // 22050 Hz hops 220 samples: 100.23 a second, not 100. Read as 100,
+        // 120 BPM came out 119.73 and the arrows drifted off.
+        val buffer = clickTrack(120.0, 120, 22_050)
+        val result = StemRhythmAnalyzer().analyze(buffer, buffer)
+        assertEquals(120f, result.bpm, 0.05f)
+        val last = 0.31 + Math.floor((120 - 1 - 0.31) * 2) * 0.5
+        val beats = Math.round((last - result.offsetSeconds) * result.bpm / 60.0)
+        assertEquals(last, result.offsetSeconds + beats * 60.0 / result.bpm, 0.02)
+    }
+
+    @Test
+    fun theMixTempoSettlesTheOctave() {
+        val envelope = envelopeOf(clickTrack(80.0, 60, 1_000))
+        val drums = StemRhythmAnalyzer().analyze(envelope)
+        assertEquals(80f, drums.bpm, 0.05f)
+
+        // The mix says twice that: the chart follows it, its beats still on the clicks.
+        val doubled = StemRhythmAnalyzer().analyze(envelope, octaveHint = 160.4f)
+        assertEquals(160f, doubled.bpm, 0.1f)
+        val beats = Math.round((0.31 - doubled.offsetSeconds) * doubled.bpm / 60.0)
+        assertEquals(0.31, doubled.offsetSeconds + beats * 60.0 / doubled.bpm, 0.02)
+
+        // No power of two from the drums (a two-step's 2.5), or out of range: the drums' own.
+        assertEquals(80f, StemRhythmAnalyzer().analyze(envelope, octaveHint = 200f).bpm, 0.05f)
+        assertEquals(80f, StemRhythmAnalyzer().analyze(envelope, octaveHint = 40f).bpm, 0.05f)
+    }
+
     @Test
     fun isolatedDrumsFeedAllRequestedDifficulties() {
         val analysis = RhythmAnalysis(
