@@ -612,8 +612,16 @@ fell when the vocals rose), blurred across neighbouring bins, smoothed over a
 fifth of a second and taken over an 8K or 16K window; a link read off it
 lagged, softened and moved with sound outside its band.
 
+**The lyrics' beat engine listens as the links do.** `rememberBassPulse`
+reads the energy of 40–110 Hz from the links' own analysis (`linkPower`,
+`LinkBandAnalysis.bandDb`), never the display spectrum, and finds the kick with
+the links' own detector (`BandRange`); the Studio's attack, release and bounce
+come after it, unchanged. On the display spectrum it moved with the mids,
+lagged behind its smoothing, swelled and stuck after every pause, and ran the
+display's big FFT for one band.
+
 **A link uses the band's own swing, and silence moves nothing.**
-`MusicLinkFollower` (and `mod_route.h`, step for step) measures the band
+`MusicLinkFollower` (through `BandRange`, which the beat engine shares, and `mod_route.h`, step for step) measures the band
 between an adaptive floor and ceiling, its full range being the band's own
 swing between `MIN_RANGE_DB` and `RANGE_DB`, so a loud, flat master still moves
 the setting the whole way rather than sitting at the top. Below the quiet
