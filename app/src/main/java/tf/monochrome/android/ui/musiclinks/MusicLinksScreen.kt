@@ -440,7 +440,7 @@ fun MusicLinksScreen(
         val d = draft
         val target = d?.let { VisualLinkTargets.byKey(it.link.target) }
         if (d != null && target != null) {
-            val spectrum = viewModel.spectrumAnalyzer.spectrumBins.collectAsStateWithLifecycle()
+            val spectrum = rememberEditorSpectrum(viewModel.spectrumAnalyzer)
             val key = d.link.target
             val info = target.info()
             MusicLinkEditor(
