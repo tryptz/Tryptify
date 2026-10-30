@@ -1804,6 +1804,7 @@
     <string name="quality_detail_aac_320">非可逆の AAC（.m4a / MP4 ファイル）。</string>
     <string name="quality_detail_aac_96">非可逆の AAC、最小サイズ。低速または従量制の回線向けです。</string>
     <string name="quality_detail_mp3">非可逆の MP3。</string>
+    <string name="quality_detail_mp3_128">非可逆の MP3、最小サイズ。低速または従量制の回線向けです。</string>
     <string name="quality_detail_tidal_atmos_download">Atmos ミックスがある曲は E-AC-3 JOC の .m4a を無加工で保存します。その他の曲は Hi-Res FLAC でダウンロードします。</string>
     <string name="settings_save_crash_reports">クラッシュレポートを保存</string>
     <string name="settings_save_crash_reports_on">クラッシュやフリーズが起きると「ダウンロード」フォルダに .log ファイルを保存します。不具合の報告に添付できます。</string>

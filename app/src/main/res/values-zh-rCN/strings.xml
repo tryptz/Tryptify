@@ -1804,6 +1804,7 @@
     <string name="quality_detail_aac_320">有损 AAC，.m4a（MP4）文件。</string>
     <string name="quality_detail_aac_96">有损 AAC，体积最小。适合慢速或按流量计费的网络。</string>
     <string name="quality_detail_mp3">有损 MP3。</string>
+    <string name="quality_detail_mp3_128">有损 MP3，体积最小。适合慢速或按流量计费的网络。</string>
     <string name="quality_detail_tidal_atmos_download">有 Atmos 混音的歌曲保存为原样的 E-AC-3 JOC .m4a。其余歌曲下载为 Hi-Res FLAC。</string>
     <string name="settings_save_crash_reports">保存崩溃报告</string>
     <string name="settings_save_crash_reports_on">崩溃或无响应时，会在“下载”文件夹中保存一个 .log 文件，可附在错误报告中。</string>

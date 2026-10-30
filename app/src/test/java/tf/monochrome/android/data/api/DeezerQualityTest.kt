@@ -10,8 +10,9 @@ class DeezerQualityTest {
 
     @Test
     fun `codes are ones the endpoint accepts`() {
-        // /api/deezer/download rejects anything but 5, 6, 7 and 27, as Qobuz does.
-        assertTrue(DeezerQuality.Tier.entries.all { it.code in setOf("5", "6", "7", "27") })
+        // /api/deezer/download takes Qobuz's ids, and Deezer formats by name.
+        val accepted = setOf("5", "6", "7", "27", "FLAC_24", "FLAC", "MP3_320", "MP3_128")
+        assertTrue(DeezerQuality.Tier.entries.all { it.code in accepted })
     }
 
     @Test
@@ -31,11 +32,26 @@ class DeezerQualityTest {
     }
 
     @Test
-    fun `lossy settings ask for the mp3 the endpoint serves for 5, which is 128`() {
+    fun `high quality is mp3 320 by name and standard is mp3 128`() {
+        // As Deezer's own picker: High Quality 320 kbps, Standard 128 kbps.
+        assertEquals(DeezerQuality.Tier.MP3_320, DeezerQuality.tierFor(AudioQuality.HIGH))
+        assertEquals("MP3_320", DeezerQuality.Tier.MP3_320.code)
         assertEquals(DeezerQuality.Tier.MP3_128, DeezerQuality.tierFor(AudioQuality.LOW))
-        assertEquals(DeezerQuality.Tier.MP3_128, DeezerQuality.tierFor(AudioQuality.HIGH))
         assertEquals("5", DeezerQuality.Tier.MP3_128.code)
-        assertEquals(128, DeezerQuality.Tier.MP3_128.bitrateKbps)
+    }
+
+    @Test
+    fun `a refused tier falls to the lossy ones below it`() {
+        // A server from before format names refuses MP3_320: High Quality lands on 128.
+        assertEquals(
+            listOf(DeezerQuality.Tier.MP3_320, DeezerQuality.Tier.MP3_128),
+            DeezerQuality.ladder(DeezerQuality.Tier.MP3_320),
+        )
+        assertEquals(
+            listOf(DeezerQuality.Tier.FLAC_HI_RES, DeezerQuality.Tier.MP3_320, DeezerQuality.Tier.MP3_128),
+            DeezerQuality.ladder(DeezerQuality.Tier.FLAC_HI_RES),
+        )
+        assertEquals(listOf(DeezerQuality.Tier.MP3_128), DeezerQuality.ladder(DeezerQuality.Tier.MP3_128))
     }
 
     @Test

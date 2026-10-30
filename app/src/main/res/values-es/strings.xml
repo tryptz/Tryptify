@@ -1906,6 +1906,7 @@
     <string name="quality_detail_aac_320">AAC con pérdida, en un archivo .m4a (MP4).</string>
     <string name="quality_detail_aac_96">AAC con pérdida, el más ligero. Para conexiones lentas o con datos limitados.</string>
     <string name="quality_detail_mp3">MP3 con pérdida.</string>
+    <string name="quality_detail_mp3_128">MP3 con pérdida, el más ligero. Para conexiones lentas o con datos limitados.</string>
     <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC en .m4a, sin modificar, para las canciones con mezcla Atmos. Las demás se descargan en FLAC Hi-Res.</string>
     <string name="settings_save_crash_reports">Guardar informes de fallos</string>
     <string name="settings_save_crash_reports_on">Un fallo o bloqueo se guarda en Descargas como archivo .log, para adjuntarlo a un informe de error.</string>

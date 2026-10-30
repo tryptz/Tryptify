@@ -1855,6 +1855,7 @@
     <string name="quality_detail_aac_320">Verlustbehaftetes AAC in einer .m4a-Datei (MP4).</string>
     <string name="quality_detail_aac_96">Verlustbehaftetes AAC, am kleinsten. Für langsame oder getaktete Verbindungen.</string>
     <string name="quality_detail_mp3">Verlustbehaftetes MP3.</string>
+    <string name="quality_detail_mp3_128">Verlustbehaftetes MP3, am kleinsten. Für langsame oder getaktete Verbindungen.</string>
     <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC als .m4a, unverändert, für Titel mit Atmos-Mix. Alle anderen werden als Hi-Res-FLAC geladen.</string>
     <string name="settings_save_crash_reports">Absturzberichte speichern</string>
     <string name="settings_save_crash_reports_on">Ein Absturz oder Hänger wird als .log-Datei unter Downloads gespeichert, zum Anhängen an einen Fehlerbericht.</string>

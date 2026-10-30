@@ -1855,6 +1855,7 @@
     <string name="quality_detail_aac_320">Kayıplı AAC, .m4a (MP4) dosyasında.</string>
     <string name="quality_detail_aac_96">Kayıplı AAC, en küçük boyut. Yavaş veya kotalı bağlantılar için.</string>
     <string name="quality_detail_mp3">Kayıplı MP3.</string>
+    <string name="quality_detail_mp3_128">Kayıplı MP3, en küçük boyut. Yavaş veya kotalı bağlantılar için.</string>
     <string name="quality_detail_tidal_atmos_download">Atmos miksi olan parçalar için E-AC-3 JOC .m4a, değiştirilmeden. Diğerleri Hi-Res FLAC olarak indirilir.</string>
     <string name="settings_save_crash_reports">Çökme raporlarını kaydet</string>
     <string name="settings_save_crash_reports_on">Bir çökme veya donma, hata raporuna eklemek için İndirilenler klasörüne .log dosyası olarak kaydedilir.</string>

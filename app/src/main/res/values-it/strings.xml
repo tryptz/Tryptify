@@ -1906,6 +1906,7 @@
     <string name="quality_detail_aac_320">AAC lossy in un file .m4a (MP4).</string>
     <string name="quality_detail_aac_96">AAC lossy, più compatto. Per connessioni lente o a consumo.</string>
     <string name="quality_detail_mp3">MP3 lossy.</string>
+    <string name="quality_detail_mp3_128">MP3 lossy, più compatto. Per connessioni lente o a consumo.</string>
     <string name="quality_detail_tidal_atmos_download">E-AC-3 JOC .m4a, originale non modificato, per i brani con mix Atmos. Il resto viene scaricato in formato FLAC Hi-Res.</string>
     <string name="settings_save_crash_reports">Salva rapporti sui crash</string>
     <string name="settings_save_crash_reports_on">Un arresto anomalo o blocco viene salvato in Download come file .log, da allegare a una segnalazione di bug.</string>

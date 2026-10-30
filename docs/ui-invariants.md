@@ -1100,8 +1100,7 @@ its text, from the accent through amber to red as the time runs out
 no screen wires it by hand.
 
 **A held song streams lossy.** `SongPreview` asks the resolver for
-`AudioQuality.HIGH` (AAC 320 on TIDAL and Apple, MP3 320 on Qobuz, MP3 128 on
-Deezer, whose server has no other lossy file): a
+`AudioQuality.HIGH` (AAC 320 on TIDAL and Apple, MP3 320 on Qobuz and Deezer): a
 25 s preview of a song that may never be played should start in a moment
 and cost little, not fetch a Hi-Res FLAC that the Qobuz cache fills from
 the front. A song already in the Qobuz or Deezer cache whole, at any

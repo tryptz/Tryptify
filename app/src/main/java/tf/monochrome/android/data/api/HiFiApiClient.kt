@@ -691,16 +691,15 @@ class HiFiApiClient @Inject constructor(
      *
      * Null when no instance serves Deezer or the instance refuses the track —
      * it answers 403 "not available for download with current ARL cookie"
-     * when its Deezer account can't serve it. A refused FLAC request is
-     * retried once as MP3, the way Hi-Res falls back on Qobuz.
+     * when its Deezer account can't serve it. A refused request is tried
+     * again a tier down, MP3 320 then MP3 128 ([DeezerQuality.ladder]), the
+     * way Hi-Res falls back on Qobuz; a server from before format names
+     * refuses `MP3_320` and so serves High Quality as MP3 128.
      */
     suspend fun getDeezerDownloadUrl(deezerId: Long, quality: AudioQuality): String? {
         val base = deezerBaseOrNull() ?: return null
-        val tier = DeezerQuality.tierFor(quality)
-        return resolveDeezerDownloadUrl(base, deezerId, tier)
-            ?: tier.takeIf { it.codec == "FLAC" }?.let {
-                resolveDeezerDownloadUrl(base, deezerId, DeezerQuality.Tier.MP3_128)
-            }
+        return DeezerQuality.ladder(DeezerQuality.tierFor(quality))
+            .firstNotNullOfOrNull { resolveDeezerDownloadUrl(base, deezerId, it) }
     }
 
     private suspend fun resolveDeezerDownloadUrl(base: String, deezerId: Long, tier: DeezerQuality.Tier): String? =

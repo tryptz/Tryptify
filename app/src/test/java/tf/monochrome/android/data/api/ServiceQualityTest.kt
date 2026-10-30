@@ -21,7 +21,8 @@ class ServiceQualityTest {
             ServiceQuality.options(ApiService.QOBUZ, Setting.CELLULAR).map { it.quality },
         )
         assertEquals(
-            listOf(AudioQuality.HI_RES, AudioQuality.LOSSLESS, AudioQuality.HIGH),
+            // Deezer's own picker: HiFi, High Quality, Standard.
+            listOf(AudioQuality.HI_RES, AudioQuality.HIGH, AudioQuality.LOW),
             ServiceQuality.options(ApiService.DEEZER, Setting.DOWNLOAD).map { it.quality },
         )
         assertTrue(ServiceQuality.options(ApiService.APPLE, Setting.WIFI).isEmpty())
@@ -39,17 +40,19 @@ class ServiceQualityTest {
     fun `the lossy tier is named for the codec each service sends`() {
         assertEquals("AAC 320 kbps", ServiceQuality.option(ApiService.TIDAL, Setting.WIFI, AudioQuality.HIGH)?.label)
         assertEquals("MP3 320 kbps", ServiceQuality.option(ApiService.QOBUZ, Setting.WIFI, AudioQuality.HIGH)?.label)
-        // Deezer's server sends MP3 128 for its only lossy code.
-        assertEquals("MP3 128 kbps", ServiceQuality.option(ApiService.DEEZER, Setting.WIFI, AudioQuality.HIGH)?.label)
+        assertEquals("MP3 320 kbps", ServiceQuality.option(ApiService.DEEZER, Setting.WIFI, AudioQuality.HIGH)?.label)
+        assertEquals("MP3 128 kbps", ServiceQuality.option(ApiService.DEEZER, Setting.CELLULAR, AudioQuality.LOW)?.label)
     }
 
     @Test
     fun `a carried-over value lands on the nearest tier the service offers`() {
         // Hi-Res on Deezer stays Hi-Res: its server serves 24-bit FLAC since 2026-10-30.
         assertEquals(AudioQuality.HI_RES, ServiceQuality.coerce(ApiService.DEEZER, Setting.WIFI, AudioQuality.HI_RES))
-        // The old global Low on Qobuz and Deezer, whose lowest is MP3.
+        // The old global Low on Qobuz, whose lowest is MP3 320; Deezer has Standard.
         assertEquals(AudioQuality.HIGH, ServiceQuality.coerce(ApiService.QOBUZ, Setting.CELLULAR, AudioQuality.LOW))
-        assertEquals(AudioQuality.HIGH, ServiceQuality.coerce(ApiService.DEEZER, Setting.CELLULAR, AudioQuality.LOW))
+        assertEquals(AudioQuality.LOW, ServiceQuality.coerce(ApiService.DEEZER, Setting.CELLULAR, AudioQuality.LOW))
+        // CD FLAC chosen on Deezer before: Deezer's picker has none, the nearer higher is HiFi.
+        assertEquals(AudioQuality.HI_RES, ServiceQuality.coerce(ApiService.DEEZER, Setting.WIFI, AudioQuality.LOSSLESS))
         // Offered values are left alone.
         assertEquals(AudioQuality.HI_RES, ServiceQuality.coerce(ApiService.QOBUZ, Setting.DOWNLOAD, AudioQuality.HI_RES))
         assertEquals(AudioQuality.HI_RES, ServiceQuality.option(ApiService.DEEZER, Setting.WIFI, AudioQuality.HI_RES)?.quality)
