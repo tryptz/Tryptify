@@ -2284,8 +2284,10 @@ internal fun StudioPreview(
             val rayLight = rememberLyricRayLight(
                 accent = accent,
                 pulse = pulse,
-                band = { letters.bandInRoot() },
-                lettersBox = { letters.boxInRoot },
+                // Remembered: the preview recomposes every frame, and a new
+                // lambda was a new light each time (hundreds a second).
+                band = remember(letters) { { letters.bandInRoot() } },
+                lettersBox = remember(letters) { { letters.boxInRoot } },
                 fx = fx,
                 debugName = "studio",
             )

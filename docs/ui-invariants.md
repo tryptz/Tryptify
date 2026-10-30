@@ -388,6 +388,17 @@ Moving a default restyles every listener's lyrics. Still letters
 (`glassTiltReactivity` 0) hold no gravity sensor, as on the player glass. The
 letters get no lens rim, haze or drop shadow: those belong to panes.
 
+**The tilt moves only when the glass can show it.** The gravity sensor reads
+50 times a second; `GravityTiltSource` smooths it and publishes a new tilt
+only once it has moved by `TILT_STEP` (about a third of a degree). Publishing
+every reading redrew every tilted surface, the god rays' march and the glass
+included, 50 times a second with the phone lying still, and the phone ran hot
+(seen on device). For the same reason the rays' light (`LyricRayLight`) is
+handed remembered `band` and `lettersBox` lambdas: a new lambda each
+recomposition was a new light, a new backdrop and new render effects, hundreds
+a second in the Studio. The lyric font is read once for the app
+(`LyricFontCache`), not once per line as each scrolls in.
+
 **The shadow and the god rays live on the background, under the glass UI — in
 both modes.** They are drawn by `LyricBackdropFx` in the player's `fxUnderlay`:
 full screen, after the album background, inside the haze sources, before the

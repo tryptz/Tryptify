@@ -21,6 +21,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
@@ -105,6 +106,10 @@ class DiscordPresenceManager @Inject constructor(
 
     /** Cache of artwork URL → Discord's proxied asset path, per process. */
     private val assetCache = HashMap<String, String>()
+    /** Artwork Discord refused, by URL, and when it may be asked again. */
+    private val assetRefusedUntil = HashMap<String, Long>()
+    /** No artwork asked for before this, after Discord said to slow down. */
+    @Volatile private var assetProxyPausedUntil = 0L
 
     /**
      * Cache of (cover, groove, tint) → the uploaded animation's CDN URL.
@@ -673,6 +678,10 @@ class DiscordPresenceManager @Inject constructor(
         if (!url.startsWith("https://")) return hostedAsset(url, token)
         if (appId == null) return null
         assetCache[url]?.let { return it }
+        // Refused a moment ago: not asked again on every update. Each update
+        // asked again, three times over, and failed the same way (on device).
+        val now = System.currentTimeMillis()
+        if (now < assetProxyPausedUntil || now < (assetRefusedUntil[url] ?: 0L)) return null
 
         return runCatching {
             val response = httpClient.post("$API_BASE/applications/$appId/external-assets") {
@@ -680,11 +689,25 @@ class DiscordPresenceManager @Inject constructor(
                 contentType(ContentType.Application.Json)
                 setBody("""{"urls":["$url"]}""")
             }
-            val path = json.parseToJsonElement(response.bodyAsText())
-                .jsonArray.firstOrNull()?.jsonObject
+            val body = json.parseToJsonElement(response.bodyAsText())
+            // An error comes back as an object: what it says, and how long to wait when it says to.
+            if (!response.status.isSuccess() || body !is kotlinx.serialization.json.JsonArray) {
+                val error = body as? kotlinx.serialization.json.JsonObject
+                val retryAfterMs = error?.get("retry_after")?.jsonPrimitive?.content?.toDoubleOrNull()?.let { (it * 1000).toLong() }
+                if (response.status.value == 429) {
+                    assetProxyPausedUntil = now + (retryAfterMs ?: ASSET_RETRY_MS)
+                }
+                assetRefusedUntil[url] = now + maxOf(retryAfterMs ?: 0L, ASSET_RETRY_MS)
+                Log.w(TAG, "artwork proxy refused (HTTP ${response.status.value}): ${error?.get("message")?.jsonPrimitive?.content ?: "no reason given"}")
+                return@runCatching null
+            }
+            val path = body.firstOrNull()?.jsonObject
                 ?.get("external_asset_path")?.jsonPrimitive?.content
             path?.let { "mp:$it" }?.also { assetCache[url] = it }
-        }.onFailure { Log.w(TAG, "artwork proxy failed", it) }.getOrNull()
+        }.onFailure {
+            assetRefusedUntil[url] = now + ASSET_RETRY_MS
+            Log.w(TAG, "artwork proxy failed: ${it.message}")
+        }.getOrNull()
     }
 
     private companion object {
@@ -693,6 +716,8 @@ class DiscordPresenceManager @Inject constructor(
         const val API_BASE = "https://discord.com/api/v9"
         const val BASE_BACKOFF_MS = 2_000L
         const val MAX_BACKOFF_MS = 60_000L
+        /** How long artwork Discord refused is left before it is asked for again. */
+        const val ASSET_RETRY_MS = 10 * 60_000L
 
         /** How far up the genre graph a badge looks for a rhythm it recognises. */
         const val LINEAGE_DEPTH = 12

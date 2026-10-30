@@ -656,8 +656,10 @@ fun MainPlayerRoute(
         rememberLyricRayLight(
             accentOf = remember(vibrantFade) { { vibrantFade.value } },
             pulse = beatPulse,
-            band = { lyricLetters.bandInRoot() },
-            lettersBox = { lyricLetters.boxInRoot },
+            // Remembered: a new lambda each recomposition was a new light (and a
+            // new backdrop and render effects) each time the player recomposed.
+            band = remember(lyricLetters) { { lyricLetters.bandInRoot() } },
+            lettersBox = remember(lyricLetters) { { lyricLetters.boxInRoot } },
             fx = lyricsFx,
             debugName = "player",
             // Built out here, before the provider below, so it is handed the

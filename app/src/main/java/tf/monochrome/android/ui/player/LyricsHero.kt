@@ -903,11 +903,32 @@ val LocalPlaybackSpeed = compositionLocalOf { 1f }
 internal fun rememberLyricFontFamily(fx: LyricsFxSettings): FontFamily? {
     if (!fx.customFont || fx.customFontPath.isBlank()) return null
     val path = fx.customFontPath
-    return remember(path) {
+    return remember(path) { LyricFontCache.familyAt(path) }
+}
+
+/**
+ * The lyric font, read once for the whole app. Each lyric line asks for it as
+ * it scrolls in, and each used to read it again: list the font folder on the
+ * main thread and build a new family, so its text was measured afresh (608
+ * loads in twenty minutes, on device). Read again only when the file changes.
+ */
+private object LyricFontCache {
+    private var path: String? = null
+    private var stamp = 0L
+    private var family: FontFamily? = null
+
+    @Synchronized
+    fun familyAt(path: String): FontFamily? {
+        val file = java.io.File(path)
+        val stamp = file.lastModified() * 31 + file.length()
+        if (path == this.path && stamp == this.stamp) return family
         // With its variations, when the library holds other cuts of the family.
-        tf.monochrome.android.ui.theme.loadImportedFontFamily(path).also {
-            LyricsDebug.log(if (it != null) "custom font loaded: $path" else "custom font MISSING or unreadable, falling back to theme: $path")
-        }
+        val loaded = tf.monochrome.android.ui.theme.loadImportedFontFamily(path)
+        LyricsDebug.log(if (loaded != null) "custom font loaded: $path" else "custom font MISSING or unreadable, falling back to theme: $path")
+        this.path = path
+        this.stamp = stamp
+        family = loaded
+        return loaded
     }
 }
 

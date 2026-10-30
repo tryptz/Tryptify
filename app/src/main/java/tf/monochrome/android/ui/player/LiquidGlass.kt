@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.player
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import android.content.Context
@@ -1075,8 +1076,16 @@ private object GravityTiltSource : SensorEventListener {
         val gy = (event.values[1] / SensorManager.GRAVITY_EARTH).coerceIn(-1f, 1f)
         fx += (gx - fx) * 0.12f
         fy += (gy - fy) * 0.12f
-        tilt.value = Offset(fx, fy)
+        // Only a move the glass can show. Every reading made every tilted
+        // surface draw again, 50 times a second with the phone still on a
+        // table: the god rays and the glass ran their shaders at the sensor's
+        // rate for a tremor no one could see (the phone ran hot, on device).
+        val shown = tilt.value
+        if (abs(fx - shown.x) >= TILT_STEP || abs(fy - shown.y) >= TILT_STEP) tilt.value = Offset(fx, fy)
     }
+
+    /** About a third of a degree of the phone's lean: below it, the tilt stays as drawn. */
+    private const val TILT_STEP = 0.006f
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
 }
