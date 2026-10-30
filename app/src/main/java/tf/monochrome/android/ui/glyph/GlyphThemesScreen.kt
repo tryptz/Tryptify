@@ -143,9 +143,16 @@ fun GlyphThemesScreen(
                     onRemove = null,
                 )
                 for (style in styles.themes) {
+                    val brings = style.bundle?.let { bundle ->
+                        listOfNotNull(
+                            bundle.noteskins.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.tm_themes_brings_noteskin) },
+                            bundle.announcer?.let { stringResource(R.string.tm_themes_brings_announcer) },
+                            bundle.character?.let { stringResource(R.string.tm_themes_brings_character) },
+                        ).takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    }
                     StyleRow(
                         name = style.name,
-                        detail = style.source,
+                        detail = brings?.let { stringResource(R.string.tm_themes_brings, it) } ?: style.source,
                         inUse = themes.themeId == style.id,
                         onUse = { onEvent(GlyphEvent.UseTheme(style.id)) },
                         onRemove = { removing = style },
@@ -153,23 +160,66 @@ fun GlyphThemesScreen(
                 }
             }
 
+            // ── sizes ───────────────────────────────────────────────────
+            GlyphPanel(modifier = Modifier.fillMaxWidth()) {
+                SectionTitle(stringResource(R.string.tm_themes_sizes))
+                Text(stringResource(R.string.tm_themes_sizes_desc), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+                val sizes = themes.sizes
+                fun reading(scale: Float) = "%.2f×".format(java.util.Locale.ROOT, scale)
+                val range = GlyphStyleSizes.MIN..GlyphStyleSizes.MAX
+                GlyphSlider(
+                    label = stringResource(R.string.tm_themes_size_judgement),
+                    value = sizes.judgement,
+                    reading = reading(sizes.judgement),
+                    range = range,
+                    default = 1f,
+                    onChange = { onEvent(GlyphEvent.SetStyleSizes(sizes.copy(judgement = it))) },
+                )
+                GlyphSlider(
+                    label = stringResource(R.string.tm_themes_size_combo),
+                    value = sizes.combo,
+                    reading = reading(sizes.combo),
+                    range = range,
+                    default = 1f,
+                    onChange = { onEvent(GlyphEvent.SetStyleSizes(sizes.copy(combo = it))) },
+                )
+                GlyphSlider(
+                    label = stringResource(R.string.tm_themes_size_dancer),
+                    value = sizes.dancer,
+                    reading = reading(sizes.dancer),
+                    range = range,
+                    default = 1f,
+                    onChange = { onEvent(GlyphEvent.SetStyleSizes(sizes.copy(dancer = it))) },
+                )
+            }
+
             // ── noteskins ───────────────────────────────────────────────
             GlyphPanel(modifier = Modifier.fillMaxWidth()) {
                 SectionTitle(stringResource(R.string.tm_themes_noteskins))
                 Text(stringResource(R.string.tm_themes_noteskins_desc), style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-                if (styles.noteskins.isEmpty()) {
-                    Text(stringResource(R.string.tm_themes_none_yet), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
-                }
                 val skin = state.gameplay.modifiers.skin
+                // The app's own first, then the imported, each with its arrows.
+                for (builtIn in GlyphSkin.entries) {
+                    StyleRow(
+                        name = builtIn.label,
+                        detail = null,
+                        inUse = skin == builtIn,
+                        onUse = { onEvent(GlyphEvent.SetSkin(builtIn)) },
+                        onRemove = null,
+                    )
+                    NoteSkinPreview(builtIn)
+                }
                 for (style in styles.noteskins) {
                     val id = GlyphSkin.importedId(style.id)
+                    val imported = GlyphSkin.fromId(id)
                     StyleRow(
                         name = style.name,
                         detail = style.source,
                         inUse = skin.id == id,
-                        onUse = { onEvent(GlyphEvent.SetSkin(GlyphSkin.fromId(id))) },
+                        onUse = { onEvent(GlyphEvent.SetSkin(imported)) },
                         onRemove = { removing = style },
                     )
+                    NoteSkinPreview(imported)
                 }
             }
 

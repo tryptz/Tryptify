@@ -62,6 +62,9 @@ fun GlyphJudgementFx(
     modifier: Modifier = Modifier,
     /** Still: no pop, no fall. */
     reducedMotion: Boolean = false,
+    /** Themes › Sizes: the judgement's and the combo's own scale, about their middles. */
+    judgementScale: Float = 1f,
+    comboScale: Float = 1f,
 ) {
     if (judgement == null) return
     val sprite = rememberStepArt(GlyphStepArt.judgement(judgement, early))
@@ -143,6 +146,7 @@ fun GlyphJudgementFx(
                 modifier = Modifier
                     .fillMaxWidth(JUDGEMENT_WIDTH_SHARE)
                     .height(JUDGEMENT_HEIGHT)
+                    .graphicsLayer { scaleX = judgementScale; scaleY = judgementScale }
                     .then(landing),
             )
         } else {
@@ -152,6 +156,7 @@ fun GlyphJudgementFx(
                 color = stepJudgementColour(judgement),
                 modifier = Modifier
                     .semantics { contentDescription = name }
+                    .graphicsLayer { scaleX = judgementScale; scaleY = judgementScale }
                     .then(landing),
             )
         }
@@ -161,8 +166,8 @@ fun GlyphJudgementFx(
                 verticalAlignment = Alignment.Bottom,
                 // Read in the layer: the pop redraws, it never recomposes.
                 modifier = Modifier.graphicsLayer {
-                    scaleX = pop.value
-                    scaleY = pop.value
+                    scaleX = pop.value * comboScale
+                    scaleY = pop.value * comboScale
                     transformOrigin = TransformOrigin(0.5f, 0.8f)
                 },
             ) {
@@ -174,6 +179,8 @@ fun GlyphJudgementFx(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.graphicsLayer {
                     val f = fall.value
+                    scaleX = comboScale
+                    scaleY = comboScale
                     translationY = f * BREAK_DROP.toPx()
                     rotationZ = f * BREAK_TILT_DEGREES
                     this.alpha = 1f - f

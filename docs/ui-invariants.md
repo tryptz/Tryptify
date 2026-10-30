@@ -2421,6 +2421,18 @@ screens stay the app's. Theme and announcer sounds are game sounds
 exclusive USB DAC. Every baked folder keeps a `LICENSE.txt` naming its
 source: the art is its authors'.
 
+**A theme brings what it ships, and the Themes screen shows the arrows.** A
+theme's own `NoteSkins`, `Announcers` and `Characters` folders import as
+noteskins, announcers and characters (`StepManiaStyleScan`), and the theme's
+`style.json` keeps their ids (`StyleInfo.bundle`): picking the theme puts its
+first noteskin, its announcer and its dancer to use with it, each changeable
+after, and its row says what it comes with. Themes › Sizes scales the
+judgement, the combo (about their middles, on their layers, so nothing
+reflows) and the dancer (from its feet) between half and twice their size
+(`GlyphStyleSizes`). The Noteskins panel lists the app's skins beside the
+imported ones, each over a strip of its four arrows (`NoteSkinPreview`, the
+PNGs the field draws; none for the vector Classic).
+
 **The StepMania Archive is browsed in the app, a tab per section.** Themes'
 Browse button opens josevarela.net's archive (`StepManiaArchiveBrowser`, a
 full-screen dialog like Packs' StepMania Online one, no JavaScript, only the

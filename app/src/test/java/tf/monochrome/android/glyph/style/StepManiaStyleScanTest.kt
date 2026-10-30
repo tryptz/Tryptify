@@ -47,6 +47,35 @@ class StepManiaStyleScanTest {
     }
 
     @Test
+    fun aThemeBringsTheNoteskinsAnnouncersAndCharactersItShips() {
+        // As DDRSN_BT2Plus does: its noteskins and its voice inside it.
+        val found = StepManiaStyleScan.scan(
+            listOf(
+                "DDRSN/Graphics/Judgment 1x6.png",
+                "DDRSN/metrics.ini",
+                "DDRSN/NoteSkins/dance/ddrsn/Down Tap Note 4x4.png",
+                "DDRSN/NoteSkins/dance/ddrsndark/Down Tap Note 4x4.png",
+                "DDRSN/Announcers/DDRSN/gameplay ready/1.ogg",
+                "DDRSN/Announcers/DDRSN/gameplay cleared/1.ogg",
+                "DDRSN/Characters/Emi/model.txt",
+                // The theme's own: not an announcer of its own.
+                "DDRSN/Sounds/gameplay ready/1.ogg",
+                "DDRSN/Sounds/gameplay cleared/1.ogg",
+            ),
+        )
+        assertEquals(
+            listOf(
+                StepManiaStyleScan.Found(Kind.NOTESKIN, "ddrsn", "DDRSN/NoteSkins/dance/ddrsn"),
+                StepManiaStyleScan.Found(Kind.NOTESKIN, "ddrsndark", "DDRSN/NoteSkins/dance/ddrsndark"),
+                StepManiaStyleScan.Found(Kind.THEME, "DDRSN", "DDRSN"),
+                StepManiaStyleScan.Found(Kind.ANNOUNCER, "DDRSN", "DDRSN/Announcers/DDRSN"),
+                StepManiaStyleScan.Found(Kind.CHARACTER, "Emi", "DDRSN/Characters/Emi"),
+            ).sortedWith(compareBy({ it.kind }, { it.name.lowercase() })),
+            found,
+        )
+    }
+
+    @Test
     fun aThemesOwnGraphicsAreNotANoteskin() {
         val found = StepManiaStyleScan.scan(
             listOf(

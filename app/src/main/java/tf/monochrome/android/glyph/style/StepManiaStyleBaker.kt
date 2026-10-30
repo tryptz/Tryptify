@@ -390,7 +390,23 @@ class StepManiaStyleBaker(private val source: File, private val archiveName: Str
     }
 
     @Serializable
-    data class StyleInfo(val kind: String, val name: String, val source: String)
+    data class StyleInfo(
+        val kind: String,
+        val name: String,
+        val source: String,
+        /** A theme's: the parts imported with it from its own folders, by their library ids. */
+        val bundle: Bundle? = null,
+    )
+
+    /** What a theme ships beside its own art, put to use with it when it is picked. */
+    @Serializable
+    data class Bundle(
+        val noteskins: List<String> = emptyList(),
+        val announcer: String? = null,
+        val character: String? = null,
+    ) {
+        val isEmpty: Boolean get() = noteskins.isEmpty() && announcer == null && character == null
+    }
 
     /** A character's moves by StepMania's folder (dance, rest, warmup): its own ("own:…") or a shared dance's file name. */
     @Serializable

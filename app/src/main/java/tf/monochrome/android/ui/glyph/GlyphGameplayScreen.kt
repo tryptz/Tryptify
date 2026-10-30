@@ -221,6 +221,7 @@ fun GlyphGameplayScreen(
                         firstNoteBeat = firstNoteBeat,
                         failed = { state.gameplay.failedAtMs > 0L },
                         paused = { state.gameplay.isPaused },
+                        scale = state.themes.sizes.dancer,
                     )
                 }
 
@@ -281,6 +282,8 @@ fun GlyphGameplayScreen(
                     fullCombo = gameplay.fullCombo,
                     fonts = fonts,
                     reducedMotion = reduced,
+                    judgementScale = state.themes.sizes.judgement,
+                    comboScale = state.themes.sizes.combo,
                     modifier = Modifier.align(Alignment.Center),
                 )
 
@@ -490,6 +493,8 @@ private fun JudgementOverlay(
     fonts: GlyphStepFonts,
     modifier: Modifier = Modifier,
     reducedMotion: Boolean = false,
+    judgementScale: Float = 1f,
+    comboScale: Float = 1f,
 ) {
     if (judgement == null) return
     Box(
@@ -511,6 +516,8 @@ private fun JudgementOverlay(
             fullCombo = fullCombo,
             fonts = fonts,
             reducedMotion = reducedMotion,
+            judgementScale = judgementScale,
+            comboScale = comboScale,
         )
     }
 }
@@ -785,6 +792,8 @@ private fun GlyphDancer(
     firstNoteBeat: Float,
     failed: () -> Boolean,
     paused: () -> Boolean,
+    /** Themes › Sizes: from its feet, which stay where they stand. */
+    scale: Float = 1f,
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val beatNow = remember { java.util.concurrent.atomic.AtomicReference(0f) }
@@ -816,11 +825,12 @@ private fun GlyphDancer(
     val frame by renderer.frame.collectAsState()
     val picture = frame ?: return
     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-        val height = size.height * DANCER_HEIGHT_SHARE
+        val feet = size.height * (DANCER_TOP_SHARE + DANCER_HEIGHT_SHARE)
+        val height = size.height * DANCER_HEIGHT_SHARE * scale
         val width = height * picture.width / picture.height
         drawImage(
             image = picture.asImageBitmap(),
-            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - width) / 2).toInt(), (size.height * DANCER_TOP_SHARE).toInt()),
+            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - width) / 2).toInt(), (feet - height).toInt()),
             dstSize = androidx.compose.ui.unit.IntSize(width.toInt(), height.toInt()),
             alpha = DANCER_ALPHA,
             filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,

@@ -174,6 +174,8 @@ sealed interface GlyphEvent {
     data class ImportStyleUrl(val url: String, val name: String) : GlyphEvent
     /** The archive's shared dances, for characters imported without them. */
     data object ImportDances : GlyphEvent
+    /** The judgement's, the combo's and the dancer's sizes (Themes › Sizes). */
+    data class SetStyleSizes(val sizes: GlyphStyleSizes) : GlyphEvent
     /** The character to dance behind the field, by id; null for none. */
     data class UseCharacter(val id: String?) : GlyphEvent
     /** The theme to wear, by id; null for Tryptify's own. */

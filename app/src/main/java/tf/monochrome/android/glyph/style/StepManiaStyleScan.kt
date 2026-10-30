@@ -25,7 +25,8 @@ object StepManiaStyleScan {
      * Everything in [paths] (files, `/`-separated, relative to the archive's
      * top), each folder once. A folder inside a theme is the theme's, not a
      * noteskin or an announcer of its own, except under the theme's own
-     * `NoteSkins` folder, which StepMania installs as noteskins.
+     * `NoteSkins`, `Announcers` and `Characters` folders, which StepMania
+     * installs as such (a DDR theme often brings its noteskin and its voice).
      */
     fun scan(paths: Collection<String>): List<Found> {
         val files = paths.map { it.replace('\\', '/').trim('/') }.filter { it.isNotEmpty() }
@@ -49,10 +50,13 @@ object StepManiaStyleScan {
             .filter { it !in characters && characters.none { c -> inside(it, c) } }
             .toSet()
 
+        // Inside a theme only where the theme ships it as one, under its own folder for it.
+        fun shipped(dir: String, folder: String) =
+            themes.none { theme -> inside(dir, theme) && dir != theme } || "/$dir/".contains("/$folder/", ignoreCase = true)
         return (themes.map { Found(Kind.THEME, nameOf(it).ifEmpty { "Theme" }, it) } +
-            characters.filter { c -> themes.none { inside(c, it) } }.map { Found(Kind.CHARACTER, nameOf(it).ifEmpty { "Character" }, it) } +
+            characters.filter { shipped(it, "characters") }.map { Found(Kind.CHARACTER, nameOf(it).ifEmpty { "Character" }, it) } +
             dances.map { Found(Kind.DANCES, nameOf(it).ifEmpty { "Dances" }, it) } +
-            announcers.filter { a -> themes.none { inside(a, it) } }
+            announcers.filter { shipped(it, "announcers") && it !in themes }
                 .map { Found(Kind.ANNOUNCER, nameOf(it).ifEmpty { "Announcer" }, it) } +
             noteskins.map { Found(Kind.NOTESKIN, nameOf(it).ifEmpty { "Noteskin" }, it) })
             .sortedWith(compareBy({ it.kind }, { it.name.lowercase() }))

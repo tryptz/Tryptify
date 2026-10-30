@@ -149,9 +149,31 @@ data class GlyphThemesUi(
     val characterId: String? = null,
     /** That character's folder, for the playfield's dancer; null with none. */
     val characterDir: java.io.File? = null,
+    /** How big the judgement, the combo and the dancer are drawn. */
+    val sizes: GlyphStyleSizes = GlyphStyleSizes(),
     val importing: Boolean = false,
     val message: String? = null,
 )
+
+/** The themes' parts' sizes, each a scale of its own size (Themes › Sizes). */
+data class GlyphStyleSizes(
+    val judgement: Float = 1f,
+    val combo: Float = 1f,
+    val dancer: Float = 1f,
+) {
+    fun clamped(): GlyphStyleSizes = GlyphStyleSizes(
+        judgement = judgement.inRange(),
+        combo = combo.inRange(),
+        dancer = dancer.inRange(),
+    )
+
+    private fun Float.inRange() = if (isFinite()) coerceIn(MIN, MAX) else 1f
+
+    companion object {
+        const val MIN = 0.5f
+        const val MAX = 2f
+    }
+}
 
 /**
  * The three audio settings the game's Settings switch, as the app has them:

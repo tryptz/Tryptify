@@ -35,7 +35,15 @@ import tf.monochrome.android.glyph.pack.StepManiaPack
 class GlyphStyleLibrary @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    data class Style(val kind: StepManiaStyleScan.Kind, val id: String, val name: String, val source: String, val dir: File)
+    data class Style(
+        val kind: StepManiaStyleScan.Kind,
+        val id: String,
+        val name: String,
+        val source: String,
+        val dir: File,
+        /** A theme's parts imported with it; null for none. */
+        val bundle: StepManiaStyleBaker.Bundle? = null,
+    )
 
     data class Styles(
         val noteskins: List<Style> = emptyList(),
@@ -171,6 +179,8 @@ class GlyphStyleLibrary @Inject constructor(
                 val staged = File(root, ".staging-${System.nanoTime()}")
                 val counts = IntArray(StepManiaStyleScan.Kind.entries.size)
                 val skipped = ArrayList<String>()
+                // What baked, by its folder in the archive, for the themes' bundles.
+                val baked = ArrayList<Pair<StepManiaStyleScan.Found, String>>()
                 try {
                     for (item in found) {
                         val label = item.name.takeIf { item.dir.isNotEmpty() } ?: name.substringBeforeLast('.')
@@ -185,7 +195,30 @@ class GlyphStyleLibrary @Inject constructor(
                                 StepManiaStyleScan.Kind.DANCES -> baker.bakeDances(files, item.copy(name = label), out)
                             }
                         }.onFailure { Log.w(TAG, "could not bake $label: ${it.message}") }.getOrDefault(false)
-                        if (ok) counts[item.kind.ordinal] += 1 else skipped += label
+                        if (ok) {
+                            counts[item.kind.ordinal] += 1
+                            baked += item to id
+                        } else {
+                            skipped += label
+                        }
+                    }
+                    // A theme remembers the parts it shipped, to put them to use with it.
+                    for ((theme, themeId) in baked.filter { it.first.kind == StepManiaStyleScan.Kind.THEME }) {
+                        fun shipped(kind: StepManiaStyleScan.Kind) = baked.filter { (item, _) ->
+                            item.kind == kind && item.dir != theme.dir &&
+                                (theme.dir.isEmpty() || item.dir.startsWith(theme.dir + "/"))
+                        }.map { it.second }
+                        val bundle = StepManiaStyleBaker.Bundle(
+                            noteskins = shipped(StepManiaStyleScan.Kind.NOTESKIN),
+                            announcer = shipped(StepManiaStyleScan.Kind.ANNOUNCER).firstOrNull(),
+                            character = shipped(StepManiaStyleScan.Kind.CHARACTER).firstOrNull(),
+                        )
+                        if (bundle.isEmpty) continue
+                        val file = File(staged, "${folderOf(StepManiaStyleScan.Kind.THEME)}/$themeId/${StepManiaStyleBaker.STYLE_FILE}")
+                        runCatching {
+                            val info = json.decodeFromString<StepManiaStyleBaker.StyleInfo>(file.readText())
+                            file.writeText(json.encodeToString(StepManiaStyleBaker.StyleInfo.serializer(), info.copy(bundle = bundle)))
+                        }
                     }
                     // Into place, each replacing an earlier import of the same name.
                     for (kind in StepManiaStyleScan.Kind.entries) {
@@ -245,7 +278,7 @@ class GlyphStyleLibrary @Inject constructor(
                     val info = runCatching {
                         json.decodeFromString<StepManiaStyleBaker.StyleInfo>(File(dir, StepManiaStyleBaker.STYLE_FILE).readText())
                     }.getOrNull() ?: return@mapNotNull null
-                    Style(kind, dir.name, info.name, info.source, dir)
+                    Style(kind, dir.name, info.name, info.source, dir, info.bundle)
                 }
                 .sortedBy { it.name.lowercase() }
         return Styles(

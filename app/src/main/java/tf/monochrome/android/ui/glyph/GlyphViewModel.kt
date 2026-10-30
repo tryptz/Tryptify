@@ -547,6 +547,15 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.CloseThemes -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
             is GlyphEvent.ImportStyle -> importStyle { styleLibrary.import(event.uri) }
             is GlyphEvent.ImportStyleUrl -> importStyle { styleLibrary.importUrl(event.url, event.name) }
+            is GlyphEvent.SetStyleSizes -> {
+                val sizes = event.sizes.clamped()
+                prefs.edit()
+                    .putFloat(PREF_SIZE_JUDGEMENT, sizes.judgement)
+                    .putFloat(PREF_SIZE_COMBO, sizes.combo)
+                    .putFloat(PREF_SIZE_DANCER, sizes.dancer)
+                    .apply()
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(sizes = sizes))
+            }
             GlyphEvent.ImportDances -> {
                 _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
                 viewModelScope.launch {
@@ -2402,6 +2411,12 @@ class GlyphViewModel @Inject constructor(
         applyTheme(themeId)
         applyAnnouncer(announcerId)
         applyCharacter(prefs.getString(PREF_CHARACTER, null))
+        val sizes = GlyphStyleSizes(
+            judgement = prefs.getFloat(PREF_SIZE_JUDGEMENT, 1f),
+            combo = prefs.getFloat(PREF_SIZE_COMBO, 1f),
+            dancer = prefs.getFloat(PREF_SIZE_DANCER, 1f),
+        ).clamped()
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(sizes = sizes))
         viewModelScope.launch {
             styleLibrary.styles.collect { styles ->
                 _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(styles = styles))
@@ -2412,6 +2427,15 @@ class GlyphViewModel @Inject constructor(
     private fun useTheme(id: String?) {
         prefs.edit().apply { if (id == null) remove(PREF_THEME) else putString(PREF_THEME, id) }.apply()
         applyTheme(id)
+        // A theme that shipped its own noteskin, voice or dancer brings them with
+        // it when picked; each can be changed again after.
+        val bundle = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME, id)?.bundle ?: return
+        bundle.noteskins.firstOrNull()?.let { noteskin ->
+            val skin = tf.monochrome.android.glyph.asset.GlyphSkin.fromId(tf.monochrome.android.glyph.asset.GlyphSkin.importedId(noteskin))
+            if (skin.isFile) updateModifiers { it.copy(skin = skin) }
+        }
+        bundle.announcer?.let { useAnnouncer(it) }
+        bundle.character?.let { useCharacter(it) }
     }
 
     private fun useAnnouncer(id: String?) {
@@ -3464,6 +3488,9 @@ class GlyphViewModel @Inject constructor(
         const val PREF_THEME = "style_theme"
         const val PREF_ANNOUNCER = "style_announcer"
         const val PREF_CHARACTER = "style_character"
+        const val PREF_SIZE_JUDGEMENT = "style_size_judgement"
+        const val PREF_SIZE_COMBO = "style_size_combo"
+        const val PREF_SIZE_DANCER = "style_size_dancer"
         private const val DANCE_PACK_NAME = "Animation + Helper Bones"
         const val PREF_SCROLL_FAMILY = "scroll_family"
         const val PREF_SCROLL_VALUE = "scroll_value"
