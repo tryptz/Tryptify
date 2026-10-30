@@ -2,6 +2,7 @@ package tf.monochrome.android.domain.model
 
 import tf.monochrome.android.ui.player.crtSource
 import tf.monochrome.android.ui.player.crtWarp
+import tf.monochrome.android.ui.player.localTubeSource
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -153,6 +154,44 @@ class LyricsFxSettingsTest {
                 androidx.compose.ui.geometry.Rect(1200f, 300f, 1300f, 360f), 1000f, 2000f, wide = true,
             ),
         )
+    }
+
+    @Test
+    fun `a tube over the sung line bends its letters and meets the flat lyrics without a seam`() {
+        val src = ::localTubeSource
+        val innerY = 1f / tf.monochrome.android.ui.player.DOME_HEADROOM
+        val innerX = 1f / tf.monochrome.android.ui.player.WORD_SIDE_ROOM
+        val lineX = tf.monochrome.android.ui.player.LINE_SIDE_INNER
+        // Over the letters of a square tube: the CRT's bow, as over the whole surface.
+        assertEquals(crtSource(0.5f, 0.4f, 30f)!!.first, src(0.5f, 0.4f, 30f, 30f, lineX, innerY, 1f).first, 1e-5f)
+        assertEquals(crtSource(0.5f, 0.4f, 30f)!!.second, src(0.5f, 0.4f, 30f, 30f, lineX, innerY, 1f).second, 1e-5f)
+        // A line's tube, ten times wider than tall: its letters do not lean. Across,
+        // a letter's top and bottom stay over each other (no italic slant)...
+        val lineTop = src(0.8f, -0.5f, 45f, 45f, lineX, innerY, 0.1f)
+        val lineBottom = src(0.8f, 0.5f, 45f, 45f, lineX, innerY, 0.1f)
+        assertEquals(lineTop.first, lineBottom.first, 0.005f)
+        // ...while toward its ends the line still bows, as on a curved screen.
+        assertTrue(src(0.8f, -0.5f, 45f, 45f, lineX, innerY, 0.1f).second < -0.5f - 0.1f)
+        // At the tube's edge, and past it: none at all.
+        val edge = src(0.9f, 0.999f, 45f, 45f, lineX, innerY, 0.32f)
+        assertEquals(0.9f, edge.first, 1e-3f)
+        assertEquals(0.999f, edge.second, 1e-3f)
+        assertEquals(0.4f to 1.2f, src(0.4f, 1.2f, 45f, 45f, innerX, innerY, 0.32f))
+        // A word's neighbours beside it are left flat at the tube's sides.
+        assertEquals(0.999f, src(0.999f, 0.3f, 45f, 45f, innerX, innerY, 0.32f).first, 1e-3f)
+        // No seam: walked a pixel at a time across a 400 by 128 px tube, both
+        // ways, a read never jumps (the old cut-off jumped by up to a tenth of it).
+        for (inner in listOf(lineX, innerX)) {
+            for (j in -64..64) {
+                for (i in -199..200) {
+                    val a = src((i - 1) / 200f, j / 64f, 45f, 45f, inner, innerY, 0.32f)
+                    val b = src(i / 200f, j / 64f, 45f, 45f, inner, innerY, 0.32f)
+                    assertTrue("seam across at $i,$j", kotlin.math.abs((b.first - a.first) * 200f) < 3f && kotlin.math.abs((b.second - a.second) * 64f) < 3f)
+                    val c = src(i / 200f, (j - 1) / 64f, 45f, 45f, inner, innerY, 0.32f)
+                    assertTrue("seam down at $i,$j", kotlin.math.abs((b.first - c.first) * 200f) < 3f && kotlin.math.abs((b.second - c.second) * 64f) < 3f)
+                }
+            }
+        }
     }
 
     @Test

@@ -38,9 +38,16 @@ import kotlin.math.cos
  * With [focusInRoot] (Lyrics FX › Curve: the sung line or the sung word) the
  * tube is that box alone, read in the draw phase so it follows the scroll and
  * hops from word to word, a little taller than the box so the letters fit in
- * it ([wide] adds room at its sides for a word). Outside it, and where its
- * rounded corners leave room inside it, the lyrics are flat. No box (the line
- * off screen) leaves everything flat.
+ * it ([wide] adds room at its sides for a word). Over the sung letters it
+ * bends fully; through the room around them the bend eases off to nothing at
+ * the tube's edge ([localTubeSource]), so it meets the flat lyrics outside
+ * without a seam. The bend is taken in the box's width both ways, as a line is
+ * a slice of a round tube: taken in the box's own proportions, a short, wide
+ * line was bent as a whole screen is, and its letters leaned like italics at
+ * its ends (seen on device). That room reaches into the lines above and below (and the
+ * words beside a word): cut off sharply there, the bend tore and doubled their
+ * letters (seen on device). No box (the line off screen) leaves everything
+ * flat.
  *
  * Android 13 and later; flat below, and under [MIN_CURVATURE_DEG].
  *
@@ -104,13 +111,18 @@ private fun Modifier.curved(
             renderEffect = null
             return@graphicsLayer
         }
-        // All five, right before the effect: the shader is shared, and one
+        // All seven, right before the effect: the shader is shared, and one
         // left out would carry another surface's value.
         shader.setFloatUniform("uSize", size.width, size.height)
         shader.setFloatUniform("uCenter", dome.center.x, dome.center.y)
         shader.setFloatUniform("uRadii", dome.width / 2f, dome.height / 2f)
         shader.setFloatUniform("uLocal", if (focusInRoot == null) 0f else 1f)
         shader.setFloatUniform("uWarp", crtWarp(side), crtWarp(top))
+        // The letters' share of the tube: a word has room beside it, a line (the
+        // surface's width) a slim margin, so neither has a seam at its sides.
+        shader.setFloatUniform("uInner", if (wide) 1f / WORD_SIDE_ROOM else LINE_SIDE_INNER, 1f / DOME_HEADROOM)
+        // Its height in its width: the bend is taken in the width both ways.
+        shader.setFloatUniform("uAspect", if (dome.width > 0f) dome.height / dome.width else 1f)
         renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
     }
 
@@ -139,6 +151,9 @@ internal const val DOME_HEADROOM = 1.6f
 /** And this much wider than a word, so its ends are not pressed against the rim. */
 internal const val WORD_SIDE_ROOM = 1.35f
 
+/** A line's tube bends fully this far toward its sides, then eases off to its edge. */
+internal const val LINE_SIDE_INNER = 0.92f
+
 /**
  * How far the tube bows at [degrees]: `1 / cos θ − 1`, how much further out
  * than its corner on the glass a corner of the flat lyrics lies. The CRT
@@ -163,6 +178,40 @@ internal fun crtSource(x: Float, y: Float, topDeg: Float, sideDeg: Float = topDe
     val sy = y * (1f + x * x * crtWarp(topDeg))
     if (abs(sx) > 1f || abs(sy) > 1f) return null
     return sx to sy
+}
+
+/**
+ * Where on the flat lyrics the point [x], [y] of a tube over the sung line or
+ * word shows, both as shares of the way out from its middle (−1 to 1 across
+ * it). Over the letters, the middle [innerX] by [innerY] of it, it is
+ * [crtSource]'s bow taken in the tube's width both ways ([aspect] is its
+ * height in its width), held to the tube; through the room around them the bow
+ * eases off, smoothly, to none at the tube's edge, so the flat lyrics outside
+ * meet it without a seam. The shader's local sum, here to be checked.
+ */
+internal fun localTubeSource(
+    x: Float,
+    y: Float,
+    topDeg: Float,
+    sideDeg: Float,
+    innerX: Float,
+    innerY: Float,
+    aspect: Float = 1f,
+): Pair<Float, Float> {
+    if (abs(x) >= 1f || abs(y) >= 1f) return x to y
+    // In the width both ways: the same scale across and down.
+    val ey = y * aspect
+    val sx = (x * (1f + ey * ey * crtWarp(sideDeg))).coerceIn(-1f, 1f)
+    val sy = (y * (1f + x * x * crtWarp(topDeg))).coerceIn(-1f, 1f)
+    val w = easeOff(innerX, abs(x)) * easeOff(innerY, abs(y))
+    return (x + (sx - x) * w) to (y + (sy - y) * w)
+}
+
+/** 1 within [inner], easing to 0 at 1: the shader's `1 − smoothstep(inner, 1, t)`. */
+private fun easeOff(inner: Float, t: Float): Float {
+    if (inner >= 0.999f) return 1f
+    val u = ((t - inner) / (1f - inner)).coerceIn(0f, 1f)
+    return 1f - u * u * (3f - 2f * u)
 }
 
 /** The slider's far end; [crtWarp] is held there, where the tube bows four times the corners away. */
@@ -191,9 +240,10 @@ private val curvatureShader: RuntimeShader? by lazy {
  * [crtSource] for every pixel, out from the tube's middle in its own
  * proportions, so the tube fits what it covers whatever its shape. Over the
  * whole surface (uLocal 0) a read past the tube's edge is clear: its rounded
- * corners. Over a line or a word (uLocal 1) every pixel outside the box, and
- * any whose read falls outside it, is the flat lyrics, so the box has no hole
- * and no edge of its own.
+ * corners. Over a line or a word (uLocal 1) it is [localTubeSource]: the bow
+ * over the letters (uInner of the tube), easing off to none at the tube's
+ * edge, and every pixel outside the box the flat lyrics, so the box has no
+ * hole, no edge and no seam of its own.
  */
 private const val CURVATURE_SHADER = """
 uniform shader content;
@@ -202,21 +252,35 @@ uniform float2 uCenter;
 uniform float2 uRadii;
 uniform float uLocal;
 uniform float2 uWarp;
+uniform float2 uInner;
+uniform float uAspect;
+
+float easeOff(float inner, float t) {
+    if (inner >= 0.999) {
+        return 1.0;
+    }
+    return 1.0 - smoothstep(inner, 1.0, t);
+}
 
 half4 main(float2 p) {
     float2 d = (p - uCenter) / uRadii;
-    bool local = uLocal > 0.5;
-    if (local && (abs(d.x) >= 1.0 || abs(d.y) >= 1.0)) {
-        return content.eval(p);
-    }
     float2 s = d * float2(1.0 + d.y * d.y * uWarp.x, 1.0 + d.x * d.x * uWarp.y);
-    if (abs(s.x) > 1.0 || abs(s.y) > 1.0) {
-        if (local) {
+    float2 q = p;
+    if (uLocal > 0.5) {
+        if (abs(d.x) >= 1.0 || abs(d.y) >= 1.0) {
             return content.eval(p);
         }
-        return half4(0.0);
+        // The bend taken in the tube's width both ways, as a slice of a round tube.
+        float ey = d.y * uAspect;
+        float2 b = d * float2(1.0 + ey * ey * uWarp.x, 1.0 + d.x * d.x * uWarp.y);
+        float w = easeOff(uInner.x, abs(d.x)) * easeOff(uInner.y, abs(d.y));
+        q = uCenter + (d + (clamp(b, -1.0, 1.0) - d) * w) * uRadii;
+    } else {
+        if (abs(s.x) > 1.0 || abs(s.y) > 1.0) {
+            return half4(0.0);
+        }
+        q = uCenter + s * uRadii;
     }
-    float2 q = uCenter + s * uRadii;
     if (q.x < 0.0 || q.y < 0.0 || q.x > uSize.x || q.y > uSize.y) {
         return half4(0.0);
     }

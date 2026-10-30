@@ -404,7 +404,13 @@ fish-eye: the middle keeps its size and lines bow outward toward rounded
 corners, the top and bottom (`curvatureDeg`) and the sides
 (`curvatureSideDeg`, unset on a curve saved with one angle, which keeps its
 shape) bowed apart, as the CRT effect's two curves; set to the sung line or word, its tube covers that box alone, read in
-the draw phase, flat outside it and in its own rounded-off corners) and the backdrop draws that copy as its input and
+the draw phase and flat outside it. Over the sung letters it bends fully, and
+through the room around them (the headroom reaching into the lines above and
+below, and the words beside a word) the bend eases off to none at the tube's
+edge (`localTubeSource`). Cut off there instead, it tore and doubled the
+neighbouring lines' letters along a seam. The bend is taken in the tube's
+width both ways (`uAspect`): in the box's own proportions a short, wide line
+was bent as a whole screen is, and its letters leaned like italics at its ends) and the backdrop draws that copy as its input and
 hands back only the shadow and the shafts (`uRaysOnly`); the real letters draw
 over them. Where a pixel's march misses the sung line it hands back nothing,
 never the copy: returning the copy there drew plain letters under the glass
