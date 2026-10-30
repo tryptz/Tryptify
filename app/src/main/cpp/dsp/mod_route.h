@@ -9,14 +9,15 @@
 //
 // The arithmetic is MusicLinkFollower's and LinkFormula's (Kotlin), step for
 // step, so a knob and a visual setting linked the same way move the same way:
-// an adaptive floor the band's level is measured against, attack and release,
+// an adaptive floor and ceiling the band's level is measured between, attack and release,
 // a smoothing low-pass, the curve, the way, the formula, and the result always
 // inside lowest..highest. MusicLinkFollowerTest pins the Kotlin side;
 // mod_route_test.cpp pins this one against the same numbers.
 //
-// Where the visual links read the spectrum analyser, a knob measures its own
-// band: a high-pass at the band's lower edge and a low-pass at its upper one,
-// over the mono sum, as block RMS in dBFS. No FFT, no allocation, no lock: a
+// Where the visual links sum their band's bins in a spectrum of their own
+// (LinkBandAnalysis), a knob measures its own band with filters: a high-pass
+// at the band's lower edge and a low-pass at its upper one, over the mono sum,
+// as block RMS in dBFS; both read a band's RMS in dBFS. No FFT, no allocation, no lock: a
 // route is plain data the engine updates under the chain lock it already
 // holds while it processes.
 namespace modroute {
@@ -27,8 +28,13 @@ constexpr int MAX_PROGRAM = 128;
 constexpr int MAX_STACK = 16;
 
 constexpr float RANGE_DB = 12.0f;
+constexpr float MIN_RANGE_DB = 4.0f;
 constexpr float FLOOR_FALL_SEC = 0.3f;
 constexpr float FLOOR_RISE_SEC = 6.0f;
+constexpr float CEILING_RISE_SEC = 0.02f;
+constexpr float CEILING_FALL_SEC = 4.0f;
+constexpr float RESTART_AFTER_SEC = 0.25f;
+constexpr float SETTLE_SEC = 1.0f;
 constexpr float AVERAGE_SEC = 1.5f;
 constexpr float BOTH_GAIN = 2.6f;
 constexpr float SILENT_PAUSE_DB = -70.0f;
@@ -146,7 +152,10 @@ inline float valueFor(float strength, float average, const Shape& s) {
 /** MusicLinkFollower: one band level in, the knob's value out. */
 struct Follower {
     float floor = 0.0f;
+    float ceiling = 0.0f;
     bool floorInit = false;
+    float quietFor = 0.0f;
+    float sinceStart = 0.0f;
     float env = 0.0f;
     float smooth = 0.0f;
     float avg = 0.3f;
@@ -159,13 +168,29 @@ struct Follower {
         const float dtc = dspIsFinite(dt) ? clampf(dt, 0.0005f, 0.1f) : 0.016f;
         const float db = (dspIsFinite(bandDb) ? bandDb : -120.0f) + s.boostDb;
         silentFor = db < SILENT_PAUSE_DB ? silentFor + dtc : 0.0f;
-        if (!floorInit) {
-            floor = db;
-            floorInit = true;
+        // As MusicLinkFollower: silence moves neither the floor nor the
+        // ceiling, both start again after a pause, and the band's own swing
+        // (MIN_RANGE_DB..RANGE_DB) is the full range.
+        float raw;
+        if (db < s.quietDb) {
+            quietFor += dtc;
+            raw = 0.0f;
+        } else {
+            if (!floorInit || quietFor >= RESTART_AFTER_SEC) {
+                floor = db - MIN_RANGE_DB;
+                ceiling = db;
+                floorInit = true;
+                sinceStart = 0.0f;
+            }
+            quietFor = 0.0f;
+            sinceStart += dtc;
+            const float floorTau = (db < floor || sinceStart < SETTLE_SEC) ? FLOOR_FALL_SEC : FLOOR_RISE_SEC;
+            floor += (db - floor) * (1.0f - std::exp(-dtc / floorTau));
+            const float ceilingTau = db > ceiling ? CEILING_RISE_SEC : CEILING_FALL_SEC;
+            ceiling += (db - ceiling) * (1.0f - std::exp(-dtc / ceilingTau));
+            const float range = clampf(ceiling - floor, MIN_RANGE_DB, RANGE_DB);
+            raw = clampf((db - floor) / range, 0.0f, 1.0f);
         }
-        const float floorTau = db < floor ? FLOOR_FALL_SEC : FLOOR_RISE_SEC;
-        floor += (db - floor) * (1.0f - std::exp(-dtc / floorTau));
-        const float raw = db < s.quietDb ? 0.0f : clampf((db - floor) / RANGE_DB, 0.0f, 1.0f);
         const float tau = std::max(0.0005f, (raw > env ? s.attackMs : s.releaseMs) / 1000.0f);
         env += (raw - env) * (1.0f - std::exp(-dtc / tau));
         const float fc = s.smoothHz;

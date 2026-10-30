@@ -93,6 +93,7 @@ Use for anything that makes a setting move with the music: a visual link (a Stud
 
 - `domain/model/VisualLinkTargets.kt`: every visual setting a link may move, its key (`lyrics.`, `player.`, `panels.`, `tv.`, `visualizer.`, by `LinkArea`), its range, and what has to be on for it to show. Its `VisualLinkTarget` doc lists what may not be linked, and why.
 - `domain/model/MusicLink.kt`: `LinkShape`, `VisualLink`, `MusicLinkFollower` (how a band of the music becomes a value) and `VisualLinkCodec` (the saved form); `LinkFormula.kt` for a custom formula.
+- `audio/eq/LinkBandAnalysis.kt` and `SpectrumAnalyzerTap.linkPower`: the links' own spectrum, each link summing only its band's bins (dBFS). Never point a link at `spectrumBins`, the display's re-centred, smoothed spectrum. `LinkBandAnalysisTest` holds it.
 - `data/repository/MusicLinksRepository.kt`: every edit goes through it under one lock, so the Studio, the Music links page and a theme import cannot race; it also holds the master pause and the link an open editor is running.
 - `ui/settings/StudioMusicLinks.kt`: the Studio's editing (`VisualLinkEditing`), overlay and undo. `ui/musiclinks/` is the page and the editor; `ui/player/VisualLinks.kt` publishes the live values the renderers read.
 - Mixer knobs: `audio/dsp/model/KnobLink.kt`, `ui/mixer/KnobLinks.kt`, and natively `dsp/mod_route.h`.

@@ -221,9 +221,9 @@ fun rememberVisualLinkDriver(
     // Held while the screen is started, not merely composed: in the
     // background, or with the phone locked, nothing is reading the values.
     androidx.lifecycle.compose.LifecycleStartEffect(tap) {
-        tap.acquire()
+        tap.acquireLinks()
         onStopOrDispose {
-            tap.release()
+            tap.releaseLinks()
             live.clear()
         }
     }
@@ -238,7 +238,7 @@ fun rememberVisualLinkDriver(
             withFrameNanos { now ->
                 val dt = if (last < 0) 0.016f else ((now - last) / 1_000_000_000f)
                 last = now
-                val bins = tap.spectrumBins.value
+                val spectrum = tap.linkPower.value
                 val linksNow = current.value
                 val values = HashMap<String, Float>(linksNow.size * 2)
                 val strengths = HashMap<String, Float>(linksNow.size * 2)
@@ -248,7 +248,7 @@ fun rememberVisualLinkDriver(
                     val f = followers.getOrPut(link.target) { MusicLinkFollower(link.shape) }
                     if (f.shape != link.shape) f.shape = link.shape
                     val line = history.getOrPut(link.target) { LevelDelay() }
-                    line.push(now, levelOf(bins, link.shape))
+                    line.push(now, levelOf(spectrum, link.shape))
                     values[link.target] = f.step(line.at(now - lagNanos), dt)
                     strengths[link.target] = f.strength
                     if (!f.asleep) allQuiet = false
@@ -259,7 +259,7 @@ fun rememberVisualLinkDriver(
             }
             if (asleep) {
                 // Nothing to draw until something is loud enough to move.
-                tap.spectrumBins.first { bins -> current.value.any { levelOf(bins, it.shape) + it.shape.boostDb > LinkShape.SILENT_PAUSE_DB } }
+                tap.linkPower.first { spectrum -> current.value.any { levelOf(spectrum, it.shape) + it.shape.boostDb > LinkShape.SILENT_PAUSE_DB } }
                 last = -1L
             }
         }
@@ -268,11 +268,11 @@ fun rememberVisualLinkDriver(
 }
 
 /**
- * A band's level from the analyser's bins, treating a spectrum of exact zeros
- * — what the analyser publishes when it stops — as silence rather than as the
- * 0 dB line, which on the pink-tilted scale is a loud signal.
+ * A link's band level: the energy of its own band alone, in dBFS, from the
+ * links' own spectrum ([SpectrumAnalyzerTap.linkPower]), never the display's,
+ * whose re-centring moved every band with the others.
  */
-private fun levelOf(bins: FloatArray, shape: LinkShape): Float {
-    if (bins.isEmpty() || bins.all { it == 0f }) return -120f
-    return MusicLinkFollower.bandLevel(bins, shape.effectiveLoHz, shape.effectiveHiHz)
-}
+private fun levelOf(spectrum: SpectrumAnalyzerTap.LinkPower, shape: LinkShape): Float =
+    tf.monochrome.android.audio.eq.LinkBandAnalysis.bandDb(
+        spectrum.power, spectrum.sampleRate, shape.effectiveLoHz, shape.effectiveHiHz,
+    )

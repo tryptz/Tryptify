@@ -38,6 +38,19 @@ float run(modroute::Follower& f, const modroute::Shape& s, float db, float secon
     return v;
 }
 
+/** Alternates a and b dB every beat seconds; the lowest and highest value in the last half. */
+void swing(modroute::Follower& f, const modroute::Shape& s, float a, float b, float beat, float seconds,
+           float* lo = nullptr, float* hi = nullptr) {
+    const int steps = static_cast<int>(seconds / kFrame);
+    float l = 1e9f, h = -1e9f;
+    for (int i = 0; i < steps; i++) {
+        const float v = f.step(static_cast<int>((i * kFrame) / beat) % 2 == 0 ? a : b, kFrame, s);
+        if (i > steps / 2) { l = std::min(l, v); h = std::max(h, v); }
+    }
+    if (lo) *lo = l;
+    if (hi) *hi = h;
+}
+
 modroute::Shape shape(float lowest = 0.0f, float highest = 1.0f) {
     modroute::Shape s;
     s.lowest = lowest;
@@ -103,6 +116,42 @@ void followerMatchesKotlin() {
         const bool slept = f.asleep(s);
         f.step(-10.0f, kFrame, s);
         check(slept && !f.asleep(s), "asleep after two seconds of silence, awake on sound");
+    }
+    {
+        // After a pause the music moves it at once, not pinned at the top.
+        modroute::Follower f;
+        auto s = shape();
+        s.attackMs = 1.0f;
+        s.releaseMs = 40.0f;
+        s.smoothHz = 0.0f;
+        swing(f, s, -20.0f, -14.0f, 0.25f, 4.0f);
+        run(f, s, -120.0f, 3.0f);
+        float lo, hi;
+        swing(f, s, -20.0f, -14.0f, 0.25f, 2.0f, &lo, &hi);
+        check(lo < 0.2f && hi > 0.8f, "after a pause it falls back between hits");
+    }
+    {
+        // A loud, flat master (a 4 dB swing) still moves it the whole way.
+        modroute::Follower f;
+        auto s = shape();
+        s.attackMs = 1.0f;
+        s.releaseMs = 40.0f;
+        s.smoothHz = 0.0f;
+        float lo, hi;
+        swing(f, s, -9.0f, -5.0f, 0.25f, 12.0f, &lo, &hi);
+        check(lo < 0.15f && hi > 0.85f, "a 4 dB swing sweeps the range");
+    }
+    {
+        // A dynamic song keeps its twelve decibels: 6 dB over the floor is half.
+        modroute::Follower f;
+        auto s = shape();
+        s.attackMs = 1.0f;
+        s.releaseMs = 40.0f;
+        s.smoothHz = 0.0f;
+        run(f, s, -40.0f, 2.0f);
+        run(f, s, -10.0f, 0.05f);
+        run(f, s, -40.0f, 0.5f);
+        check(std::fabs(run(f, s, -34.0f, 0.05f) - 0.5f) < 0.08f, "6 dB over the floor is half");
     }
     {
         // Every way, every curve, a formula that tries to escape: always

@@ -597,6 +597,26 @@ the bass pulse is read. Read in composition, every lyric layer would recompose
 sixty times a second. Composition may read `linkedKeys` alone, which changes
 only when the links do — to keep a clock running for a linked ray setting.
 
+**A link hears its own band, measured, never the display's spectrum.** The
+visual links read `SpectrumAnalyzerTap.linkPower`, a plain power spectrum of
+their own (`LinkBandAnalysis`: a 2048-sample window, 43 ms at 48 kHz, taken
+whenever new sound arrives, at most every 5 ms, while a link listens:
+`acquireLinks`), and each sums only its band's bins into the band's RMS in
+dBFS, as the mixer's knob links measure theirs. `spectrumBins` is for the eye:
+tilted pink, re-centred each frame on the 200 Hz–2 kHz average (a kick link
+fell when the vocals rose), blurred across neighbouring bins, smoothed over a
+fifth of a second and taken over an 8K or 16K window; a link read off it
+lagged, softened and moved with sound outside its band.
+
+**A link uses the band's own swing, and silence moves nothing.**
+`MusicLinkFollower` (and `mod_route.h`, step for step) measures the band
+between an adaptive floor and ceiling, its full range being the band's own
+swing between `MIN_RANGE_DB` and `RANGE_DB`, so a loud, flat master still moves
+the setting the whole way rather than sitting at the top. Below the quiet
+limit neither moves: a pause used to drag the floor to −120 dB, and the song
+after it read as full for a dozen seconds. After a pause both start again just
+under the first sound and settle within `SETTLE_SEC`.
+
 **A rate is a target only when it adds to a phase, never when it multiplies
 the clock.** The 3D letter wave runs on a clock of its own,
 `rememberLetterWaveSeconds`, which each frame moves on by the frame's length
