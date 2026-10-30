@@ -617,7 +617,7 @@ fun MainPlayerRoute(
         parent = appLive,
     )
     androidx.compose.runtime.LaunchedEffect(beatOn) {
-        LyricsDebug.log("beat engine ${if (beatOn) "acquired (FFT analyzer staked)" else "released"}")
+        LyricsDebug.log("beat engine ${if (beatOn) "on (the links' analysis)" else "off"}")
         if (!beatOn) { glyphAnchors.reset(); albumArtAnchor.reset() }
     }
     // Log the active lyrics-FX configuration whenever it changes, and when the

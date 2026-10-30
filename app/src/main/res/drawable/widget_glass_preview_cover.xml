@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The picker preview's stand-in cover. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="@dimen/widget_glass_inner_radius" />
+    <solid android:color="#FFE8875A" />
+</shape>

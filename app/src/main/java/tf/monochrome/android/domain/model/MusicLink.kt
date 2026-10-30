@@ -188,11 +188,7 @@ class MusicLinkFollower(shape: LinkShape) {
         }
 
     private var program: FloatArray? = LinkFormula.compile(shape.formula).program
-    private var floor = 0f
-    private var ceiling = 0f
-    private var floorInit = false
-    private var quietFor = 0f
-    private var sinceStart = 0f
+    private val range = BandRange()
     private var env = 0f
     private var smooth = 0f
     private var avg = 0.3f
@@ -215,37 +211,7 @@ class MusicLinkFollower(shape: LinkShape) {
         val db = (if (bandDb.isFinite()) bandDb else -120f) + s.boostDb
         silentFor = if (db < LinkShape.SILENT_PAUSE_DB) silentFor + dtc else 0f
 
-        // An adaptive floor that falls fast into the quiet gaps and rises
-        // slowly, so a kick pokes above it and a held vocal stays above it for
-        // as long as it is held; and a ceiling that leaps to each hit and sinks
-        // slowly, so the band's own swing is the full range. Silence moves
-        // neither: a pause dragged the floor to -120 dB, and the music after it
-        // read as full for a dozen seconds, pinned at the top. After a real
-        // pause both start again from the first sound, the floor just under it.
-        val raw: Float
-        if (db < s.quietDb) {
-            quietFor += dtc
-            raw = 0f
-        } else {
-            if (!floorInit || quietFor >= RESTART_AFTER_SEC) {
-                // Just under the first sound, so that first hit shows.
-                floor = db - MIN_RANGE_DB
-                ceiling = db
-                floorInit = true
-                sinceStart = 0f
-            }
-            quietFor = 0f
-            sinceStart += dtc
-            // Settling at first, then slowly, so a held note sinks in over seconds.
-            val floorTau = if (db < floor || sinceStart < SETTLE_SEC) FLOOR_FALL_SEC else FLOOR_RISE_SEC
-            floor += (db - floor) * (1f - exp(-dtc / floorTau))
-            val ceilingTau = if (db > ceiling) CEILING_RISE_SEC else CEILING_FALL_SEC
-            ceiling += (db - ceiling) * (1f - exp(-dtc / ceilingTau))
-            // A loud, flat master swings a few dB: that is its whole range, so
-            // it moves the setting the whole way rather than sitting still.
-            val range = (ceiling - floor).coerceIn(MIN_RANGE_DB, RANGE_DB)
-            raw = ((db - floor) / range).coerceIn(0f, 1f)
-        }
+        val raw = range.step(db, s.quietDb, dtc)
 
         val tau = (if (raw > env) s.attackMs else s.releaseMs) / 1000f
         env += (raw - env) * (1f - exp(-dtc / tau.coerceAtLeast(0.0005f)))
@@ -330,6 +296,54 @@ class MusicLinkFollower(shape: LinkShape) {
             for (i in a..b) sum += bins[i]
             return sum / (b - a + 1)
         }
+    }
+}
+
+/**
+ * How far a band pokes above its own quiet, 0..1: the transient a music link
+ * and the lyrics' beat engine both follow. An adaptive floor falls fast into
+ * the quiet gaps and rises slowly, so a kick pokes above it and a held vocal
+ * sinks into it over seconds; a ceiling leaps to each hit and sinks slowly, so
+ * the band's own swing ([MusicLinkFollower.MIN_RANGE_DB] to
+ * [MusicLinkFollower.RANGE_DB]) is the full range and a loud, flat master still
+ * moves. Silence moves neither: a pause dragged the floor to -120 dB, and the
+ * music after it read as full for a dozen seconds. After a pause both start
+ * again just under the first sound and settle within
+ * [MusicLinkFollower.SETTLE_SEC]. `mod_route.h` runs the same steps natively.
+ */
+class BandRange {
+    private var floor = 0f
+    private var ceiling = 0f
+    private var started = false
+    private var quietFor = 0f
+    private var sinceStart = 0f
+
+    /** One step: the band's level [db] (dBFS, after any boost), under [quietDb] silent; [dt] in seconds. */
+    fun step(db: Float, quietDb: Float, dt: Float): Float {
+        if (db < quietDb) {
+            quietFor += dt
+            return 0f
+        }
+        if (!started || quietFor >= MusicLinkFollower.RESTART_AFTER_SEC) {
+            // Just under the first sound, so that first hit shows.
+            floor = db - MusicLinkFollower.MIN_RANGE_DB
+            ceiling = db
+            started = true
+            sinceStart = 0f
+        }
+        quietFor = 0f
+        sinceStart += dt
+        // Settling at first, then slowly, so a held note sinks in over seconds.
+        val floorTau = if (db < floor || sinceStart < MusicLinkFollower.SETTLE_SEC) {
+            MusicLinkFollower.FLOOR_FALL_SEC
+        } else {
+            MusicLinkFollower.FLOOR_RISE_SEC
+        }
+        floor += (db - floor) * (1f - exp(-dt / floorTau))
+        val ceilingTau = if (db > ceiling) MusicLinkFollower.CEILING_RISE_SEC else MusicLinkFollower.CEILING_FALL_SEC
+        ceiling += (db - ceiling) * (1f - exp(-dt / ceilingTau))
+        val span = (ceiling - floor).coerceIn(MusicLinkFollower.MIN_RANGE_DB, MusicLinkFollower.RANGE_DB)
+        return ((db - floor) / span).coerceIn(0f, 1f)
     }
 }
 
