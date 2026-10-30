@@ -1,8 +1,6 @@
 package tf.monochrome.android.ui.debug
 
 import tf.monochrome.android.ui.navigation.popBackStackSafe
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -154,9 +152,18 @@ fun DebugLogScreen(
             },
             actions = {
                 IconButton(onClick = {
-                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("monotrypt-debug-log", viewModel.exportText()))
-                    Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                    // The newest lines that fit: the whole buffer is past what the
+                    // clipboard takes in one go and crashed the app (1.3 MB, on
+                    // device). Export to file keeps all of it.
+                    val all = viewModel.exportText()
+                    val copied = tf.monochrome.android.util.SafeClipboard.newestLinesThatFit(all)
+                    val ok = tf.monochrome.android.util.SafeClipboard.copy(context, "monotrypt-debug-log", copied)
+                    val message = when {
+                        !ok -> "The log could not be copied. Use Export to file."
+                        copied.length < all.length -> "Copied the newest ${copied.lines().size} lines. Export to file for all of it."
+                        else -> "Log copied to clipboard"
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                 }) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy all")
                 }

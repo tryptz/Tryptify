@@ -1,7 +1,5 @@
 package tf.monochrome.android.ui.themestore
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -725,6 +723,5 @@ internal fun BoxScope.SheetFrame(hazeState: HazeState, onDismiss: () -> Unit, co
 }
 
 internal fun copyText(context: Context, text: String) {
-    context.getSystemService(ClipboardManager::class.java)
-        ?.setPrimaryClip(ClipData.newPlainText("Tryptify theme", text))
+    tf.monochrome.android.util.SafeClipboard.copy(context, "Tryptify theme", text)
 }
