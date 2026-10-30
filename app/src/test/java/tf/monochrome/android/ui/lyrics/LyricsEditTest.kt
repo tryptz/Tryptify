@@ -38,6 +38,21 @@ class LyricsEditTest {
     }
 
     @Test
+    fun stampingAWordLateCarriesTheWordsAfterIt() {
+        // As seen on device: the source had the line at 0:34, the first word was stamped at 0:47.
+        val early = Lyrics(
+            lines = listOf(LyricLine(34_000, "the darkest hour", listOf(LyricWord(34_000, 34_300, "the"), LyricWord(34_300, 34_600, "darkest"), LyricWord(34_600, 35_000, "hour")))),
+            isSynced = true,
+        )
+        val stamped = LyricsEdit.setWordTime(early, 0, 0, 47_760)
+        assertEquals(47_760L, stamped.lines[0].timeMs)
+        assertEquals(listOf(47_760L, 48_060L, 48_360L), stamped.lines[0].words.map { it.startMs })
+        // Words already after the stamp stay where they were.
+        val later = LyricsEdit.setWordTime(timed, 0, 0, 10_100)
+        assertEquals(10_400L, later.lines[0].words[1].startMs)
+    }
+
+    @Test
     fun nudgeAndShiftNeverGoBelowZero() {
         assertEquals(9_900L, LyricsEdit.nudgeLine(timed, 0, -100).lines[0].timeMs)
         val shifted = LyricsEdit.shiftAll(timed, -15_000)

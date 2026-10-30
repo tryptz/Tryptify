@@ -10,6 +10,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -85,7 +85,7 @@ import tf.monochrome.android.ui.settings.StudioSection
  * button under it, then the lines, then every setting in the Studio's own
  * sections. See docs/ui-invariants.md, "Lyrics".
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun LyricsEditorScreen(
     navController: NavController,
@@ -176,14 +176,17 @@ fun LyricsEditorScreen(
                 TextButton(onClick = { viewModel.nudgeSelected(-stepMs) }) { Text("−$stepMs") }
                 TextButton(onClick = { viewModel.nudgeSelected(stepMs) }) { Text("+$stepMs") }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            // Wrapped, not scrolled sideways: a scrolling row hid the last
+            // chips past the edge, with nothing to say they were there.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 GlassChoiceChip(stringResource(R.string.lyrics_editor_line_mode), selected = !wordMode, accent = accent, onClick = { viewModel.wordMode.value = false })
-                Spacer(Modifier.width(6.dp))
                 GlassChoiceChip(stringResource(R.string.lyrics_editor_word_mode), selected = wordMode, accent = accent, onClick = { viewModel.wordMode.value = true })
-                Spacer(Modifier.width(14.dp))
                 for (step in listOf(10L, 50L, 100L, 500L)) {
                     GlassChoiceChip("$step ms", selected = stepMs == step, accent = accent, onClick = { viewModel.stepMs.value = step })
-                    Spacer(Modifier.width(6.dp))
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -227,7 +230,11 @@ fun LyricsEditorScreen(
                     onHold = { rowMenu = i },
                 )
                 if (i == selectedLine && wordMode && line.words.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp)) {
+                    FlowRow(
+                        Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         line.words.forEachIndexed { w, word ->
                             GlassChoiceChip(
                                 label = "${word.text} ${LrcFormat.stamp(word.startMs).drop(3)}",
@@ -238,7 +245,6 @@ fun LyricsEditorScreen(
                                     playerViewModel.seekTo(word.startMs)
                                 },
                             )
-                            Spacer(Modifier.width(6.dp))
                         }
                     }
                 }
@@ -254,7 +260,7 @@ fun LyricsEditorScreen(
                 )
                 FxNudge(label = stringResource(R.string.lyrics_editor_shift_all), step = stepMs.toFloat(), unit = " ms") { viewModel.shiftAll(it.toLong()) }
                 if (selectedLine in lines.indices) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(Modifier.fillMaxWidth()) {
                         if (lines[selectedLine].words.isEmpty()) {
                             TextButton(onClick = { viewModel.splitWords(selectedLine) }) { Text(stringResource(R.string.lyrics_editor_split_words)) }
                         } else {
@@ -267,13 +273,13 @@ fun LyricsEditorScreen(
                 }
 
                 StudioSection(stringResource(R.string.lyrics_editor_text))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                FlowRow(Modifier.fillMaxWidth()) {
                     TextButton(onClick = { pasting = true }) { Text(stringResource(R.string.lyrics_editor_paste)) }
                     TextButton(onClick = { inserting = lines.size - 1 }) { Text(stringResource(R.string.lyrics_editor_add_line)) }
                 }
 
                 StudioSection(stringResource(R.string.lyrics_editor_file))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                FlowRow(Modifier.fillMaxWidth()) {
                     TextButton(
                         onClick = {
                             val lrc = viewModel.lrcText() ?: return@TextButton
