@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -69,6 +70,7 @@ fun PlayerTopBar(
     onDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onSendFile: () -> Unit,
+    onShareLink: () -> Unit,
     onOpenLyricsStudio: () -> Unit,
     onOpenSettings: () -> Unit,
     onEditLyrics: (() -> Unit)? = null,
@@ -225,6 +227,11 @@ fun PlayerTopBar(
                         text = { Text(stringResource(R.string.action_send_file)) },
                         onClick = { onSendFile(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.share_link)) },
+                        onClick = { onShareLink(); menuExpanded = false },
+                        leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
                     )
                     if (onEditLyrics != null) {
                         DropdownMenuItem(

@@ -3456,4 +3456,7 @@
     <string name="tm_themes_dances">Danses</string>
     <string name="tm_themes_dances_desc">Les pas que partagent les personnages, trouvés par leur nom quand l\'un danse.</string>
     <string name="shared_link_failed">Impossible de lire ce lien partagé. Vérifiez l’API %1$s dans Paramètres › Connexions.</string>
+    <string name="share_link">Partager le lien</string>
+    <string name="share_album_link">Partager le lien de l’album</string>
+    <string name="share_link_unavailable">Ce titre ne vient pas d’un catalogue, il n’a donc pas de lien à partager. Partagez plutôt le fichier.</string>
 </resources>

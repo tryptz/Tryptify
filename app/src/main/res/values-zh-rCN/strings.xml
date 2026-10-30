@@ -3300,4 +3300,7 @@
     <string name="tm_themes_dances">舞步</string>
     <string name="tm_themes_dances_desc">角色共享的舞步，在角色跳舞时按名称查找。</string>
     <string name="shared_link_failed">无法播放此分享链接。请在“设置 › 连接”中检查 %1$s API。</string>
+    <string name="share_link">分享链接</string>
+    <string name="share_album_link">分享专辑链接</string>
+    <string name="share_link_unavailable">这首歌不来自曲库，没有可分享的链接。请改为分享文件。</string>
 </resources>

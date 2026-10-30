@@ -166,6 +166,7 @@ fun ArtistDetailScreen(
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
+            onShareLink = { playerViewModel.shareLink(track) },
             onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
             onGoToArtist = null, // Already here
             onSelect = { selection.toggle(track.id) }

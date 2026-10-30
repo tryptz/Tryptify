@@ -41,6 +41,24 @@ data class SharedLink(
         private val ISRC = Regex("""[A-Z]{2}[A-Z0-9]{3}\d{7}""")
 
         /**
+         * The link for [link], as TrypT-hifi's share button makes it, less its
+         * signature: what this phone shares when no TrypT-hifi it has added
+         * will sign one. It opens and plays in Tryptify all the same; only the
+         * website's preview (the cover, Discord's player) needs the signature.
+         */
+        fun url(link: SharedLink): String {
+            fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+            val path = "/listen/${link.source.slug}/album/${enc(link.album)}" + (link.track?.let { "/track/$it" } ?: "")
+            val query = listOfNotNull(
+                link.isrc?.let { "isrc=${enc(it)}" },
+                link.title?.let { "title=${enc(it.take(200))}" },
+                link.artist?.let { "artist=${enc(it.take(200))}" },
+                link.durationSec?.takeIf { link.track != null && it > 0 }?.let { "duration=$it" },
+            ).joinToString("&")
+            return "https://tryptify.com$path" + (if (query.isEmpty()) "" else "?$query")
+        }
+
+        /**
          * The link in [scheme], [host], [path] and its [query] parameters, or
          * null for any other link. Qobuz albums are slugs (letters and digits);
          * every other id must be a number, since that is how those catalogs

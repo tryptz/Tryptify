@@ -97,6 +97,7 @@ class PlayerViewModel @Inject constructor(
     private val playbackPositions: tf.monochrome.android.player.PlaybackPositionSource,
     private val openedAudio: tf.monochrome.android.data.opened.OpenedAudioRepository,
     private val sharedLinkResolver: tf.monochrome.android.share.SharedLinkResolver,
+    private val shareLinks: tf.monochrome.android.share.ShareLinks,
 ) : ViewModel() {
 
     /**
@@ -1633,6 +1634,19 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             trackShareHelper.shareTrack(track)
         }
+    }
+
+    /**
+     * Share [track] as a tryptify.com link that opens and plays it in Tryptify,
+     * on whichever service the person it's sent to has (ShareLinks).
+     */
+    fun shareLink(track: Track) {
+        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track)?.source) }
+    }
+
+    /** Share an album page's album as a tryptify.com link (ShareLinks). */
+    fun shareAlbumLink(albumId: Long, detail: tf.monochrome.android.domain.model.AlbumDetail) {
+        viewModelScope.launch { shareLinks.shareAlbum(albumId, detail) }
     }
 
     fun shareDownloadedTrack(entity: tf.monochrome.android.data.db.entity.DownloadedTrackEntity) {

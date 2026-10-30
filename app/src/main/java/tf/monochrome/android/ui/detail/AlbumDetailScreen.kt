@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -107,6 +108,7 @@ fun AlbumDetailScreen(
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
+            onShareLink = { playerViewModel.shareLink(track) },
             onGoToAlbum = null, // Already here
             onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track)),
             onSelect = { selection.toggle(track.id) }
@@ -319,6 +321,22 @@ fun AlbumDetailScreen(
                                         contentDescription = stringResource(R.string.download_album),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                                // A tryptify.com link that opens and plays the album in Tryptify.
+                                albumDetail?.let { detail ->
+                                    FilledIconButton(
+                                        onClick = { playerViewModel.shareAlbumLink(viewModel.albumId, detail) },
+                                        modifier = Modifier.size(48.dp),
+                                        colors = IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Link,
+                                            contentDescription = stringResource(R.string.share_album_link),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                                 // While a party is on: the whole list into its queue, in order.
                                 tf.monochrome.android.ui.party.LocalPartyAdder.current?.let { party ->

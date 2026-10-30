@@ -238,6 +238,7 @@ fun SearchResultsContent(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
+            onShareLink = { playerViewModel.shareLink(track) },
             onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
             onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track)),
             onSelect = menuSelectId?.let { id -> { selection.toggle(id) } },

@@ -718,6 +718,7 @@ fun MainPlayerRoute(
             onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
             onAddToPlaylist = { currentTrack?.let { addToPlaylistFor = it } },
             onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
+            onShareLink = { currentTrack?.let { playerViewModel.shareLink(it) } },
             onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
             onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
             onEditLyrics = { navController.navigateTool(Screen.LyricsEditor) },

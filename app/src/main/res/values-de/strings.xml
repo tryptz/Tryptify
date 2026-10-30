@@ -3378,4 +3378,7 @@
     <string name="tm_themes_dances">Tänze</string>
     <string name="tm_themes_dances_desc">Die Schritte, die Figuren teilen, beim Tanzen über ihren Namen gefunden.</string>
     <string name="shared_link_failed">Dieser geteilte Link ließ sich nicht abspielen. Prüfe die %1$s-API unter Einstellungen › Verbindungen.</string>
+    <string name="share_link">Link teilen</string>
+    <string name="share_album_link">Albumlink teilen</string>
+    <string name="share_link_unavailable">Dieser Song stammt aus keinem Katalog, daher gibt es keinen Link zum Teilen. Teile stattdessen die Datei.</string>
 </resources>

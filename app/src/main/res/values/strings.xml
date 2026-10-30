@@ -3381,4 +3381,7 @@
     <string name="tm_themes_dances">Dances</string>
     <string name="tm_themes_dances_desc">The moves characters share, found by name when one dances.</string>
     <string name="shared_link_failed">Couldn\'t play this shared link. Check the %1$s API in Settings › Connections.</string>
+    <string name="share_link">Share link</string>
+    <string name="share_album_link">Share album link</string>
+    <string name="share_link_unavailable">This song isn\'t from a catalog, so it has no link to share. Share the file instead.</string>
 </resources>

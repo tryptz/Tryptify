@@ -3300,4 +3300,7 @@
     <string name="tm_themes_dances">振り付け</string>
     <string name="tm_themes_dances_desc">キャラクター共通の振り付け。踊るときに名前で探されます。</string>
     <string name="shared_link_failed">この共有リンクを再生できませんでした。「設定 › 接続」で %1$s の API を確認してください。</string>
+    <string name="share_link">リンクを共有</string>
+    <string name="share_album_link">アルバムのリンクを共有</string>
+    <string name="share_link_unavailable">この曲はカタログの曲ではないため、共有できるリンクがありません。代わりにファイルを共有してください。</string>
 </resources>

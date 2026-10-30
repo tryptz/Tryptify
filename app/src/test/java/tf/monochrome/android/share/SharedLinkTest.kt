@@ -47,6 +47,25 @@ class SharedLinkTest {
     }
 
     @Test
+    fun aLinkThisPhoneMakesReadsBackAsTheSameLink() {
+        // What the app shares when no TrypT-hifi signs the link: no signature,
+        // and it must still open here, song and all.
+        fun roundTrip(link: SharedLink): SharedLink? {
+            val uri = java.net.URI(SharedLink.url(link))
+            val query = uri.rawQuery.orEmpty().split('&').filter { it.isNotEmpty() }.associate {
+                val (k, v) = it.split('=', limit = 2)
+                k to java.net.URLDecoder.decode(v, "UTF-8")
+            }
+            return SharedLink.parse(uri.scheme, uri.host, uri.path) { query[it] }
+        }
+        val song = SharedLink(SharedLink.Source.QOBUZ, "xw5rk3bkfxjfb", 12345L, null, "Ça & Ça (Remix) / 1", "Daft Punk", 274)
+        assertEquals(song, roundTrip(song))
+        val album = SharedLink(SharedLink.Source.TIDAL, "1234", null, title = "Random Access Memories", artist = "Daft Punk")
+        assertEquals(album, roundTrip(album))
+        assertEquals("https://tryptify.com/listen/tidal/album/1234?title=Random+Access+Memories&artist=Daft+Punk", SharedLink.url(album))
+    }
+
+    @Test
     fun anAlbumFoundByNameIsTheSameAlbumByTheSameArtist() {
         assertTrue(SharedLinkResolver.sameAlbum("Random Access Memories (10th Anniversary Edition)", "Daft Punk", "Random Access Memories", "Daft Punk"))
         assertTrue(SharedLinkResolver.sameAlbum("Random Access Memories", null, "Random Access Memories", "Daft Punk"))

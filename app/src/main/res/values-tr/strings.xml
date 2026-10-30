@@ -3378,4 +3378,7 @@
     <string name="tm_themes_dances">Danslar</string>
     <string name="tm_themes_dances_desc">Karakterlerin paylaştığı hareketler; biri dans ederken adıyla bulunur.</string>
     <string name="shared_link_failed">Bu paylaşılan bağlantı çalınamadı. Ayarlar › Bağlantılar’dan %1$s API’sini kontrol edin.</string>
+    <string name="share_link">Bağlantıyı paylaş</string>
+    <string name="share_album_link">Albüm bağlantısını paylaş</string>
+    <string name="share_link_unavailable">Bu şarkı bir katalogdan değil, paylaşılacak bağlantısı yok. Bunun yerine dosyayı paylaşın.</string>
 </resources>

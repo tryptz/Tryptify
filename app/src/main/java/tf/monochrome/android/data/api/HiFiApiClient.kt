@@ -539,6 +539,42 @@ class HiFiApiClient @Inject constructor(
     private suspend fun deezerBaseOrNull(): String? =
         instanceManager.deezerInstanceOrNull()?.url?.trimEnd('/')
 
+    // --- Share links (trypt-hifi /api/share/link) -------------------------------
+
+    /**
+     * A tryptify.com/listen link for an album, or a song on it ([track]),
+     * signed by a TrypT-hifi this phone has added: the one serving [source]
+     * first, then any other. Signed, the link's page shows the cover and
+     * Discord plays a preview; TrypT-hifi also puts the song's ISRC in it.
+     * Null when none answers (a HiFi API that is not TrypT-hifi has no such
+     * route): the caller then makes the link itself, which still plays.
+     */
+    suspend fun shareLink(source: String, album: String, track: Long?): String? {
+        val first = when (source) {
+            "qobuz" -> instanceManager.qobuzInstanceOrNull()
+            "deezer" -> instanceManager.deezerInstanceOrNull()
+            "apple" -> instanceManager.appleInstanceOrNull()
+            else -> instanceManager.tidalInstanceOrNull()
+        }
+        val bases = listOfNotNull(
+            first, instanceManager.qobuzInstanceOrNull(), instanceManager.deezerInstanceOrNull(),
+            instanceManager.appleInstanceOrNull(), instanceManager.tidalInstanceOrNull(),
+        ).map { it.url.trimEnd('/') }.distinct()
+        val query = "source=$source&album=${java.net.URLEncoder.encode(album, "UTF-8")}" + (track?.let { "&track=$it" } ?: "")
+        for (base in bases) {
+            val url = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+                runCatching {
+                    val res = httpClient.get("$base/api/share/link?$query")
+                    if (!res.status.isSuccess()) return@runCatching null
+                    val body = json.parseToJsonElement(res.bodyAsText()) as? JsonObject
+                    ((body?.get("data") as? JsonObject)?.get("url") as? JsonPrimitive)?.contentOrNull
+                }.getOrNull()
+            }
+            if (url != null && url.startsWith("https://")) return url
+        }
+        return null
+    }
+
     /**
      * Map a Deezer track item: Deezer identity, and the quality its catalogue
      * flags claim — /api/deezer/download serves the full file in that tier.

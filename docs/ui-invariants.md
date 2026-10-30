@@ -2823,6 +2823,15 @@ the bottom, and the field to say something.
   rotated or reopened from Recents, it does not play again. When no service
   here has it, a toast says so and names the catalog it came from; nothing
   else changes.
+* Share link makes the same link here: in a song's menu (beside Share file,
+  wherever Share file is), in the player's menu (beside Send file) and as a
+  button in an album page's row (beside Download). It names the song's own
+  catalog and album there, and is signed by a TrypT-hifi this phone has added
+  (the one serving that catalog first) when one answers, so its page shows
+  the cover and Discord plays a preview; else it is made here, unsigned, and
+  still plays. It goes out through Android's share sheet as text. A local
+  file, a music server's song, a collection or a radio station has no catalog
+  to link to: a toast says so and points to Share file.
 * The host's speed is the party's, and at a party it is always vinyl style:
   the pitch rides the speed, whatever the keep-pitch switch says (the
   owner's call: "like vinyl"). The host changes it with the app's own speed

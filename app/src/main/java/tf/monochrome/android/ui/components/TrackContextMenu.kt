@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.RemoveCircleOutline
@@ -82,6 +83,7 @@ fun TrackContextMenu(
     removeLabel: String = stringResource(R.string.action_remove_from_playlist),
     onDownloadTrack: (() -> Unit)? = null,
     onShareFile: (() -> Unit)? = null,
+    onShareLink: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
     onGoToArtist: (() -> Unit)? = null,
     filePath: String? = null,
@@ -280,6 +282,16 @@ fun TrackContextMenu(
                             icon = Icons.Default.Share,
                             label = stringResource(R.string.action_share_file),
                             onClick = { onShareFile(); onDismiss() }
+                        )
+                    }
+
+                    // A tryptify.com link that opens and plays the song in
+                    // Tryptify, on whichever service the other person has.
+                    if (onShareLink != null) {
+                        ContextMenuItem(
+                            icon = Icons.Default.Link,
+                            label = stringResource(R.string.share_link),
+                            onClick = { onShareLink(); onDismiss() }
                         )
                     }
 
