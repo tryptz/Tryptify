@@ -3303,4 +3303,14 @@
     <string name="share_link">分享链接</string>
     <string name="share_album_link">分享专辑链接</string>
     <string name="share_link_unavailable">这首歌不来自曲库，没有可分享的链接。请改为分享文件。</string>
+    <string name="whats_new_section_sharing">分享</string>
+    <string name="whats_new_section_widget">桌面小部件</string>
+    <string name="whats_new_1951_shared_open_title">从 TrypT-hifi 分享的歌曲在这里播放</string>
+    <string name="whats_new_1951_shared_open_body">TrypT-hifi 分享按钮生成的 tryptify.com 链接会打开 Tryptify，播放这首歌，再接着播放专辑的其余部分，并使用你已有的服务：优先使用分享来源，否则按 ISRC 或名称找到同一首歌。</string>
+    <string name="whats_new_1951_share_link_title">分享链接</string>
+    <string name="whats_new_1951_share_link_body">在歌曲菜单、播放器菜单和专辑页面中：生成一个 tryptify.com 链接，任何装有 Tryptify 的人都能播放，无论使用什么服务。在“设置 › 连接”中添加 TrypT-hifi 后，Discord 会显示封面和试听。</string>
+    <string name="whats_new_1951_widget_title">玻璃桌面小部件</string>
+    <string name="whats_new_1951_widget_body">平整透明的玻璃，带封面和播放按钮，有小、中、大三种尺寸，均可调整大小。在“设置 › 外观 › 桌面小部件”中可设置颜色、不透明度、边框、封面、进度条、按钮和文字，并实时预览。</string>
+    <string name="whats_new_1951_lyrics_beat_title">歌词随底鼓律动</string>
+    <string name="whats_new_1951_lyrics_beat_body">歌词的律动、光晕和光线现在像音乐联动一样跟随底鼓（40–110 Hz），人声升高不再改变节拍，暂停之后律动也不再膨胀卡住。</string>
 </resources>

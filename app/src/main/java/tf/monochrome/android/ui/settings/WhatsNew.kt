@@ -86,6 +86,8 @@ object WhatsNew {
         USB_DAC -> R.string.whats_new_section_usb_dac
         TRYPT_MANIA -> R.string.whats_new_section_trypt_mania
         MUSIC_LINKS -> R.string.whats_new_section_music_links
+        SHARING -> R.string.whats_new_section_sharing
+        WIDGET -> R.string.whats_new_section_widget
         else -> 0
     }
 
@@ -157,6 +159,12 @@ object WhatsNew {
 
     /** Settings and knobs that follow a part of the song, and the page that lists them. */
     private const val MUSIC_LINKS = "Music links"
+
+    /** Songs and albums sent as tryptify.com links, and opened from them. */
+    private const val SHARING = "Sharing"
+
+    /** The now playing widget on the home screen. */
+    private const val WIDGET = "Home screen widget"
 
     /** Sharing a whole look, and taking someone else's. */
     private const val THEME_STORE = "Theme Store"
@@ -317,6 +325,30 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_1951_link_presets_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Songs shared from TrypT-hifi play here",
+                    body = "A tryptify.com link from TrypT-hifi's share button opens Tryptify and plays the song, then the rest of its album, on whichever service you have: the one it was shared from, else the same song found by its ISRC or by name.",
+                    titleRes = R.string.whats_new_1951_shared_open_title,
+                    bodyRes = R.string.whats_new_1951_shared_open_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share link",
+                    body = "In a song's menu, the player's menu and on an album's page: a tryptify.com link anyone with Tryptify can play, whatever services they use. With a TrypT-hifi under Settings › Connections, Discord shows its cover and a preview.",
+                    titleRes = R.string.whats_new_1951_share_link_title,
+                    bodyRes = R.string.whats_new_1951_share_link_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = WIDGET,
+                    title = "A glass home screen widget",
+                    body = "Flat see-through glass with the cover and a play button, in Small, Medium and Large, each resizable. Settings › Appearance › Home screen widget sets its colour, opacity, edge, cover, progress bar, button and text, with a live preview.",
+                    titleRes = R.string.whats_new_1951_widget_title,
+                    bodyRes = R.string.whats_new_1951_widget_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = USB_DAC,
                     title = "DACs with one clock stay exclusive",
@@ -331,6 +363,14 @@ object WhatsNew {
                     body = "A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib's short stamps, offsets and word timing read as elsewhere.",
                     titleRes = R.string.whats_new_1951_lrc_fixes_title,
                     bodyRes = R.string.whats_new_1951_lrc_fixes_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The lyrics pump to the kick drum",
+                    body = "The lyrics' pump, glow and rays now follow the kick (40–110 Hz), as music links do, so a rising vocal no longer shifts the beat, and after a pause the pump no longer swells and sticks.",
+                    titleRes = R.string.whats_new_1951_lyrics_beat_title,
+                    bodyRes = R.string.whats_new_1951_lyrics_beat_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

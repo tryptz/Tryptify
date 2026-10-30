@@ -3381,4 +3381,14 @@
     <string name="share_link">Link teilen</string>
     <string name="share_album_link">Albumlink teilen</string>
     <string name="share_link_unavailable">Dieser Song stammt aus keinem Katalog, daher gibt es keinen Link zum Teilen. Teile stattdessen die Datei.</string>
+    <string name="whats_new_section_sharing">Teilen</string>
+    <string name="whats_new_section_widget">Startbildschirm-Widget</string>
+    <string name="whats_new_1951_shared_open_title">Aus TrypT-hifi geteilte Songs spielen hier</string>
+    <string name="whats_new_1951_shared_open_body">Ein tryptify.com-Link vom Teilen-Knopf in TrypT-hifi öffnet Tryptify und spielt den Song, dann den Rest des Albums, über den Dienst, den du hast: den, von dem er geteilt wurde, sonst denselben Song, gefunden über seine ISRC oder seinen Namen.</string>
+    <string name="whats_new_1951_share_link_title">Link teilen</string>
+    <string name="whats_new_1951_share_link_body">Im Menü eines Songs, im Player-Menü und auf der Seite eines Albums: ein tryptify.com-Link, den jeder mit Tryptify abspielen kann, egal welche Dienste er nutzt. Mit einem TrypT-hifi unter Einstellungen › Verbindungen zeigt Discord das Cover und eine Hörprobe.</string>
+    <string name="whats_new_1951_widget_title">Ein Startbildschirm-Widget aus Glas</string>
+    <string name="whats_new_1951_widget_body">Flaches, durchsichtiges Glas mit Cover und Wiedergabeknopf, in Klein, Mittel und Groß, jede Größe veränderbar. Einstellungen › Darstellung › Startbildschirm-Widget stellt Farbe, Deckkraft, Rand, Cover, Fortschrittsbalken, Knopf und Text ein, mit Live-Vorschau.</string>
+    <string name="whats_new_1951_lyrics_beat_title">Der Songtext pumpt zur Bassdrum</string>
+    <string name="whats_new_1951_lyrics_beat_body">Pumpen, Glühen und Strahlen des Songtexts folgen jetzt der Bassdrum (40–110 Hz), wie die Musik-Kopplungen: Steigender Gesang verschiebt den Beat nicht mehr, und nach einer Pause schwillt das Pumpen nicht mehr an und bleibt hängen.</string>
 </resources>

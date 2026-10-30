@@ -3459,4 +3459,14 @@
     <string name="share_link">Partager le lien</string>
     <string name="share_album_link">Partager le lien de l’album</string>
     <string name="share_link_unavailable">Ce titre ne vient pas d’un catalogue, il n’a donc pas de lien à partager. Partagez plutôt le fichier.</string>
+    <string name="whats_new_section_sharing">Partage</string>
+    <string name="whats_new_section_widget">Widget d’écran d’accueil</string>
+    <string name="whats_new_1951_shared_open_title">Les titres partagés depuis TrypT-hifi se lisent ici</string>
+    <string name="whats_new_1951_shared_open_body">Un lien tryptify.com du bouton de partage de TrypT-hifi ouvre Tryptify et lit le titre, puis le reste de l’album, sur le service que vous avez : celui d’origine, sinon le même titre trouvé par son ISRC ou par son nom.</string>
+    <string name="whats_new_1951_share_link_title">Partager le lien</string>
+    <string name="whats_new_1951_share_link_body">Dans le menu d’un titre, celui du lecteur et sur la page d’un album : un lien tryptify.com que toute personne ayant Tryptify peut lire, quels que soient ses services. Avec un TrypT-hifi dans Paramètres › Connexions, Discord affiche la pochette et un extrait.</string>
+    <string name="whats_new_1951_widget_title">Un widget d’écran d’accueil en verre</string>
+    <string name="whats_new_1951_widget_body">Du verre plat et transparent avec la pochette et un bouton de lecture, en Petit, Moyen et Grand, tous redimensionnables. Paramètres › Apparence › Widget d’écran d’accueil règle couleur, opacité, bord, pochette, barre de progression, bouton et texte, avec un aperçu en direct.</string>
+    <string name="whats_new_1951_lyrics_beat_title">Les paroles battent au rythme de la grosse caisse</string>
+    <string name="whats_new_1951_lyrics_beat_body">La pulsation, la lueur et les rayons des paroles suivent désormais la grosse caisse (40–110 Hz), comme les liens musicaux : une voix qui monte ne décale plus le rythme, et après une pause la pulsation ne gonfle plus pour rester bloquée.</string>
 </resources>

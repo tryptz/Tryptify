@@ -3459,4 +3459,14 @@
     <string name="share_link">Compartir enlace</string>
     <string name="share_album_link">Compartir enlace del álbum</string>
     <string name="share_link_unavailable">Esta canción no es de un catálogo, así que no tiene enlace para compartir. Comparte el archivo.</string>
+    <string name="whats_new_section_sharing">Compartir</string>
+    <string name="whats_new_section_widget">Widget de pantalla de inicio</string>
+    <string name="whats_new_1951_shared_open_title">Las canciones compartidas desde TrypT-hifi suenan aquí</string>
+    <string name="whats_new_1951_shared_open_body">Un enlace de tryptify.com del botón de compartir de TrypT-hifi abre Tryptify y reproduce la canción y luego el resto del álbum, en el servicio que tengas: el de origen o, si no, la misma canción encontrada por su ISRC o por su nombre.</string>
+    <string name="whats_new_1951_share_link_title">Compartir enlace</string>
+    <string name="whats_new_1951_share_link_body">En el menú de una canción, el del reproductor y la página de un álbum: un enlace de tryptify.com que cualquiera con Tryptify puede reproducir, use los servicios que use. Con un TrypT-hifi en Ajustes › Conexiones, Discord muestra la portada y un avance.</string>
+    <string name="whats_new_1951_widget_title">Un widget de pantalla de inicio de cristal</string>
+    <string name="whats_new_1951_widget_body">Cristal plano y transparente con la portada y un botón de reproducción, en Pequeño, Mediano y Grande, todos redimensionables. Ajustes › Apariencia › Widget de pantalla de inicio ajusta color, opacidad, borde, portada, barra de progreso, botón y texto, con vista previa en vivo.</string>
+    <string name="whats_new_1951_lyrics_beat_title">La letra late con el bombo</string>
+    <string name="whats_new_1951_lyrics_beat_body">El pulso, el brillo y los rayos de la letra siguen ahora al bombo (40–110 Hz), como los enlaces musicales: una voz que sube ya no mueve el ritmo y, tras una pausa, el pulso ya no se hincha y se queda atascado.</string>
 </resources>

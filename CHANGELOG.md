@@ -2,10 +2,6 @@
 
 ## [Unreleased]
 
-### Added
-- **Songs shared from TrypT-hifi open here and play, on any service.** A tryptify.com/listen link from TrypT-hifi's share button opens Tryptify and plays that song, then the rest of its album; an album link plays from its first song. It plays from the service it was shared from when you have that one under Settings › Connections, and otherwise finds the same song on one you do have: by its ISRC on Qobuz, else by title, artist and length on TIDAL, Qobuz, Deezer or Apple Music. Pasted in Discord, the same link shows the cover and a 30-second preview.
-- **Share link**, in a song's menu, the player's menu and on an album's page: the same tryptify.com link, to send to anyone with Tryptify, whatever services they use. With a TrypT-hifi added under Settings › Connections, it shows the cover and a preview in Discord too.
-
 ## [1.9.51]
 
 ### Added
@@ -51,6 +47,15 @@
 #### Motion blur
 - **Notes can leave a short trail, and the lyrics blur as they glide.** Trypt Mania › Graphics › Motion blur and Player Visuals Studio › 3D letter wave › Motion blur, each with a quality slider from Off to Cinematic, off by default. The note stays sharp; nothing extra is drawn while nothing moves fast, and a dense chart gets coarser trails rather than a slower frame. A personal setting a theme never changes or shares (Android 12 and up).
 
+#### Sharing
+- **Songs shared from TrypT-hifi open here and play, on any service.** A tryptify.com/listen link from TrypT-hifi's share button opens Tryptify and plays that song, then the rest of its album; an album link plays from its first song. It plays from the service it was shared from when you have that one under Settings › Connections, and otherwise finds the same song on one you do have: by its ISRC on Qobuz, else by title, artist and length on TIDAL, Qobuz, Deezer or Apple Music. Pasted in Discord, the same link shows the cover and a 30-second preview.
+- **Share link**, in a song's menu, the player's menu and on an album's page: the same tryptify.com link, to send to anyone with Tryptify, whatever services they use. With a TrypT-hifi added under Settings › Connections, it shows the cover and a preview in Discord too.
+
+#### A glass home screen widget
+- **Flat glass**: one see-through pane with a hairline edge, the sharp cover, the text and a play disc. No gradients and no blurred cover.
+- **Three sizes in the widget picker**, Small (2×2), Medium (5×2, a five-column home screen's full width) and Large (4×4), all the same widget and all resizable, with a layout for each size from a 2×1 bar up to 4×4. It lays out at its exact size, so a 5×2 on ColorOS no longer falls back to the thin bar.
+- **Settings › Appearance › Home screen widget** with a live preview of the song it is showing: glass Light, Dark or Album colour, opacity, the edge, cover art, the progress bar, a Solid or Glass play button, and Text (Auto, White or Dark). Auto reads the wallpaper's main colour, so the text stays readable on any wallpaper.
+
 #### Music links presets
 - **Save the Music links page's links under a name**, load a set back in one tap (every link replaced at once, with Undo), and export or import one as a `.links.json` file. A preset holds each visual link with its pause; the mixer's knob links stay with mixer presets, since they name a mix's own effect slots. A file from a newer version opens as far as this one understands it.
 
@@ -72,6 +77,7 @@
 - **Lyrics timed on a chart server.** The TryptMania Parser no longer times lyrics, so the app stops asking, and the Server lyrics setting is gone. Lyrics a server timed before, and those you time in the lyrics editor, stay; a saved server that listed lyrics loads without them.
 
 ### Fixed
+- **The lyrics' beat follows the kick drum.** Their pump, glow and rays read 40–110 Hz from the music links' own analysis, with the links' kick detector, instead of the display spectrum's bass, which moved with the vocals and, after a pause, swelled and stuck.
 - **USB DACs with one clock keep exclusive mode for CD-quality songs.** A DAC that runs only 48 and 96 kHz (the Nothing Ear (1) and Headphone (1)) refused 44.1 kHz, so every CD-rate song fell back to Android's mixer. The song is now resampled to the DAC's nearest rate; rates the DAC takes stay bit-perfect.
 - **LRC lyrics that read wrong now read right**, from LRCLib too: a file starting with a byte order mark keeps its first line, an end stamp (`[00:15.00]` after the words) is a time rather than part of the lyric, a file stamped all `[00:00.00]` shows as plain lyrics instead of every line lighting up at once, and LRCLib's lyrics with `[mm:ss]`, two stamps on a line, `[offset:]` or word timing read as they do everywhere else.
 - **Continue into the next list keeps going when it should.** After a restart, a long list plays to its end instead of jumping to the next list at song 300; on a weak connection a list that won't load is tried again at the next song's end or Next, rather than taken for the end and replaced by radio, and the wait is at most 15 seconds; right after a restart a Qobuz, Deezer or Apple album is no longer asked for at TIDAL; and folders sorted by date move on without a pause.

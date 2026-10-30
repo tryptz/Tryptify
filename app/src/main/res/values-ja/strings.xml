@@ -3303,4 +3303,14 @@
     <string name="share_link">リンクを共有</string>
     <string name="share_album_link">アルバムのリンクを共有</string>
     <string name="share_link_unavailable">この曲はカタログの曲ではないため、共有できるリンクがありません。代わりにファイルを共有してください。</string>
+    <string name="whats_new_section_sharing">共有</string>
+    <string name="whats_new_section_widget">ホーム画面ウィジェット</string>
+    <string name="whats_new_1951_shared_open_title">TrypT-hifi から共有された曲をここで再生</string>
+    <string name="whats_new_1951_shared_open_body">TrypT-hifi の共有ボタンで作られた tryptify.com のリンクを開くと Tryptify が起動し、その曲に続けてアルバムの残りを再生します。共有元のサービスがなくても、ISRC や曲名で同じ曲を手持ちのサービスから見つけます。</string>
+    <string name="whats_new_1951_share_link_title">リンクを共有</string>
+    <string name="whats_new_1951_share_link_body">曲のメニュー、プレーヤーのメニュー、アルバムのページから：Tryptify があれば、どのサービスを使っていても再生できる tryptify.com のリンクを共有します。「設定 › 接続」に TrypT-hifi があれば、Discord でカバーと試聴が表示されます。</string>
+    <string name="whats_new_1951_widget_title">ガラスのホーム画面ウィジェット</string>
+    <string name="whats_new_1951_widget_body">カバーと再生ボタンを載せた、平らで透けるガラス。小・中・大の 3 サイズで、どれもサイズを変えられます。「設定 › 外観 › ホーム画面ウィジェット」で色、不透明度、縁、カバー、進捗バー、ボタン、文字をライブプレビューしながら設定できます。</string>
+    <string name="whats_new_1951_lyrics_beat_title">歌詞がキックに合わせて脈打つ</string>
+    <string name="whats_new_1951_lyrics_beat_body">歌詞の脈動、グロー、光線はミュージックリンクと同じくキック（40–110 Hz）に従うようになりました。ボーカルが上がっても拍がずれず、一時停止の後に脈動が膨らんだまま止まることもありません。</string>
 </resources>

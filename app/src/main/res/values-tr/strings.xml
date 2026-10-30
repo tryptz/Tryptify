@@ -3381,4 +3381,14 @@
     <string name="share_link">Bağlantıyı paylaş</string>
     <string name="share_album_link">Albüm bağlantısını paylaş</string>
     <string name="share_link_unavailable">Bu şarkı bir katalogdan değil, paylaşılacak bağlantısı yok. Bunun yerine dosyayı paylaşın.</string>
+    <string name="whats_new_section_sharing">Paylaşım</string>
+    <string name="whats_new_section_widget">Ana ekran widget’ı</string>
+    <string name="whats_new_1951_shared_open_title">TrypT-hifi’den paylaşılan şarkılar burada çalar</string>
+    <string name="whats_new_1951_shared_open_body">TrypT-hifi’nin paylaş düğmesinden gelen bir tryptify.com bağlantısı Tryptify’ı açar ve şarkıyı, ardından albümün geri kalanını sizdeki hizmetten çalar: paylaşıldığı hizmet, yoksa ISRC’si ya da adıyla bulunan aynı şarkı.</string>
+    <string name="whats_new_1951_share_link_title">Bağlantıyı paylaş</string>
+    <string name="whats_new_1951_share_link_body">Şarkı menüsünde, oynatıcı menüsünde ve albüm sayfasında: Tryptify’ı olan herkesin, hangi hizmeti kullanırsa kullansın çalabileceği bir tryptify.com bağlantısı. Ayarlar › Bağlantılar’da bir TrypT-hifi varsa Discord kapağı ve bir ön dinleme gösterir.</string>
+    <string name="whats_new_1951_widget_title">Cam bir ana ekran widget’ı</string>
+    <string name="whats_new_1951_widget_body">Kapak ve oynat düğmesiyle düz, saydam cam; Küçük, Orta ve Büyük boyutlarda, hepsi yeniden boyutlandırılabilir. Ayarlar › Görünüm › Ana ekran widget’ı; renk, opaklık, kenar, kapak, ilerleme çubuğu, düğme ve yazıyı canlı önizlemeyle ayarlar.</string>
+    <string name="whats_new_1951_lyrics_beat_title">Şarkı sözleri kick davulla atıyor</string>
+    <string name="whats_new_1951_lyrics_beat_body">Şarkı sözlerinin nabzı, parıltısı ve ışınları artık müzik bağlantıları gibi kick davulu (40–110 Hz) izliyor: yükselen vokal ritmi kaydırmıyor, duraklamadan sonra nabız şişip takılı kalmıyor.</string>
 </resources>

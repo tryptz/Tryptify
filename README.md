@@ -100,9 +100,10 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 | **Library galaxy** | Your artists as stars, albums as planets and tracks as moons, offline. |
 | **Tryptify Connect** | Your phone and tryptify.com see each other: move the music between them at the same second, or steer one from the other. |
 | **Listening parties** | Hear the same moment of the same song with friends, in the app or a browser, with a shared queue, chat and vote skip. |
+| **Share links** | Send a song or album as a tryptify.com link: it plays in anyone's Tryptify, on whatever service they have, and shows its cover and a 30-second preview in Discord. |
 | **Web player** | [tryptify.com/player](https://tryptify.com/player) plays your files, your server, Tryptify Cloud and TrypT HiFi through the app's AutoEQ. |
 | **Eight languages** | English, 简体中文, 日本語, Français, Español, Türkçe, Deutsch and Italiano. |
-| **Everywhere else** | Widget, Android Auto, Discord, Last.fm, ListenBrainz, downloads and account sync. |
+| **Everywhere else** | A glass home screen widget in three sizes, Android Auto, Discord, Last.fm, ListenBrainz, downloads and account sync. |
 
 ## How the sound flows
 

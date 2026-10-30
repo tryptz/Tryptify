@@ -3384,4 +3384,14 @@
     <string name="share_link">Share link</string>
     <string name="share_album_link">Share album link</string>
     <string name="share_link_unavailable">This song isn\'t from a catalog, so it has no link to share. Share the file instead.</string>
+    <string name="whats_new_section_sharing">Sharing</string>
+    <string name="whats_new_section_widget">Home screen widget</string>
+    <string name="whats_new_1951_shared_open_title">Songs shared from TrypT-hifi play here</string>
+    <string name="whats_new_1951_shared_open_body">A tryptify.com link from TrypT-hifi\'s share button opens Tryptify and plays the song, then the rest of its album, on whichever service you have: the one it was shared from, else the same song found by its ISRC or by name.</string>
+    <string name="whats_new_1951_share_link_title">Share link</string>
+    <string name="whats_new_1951_share_link_body">In a song\'s menu, the player\'s menu and on an album\'s page: a tryptify.com link anyone with Tryptify can play, whatever services they use. With a TrypT-hifi under Settings › Connections, Discord shows its cover and a preview.</string>
+    <string name="whats_new_1951_widget_title">A glass home screen widget</string>
+    <string name="whats_new_1951_widget_body">Flat see-through glass with the cover and a play button, in Small, Medium and Large, each resizable. Settings › Appearance › Home screen widget sets its colour, opacity, edge, cover, progress bar, button and text, with a live preview.</string>
+    <string name="whats_new_1951_lyrics_beat_title">The lyrics pump to the kick drum</string>
+    <string name="whats_new_1951_lyrics_beat_body">The lyrics\' pump, glow and rays now follow the kick (40–110 Hz), as music links do, so a rising vocal no longer shifts the beat, and after a pause the pump no longer swells and sticks.</string>
 </resources>
