@@ -1768,6 +1768,32 @@ import_from_spotify	Imported from Spotify	从 Spotify 导入	Spotify からイ�
 import_spotify_failed	Spotify import failed	Spotify 导入失败	Spotify のインポートに失敗しました	Échec de l’import Spotify	Error al importar de Spotify	Spotify içe aktarma başarısız	Spotify-Import fehlgeschlagen	Importazione da Spotify non riuscita
 widget_nothing_playing	Nothing playing	没有正在播放的内容	再生中の曲はありません	Aucune lecture en cours	No se está reproduciendo nada	Çalan bir şey yok	Es läuft nichts	Nessun brano in riproduzione
 widget_album_art	Album art	专辑封面	アルバムアート	Pochette	Portada	Albüm kapağı	Albumcover	Copertina album
+widget_label_small	Now playing · Small	正在播放 · 小	再生中 · 小	En cours de lecture · Petit	Reproduciendo · Pequeño	Şimdi çalıyor · Küçük	Wird gespielt · Klein	In riproduzione · Piccolo
+widget_label_medium	Now playing · Medium	正在播放 · 中	再生中 · 中	En cours de lecture · Moyen	Reproduciendo · Mediano	Şimdi çalıyor · Orta	Wird gespielt · Mittel	In riproduzione · Medio
+widget_label_large	Now playing · Large	正在播放 · 大	再生中 · 大	En cours de lecture · Grand	Reproduciendo · Grande	Şimdi çalıyor · Büyük	Wird gespielt · Groß	In riproduzione · Grande
+settings_widget	Home screen widget	桌面小部件	ホーム画面ウィジェット	Widget d’écran d’accueil	Widget de pantalla de inicio	Ana ekran widget’ı	Startbildschirm-Widget	Widget della schermata Home
+settings_widget_summary	Glass colour, opacity and what the widget shows	玻璃颜色、不透明度和显示内容	ガラスの色、不透明度、表示する内容	Couleur du verre, opacité et contenu affiché	Color del cristal, opacidad y lo que muestra	Cam rengi, opaklık ve gösterilenler	Glasfarbe, Deckkraft und was das Widget zeigt	Colore del vetro, opacità e cosa mostra
+widget_style_glass	Glass	玻璃	ガラス	Verre	Cristal	Cam	Glas	Vetro
+widget_style_light	Light	浅色	ライト	Clair	Claro	Açık	Hell	Chiaro
+widget_style_dark	Dark	深色	ダーク	Sombre	Oscuro	Koyu	Dunkel	Scuro
+widget_style_album	Album colour	专辑颜色	アルバムの色	Couleur de l’album	Color del álbum	Albüm rengi	Albumfarbe	Colore dell’album
+widget_style_opacity_value	Opacity  %1$d%%	不透明度  %1$d%%	不透明度  %1$d%%	Opacité  %1$d %%	Opacidad  %1$d %%	Opaklık  %%%1$d	Deckkraft  %1$d %%	Opacità  %1$d%%
+widget_style_edge	Edge	边框	縁取り	Bordure	Borde	Kenar	Rand	Bordo
+widget_style_edge_summary	A thin line around the glass	玻璃周围的细线	ガラスの周りの細い線	Un fin trait autour du verre	Una línea fina alrededor del cristal	Camın çevresinde ince bir çizgi	Eine feine Linie um das Glas	Una linea sottile intorno al vetro
+widget_style_cover	Cover art	封面	カバーアート	Pochette	Portada	Kapak resmi	Cover	Copertina
+widget_style_cover_summary	Show the album cover	显示专辑封面	アルバムのカバーを表示	Afficher la pochette de l’album	Mostrar la portada del álbum	Albüm kapağını göster	Albumcover anzeigen	Mostra la copertina dell’album
+widget_style_progress	Progress bar	进度条	プログレスバー	Barre de progression	Barra de progreso	İlerleme çubuğu	Fortschrittsbalken	Barra di avanzamento
+widget_style_progress_summary	Show how far into the song you are	显示歌曲的播放进度	曲の再生位置を表示	Afficher où vous en êtes dans le morceau	Mostrar por dónde va la canción	Şarkının neresinde olduğunu göster	Zeigen, wie weit der Song ist	Mostra a che punto è il brano
+widget_style_play	Play button	播放按钮	再生ボタン	Bouton lecture	Botón de reproducir	Oynat düğmesi	Wiedergabetaste	Pulsante play
+widget_style_play_solid	Solid	实心	塗りつぶし	Plein	Sólido	Dolu	Gefüllt	Pieno
+widget_style_play_glass	Glass	玻璃	ガラス	Verre	Cristal	Cam	Glas	Vetro
+widget_style_text	Text	文字	文字	Texte	Texto	Metin	Text	Testo
+widget_style_text_auto	Auto	自动	自動	Auto	Automático	Otomatik	Automatisch	Automatico
+widget_style_text_white	White	白色	白	Blanc	Blanco	Beyaz	Weiß	Bianco
+widget_style_text_dark	Dark	深色	黒	Foncé	Oscuro	Koyu	Dunkel	Scuro
+widget_style_text_summary	Auto picks white or dark text from your wallpaper’s main colour. Choose one yourself if it is hard to read.	“自动”会根据壁纸的主色选择白色或深色文字。如果看不清，请自行选择。	「自動」は壁紙のメインカラーから白か黒の文字を選びます。読みにくいときは自分で選んでください。	Auto choisit un texte blanc ou foncé selon la couleur principale de votre fond d’écran. Choisissez vous-même s’il est difficile à lire.	Automático elige texto blanco u oscuro según el color principal de tu fondo de pantalla. Elige tú si cuesta leerlo.	Otomatik, duvar kâğıdınızın ana rengine göre beyaz ya da koyu metin seçer. Okumak zorsa kendiniz seçin.	Automatisch wählt weißen oder dunklen Text nach der Hauptfarbe deines Hintergrundbilds. Wähle selbst, wenn er schwer zu lesen ist.	Automatico sceglie testo bianco o scuro in base al colore principale dello sfondo. Sceglilo tu se è difficile da leggere.
+widget_style_preview	Preview	预览	プレビュー	Aperçu	Vista previa	Önizleme	Vorschau	Anteprima
+widget_style_hint	Changes show on your home screen right away. To add the widget, long-press an empty spot on your home screen and choose Widgets.	更改会立即显示在桌面上。要添加小部件，请长按桌面空白处并选择“小部件”。	変更はすぐにホーム画面に反映されます。ウィジェットを追加するには、ホーム画面の空いている場所を長押しして「ウィジェット」を選びます。	Les changements s’affichent tout de suite sur l’écran d’accueil. Pour ajouter le widget, appuyez longuement sur un espace vide de l’écran d’accueil et choisissez Widgets.	Los cambios se ven al instante en la pantalla de inicio. Para añadir el widget, mantén pulsado un espacio vacío de la pantalla de inicio y elige Widgets.	Değişiklikler ana ekranda hemen görünür. Widget’ı eklemek için ana ekranda boş bir yere uzun basıp Widget’lar’ı seçin.	Änderungen erscheinen sofort auf dem Startbildschirm. Zum Hinzufügen lange auf eine freie Stelle des Startbildschirms drücken und Widgets wählen.	Le modifiche appaiono subito nella schermata Home. Per aggiungere il widget, tieni premuto uno spazio vuoto della schermata Home e scegli Widget.
 notif_playback_channel	Now Playing	正在播放	再生中	En cours de lecture	Reproduciendo	Şimdi çalıyor	Wird gespielt	In riproduzione
 notif_playback_channel_desc	Playback controls shown in the notification shade and on the lock screen.	显示在通知栏和锁屏上的播放控制。	通知シェードとロック画面に表示される再生コントロール。	Commandes de lecture affichées dans le volet des notifications et sur l’écran de verrouillage.	Controles de reproducción que se muestran en el panel de notificaciones y en la pantalla de bloqueo.	Bildirim panelinde ve kilit ekranında gösterilen çalma kontrolleri.	Wiedergabesteuerung in der Benachrichtigungsleiste und auf dem Sperrbildschirm.	Controlli di riproduzione mostrati nell'area delle notifiche e nella schermata di blocco.
 notif_downloading_n#one	Downloading %1$d track	正在下载 %1$d 首歌曲	%1$d 曲をダウンロード中	Téléchargement de %1$d titre	Descargando %1$d canción	%1$d parça indiriliyor	%1$d Titel wird heruntergeladen	Download di %1$d brano

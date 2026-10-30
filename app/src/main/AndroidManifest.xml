@@ -212,10 +212,23 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
-        <!-- Glance Widget -->
+        <!-- Glance widget: one widget, offered in three sizes in the picker -->
+        <receiver
+            android:name=".widget.NowPlayingSmallWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_label_small"
+            android:permission="android.permission.BIND_APPWIDGET">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/now_playing_widget_small_info" />
+        </receiver>
         <receiver
             android:name=".widget.NowPlayingWidgetReceiver"
             android:exported="true"
+            android:label="@string/widget_label_medium"
             android:permission="android.permission.BIND_APPWIDGET">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -223,6 +236,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/now_playing_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.NowPlayingLargeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_label_large"
+            android:permission="android.permission.BIND_APPWIDGET">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/now_playing_widget_large_info" />
         </receiver>
 
         <!-- WorkManager initializer for Hilt -->

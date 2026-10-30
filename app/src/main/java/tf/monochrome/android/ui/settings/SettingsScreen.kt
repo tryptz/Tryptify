@@ -758,6 +758,13 @@ private fun AppearanceTab(
             Spacer(modifier = Modifier.height(16.dp))
             InterfaceControls(viewModel, navController)
             Spacer(modifier = Modifier.height(16.dp))
+            // The home-screen widget's look has a page of its own, for its preview.
+            SettingItem(
+                title = stringResource(R.string.settings_widget),
+                subtitle = stringResource(R.string.settings_widget_summary),
+                onClick = { navController.navigateTool(Screen.WidgetSettings) },
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             // Last of all: the whole app through an old TV.
             CrtEffectSetting(viewModel)
         }
