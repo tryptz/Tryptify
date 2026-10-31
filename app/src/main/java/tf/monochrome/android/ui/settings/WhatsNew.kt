@@ -78,10 +78,11 @@ object WhatsNew {
      */
     @StringRes
     fun sectionRes(section: String): Int = when (section) {
+        YOUTUBE_SOUNDCLOUD -> R.string.whats_new_section_youtube_soundcloud
         PLAYBACK -> R.string.whats_new_section_playback
         PLAYLISTS -> R.string.whats_new_section_playlists
-        LIBRARY -> R.string.whats_new_section_library
         CONNECTIONS -> R.string.whats_new_section_connections
+        LIBRARY -> R.string.whats_new_section_library
         LYRICS -> R.string.whats_new_section_lyrics
         USB_DAC -> R.string.whats_new_section_usb_dac
         TRYPT_MANIA -> R.string.whats_new_section_trypt_mania
@@ -163,6 +164,9 @@ object WhatsNew {
     /** Songs and albums sent as tryptify.com links, and opened from them. */
     private const val SHARING = "Sharing"
 
+    /** The two built-in song sources: YouTube on the phone, SoundCloud through Tryptify's server. */
+    private const val YOUTUBE_SOUNDCLOUD = "YouTube and SoundCloud"
+
     /** The now playing widget on the home screen. */
     private const val WIDGET = "Home screen widget"
 
@@ -198,123 +202,75 @@ object WhatsNew {
             entries = listOf(
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = YOUTUBE_SOUNDCLOUD,
+                    title = "YouTube and SoundCloud, built in",
+                    body = "Search them with their own chips, then play or download their songs. YouTube runs on your phone with no sign-in; SoundCloud works with your Tryptify sign-in.",
+                    titleRes = R.string.whats_new_1951_youtube_title,
+                    bodyRes = R.string.whats_new_1951_youtube_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share link",
+                    body = "In a song's or the player's menu and on an album's page: a tryptify.com link that plays in anyone's Tryptify, on any service they have. Links shared from TrypT-hifi play here too.",
+                    titleRes = R.string.whats_new_1951_share_link_title,
+                    bodyRes = R.string.whats_new_1951_share_link_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share YouTube and SoundCloud songs",
+                    body = "Share link works for them too: signed in, Discord shows the cover with a play button. A shared song none of your services has, or a SoundCloud link opened signed out, plays from YouTube.",
+                    titleRes = R.string.whats_new_1951_share_youtube_title,
+                    bodyRes = R.string.whats_new_1951_share_youtube_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "Continue into the next list",
-                    body = "When a playlist, album or folder ends, the next one on the screen you opened it from plays, and after the last, radio from its last song. On by default, in Settings › Audio › Playback.",
+                    body = "When a playlist, album or folder ends, the next one on the screen you opened it from plays, and Previous goes back a list. It's on by default (Settings › Audio › Playback), and your playlists can now be sorted.",
                     titleRes = R.string.whats_new_1951_next_list_title,
                     bodyRes = R.string.whats_new_1951_next_list_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
-                    title = "Previous goes back a list",
-                    body = "On a list's first song, Previous plays the last song of the list before. The queue keeps every list played. Repeat All still loops the list, and under shuffle the next one plays shuffled.",
-                    titleRes = R.string.whats_new_1951_previous_list_title,
-                    bodyRes = R.string.whats_new_1951_previous_list_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = PLAYBACK,
                     title = "ReplayGain is back",
-                    body = "Settings › Audio › Audio processing › ReplayGain evens songs out to a level you pick, -23 to -8 LUFS: from their tags, or a song's loudness measured as it plays. A quiet song is raised only as far as its peak tag allows.",
+                    body = "It evens songs out to the loudness you pick, -23 to -8 LUFS, without clipping, and measures untagged songs as they play. In Settings › Audio › Audio processing, and as a switch in the player's audio panel.",
                     titleRes = R.string.whats_new_1951_replaygain_title,
                     bodyRes = R.string.whats_new_1951_replaygain_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = PLAYBACK,
-                    title = "ReplayGain in the player",
-                    body = "The player's audio panel has a ReplayGain switch under Crossfeed. Hold it to open Settings › Audio, for its modes and the target loudness.",
-                    titleRes = R.string.whats_new_1951_rg_panel_title,
-                    bodyRes = R.string.whats_new_1951_rg_panel_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = PLAYLISTS,
-                    title = "Sort your playlists",
-                    body = "Library › Playlists has a sort button beside New playlist: last edited, name or date created. Playback walks your playlists in that order.",
-                    titleRes = R.string.whats_new_1951_playlist_sort_title,
-                    bodyRes = R.string.whats_new_1951_playlist_sort_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
                     section = LIBRARY,
-                    title = "Your server counts your plays",
-                    body = "Songs from your own music server count there: now playing as a song starts, the play once you've heard enough, so its counts, Recently played and scrobbles agree.",
-                    titleRes = R.string.whats_new_1951_server_plays_title,
-                    bodyRes = R.string.whats_new_1951_server_plays_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = LIBRARY,
-                    title = "Likes star songs on your server",
-                    body = "Liking one of your server's songs stars it there, and unliking unstars it, so your server's other apps agree.",
-                    titleRes = R.string.whats_new_1951_server_stars_title,
-                    bodyRes = R.string.whats_new_1951_server_stars_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = LIBRARY,
-                    title = "Playlists and Liked songs in My server",
-                    body = "Library › My server lists your server's playlists, to open, play or shuffle, and everything starred on it.",
-                    titleRes = R.string.whats_new_1951_server_playlists_title,
-                    bodyRes = R.string.whats_new_1951_server_playlists_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = CONNECTIONS,
-                    title = "Cellular streaming for your server",
-                    body = "Settings › Connections › Music server: keep the original file on mobile data, or ask your server for an MP3 of at most 320, 192 or 128 kbps. Wi-Fi always gets the original.",
-                    titleRes = R.string.whats_new_1951_server_cellular_title,
-                    bodyRes = R.string.whats_new_1951_server_cellular_body,
+                    title = "More from your music server",
+                    body = "It counts your plays, stars what you like and sends its own lyrics, and Library › My server lists its playlists and liked songs. On mobile data it can stream a smaller MP3.",
+                    titleRes = R.string.whats_new_1951_my_server_title,
+                    bodyRes = R.string.whats_new_1951_my_server_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LYRICS,
                     title = "Your files' own lyrics first",
-                    body = "The .lrc next to a song and lyrics in its tags come first, for library files and downloads, and show offline. Word-timed ones are used at once.",
+                    body = "The .lrc beside a song and lyrics in its tags come first, and show offline. LRC files that read wrong, LRCLib's included, now read right.",
                     titleRes = R.string.whats_new_1951_file_lyrics_title,
                     bodyRes = R.string.whats_new_1951_file_lyrics_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = LYRICS,
-                    title = "Your server's lyrics first",
-                    body = "For your server's songs, its own lyrics: timed when it has them timed, as Navidrome does, plain otherwise.",
-                    titleRes = R.string.whats_new_1951_server_lyrics_title,
-                    bodyRes = R.string.whats_new_1951_server_lyrics_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
                     section = TRYPT_MANIA,
                     title = "Chart your own songs",
-                    body = "Trypt Mania › Generate charts charts a song on Tryptify's server: your first song is free, then minutes from a pack, 150 for $2.99. A song that fails gives its minutes back, and a server of your own stays free.",
+                    body = "Trypt Mania › Generate charts charts a song on Tryptify's server: your first song is free, then minute packs from $2.99. A server of your own stays free.",
                     titleRes = R.string.whats_new_1951_charting_title,
                     bodyRes = R.string.whats_new_1951_charting_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = TRYPT_MANIA,
-                    title = "Trypt Mania on your USB DAC",
-                    body = "With a DAC in exclusive mode, the game's songs and previews play through it, through your AutoEQ and DSP, at the level your volume keys set. Starting a run pauses your music.",
+                    title = "Trypt Mania through your DAC and DSP",
+                    body = "The game plays through your USB DAC and the DSP engine, with AutoEQ, the Oxford Inflator and ReplayGain in its own Settings › Audio. Motion blur, off by default, can trail the notes and the gliding lyrics.",
                     titleRes = R.string.whats_new_1951_tm_dac_title,
                     bodyRes = R.string.whats_new_1951_tm_dac_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = TRYPT_MANIA,
-                    title = "Audio settings in the game",
-                    body = "Trypt Mania › Settings › Audio switches AutoEQ, the Oxford Inflator and ReplayGain: the same settings the player uses.",
-                    titleRes = R.string.whats_new_1951_tm_audio_title,
-                    bodyRes = R.string.whats_new_1951_tm_audio_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = TRYPT_MANIA,
-                    title = "Motion blur",
-                    body = "Notes can leave a short trail and the lyrics blur as they glide: Trypt Mania › Graphics, and the Player Visuals Studio's 3D letter wave. Off by default.",
-                    titleRes = R.string.whats_new_1951_motion_blur_title,
-                    bodyRes = R.string.whats_new_1951_motion_blur_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
@@ -326,25 +282,9 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
-                    section = SHARING,
-                    title = "Songs shared from TrypT-hifi play here",
-                    body = "A tryptify.com link from TrypT-hifi's share button opens Tryptify and plays the song, then the rest of its album, on whichever service you have: the one it was shared from, else the same song found by its ISRC or by name.",
-                    titleRes = R.string.whats_new_1951_shared_open_title,
-                    bodyRes = R.string.whats_new_1951_shared_open_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
-                    section = SHARING,
-                    title = "Share link",
-                    body = "In a song's menu, the player's menu and on an album's page: a tryptify.com link anyone with Tryptify can play, whatever services they use. With a TrypT-hifi under Settings › Connections, Discord shows its cover and a preview.",
-                    titleRes = R.string.whats_new_1951_share_link_title,
-                    bodyRes = R.string.whats_new_1951_share_link_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.NEW,
                     section = WIDGET,
                     title = "A glass home screen widget",
-                    body = "Flat see-through glass with the cover and a play button, in Small, Medium and Large, each resizable. Settings › Appearance › Home screen widget sets its colour, opacity, edge, cover, progress bar, button and text, with a live preview.",
+                    body = "Flat see-through glass with the cover and a play button, in three resizable sizes. Set its look in Settings › Appearance › Home screen widget, with a live preview.",
                     titleRes = R.string.whats_new_1951_widget_title,
                     bodyRes = R.string.whats_new_1951_widget_body,
                 ),
@@ -358,43 +298,11 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
-                    section = LYRICS,
-                    title = "LRC lyrics read right",
-                    body = "A file starting with a byte order mark keeps its first line, an end stamp is a time, an all-zero file shows as plain lyrics, and LRCLib's short stamps, offsets and word timing read as elsewhere.",
-                    titleRes = R.string.whats_new_1951_lrc_fixes_title,
-                    bodyRes = R.string.whats_new_1951_lrc_fixes_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = LYRICS,
-                    title = "The lyrics pump to the kick drum",
-                    body = "The lyrics' pump, glow and rays now follow the kick (40–110 Hz), as music links do, so a rising vocal no longer shifts the beat, and after a pause the pump no longer swells and sticks.",
-                    titleRes = R.string.whats_new_1951_lyrics_beat_title,
-                    bodyRes = R.string.whats_new_1951_lyrics_beat_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "Lighter on battery and memory",
                     body = "Less CPU while music plays, less memory and smoother screens, and a USB DAC wakes the phone far less, resting its stream while paused.",
                     titleRes = R.string.whats_new_1951_lighter_title,
                     bodyRes = R.string.whats_new_1951_lighter_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.CHANGED,
-                    section = TRYPT_MANIA,
-                    title = "Hold to nudge the offset",
-                    body = "The audio offset in Trypt Mania's Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while you hold + or −.",
-                    titleRes = R.string.whats_new_1951_offset_hold_title,
-                    bodyRes = R.string.whats_new_1951_offset_hold_body,
-                ),
-                WhatsNewEntry(
-                    kind = WhatsNewKind.REMOVED,
-                    section = LYRICS,
-                    title = "Lyrics timed on a server",
-                    body = "Lyrics are no longer timed on a chart server. The ones timed before, and those you time in the lyrics editor, stay.",
-                    titleRes = R.string.whats_new_1951_chart_lyrics_title,
-                    bodyRes = R.string.whats_new_1951_chart_lyrics_body,
                 ),
             ),
         ),
