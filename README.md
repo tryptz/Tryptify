@@ -138,7 +138,9 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,
   `app/src/main/assets/fonts/LICENSES.txt`), NewPipeExtractor for YouTube
-  (GPL-3.0-or-later, a library the build fetches) and the rest named in their
-  folders.
+  (GPL-3.0-or-later, a library the build fetches), NewPipe's PO-token
+  WebView (GPL-3.0-or-later, adapted from TeamNewPipe/NewPipe in
+  `app/src/main/java/tf/monochrome/android/data/youtube/potoken/` and
+  `app/src/main/assets/po_token.html`) and the rest named in their folders.
 
 Built by **[tryptz](https://github.com/tryptz)**.

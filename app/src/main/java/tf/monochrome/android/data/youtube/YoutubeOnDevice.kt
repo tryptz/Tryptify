@@ -13,6 +13,7 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.localization.ContentCountry
 import org.schabi.newpipe.extractor.localization.Localization
+import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor
 import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamInfo
@@ -22,6 +23,7 @@ import tf.monochrome.android.data.scxyt.ScxytError
 import tf.monochrome.android.data.scxyt.ScxytSource
 import tf.monochrome.android.data.scxyt.ScxytStream
 import tf.monochrome.android.data.scxyt.ScxytTrack
+import tf.monochrome.android.data.youtube.potoken.PoTokenProviderImpl
 import tf.monochrome.android.locale.AppLanguage
 import java.io.File
 import java.io.RandomAccessFile
@@ -49,6 +51,7 @@ class YoutubeOnDevice @Inject constructor(
 ) : ScxytBackend {
 
     private val http = NewPipeDownloader.client()
+    private val downloader = NewPipeDownloader(http)
     private val pieces = ChunkedDownload(http)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cache = YoutubeAudioCache(File(context.cacheDir, CACHE_DIR), scope, fetch = ::fetchAudio)
@@ -71,11 +74,27 @@ class YoutubeOnDevice @Inject constructor(
             val language = if (chosen.isBlank()) phone else Locale.forLanguageTag(chosen)
             val country = phone.country.takeIf { it.length == 2 } ?: language.country.takeIf { it.length == 2 } ?: "US"
             NewPipe.init(
-                NewPipeDownloader(http),
+                downloader,
                 Localization(language.language, language.country.ifBlank { country }),
                 ContentCountry(country),
             )
+            offerPoTokens()
             initialized = true
+        }
+    }
+
+    /**
+     * Hands the extractor NewPipe's PO-token provider, for when YouTube asks
+     * phones for proof that they are a real client. On v0.26.5 it changes
+     * nothing (see [PoTokenProviderImpl]): the clients that work today stay
+     * first, and a token that cannot be made is simply left out. Even failing
+     * to set it up must not stop YouTube, so that is only logged.
+     */
+    private fun offerPoTokens() {
+        try {
+            YoutubeStreamExtractor.setPoTokenProvider(PoTokenProviderImpl.create(context, downloader))
+        } catch (e: Exception) {
+            Log.w(TAG, "PO-token provider not set: ${e.message}")
         }
     }
 

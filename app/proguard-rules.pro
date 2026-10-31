@@ -70,3 +70,9 @@
 # directly today; NewPipe keeps them whole in case a release loads them by
 # name again.
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
+# NewPipe's PO-token WebView (data/youtube/potoken): its page calls these
+# methods back by name through addJavascriptInterface. AGP's default rules
+# keep them too; this does not depend on that.
+-keepclassmembers class tf.monochrome.android.data.youtube.potoken.PoTokenWebView {
+    @android.webkit.JavascriptInterface <methods>;
+}

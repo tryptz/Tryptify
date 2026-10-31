@@ -289,10 +289,36 @@ fields by name. It also needs core library desugaring with
 `desugar_jdk_libs_nio`, as NewPipe's app has: it calls Java APIs Android only
 has from 13 on (URLEncoder and URLDecoder with a Charset,
 `Collectors.toUnmodifiableList`) in every search, which would crash YouTube
-on Android 8 to 12 without it. v0.26.5 asks for no PO token (it uses YouTube's Android
-"reel" and visionOS clients); if phones start being refused, NewPipe's app
-makes them in a WebView (`util/potoken/` in TeamNewPipe/NewPipe) and hands
-them to `YoutubeStreamExtractor.setPoTokenProvider`.
+on Android 8 to 12 without it.
+
+**PO tokens** (YouTube's proof-of-origin tokens) are made in a WebView, as
+NewPipe's app makes them: `data/youtube/potoken/`, ported from its
+`util/potoken/` (TeamNewPipe/NewPipe master at `00acf2f3`, the commit on
+v0.26.5; GPL-3.0-or-later) with `assets/po_token.html`, coroutines in place
+of RxJava and the extractor's own downloader for BotGuard's two requests.
+`YoutubeOnDevice` hands `PoTokenProviderImpl` to
+`YoutubeStreamExtractor.setPoTokenProvider` when it sets NewPipe up. Only
+the WEB client's tokens can be made in a WebView; the Android and iOS
+clients' need DroidGuard and Apple's attestation, so those are always null,
+as in NewPipe. That null is what keeps today's path: on v0.26.5 a token for
+the Android client would move it from the "reel" client, which needs none
+and is what works, to the plain Android one (`PoTokenWiringTest` holds the
+first player request to the reel client with the provider set). v0.26.5
+never asks for a WEB token at all (and the iOS client, the only other one
+asked, is off), so on this version the WebView never runs: the provider
+stands ready for an extractor that asks, and NewPipe's newer extractor
+commits leave `setPoTokenProvider` a no-op until they support SABR, so check
+an upgrade's `YoutubeStreamExtractor` for where it asks. A token that cannot
+be made (no WebView, an old or broken one, a BotGuard or JavaScript error, a
+network error, a 20 s timeout, a call from the main thread) is null and
+extraction goes on without it; after a failure tokens are not tried for 5
+minutes, and after a syntax error in the page never again until the app
+restarts. Tokens are kept per visitor data until BotGuard's integrity token
+is 10 minutes from expiring, then the WebView is made anew. The page calls
+`PoTokenWebView`'s `@JavascriptInterface` methods by name: a keep rule in
+`proguard-rules.pro` holds them. `JavaScriptUtilTest` and
+`PoTokenProviderImplTest` hold the parsing, the cache and every fallback,
+without a WebView; nothing here has run BotGuard on a phone.
 
 **SoundCloud goes through trypt-hifi-scxyt** (its own repository; its
 README's "The API Tryptify uses" is the contract), which searches and fetches
@@ -304,8 +330,8 @@ first and uses the signed link it returns.
 
 `ScxytTest` holds the app to the server's JSON and error codes,
 `ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
-`ChunkedDownloadTest` and `YoutubeAudioCacheTest` the YouTube side, all
-without a network.
+`ChunkedDownloadTest`, `YoutubeAudioCacheTest` and the PO-token tests above
+the YouTube side, all without a network.
 
 ## projectM is patched, and its presets are scanned
 
