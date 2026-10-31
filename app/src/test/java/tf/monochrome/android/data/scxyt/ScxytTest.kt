@@ -219,6 +219,7 @@ class ScxytTest {
         assertTrue(ScxytError.of(401, body("signed_out")) is ScxytError.SignedOut)
         assertTrue(ScxytError.of(503, body("blocked")) is ScxytError.Blocked)
         assertTrue(ScxytError.of(422, body("unavailable")) is ScxytError.Unavailable)
+        assertTrue(ScxytError.of(422, body("protected")) is ScxytError.Protected)
         assertTrue(ScxytError.of(422, body("too_long")) is ScxytError.TooLong)
         assertTrue(ScxytError.of(404, body("not_found")) is ScxytError.NotFound)
         assertTrue(ScxytError.of(503, body("busy")) is ScxytError.Busy)
@@ -248,6 +249,7 @@ class ScxytTest {
         assertFalse(ScxytError.Blocked().retryable)
         assertFalse(ScxytError.NotFound().retryable)
         assertFalse(ScxytError.Unavailable().retryable)
+        assertFalse(ScxytError.Protected().retryable)
         assertFalse(ScxytError.SignedOut().retryable)
     }
 
@@ -282,6 +284,7 @@ class ScxytTest {
         assertEquals(R.string.scxyt_error_blocked, ScxytMessages.textRes(ScxytError.Blocked()))
         assertEquals(R.string.scxyt_error_signed_out, ScxytMessages.textRes(ScxytError.SignedOut()))
         assertEquals(R.string.scxyt_error_unavailable, ScxytMessages.textRes(ScxytError.Unavailable()))
+        assertEquals(R.string.scxyt_error_protected, ScxytMessages.textRes(ScxytError.Protected()))
         assertEquals(R.string.scxyt_error_too_long, ScxytMessages.textRes(ScxytError.TooLong()))
         assertEquals(R.string.scxyt_error_not_found, ScxytMessages.textRes(ScxytError.NotFound()))
         assertEquals(R.string.scxyt_error_busy, ScxytMessages.textRes(ScxytError.Busy()))

@@ -3474,6 +3474,7 @@
     <string name="scxyt_error_signed_out">Inicia sesión para reproducir o descargar canciones de %1$s.</string>
     <string name="scxyt_error_blocked">%1$s está rechazando al servidor ahora mismo. Vuelve a intentarlo más tarde.</string>
     <string name="scxyt_error_unavailable">Esta canción no se puede reproducir aquí (verificación de edad, restricción regional o solo para miembros).</string>
+    <string name="scxyt_error_protected">%1$s bloquea esta canción: solo se reproduce en la app de %1$s.</string>
     <string name="scxyt_error_too_long">Esta canción es demasiado larga para obtenerla, o es una emisión en directo.</string>
     <string name="scxyt_error_not_found">Esta canción ya no existe en %1$s, o es privada.</string>
     <string name="scxyt_error_busy">El servidor está ocupado. Vuelve a intentarlo en un momento.</string>

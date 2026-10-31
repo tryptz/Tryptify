@@ -102,7 +102,9 @@ sealed class ScxytError(message: String) : Exception(message) {
     class SignedOut : ScxytError("signed out")
     /** YouTube or SoundCloud turned the server away; it lasts until the server is fixed. */
     class Blocked(message: String? = null) : ScxytError(message ?: "blocked")
-    /** It exists but cannot be played there: DRM, age check, region, members only. */
+    /** Locked by the service itself (DRM): SoundCloud's uploads by big labels. */
+    class Protected(message: String? = null) : ScxytError(message ?: "protected")
+    /** It exists but cannot be played there: age check, region, members only. */
     class Unavailable(message: String? = null) : ScxytError(message ?: "unavailable")
     /** Longer than the server fetches, or a live stream. */
     class TooLong(message: String? = null) : ScxytError(message ?: "too long")
@@ -129,6 +131,7 @@ sealed class ScxytError(message: String) : Exception(message) {
             return when (val code = envelope?.error) {
                 "signed_out" -> SignedOut()
                 "blocked" -> Blocked(message)
+                "protected" -> Protected(message)
                 "unavailable" -> Unavailable(message)
                 "too_long" -> TooLong(message)
                 "not_found" -> NotFound(message)

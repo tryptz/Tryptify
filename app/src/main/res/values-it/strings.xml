@@ -3474,6 +3474,7 @@
     <string name="scxyt_error_signed_out">Accedi per riprodurre o scaricare i brani da %1$s.</string>
     <string name="scxyt_error_blocked">%1$s sta rifiutando il server in questo momento. Riprova più tardi.</string>
     <string name="scxyt_error_unavailable">Questo brano non può essere riprodotto qui (verifica dell\'età, limitazione regionale o solo per i membri).</string>
+    <string name="scxyt_error_protected">%1$s blocca questo brano: si ascolta solo nell’app di %1$s.</string>
     <string name="scxyt_error_too_long">Questo brano è troppo lungo da recuperare, oppure è una diretta.</string>
     <string name="scxyt_error_not_found">Questo brano non esiste più su %1$s, oppure è privato.</string>
     <string name="scxyt_error_busy">Il server è occupato. Riprova tra un momento.</string>

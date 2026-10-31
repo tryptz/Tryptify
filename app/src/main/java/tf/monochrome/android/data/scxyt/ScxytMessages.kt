@@ -15,6 +15,7 @@ object ScxytMessages {
     fun textRes(error: Throwable): Int = when (error) {
         is ScxytError.SignedOut -> R.string.scxyt_error_signed_out
         is ScxytError.Blocked -> R.string.scxyt_error_blocked
+        is ScxytError.Protected -> R.string.scxyt_error_protected
         is ScxytError.Unavailable -> R.string.scxyt_error_unavailable
         is ScxytError.TooLong -> R.string.scxyt_error_too_long
         is ScxytError.NotFound -> R.string.scxyt_error_not_found
@@ -27,6 +28,7 @@ object ScxytMessages {
     private val NAMES_SERVICE = setOf(
         R.string.scxyt_error_signed_out,
         R.string.scxyt_error_blocked,
+        R.string.scxyt_error_protected,
         R.string.scxyt_error_not_found,
         R.string.scxyt_error_failed,
     )

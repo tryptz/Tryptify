@@ -3318,6 +3318,7 @@
     <string name="scxyt_error_signed_out">登录后即可播放或下载来自 %1$s 的歌曲。</string>
     <string name="scxyt_error_blocked">%1$s 目前拒绝了服务器的请求。请稍后再试。</string>
     <string name="scxyt_error_unavailable">这首歌无法在此播放（年龄验证、地区限制或仅限会员）。</string>
+    <string name="scxyt_error_protected">%1$s 锁定了这首歌，它只能在 %1$s 自己的应用中播放。</string>
     <string name="scxyt_error_too_long">这首歌太长，无法获取，或者它是直播。</string>
     <string name="scxyt_error_not_found">这首歌已不在 %1$s 上，或者已设为私密。</string>
     <string name="scxyt_error_busy">服务器繁忙。请稍后再试。</string>

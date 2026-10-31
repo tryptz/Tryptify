@@ -3396,6 +3396,7 @@
     <string name="scxyt_error_signed_out">%1$s parçalarını çalmak veya indirmek için oturum açın.</string>
     <string name="scxyt_error_blocked">%1$s şu anda sunucuyu geri çeviriyor. Daha sonra tekrar deneyin.</string>
     <string name="scxyt_error_unavailable">Bu parça burada çalınamıyor (yaş doğrulaması, bölge kısıtlaması veya yalnızca üyelere özel).</string>
+    <string name="scxyt_error_protected">%1$s bu parçayı kilitliyor; yalnızca %1$s uygulamasında çalınabilir.</string>
     <string name="scxyt_error_too_long">Bu parça alınamayacak kadar uzun ya da canlı yayın.</string>
     <string name="scxyt_error_not_found">Bu parça artık %1$s üzerinde yok ya da gizli.</string>
     <string name="scxyt_error_busy">Sunucu meşgul. Birazdan tekrar deneyin.</string>
