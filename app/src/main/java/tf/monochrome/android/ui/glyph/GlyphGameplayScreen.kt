@@ -220,7 +220,7 @@ fun GlyphGameplayScreen(
                         songBeat = { timing.secondsToBeat(positionProvider()) },
                         firstNoteBeat = firstNoteBeat,
                         failed = { state.gameplay.failedAtMs > 0L },
-                        paused = { state.gameplay.isPaused },
+                        paused = gameplay.isPaused,
                         scale = state.themes.sizes.dancer,
                     )
                 }
@@ -782,7 +782,9 @@ private const val THEME_BACKGROUND_DIM = 0.45f
  * a frame, scaled up smooth, in the lower middle of the screen as StepMania's
  * dancers stand. The renderer runs while this is on screen and stops with it.
  * The song's beat is read here, on the main thread with the field, once a
- * frame, and handed to the renderer's thread.
+ * frame, and handed to the renderer's thread. Paused, neither ticks: the
+ * frame loop ends and the renderer sleeps until the run goes on, as the
+ * field's own clock stops ([rememberFrameTick]).
  */
 @Composable
 private fun GlyphDancer(
@@ -791,17 +793,23 @@ private fun GlyphDancer(
     songBeat: () -> Float,
     firstNoteBeat: Float,
     failed: () -> Boolean,
-    paused: () -> Boolean,
+    paused: Boolean,
     /** Themes › Sizes: from its feet, which stay where they stand. */
     scale: Float = 1f,
 ) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val beatNow = remember { java.util.concurrent.atomic.AtomicReference(0f) }
+    val pausedNow = remember { kotlinx.coroutines.flow.MutableStateFlow(paused) }
     val currentSongBeat by androidx.compose.runtime.rememberUpdatedState(songBeat)
     val currentFirstNote by androidx.compose.runtime.rememberUpdatedState(firstNoteBeat)
     val currentFailed by androidx.compose.runtime.rememberUpdatedState(failed)
-    val currentPaused by androidx.compose.runtime.rememberUpdatedState(paused)
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(paused) {
+        // Read before the renderer is let go, so its first pose after a pause
+        // is on the song's beat now (a restart from the pause menu starts the
+        // song over), and a first picture drawn while paused has a beat too.
+        beatNow.set(currentSongBeat())
+        pausedNow.value = paused
+        if (paused) return@LaunchedEffect
         while (true) {
             androidx.compose.runtime.withFrameNanos { }
             beatNow.set(currentSongBeat())
@@ -815,16 +823,18 @@ private fun GlyphDancer(
             beat = { beatNow.get() },
             firstNoteBeat = { currentFirstNote },
             failed = { currentFailed() },
-            paused = { currentPaused() },
+            paused = pausedNow,
         )
     }
     androidx.compose.runtime.DisposableEffect(renderer) {
         renderer.start()
         onDispose { renderer.stop() }
     }
-    val frame by renderer.frame.collectAsState()
-    val picture = frame ?: return
+    // Read in the draw, not here: a new picture 30 times a second redraws
+    // the canvas without recomposing this.
+    val frame = renderer.frame.collectAsState()
     androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+        val picture = frame.value ?: return@Canvas
         val feet = size.height * (DANCER_TOP_SHARE + DANCER_HEIGHT_SHARE)
         val height = size.height * DANCER_HEIGHT_SHARE * scale
         val width = height * picture.width / picture.height

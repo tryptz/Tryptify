@@ -90,4 +90,35 @@ class WidgetStyleTest {
         val light = resolveWidgetLook(WidgetStyle(glass = WidgetStyle.Glass.Light), coverColor = null)
         assertEquals(light, album)
     }
+
+    /** A 16×16 cover as [averageColor] reads it: [centre] in the middle quarter, [rest] around it. */
+    private fun cover(centre: Int, rest: Int) = IntArray(16 * 16) { i ->
+        val x = i % 16; val y = i / 16
+        if (x in 4 until 12 && y in 4 until 12) centre else rest
+    }
+
+    @Test
+    fun theAlbumColourIsTheWholeCoversNotItsMiddles() {
+        // The finding: a white subject in the middle of a dark red cover made white glass.
+        val red = 0xFF8B0000.toInt()
+        val average = Color(averageArgb(cover(centre = 0xFFFFFFFF.toInt(), rest = red)))
+        // A quarter white, three quarters red: still red, not near-white.
+        assertEquals((255 + 3 * 0x8B) / 4f / 255f, average.red, 1f / 255f)
+        assertEquals(255 / 4f / 255f, average.green, 1f / 255f)
+        assertEquals(average.green, average.blue, 0f)
+        assertTrue(average.red > average.green * 2)
+    }
+
+    @Test
+    fun aFlatCoverIsItsOwnColour() {
+        for (c in covers) assertEquals(Integer.toHexString(c), c, averageArgb(IntArray(256) { c }))
+    }
+
+    @Test
+    fun aTransparentMarginDoesNotDarkenTheCover() {
+        val orange = 0xFFE8875A.toInt()
+        val average = averageArgb(cover(centre = orange, rest = 0x00000000))
+        assertEquals(orange and 0xFFFFFF, average and 0xFFFFFF)
+        assertEquals(0, averageArgb(IntArray(4)))
+    }
 }

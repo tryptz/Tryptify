@@ -59,7 +59,9 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.R
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.popBackStackSafe
@@ -97,7 +99,11 @@ fun WidgetSettingsScreen(navController: NavController) {
         value = PreviewSong(snapshot, art)
     }
     // The wallpaper's colours, so the preview stands on what the widget does.
-    val wallpaper = remember { wallpaperColors(context) }
+    // A binder call to the wallpaper service, so read off the main thread
+    // rather than in composition.
+    val wallpaper by produceState<WallpaperRead?>(initialValue = null) {
+        value = WallpaperRead(withContext(Dispatchers.IO) { wallpaperColors(context) })
+    }
 
     fun save(style: WidgetStyle) {
         scope.launch {
@@ -116,8 +122,10 @@ fun WidgetSettingsScreen(navController: NavController) {
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
-        // Nothing until the saved style is read, so the defaults never flash.
+        // Nothing until the saved style and the wallpaper's colours are read,
+        // so neither the defaults nor the stand-in colours flash.
         val style = saved ?: return@Column
+        val wallpaperRead = wallpaper ?: return@Column
         val shown = style.copy(opacity = dragOpacity ?: style.opacity)
         Column(
             modifier = Modifier
@@ -127,7 +135,7 @@ fun WidgetSettingsScreen(navController: NavController) {
                 .padding(horizontal = 20.dp),
         ) {
             SettingsGroupHeader(stringResource(R.string.widget_style_preview))
-            WidgetPreview(shown, nowPlaying, wallpaper)
+            WidgetPreview(shown, nowPlaying, wallpaperRead.colors)
             Spacer(Modifier.height(20.dp))
 
             SettingsGroupHeader(stringResource(R.string.widget_style_glass))
@@ -245,6 +253,9 @@ private fun <T> Choice(options: List<T>, selected: T, label: @Composable (T) -> 
 private val PreviewCover = Color(0xFFE8875A)
 
 private class PreviewSong(val snapshot: NowPlayingSnapshot, val art: Bitmap?)
+
+/** The wallpaper's colours once read; [colors] is null when Android cannot say. */
+private class WallpaperRead(val colors: List<Color>?)
 
 /**
  * The medium widget over the wallpaper's colours (or stand-ins): its main

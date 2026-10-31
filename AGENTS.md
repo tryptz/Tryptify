@@ -93,7 +93,7 @@ with the NDK and run under qemu for both ARM ABIs when the NDK and
 otherwise that step says it skipped.
 
 Four more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, eighteen tests; the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, nineteen tests; the
 script above runs only `channel_placer_test` from it), Trypt Mania's game
 engine (`glyph/tests/`, held to the same rules as its Kotlin twin), the
 motion blur behind the note trails and the lyric glide (`motion/tests/`) and
@@ -281,7 +281,13 @@ googlevideo throttles or refuses open-ended requests), and plays or copies
 that file: a stream link is tied to the phone's address and expires, and the
 player never sees one. The cache holds 256 MiB, least recently played out
 first, never a file used in the last hour (the player may hold it for
-gapless playback); `YoutubeAudioCache`. Live streams and songs over 30
+gapless playback); `YoutubeAudioCache`. The song next in line, and only
+that one, is fetched the same way while the one before plays
+(`StreamResolver.warmUpcoming`, `UpcomingPrepare`), so it can be pre-queued
+for gapless playback; it waits while the song asked for is still being
+fetched, and stops when the queue moves on without it. A
+SoundCloud song next has its link asked for ahead and kept for its play,
+once (`ScxytRepository.prepareAhead`). Live streams and songs over 30
 minutes are refused, as the server refused them. NewPipe needs the R8 rules
 at the end of `proguard-rules.pro` (from NewPipe's own app): Rhino runs
 YouTube's player script and reaches Java by reflection, protobuf-lite reads

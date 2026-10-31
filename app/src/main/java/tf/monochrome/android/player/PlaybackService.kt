@@ -106,6 +106,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
+    @Inject lateinit var preparingPlay: PreparingPlay
     @Inject lateinit var playbackState: PlaybackStateRepository
     @Inject lateinit var playbackSignals: PlaybackSignals
     // The Audio Pipeline panel's window into the decoder. Nothing else in
@@ -473,7 +474,7 @@ class PlaybackService : MediaSessionService() {
                     // volume is re-asserted here — it's the only hook the
                     // hand-off gives us.
                     applyVolume()
-                    serviceScope.launch { preloadNextTracks() }
+                    preloadNextTracks()
                 }
                 // The window advanced, so the memo below is about the track
                 // that just played. A repeat-one queue would otherwise keep the
@@ -1367,6 +1368,9 @@ class PlaybackService : MediaSessionService() {
         }
         crossfade.release()
         playbackSignals.detach()
+        // While the engine still answers: a change no game player has asked
+        // for yet is read now, and the singleton lets go of this service.
+        if (::gameAudio.isInitialized) gameAudio.retireSeed()
         mediaSession?.run {
             player.release()
             release()
@@ -1404,16 +1408,26 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     fun playQueue() {
         val currentTrack = queueManager.currentTrack.value ?: return
+        // Unified tracks (local files, encrypted collections) go through a
+        // different resolver — they aren't HiFi API streams and the legacy
+        // resolver can't handle them. Consult the shared registry first so
+        // notification / lock-screen next / previous taps route correctly
+        // for mixed queues.
+        val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
+        // A track end or a skip from the notification waits for a YouTube or
+        // SoundCloud song to be made ready just as a tap does, and the play
+        // button's spinner says so (PreparingPlay).
+        val turn = preparingPlay.begin(
+            prepares = unifiedTrack?.source is tf.monochrome.android.domain.model.PlaybackSource.Scxyt,
+        )
         serviceScope.launch {
             try {
-                // Unified tracks (local files, encrypted collections) go through a
-                // different resolver — they aren't HiFi API streams and the legacy
-                // resolver can't handle them. Consult the shared registry first so
-                // notification / lock-screen next / previous taps route correctly
-                // for mixed queues.
-                val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
                 if (unifiedTrack != null) {
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
+                    // A newer play started while this one was made ready, and
+                    // the player is that one's now: a fetch that ends late
+                    // must not play over it, nor skip it by failing.
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (!resolved.isPlayable) {
                         onTrackEnded()
                         return@launch
@@ -1422,10 +1436,16 @@ class PlaybackService : MediaSessionService() {
                     player.prepare()
                     startPlayback()
                     // Recorded by the track change this causes (notePlay).
+
+                    // Warmed as the catalogue path below is. Without it a
+                    // track end, a blend or a notification skip left the next
+                    // song cold, which for a YouTube song is a whole fetch.
+                    preloadNextTracks()
                     return@launch
                 }
 
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(currentTrack)
+                if (!preparingPlay.isLatest(turn)) return@launch
 
                 if (mediaItem == null) {
                     onTrackEnded()
@@ -1472,9 +1492,11 @@ class PlaybackService : MediaSessionService() {
                 // window for the track we just started.
                 syncGaplessNext()
             } catch (e: Exception) {
-                onTrackEnded()
+                if (preparingPlay.isLatest(turn)) onTrackEnded()
             }
-        }
+            // On completion rather than in a finally: a play cancelled before
+            // it started (the service going) runs no finally.
+        }.invokeOnCompletion { preparingPlay.end(turn) }
     }
 
     @OptIn(UnstableApi::class)
@@ -1828,11 +1850,15 @@ class PlaybackService : MediaSessionService() {
         )
     }
 
-    /** Hands the settings as they stand to Trypt Mania's chains; called wherever one lands on the singletons. */
+    /**
+     * Hands the settings as they stand to Trypt Mania's chains; called wherever
+     * one lands on the singletons. Read only while a game player is alive
+     * (or when the next one comes), not on every knob turn for nobody.
+     */
     @OptIn(UnstableApi::class)
     private fun publishGameSeed() {
         if (!::gameAudio.isInitialized) return
-        gameAudio.publishSeed(currentDspSeed())
+        gameAudio.publishSeed(::currentDspSeed)
     }
 
     @OptIn(UnstableApi::class)
@@ -2357,17 +2383,21 @@ class PlaybackService : MediaSessionService() {
         return item.takeIf { GaplessEligibility.isStableUri(uri) }
     }
 
-    private suspend fun preloadNextTracks() {
+    private fun preloadNextTracks() {
         // Warm the next 2 tracks so a skip doesn't start cold. Only durable
         // work is done — see StreamResolver.warmUpcoming; a full resolve here
         // fetched short-lived stream URLs and discarded them, which cost a
         // request at the worst possible moment and bought nothing.
+        //
+        // Each on its own: a YouTube song next is a whole fetch, and the one
+        // after it, or the gapless window built after this, must not wait
+        // for that.
         val queue = queueManager.currentQueue
         val currentIdx = queueManager.currentQueueIndex
         for (i in 1..2) {
             val nextIdx = currentIdx + i
             if (nextIdx < queue.size) {
-                streamResolver.warmUpcoming(queue[nextIdx])
+                serviceScope.launch { streamResolver.warmUpcoming(queue[nextIdx], stepsAhead = i) }
             }
         }
     }

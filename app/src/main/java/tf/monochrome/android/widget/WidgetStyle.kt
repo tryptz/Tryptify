@@ -124,9 +124,45 @@ private fun mix(under: Color, over: Color, t: Float) = Color(
     blue = under.blue + (over.blue - under.blue) * t,
 )
 
-/** The cover's average colour, for the Album glass: flat, so there is no gradient to pick. */
-fun averageColor(bitmap: Bitmap): Int =
-    Bitmap.createScaledBitmap(bitmap, 1, 1, true).getPixel(0, 0)
+/**
+ * The cover's average colour, for the Album glass: flat, so there is no
+ * gradient to pick. Taken over a 16×16 copy, so every part of the cover
+ * counts. A filtered scale straight to 1×1 reads only the few pixels at the
+ * middle: a white subject on a red cover made white glass.
+ */
+fun averageColor(bitmap: Bitmap): Int {
+    val w = minOf(AVERAGE_GRID, bitmap.width)
+    val h = minOf(AVERAGE_GRID, bitmap.height)
+    val small = Bitmap.createScaledBitmap(bitmap, w, h, true)
+    val pixels = IntArray(w * h)
+    small.getPixels(pixels, 0, w, 0, 0, w, h)
+    if (small !== bitmap) small.recycle()
+    return averageArgb(pixels)
+}
+
+private const val AVERAGE_GRID = 16
+
+/**
+ * The mean of [pixels] (ARGB), each colour weighed by its alpha, so a
+ * cover's transparent margin does not pull it towards black. In the
+ * pixels' own sRGB values, as a scaled bitmap averages them.
+ */
+internal fun averageArgb(pixels: IntArray): Int {
+    var a = 0L; var r = 0L; var g = 0L; var b = 0L
+    for (p in pixels) {
+        val alpha = (p ushr 24).toLong()
+        a += alpha
+        r += ((p shr 16) and 0xFF) * alpha
+        g += ((p shr 8) and 0xFF) * alpha
+        b += (p and 0xFF) * alpha
+    }
+    if (a == 0L) return 0
+    val meanAlpha = (a + pixels.size / 2) / pixels.size
+    return (meanAlpha.toInt() shl 24) or
+        (((r + a / 2) / a).toInt() shl 16) or
+        (((g + a / 2) / a).toInt() shl 8) or
+        ((b + a / 2) / a).toInt()
+}
 
 /**
  * Where the style is kept: its own DataStore file, beside the snapshot's, for

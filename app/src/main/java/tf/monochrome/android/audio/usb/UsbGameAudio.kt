@@ -13,9 +13,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import tf.monochrome.android.audio.dsp.DspChain
 import tf.monochrome.android.audio.dsp.DspSeed
@@ -43,7 +41,8 @@ import tf.monochrome.android.data.preferences.PreferencesManager
  * them. The copy runs the same engine (mixer, Oxford Inflator, Compressor
  * and Crossfeed, ReplayGain, AutoEQ, Parametric EQ) on the DAC and on
  * Android's output alike, and follows the app's settings live: PlaybackService
- * publishes a [DspSeed] whenever one lands on its singletons ([publishSeed]).
+ * publishes a [DspSeed] whenever one lands on its singletons ([publishSeed]),
+ * read only while a player is alive to take it ([LazySeed]).
  * The taps stay out (spectrum, BPM, dynamic range, Atmos, projectM): they
  * feed what the app shows about the song playing in the main player.
  *
@@ -60,13 +59,12 @@ class UsbGameAudio @Inject constructor(
     preferences: PreferencesManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val _seed = MutableStateFlow<DspSeed?>(null)
+    private val seeds = LazySeed<DspSeed>()
     /** The players alive, on the main thread, each with its own chain. */
     private val players = LinkedHashSet<GamePlayerAudio>()
     private var replayGain = ReplayGainSettings()
 
     init {
-        scope.launch { _seed.filterNotNull().collect { seed -> players.forEach { it.apply(seed) } } }
         scope.launch {
             preferences.replayGainSettings.collect { settings ->
                 replayGain = settings
@@ -81,9 +79,25 @@ class UsbGameAudio @Inject constructor(
     /** True while Trypt Mania's audio is what the DAC plays. */
     fun gameOnDac(): Boolean = driver.holdsStream(StreamClaimant.GAME)
 
-    /** The main player's settings as they stand; every game chain follows. Any thread. */
-    fun publishSeed(seed: DspSeed) {
-        _seed.value = seed
+    /**
+     * The main player's settings have changed; [seed] reads them as they
+     * stand, and every game chain follows. Read now while a player is alive,
+     * otherwise when the next one comes: the read is the engine's whole state,
+     * serialised and parsed again, and nobody outside Trypt Mania needs it.
+     * Main thread.
+     */
+    fun publishSeed(seed: () -> DspSeed) {
+        val changed = seeds.publish(seed, listening = players.isNotEmpty()) ?: return
+        players.forEach { it.apply(changed) }
+    }
+
+    /**
+     * The publisher is going (PlaybackService's onDestroy): a change it has
+     * not been asked for yet is read now, and its reader is let go, so this
+     * singleton does not keep a destroyed service. Main thread.
+     */
+    fun retireSeed() {
+        seeds.retire()
     }
 
     /** A player's audio: its renderers, its chain, and what the song and the speed tell it. Main thread. */
@@ -102,7 +116,7 @@ class UsbGameAudio @Inject constructor(
 
         init {
             chain.observeEngine(scope)
-            _seed.value?.let { apply(it) }
+            seeds.current()?.let { apply(it) }
         }
 
         /**
@@ -180,5 +194,51 @@ class UsbGameAudio @Inject constructor(
             players.remove(this)
             chain.release()
         }
+    }
+}
+
+/**
+ * A value worked out only when someone is there to take it: the game's
+ * [DspSeed], which PlaybackService publishes on every EQ, knob and engine
+ * change, on the main thread, whether or not Trypt Mania is open.
+ *
+ * [publish] keeps the reader. While somebody listens it reads at once and
+ * hands on what changed, every change as before (an equal value is no
+ * change, as a StateFlow would have it); otherwise it only notes that the
+ * last value is stale. [current], for a newcomer, reads once if it is.
+ * Main thread, like its callers; not thread-safe.
+ */
+internal class LazySeed<T : Any> {
+    private var source: (() -> T)? = null
+    private var latest: T? = null
+    private var stale = false
+
+    /** A change; when [listening], the value read now if it differs from the last, else null (read later, or nothing new). */
+    fun publish(source: () -> T, listening: Boolean): T? {
+        this.source = source
+        if (!listening) {
+            stale = true
+            return null
+        }
+        stale = false
+        val value = source()
+        if (value == latest) return null
+        latest = value
+        return value
+    }
+
+    /** The value as it stands, read now if a change came while nobody listened; null before any. */
+    fun current(): T? {
+        if (stale) {
+            stale = false
+            latest = source?.invoke()
+        }
+        return latest
+    }
+
+    /** Reads what is stale and lets go of the reader; the last value stays for [current]. */
+    fun retire() {
+        current()
+        source = null
     }
 }

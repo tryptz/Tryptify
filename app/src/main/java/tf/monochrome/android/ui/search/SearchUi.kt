@@ -219,6 +219,9 @@ fun SearchResultsContent(
     // Why the chosen source gave nothing, when it is off (YouTube or
     // SoundCloud signed out, or turned away): one line under the chips.
     sourceNote: SearchViewModel.SourceNote? = null,
+    // YouTube or SoundCloud is still out under results already up: the
+    // footer spinner, and no "No results found" until it has answered.
+    isSearchingMore: Boolean = false,
 ) {
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -523,8 +526,9 @@ fun SearchResultsContent(
 
                 // Footer spinner while another page is in-flight.
                 // Disappears once every type has hit endReached so the
-                // list terminates cleanly.
-                if (isLoadingMore && !endReached) {
+                // list terminates cleanly. The same spinner stands while
+                // YouTube or SoundCloud is still out.
+                if ((isLoadingMore && !endReached) || isSearchingMore) {
                     item(key = "loadingMore", contentType = "footer") {
                         Row(
                             modifier = Modifier
@@ -560,9 +564,11 @@ fun SearchResultsContent(
                                 )
                                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                             }
-                        } else if (sourceNote == null) {
+                        } else if (sourceNote == null && !isSearchingMore) {
                             // A chosen source with a note (signed out, turned away)
                             // searched nothing: its line under the chips says why.
+                            // One still out may yet find something: the spinner
+                            // above stands until it has answered.
                             Text(
                                 text = stringResource(R.string.no_results),
                                 style = MaterialTheme.typography.bodyLarge,

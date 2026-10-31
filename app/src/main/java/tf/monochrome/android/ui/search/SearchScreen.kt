@@ -38,6 +38,7 @@ fun SearchScreen(
     val artists by viewModel.artists.collectAsStateWithLifecycle()
     val playlistResults by viewModel.playlists.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    val isSearchingMore by viewModel.isSearchingMore.collectAsStateWithLifecycle()
     val selectedType by viewModel.selectedType.collectAsStateWithLifecycle()
     val selectedSource by viewModel.selectedSource.collectAsStateWithLifecycle()
     val showSourceFilter by viewModel.showSourceFilter.collectAsStateWithLifecycle()
@@ -117,6 +118,7 @@ fun SearchScreen(
             albumSources = albumSources,
             artistSources = artistSources,
             sourceNote = sourceNote,
+            isSearchingMore = isSearchingMore,
             emptyContent = { inset ->
                 SearchHistoryContent(
                     history = searchHistory,

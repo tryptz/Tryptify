@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,7 +41,8 @@ import kotlinx.serialization.json.Json
  * chart's first measure, resting once the run fails, every move on the song's
  * beat ([beat]), blended into the next, the camera turning about it as
  * StepMania's does. Moves are read as they are needed, a few at a time, never
- * all of them at once. Nothing is drawn while [paused]: the picture holds.
+ * all of them at once. Nothing is drawn while [paused]: the picture holds,
+ * and the loop sleeps until the run goes on rather than waking to check.
  */
 class GlyphCharacterRenderer(
     private val characterDir: File,
@@ -53,7 +55,7 @@ class GlyphCharacterRenderer(
     /** Whether the run has failed: the dancer rests. */
     private val failed: () -> Boolean,
     /** Whether the run is paused: the dancer holds. */
-    private val paused: () -> Boolean,
+    private val paused: StateFlow<Boolean>,
 ) {
     // Three, so the one being drawn is never the one the screen is reading.
     private val buffers = Array(BUFFERS) { Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888) }
@@ -77,14 +79,19 @@ class GlyphCharacterRenderer(
             launch(Dispatchers.IO) { loadMoves(scene) }
             var last = System.nanoTime()
             while (isActive) {
+                // Paused with a picture up: nothing to draw until the run goes
+                // on. The clock starts again from the wake, so the dance takes
+                // one frame's step, as it did when the loop ticked through.
+                if (paused.value && _frame.value != null) {
+                    paused.first { !it }
+                    last = System.nanoTime() - 1_000_000_000L / FPS
+                }
                 val now = System.nanoTime()
                 val dt = ((now - last) / 1e9f).coerceIn(0f, 0.25f)
                 last = now
-                if (!paused() || _frame.value == null) {
-                    val step = choreography.update(beat(), dt, firstNoteBeat(), failed())
-                    wanted = choreography.wanted()
-                    render(scene, step)
-                }
+                val step = choreography.update(beat(), dt, firstNoteBeat(), failed())
+                wanted = choreography.wanted()
+                render(scene, step)
                 delay(1000L / FPS)
             }
         }

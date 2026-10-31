@@ -129,13 +129,23 @@ class LibraryRepository @Inject constructor(
         }
     }
 
+    /**
+     * [sourceOf] for a song being liked or put in a playlist. A YouTube or
+     * SoundCloud one is marked in the registry as reading the list would mark
+     * it, which keeps its entry for good from now: the saved row holds only
+     * the hash, and the entry is how this run plays it.
+     */
+    private fun savedSourceOf(track: Track): String = sourceOf(track).also {
+        if (it == TrackSource.YOUTUBE || it == TrackSource.SOUNDCLOUD) unifiedTrackRegistry.markScxytHash(track.id)
+    }
+
     suspend fun toggleFavoriteTrack(track: Track) {
         if (favoriteDao.isFavoriteTrack(track.id)) {
             favoriteDao.deleteFavoriteTrack(track.id)
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.DELETE)
             starOnServer(track.id, starred = false)
         } else {
-            favoriteDao.insertFavoriteTrack(track.toFavoriteEntity().copy(source = sourceOf(track)))
+            favoriteDao.insertFavoriteTrack(track.toFavoriteEntity().copy(source = savedSourceOf(track)))
             supabaseSync.queueChange(SyncKind.FAVORITE_TRACK, track.id.toString(), SyncOp.UPSERT)
             autoDownloadOnLike(track)
             starOnServer(track.id, starred = true)
@@ -336,7 +346,7 @@ class LibraryRepository @Inject constructor(
     }
 
     suspend fun addTrackToPlaylist(playlistId: String, track: Track) {
-        playlistDao.addTrackToPlaylist(playlistId, track.toPlaylistTrackEntity(playlistId).copy(source = sourceOf(track)))
+        playlistDao.addTrackToPlaylist(playlistId, track.toPlaylistTrackEntity(playlistId).copy(source = savedSourceOf(track)))
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, track.id), SyncOp.UPSERT)
     }
 
@@ -360,7 +370,7 @@ class LibraryRepository @Inject constructor(
         replacement: Track,
     ): PlaylistTrackReplacement {
         val outcome = playlistDao.replacePlaylistTrack(
-            playlistId, oldTrackId, replacement.toPlaylistTrackEntity(playlistId).copy(source = sourceOf(replacement))
+            playlistId, oldTrackId, replacement.toPlaylistTrackEntity(playlistId).copy(source = savedSourceOf(replacement))
         )
         if (outcome == PlaylistTrackReplacement.REPLACED || outcome == PlaylistTrackReplacement.MERGED) {
             supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, oldTrackId), SyncOp.DELETE)

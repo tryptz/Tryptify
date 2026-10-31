@@ -606,11 +606,14 @@ visual links read `SpectrumAnalyzerTap.linkPower`, a plain power spectrum of
 their own (`LinkBandAnalysis`: a 2048-sample window, 43 ms at 48 kHz, taken
 whenever new sound arrives, at most every 5 ms, while a link listens:
 `acquireLinks`), and each sums only its band's bins into the band's RMS in
-dBFS, as the mixer's knob links measure theirs. `spectrumBins` is for the eye:
-tilted pink, re-centred each frame on the 200 Hz–2 kHz average (a kick link
-fell when the vocals rose), blurred across neighbouring bins, smoothed over a
-fifth of a second and taken over an 8K or 16K window; a link read off it
-lagged, softened and moved with sound outside its band.
+dBFS, as the mixer's knob links measure theirs. Once no sound has come for
+150 ms it publishes silence and sleeps until the audio thread's next buffer
+wakes it (`SoundArrival`), rather than looking every 5 ms: paused with the
+lyrics open, that was 200 wake-ups a second for nothing. `spectrumBins` is
+for the eye: tilted pink, re-centred each frame on the 200 Hz–2 kHz average
+(a kick link fell when the vocals rose), blurred across neighbouring bins,
+smoothed over a fifth of a second and taken over an 8K or 16K window; a link
+read off it lagged, softened and moved with sound outside its band.
 
 **The lyrics' beat engine listens as the links do.** `rememberBassPulse`
 reads the energy of 40–110 Hz from the links' own analysis (`linkPower`,
@@ -823,7 +826,10 @@ cover, a sheen or any gradient.
 widget (`WidgetSettingsScreen`, the owner asked for it): glass Light, Dark or
 Album colour (the cover's *average* colour, flat), opacity 0–85% (default
 Light at 18%), the edge, the cover, the progress line, a Solid or Glass play
-disc, and the text: Auto, White or Dark. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
+disc, and the text: Auto, White or Dark. The average is taken over a 16×16
+copy of the whole cover (`averageColor`); a filtered scale straight to 1×1
+read only the pixels at its middle, and a white subject on a red cover made
+white glass. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
 not synced: it is about this phone's home screen. Every option stays one
 flat colour at an opacity.
 
@@ -839,7 +845,9 @@ not what sits behind the widget. `WidgetStyleTest` sweeps every glass, cover,
 opacity and a range of wallpapers for 4:1. The widget and the Settings preview
 both draw from `resolveWidgetLook`, and the preview stands on the wallpaper's
 colours and shows the song the widget is showing (`NowPlayingSnapshotStore`),
-so it cannot drift from the widget.
+so it cannot drift from the widget. Settings reads those colours off the main
+thread (a binder call) and shows nothing until it has them, as with the saved
+style, so the stand-in colours never flash.
 
 **A widget's tint drops its alpha. Translucency is a background colour.**
 Glance's `ColorFilter.tint` becomes `ImageView.setColorFilter`, which is
@@ -1443,6 +1451,23 @@ search while a service refuses is what this prevents. While the note shows,
 "No results found" does not: nothing was searched, and the note says why. The
 note is a polite live region, so TalkBack reads it when it appears.
 
+**They never hold the others up.** The catalogues, the library and My server
+are shown the moment they answer; YouTube and SoundCloud are asked beside them
+and merged in as each answers, each still within its 7 s (`SearchRound`).
+Their songs are ranked into the first page as if they had come with it, so a
+catalogue's copy of a song stays above theirs, and pages loaded on scroll
+meanwhile stay below. While one is out over results already up, the paging
+spinner sits under them (`isSearchingMore`); with nothing up yet, the
+full-page one stays. "No results found" and "couldn't reach search" wait for
+both: either may still find something. A newer query drops the older one's
+late answers. Only a chip that can list their songs asks for them
+(`SearchViewModel.lateSourcesFor`): All and Local (a downloaded song is
+local) ask both, each one's own chip asks it alone, and searching under
+TIDAL, Qobuz, Deezer, Collection or My server sends them nothing; choosing All,
+Local or their chip afterwards asks them then. Awaited with the rest, every
+search waited for YouTube's, up to 7 s, and sent YouTube every query
+whichever chip was chosen.
+
 **Signing in names the place.** Every line that asks for a sign-in for
 SoundCloud says "Sign in on the Account page", as Tryptify Cloud's does: a bare
 "Sign in to search SoundCloud" reads as a SoundCloud account, which the app
@@ -1463,6 +1488,23 @@ Never "the server" alone: the listener has never heard of it. No connection
 has its own line ("Couldn't reach YouTube. Check your connection and try
 again."). A queue failing for one reason says it once, not once a song
 (`PlayerViewModel.tellResolveFailure`).
+
+**The play button's spinner shows while the song asked for is made ready.**
+A YouTube song is fetched whole and a SoundCloud one prepared by the server
+before the player gets anything, which takes seconds, longer on mobile data,
+and the player's own buffering state has nothing to say meanwhile: the tap
+looked dead and got tapped again. So `PlayerViewModel.isBuffering` is the
+player buffering *or* `PreparingPlay.waiting`, the same ring either way, for
+a tap in the app and for the service's own advance (a track end, a blend, a
+notification skip) alike. Never for a song made ready ahead of its turn: the
+next song warming while this one plays shows nothing. Every play takes a turn
+(`PreparingPlay.begin`), and only the newest one's ending clears it, so a
+slow fetch that ends after a newer tap neither clears that tap's spinner nor
+leaves one stuck, and it does not play over the newer song or skip it by
+failing. A plain boolean set and cleared by each play gets exactly that
+wrong. A turn ends when its play's job completes (`invokeOnCompletion`, not a
+`finally`), so a play whose scope was cancelled before it started does not
+leave the spinner on either. `PreparingPlayTest` holds it.
 
 **Download is in the ⋮ menu**, which registers the song first
 (`PlayerViewModel.downloadUnified`) so the download is fetched by the song's
@@ -2159,7 +2201,10 @@ mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and
 the Parametric EQ; never the taps, which show the main player's song), on
 the DAC and on Android's output alike, and it follows the app's settings
 live: `PlaybackService` publishes a `DspSeed` to `UsbGameAudio` whenever a
-setting lands on its singletons. The main player's stages are never shared
+setting lands on its singletons. The seed (the engine's whole state, read
+back and parsed again) is read only while a game player is alive, or once
+when the next one starts (`LazySeed`), so a knob turned with the game
+closed costs the main thread nothing. The main player's stages are never shared
 with the game: they hold one stream's state. A game song has no gain tags,
 so ReplayGain on measures it as it plays, as for an untagged song. The
 engine's own latency (the Inflator's band split is a few milliseconds)
@@ -2773,7 +2818,11 @@ flash and combo burst have faded in real time, and starts again on Resume. A
 room's run passes true under its pause panel; previews always run. The life
 bar throbs and shimmers only in danger or full; the song card's beat light runs
 only while a preview plays. Before, a paused game redrew every frame, the CRT
-pass included, over a picture nobody could see.
+pass included, over a picture nobody could see. The dancer holds whenever
+the run is paused, a room's pause panel included, as it always has: paused,
+`GlyphDancer` reads no beat each frame and `GlyphCharacterRenderer` sleeps
+on the paused state until Resume, and a new picture only redraws its
+canvas, never recomposes it.
 
 **The field's art is warmed once per size, skin, glass and set of note
 divisions, and drawn by place** (`GlyphFieldArt`). The game keeps its own size

@@ -24,6 +24,11 @@ import tf.monochrome.android.domain.model.TrackStream
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.buildCoverUrl
 import tf.monochrome.android.domain.usecase.CrossSourceMatcher
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import tf.monochrome.android.data.scxyt.ScxytSource
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,8 +61,21 @@ class StreamResolver @Inject constructor(
     private val subsonicRepository: tf.monochrome.android.data.subsonic.SubsonicRepository,
     private val scxytRepository: tf.monochrome.android.data.scxyt.ScxytRepository,
     private val unifiedTrackRegistry: UnifiedTrackRegistry,
+    private val queueManager: QueueManager,
+    private val preparingPlay: PreparingPlay,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) {
+    /**
+     * The YouTube or SoundCloud song next in line, made ready on a scope of
+     * its own: the queue owns that work, not whichever caller asked first.
+     */
+    private val upcomingScxyt = UpcomingPrepare(
+        queue = queueManager,
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        playPreparing = preparingPlay.waiting,
+        prepare = { mediaId -> scxytRepository.prepareAhead(mediaId).isSuccess },
+    )
+
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
         val parsed = raw.toUri()
@@ -178,7 +196,8 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * Pre-warm what can *usefully* be pre-warmed for an upcoming queue entry.
+     * Pre-warm what can *usefully* be pre-warmed for an upcoming queue entry,
+     * [stepsAhead] places after the one playing.
      *
      * Only work whose result outlives the call is done here. Qobuz parks the
      * whole file on disk and the on-device lookup is memoised, so both make the
@@ -188,12 +207,28 @@ class StreamResolver @Inject constructor(
      * that and threw the answer away, spending a request (and connection
      * contention) at the precise moment the current track was trying to start.
      *
+     * A YouTube song is fetched whole into the phone's cache, and a SoundCloud
+     * one is fetched by the server, whose link holds for hours: both are what
+     * the play would otherwise wait for. Each is a whole song, so it is done
+     * for the next one only, never one further on, and the queue owns the work
+     * ([UpcomingPrepare]): it stops when the queue moves on without the song.
+     *
      * Returns whether this track can also be *pre-queued* — handed to
-     * ExoPlayer's playlist now for gapless playback. That's true of exactly the
-     * sources warmed here, because they're the ones that resolve to a URI which
-     * is still valid minutes later; see [GaplessEligibility].
+     * ExoPlayer's playlist now for gapless playback. That's true of the
+     * sources warmed here whose URI is still valid minutes later, a YouTube
+     * song's file among them but not a SoundCloud link; see [GaplessEligibility].
      */
-    suspend fun warmUpcoming(track: Track): Boolean = runCatching {
+    suspend fun warmUpcoming(track: Track, stepsAhead: Int = 1): Boolean = try {
+        warm(track, stepsAhead)
+    } catch (e: CancellationException) {
+        // The caller stopped waiting (a gapless job started again): it ends
+        // there, rather than going on as if the song could not be warmed.
+        throw e
+    } catch (e: Throwable) {
+        false
+    }
+
+    private suspend fun warm(track: Track, stepsAhead: Int): Boolean {
         val local = localFor(
             title = track.title,
             artist = track.displayArtist,
@@ -201,22 +236,29 @@ class StreamResolver @Inject constructor(
             durationSeconds = track.duration,
             catalogTrackId = track.id,
         )
-        if (local != null) return@runCatching true
+        if (local != null) return true
+        // Before the catalogue checks below, as a play goes: both resolvers
+        // ask the registry first.
+        (unifiedTrackRegistry[track.id]?.source as? PlaybackSource.Scxyt)?.let { scxyt ->
+            if (stepsAhead != 1) return false
+            val ready = upcomingScxyt.warm(track.id, scxyt.mediaId)
+            return ready && ScxytSource.ofId(scxyt.mediaId) == ScxytSource.YOUTUBE
+        }
         if (qobuzIdRegistry.isQobuzTrack(track.id)) {
             // Kicks the download off and returns; it keeps filling the
             // cache on the manager's own scope, so by the time this track
             // is reached it is already there.
             qobuzCache.openPartial(track.id, repository.streamQuality(ApiService.QOBUZ))
-            return@runCatching true
+            return true
         }
         // Same for Deezer — but only when the full file is really coming. The
         // preview fallback is a signed URL, which must not be pre-queued.
         if (track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id)) {
             val started = deezerCache.openPartial(track.deezerId ?: track.id, repository.streamQuality(ApiService.DEEZER))
-            return@runCatching started != null && started.failure == null
+            return started != null && started.failure == null
         }
-        false
-    }.getOrDefault(false)
+        return false
+    }
 
     // New method for UnifiedTrack
     @OptIn(UnstableApi::class)

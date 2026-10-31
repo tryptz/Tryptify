@@ -41,9 +41,21 @@ import javax.inject.Singleton
  * A song from the listener's own server is never let go. Liked Songs,
  * playlists and search show plain tracks and never put their rows here, and
  * for a server song this is the only record of where it plays from: forgotten,
- * a tap on it went to TIDAL with its hashed id. The same holds for a YouTube
- * or SoundCloud song, whose id is a hash too. A local file forgotten is
+ * a tap on it went to TIDAL with its hashed id. A local file forgotten is
  * still found, by its tags (StreamResolver's local lookup).
+ *
+ * A YouTube or SoundCloud song's id is a hash too, but every search result in
+ * a list that was played lands here, and kept for good they only grew. So
+ * only the ones a like or a playlist holds are kept for good: their rows have
+ * nothing but the hash ([markScxytHash], on reading the list or saving the
+ * song), and this is how this run plays them. The rest are a bound of their
+ * own, [KEEP_SCXYT_OUTSIDE_QUEUE], kept by the same order as the others, so
+ * the churn of a library queue never pushes them out. Those come back on
+ * their own: Recently Played puts its rows here each time it is read, a
+ * search puts its results when one is played, a download plays from its file
+ * (the local lookup, by the hashed id), and the saved queue puts its songs
+ * back when it is restored. One let go stays known by its hash
+ * ([isUnresolvedScxyt]), so a list still showing it never sends it to TIDAL.
  */
 @Singleton
 class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
@@ -75,10 +87,19 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
     // A liked or playlisted YouTube or SoundCloud song keeps only its hashed
     // id, with FavoriteTrackEntity.source naming the service. Until this run
     // sees the song itself, that number must not reach TIDAL, whose catalogue
-    // may hold a different song under it.
+    // may hold a different song under it. The same goes for one whose entry
+    // was let go here: a list may still show it by its hash. Only the ids
+    // are kept, a few dozen bytes each against an entry's 1.4 KB.
     private val scxytHashes = ConcurrentHashMap.newKeySet<Long>()
 
-    fun markScxytHash(trackId: Long) { scxytHashes.add(trackId) }
+    /** The liked and playlisted ones among them, whose entries are kept for good. */
+    private val savedScxyt = ConcurrentHashMap.newKeySet<Long>()
+
+    /** [trackId] is a liked or playlisted YouTube or SoundCloud song's hashed id. */
+    fun markScxytHash(trackId: Long) {
+        scxytHashes.add(trackId)
+        savedScxyt.add(trackId)
+    }
 
     /** A YouTube or SoundCloud song known only by its hash: nothing here can play it. */
     fun isUnresolvedScxyt(trackId: Long): Boolean =
@@ -91,7 +112,8 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
 
     /**
      * Forgets what is neither in [queue] nor [original] (the queue's
-     * pre-shuffle order) nor among the [KEEP_OUTSIDE_QUEUE] kept outside it.
+     * pre-shuffle order) nor among the [KEEP_OUTSIDE_QUEUE] kept outside it
+     * (YouTube and SoundCloud songs: [KEEP_SCXYT_OUTSIDE_QUEUE]).
      * On the queue's own thread, right after it changed: the tracks of a new
      * queue are put here before it is set, so they are in it by now.
      */
@@ -100,24 +122,34 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
         val now = clock.incrementAndGet()
         for (track in queue) map[track.id]?.queuedAt = now
         for (track in original) map[track.id]?.queuedAt = now
-        if (map.size <= KEEP_OUTSIDE_QUEUE) return
+        if (map.size <= minOf(KEEP_OUTSIDE_QUEUE, KEEP_SCXYT_OUTSIDE_QUEUE)) return
 
         val outside = ArrayList<Map.Entry<Long, Entry>>()
+        val scxytOutside = ArrayList<Map.Entry<Long, Entry>>()
         for (entry in map.entries) {
-            if (entry.value.queuedAt != now && !entry.value.track.source.keptForGood()) outside += entry
+            if (entry.value.queuedAt == now || keptForGood(entry.key, entry.value.track.source)) continue
+            if (entry.value.track.source is PlaybackSource.Scxyt) scxytOutside += entry else outside += entry
         }
-        if (outside.size <= KEEP_OUTSIDE_QUEUE) return
+        keepNewest(outside, KEEP_OUTSIDE_QUEUE)
+        // Known as a hash from now on, so a tap on it is skipped rather than
+        // sent to TIDAL, until a search or Recently Played puts it back.
+        keepNewest(scxytOutside, KEEP_SCXYT_OUTSIDE_QUEUE) { scxytHashes.add(it) }
+    }
 
-        val keys = LongArray(outside.size) { rank(outside[it].value) }
-        val cutoff = keys.copyOf().also { it.sort() }[outside.size - KEEP_OUTSIDE_QUEUE]
-        for (i in outside.indices) {
+    /** Forgets all but the [keep] of [entries] ranked highest, telling [dropped] of each. */
+    private inline fun keepNewest(entries: List<Map.Entry<Long, Entry>>, keep: Int, dropped: (Long) -> Unit = {}) {
+        if (entries.size <= keep) return
+        val keys = LongArray(entries.size) { rank(entries[it].value) }
+        val cutoff = keys.copyOf().also { it.sort() }[entries.size - keep]
+        for (i in entries.indices) {
             // Only the entry looked at: one put again meanwhile stays.
-            if (keys[i] < cutoff) map.remove(outside[i].key, outside[i].value)
+            if (keys[i] < cutoff && map.remove(entries[i].key, entries[i].value)) dropped(entries[i].key)
         }
     }
 
-    /** A song whose hashed id is the only way back to where it plays from; see the class comment. */
-    private fun PlaybackSource.keptForGood(): Boolean = this is PlaybackSource.Subsonic || this is PlaybackSource.Scxyt
+    /** A song this registry is the only way back to where it plays from; see the class comment. */
+    private fun keptForGood(trackId: Long, source: PlaybackSource): Boolean =
+        source is PlaybackSource.Subsonic || (source is PlaybackSource.Scxyt && trackId in savedScxyt)
 
     /** Higher is kept first; see the class comment. */
     private fun rank(entry: Entry): Long =
@@ -127,6 +159,13 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
     companion object {
         /** Tracks kept that are not in the queue: about 1.4 MB of them at most. */
         const val KEEP_OUTSIDE_QUEUE = 1_000
+
+        /**
+         * YouTube and SoundCloud songs kept that are not in the queue, nor
+         * liked nor in a playlist: about a hundred played searches' worth,
+         * some 2.8 MB at most.
+         */
+        const val KEEP_SCXYT_OUTSIDE_QUEUE = 2_000
 
         /** Above every rank of a track that only left a queue. */
         private const val ASKED_FOR = 1L shl 62

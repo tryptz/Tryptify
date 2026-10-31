@@ -76,12 +76,28 @@ class ScxytRepository @Inject constructor(
     suspend fun search(query: String, source: ScxytSource, limit: Int = SEARCH_LIMIT): Result<List<UnifiedTrack>> =
         router.search(query, source, limit)
 
+    /** SoundCloud links asked for ahead of their songs' turn ([prepareAhead]). */
+    private val readyAhead = ReadyAhead<ScxytStream>(maxAgeMs = READY_AHEAD_MS)
+
     /**
      * Makes [mediaId] ready to play: a YouTube song (`yt:…`) fetched whole
      * into the phone's cache, a SoundCloud one (`sc:…`) fetched by the server,
-     * which returns its six-hour link.
+     * which returns its six-hour link. A SoundCloud link already asked for
+     * ahead of the song's turn is used instead of asking again.
      */
-    suspend fun prepare(mediaId: String): Result<ScxytStream> = router.prepare(mediaId)
+    suspend fun prepare(mediaId: String): Result<ScxytStream> =
+        readyAhead.take(mediaId)?.let { Result.success(it) } ?: router.prepare(mediaId)
+
+    /**
+     * [prepare], for the song after the one playing. A YouTube song lands in
+     * the phone's cache, where its play finds it. A SoundCloud song's link is
+     * kept here for its play, so the server is asked once for the song however
+     * often the queue warms it.
+     */
+    suspend fun prepareAhead(mediaId: String): Result<ScxytStream> {
+        readyAhead.peek(mediaId)?.let { return Result.success(it) }
+        return router.prepare(mediaId).onSuccess { if (it.file == null) readyAhead.put(mediaId, it) }
+    }
 
     /**
      * Has the server make the preview Discord plays for [mediaId]'s shared
@@ -134,5 +150,8 @@ class ScxytRepository @Inject constructor(
 
         /** A first page, as the search screen shows one source's songs. */
         const val SEARCH_LIMIT = 20
+
+        /** How long a link asked for ahead is handed to a play: an hour of its six. */
+        const val READY_AHEAD_MS = 60 * 60 * 1000L
     }
 }

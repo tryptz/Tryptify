@@ -186,6 +186,12 @@ class SpectrumAnalyzerTap @Inject constructor(
     @Volatile private var linksActive = false
     private val linkSubscribers = AtomicInteger(0)
     private var linkJob: Job? = null
+    /**
+     * The running links loop waits on it once it has gone silent; [queueInput]
+     * wakes it. Each loop has its own, so one let go (releaseLinks) that has
+     * not stopped yet cannot take the wait of the next.
+     */
+    @Volatile private var linkArrival: SoundArrival? = null
 
     /** The ring fills while the display or the links listen. */
     private val ringActive: Boolean get() = analysisActive || linksActive
@@ -206,6 +212,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                     linksActive = false
                     linkJob?.cancel()
                     linkJob = null
+                    linkArrival = null
                     _linkPower.value = LinkPower(FloatArray(0), sampleRate)
                 }
             }
@@ -216,6 +223,8 @@ class SpectrumAnalyzerTap @Inject constructor(
         if (!ringActive) restartRing()
         linksActive = true
         linkJob?.cancel()
+        val arrival = SoundArrival()
+        linkArrival = arrival
         linkJob = scope.launch {
             val analysis = LinkBandAnalysis()
             val samples = FloatArray(LinkBandAnalysis.SIZE)
@@ -240,7 +249,9 @@ class SpectrumAnalyzerTap @Inject constructor(
                         _linkPower.value = LinkPower(out, sampleRate)
                         silent = true
                     }
-                    delay(LINK_HOP_MS)
+                    // Silence published, there is nothing to look at until the
+                    // next buffer: sleep until it comes, and take it at once.
+                    if (silent) arrival.await { ringWrite == lastWriteIdx } else delay(LINK_HOP_MS)
                     continue
                 }
                 idleSince = 0L
@@ -546,6 +557,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
             }
             ringWrite = w
+            linkArrival?.arrived()
             if (cn > 0) WaveScopeNative.nativePush(scopeChunk, cn, sampleRate)
         }
 

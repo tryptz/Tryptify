@@ -98,6 +98,7 @@ class PlayerViewModel @Inject constructor(
     private val openedAudio: tf.monochrome.android.data.opened.OpenedAudioRepository,
     private val sharedLinkResolver: tf.monochrome.android.share.SharedLinkResolver,
     private val shareLinks: tf.monochrome.android.share.ShareLinks,
+    private val preparingPlay: tf.monochrome.android.player.PreparingPlay,
 ) : ViewModel() {
 
     /**
@@ -189,7 +190,15 @@ class PlayerViewModel @Inject constructor(
     // per access.
 
     private val _isBuffering = MutableStateFlow(false)
-    val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
+
+    /**
+     * The player loading, or the song asked for still being made ready before
+     * the player can have it (a YouTube or SoundCloud song, PreparingPlay):
+     * either way the tap was taken and the play button's spinner shows it.
+     */
+    val isBuffering: StateFlow<Boolean> = combine(_isBuffering, preparingPlay.waiting) { loading, preparing ->
+        loading || preparing
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Surfaced to the player UI when a track can't be resolved/streamed. Also
     // used to break the resolve→fail→skip→resolve loop that otherwise ran
@@ -1375,6 +1384,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
     }
 
+    /**
+     * The plays still being resolved, and the queue entry they are for: more
+     * than one when the same song was tapped again, all stopped together by
+     * a tap on another.
+     */
+    private val resolveJobs = ArrayList<Job>()
+    private var resolvingTrackId: Long? = null
+
     private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
         // Consumed on first use and keyed on the track, so replaying it later
@@ -1389,21 +1406,36 @@ class PlayerViewModel @Inject constructor(
         // song ended" and pick a matching transition length. Bumped before the
         // resolve so it is already recorded when the track change lands.
         _userTrackChanges.value++
-        viewModelScope.launch {
+        // Resolution priority:
+        //   1. unifiedTrackRegistry — local files / collections / Qobuz
+        //      tracks already promoted to UnifiedTrack at queue time.
+        //   2. qobuzIdRegistry — synthesize a QobuzCached UnifiedTrack
+        //      for tracks whose ids came in via getQobuzAlbum /
+        //      getQobuzArtist / searchQobuz but were enqueued as
+        //      legacy Track (e.g. an album-detail screen tap). Without
+        //      this step the legacy path below would call TIDAL
+        //      /track/?id=<qobuzId> which either 404s or returns the
+        //      wrong track because the numeric id doesn't match.
+        //   3. Legacy TIDAL path.
+        val unifiedTrack = unifiedTrackRegistry[track.id]
+            ?: synthesizeQobuzUnifiedTrack(track)
+        // A YouTube or SoundCloud song is made ready before the player gets
+        // it, for seconds; the play button's spinner shows that wait
+        // (PreparingPlay). This play is the newest from here on: one still
+        // being made ready comes back to find it is not, and does nothing.
+        val turn = preparingPlay.begin(prepares = unifiedTrack?.source is PlaybackSource.Scxyt)
+        // A tap on another song stops the one before it, whose fetch nobody
+        // waits for any more (YoutubeAudioCache drops it, unless the queue is
+        // warming that song). A second tap on the same song leaves the first
+        // fetching, for the newer play to join.
+        if (resolvingTrackId != track.id) {
+            resolveJobs.forEach { it.cancel() }
+            resolveJobs.clear()
+        }
+        resolveJobs.removeAll { it.isCompleted }
+        resolvingTrackId = track.id
+        resolveJobs += viewModelScope.launch {
             try {
-                // Resolution priority:
-                //   1. unifiedTrackRegistry — local files / collections / Qobuz
-                //      tracks already promoted to UnifiedTrack at queue time.
-                //   2. qobuzIdRegistry — synthesize a QobuzCached UnifiedTrack
-                //      for tracks whose ids came in via getQobuzAlbum /
-                //      getQobuzArtist / searchQobuz but were enqueued as
-                //      legacy Track (e.g. an album-detail screen tap). Without
-                //      this step the legacy path below would call TIDAL
-                //      /track/?id=<qobuzId> which either 404s or returns the
-                //      wrong track because the numeric id doesn't match.
-                //   3. Legacy TIDAL path.
-                val unifiedTrack = unifiedTrackRegistry[track.id]
-                    ?: synthesizeQobuzUnifiedTrack(track)
                 if (unifiedTrack != null) {
                     // Make sure the synthesized UnifiedTrack lands in the
                     // registry so PlaybackService.onMediaItemTransition can
@@ -1412,12 +1444,17 @@ class PlayerViewModel @Inject constructor(
                     // death.
                     unifiedTrackRegistry.put(track.id, unifiedTrack)
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
+                    // Superseded meanwhile (a newer tap, a notification skip):
+                    // neither played over the newer song nor counted as a
+                    // failure, which would skip it.
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (!resolved.isPlayable) {
                         resolved.failureReason?.let(::tellResolveFailure)
                         handleResolveFailure()
                         return@launch
                     }
                     val mc = awaitMediaController()
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mc == null) {
                         handleResolveFailure()
                         return@launch
@@ -1430,11 +1467,13 @@ class PlayerViewModel @Inject constructor(
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mediaItem == null) {
                         handleResolveFailure()
                         return@launch
                     }
                     val mc = awaitMediaController()
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mc == null) {
                         handleResolveFailure()
                         return@launch
@@ -1445,9 +1484,17 @@ class PlayerViewModel @Inject constructor(
                     onResolveSucceeded()
                     warmUpcoming()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Stopped by a newer tap: that one plays, and this is no failure.
+                throw e
             } catch (_: Exception) {
-                handleResolveFailure()
+                if (preparingPlay.isLatest(turn)) handleResolveFailure()
             }
+        }.also { job ->
+            // On completion rather than in a finally: a job that never starts
+            // (its scope already cancelled) runs no finally, and would leave
+            // the spinner on.
+            job.invokeOnCompletion { preparingPlay.end(turn) }
         }
     }
 
@@ -1480,15 +1527,16 @@ class PlayerViewModel @Inject constructor(
      * Warm the next couple of queue entries once playback is under way, so a
      * skip doesn't start from cold. Only the service used to do this, which
      * left every UI-initiated play unwarmed. Detached — it must never hold up
-     * the track that's already playing.
+     * the track that's already playing — and each on its own, since a YouTube
+     * song next is a whole fetch the one after it must not wait for.
      */
     private fun warmUpcoming() {
-        viewModelScope.launch {
-            val queue = queueManager.currentQueue
-            val currentIdx = queueManager.currentQueueIndex
-            for (i in 1..2) {
-                val nextIdx = currentIdx + i
-                if (nextIdx < queue.size) streamResolver.warmUpcoming(queue[nextIdx])
+        val queue = queueManager.currentQueue
+        val currentIdx = queueManager.currentQueueIndex
+        for (i in 1..2) {
+            val nextIdx = currentIdx + i
+            if (nextIdx < queue.size) {
+                viewModelScope.launch { streamResolver.warmUpcoming(queue[nextIdx], stepsAhead = i) }
             }
         }
     }

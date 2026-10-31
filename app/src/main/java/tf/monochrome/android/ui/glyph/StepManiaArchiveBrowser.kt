@@ -120,11 +120,9 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
                             settings.javaScriptEnabled = false
                             settings.allowFileAccess = false
                             settings.allowContentAccess = false
-                            fun take(url: Uri) {
-                                val file = Uri.decode(url.lastPathSegment.orEmpty())
-                                val name = file.substringBeforeLast('.')
-                                download(url.toString(), name)
-                                note = queuedLine.format(name.ifBlank { "…" })
+                            fun take(offered: ArchiveDownload) {
+                                download(offered.url, offered.name)
+                                note = queuedLine.format(offered.name.ifBlank { "…" })
                             }
                             webViewClient = object : WebViewClient() {
                                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -138,7 +136,7 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
                                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                     val url = request.url
                                     if (url.scheme == "https" && isArchiveDownload(url)) {
-                                        take(url)
+                                        take(linkedDownload(url))
                                         return true
                                     }
                                     if (url.scheme != "https" || !isArchive(url)) {
@@ -150,8 +148,7 @@ fun StepManiaArchiveBrowser(onDismiss: () -> Unit, onDownload: (String, String) 
                             }
                             setDownloadListener { url, _, disposition, mime, _ ->
                                 if (url.startsWith("https://")) {
-                                    val name = URLUtil.guessFileName(url, disposition, mime)
-                                    take(Uri.parse(url).buildUpon().path("/" + name).build().takeIf { isArchiveDownload(it) } ?: Uri.parse(url))
+                                    take(offeredDownload(url, URLUtil.guessFileName(url, disposition, mime)))
                                 }
                             }
                             webChromeClient = object : android.webkit.WebChromeClient() {
@@ -241,9 +238,29 @@ private fun isArchive(url: Uri): Boolean {
 }
 
 /** A link to an archive file: a ZIP, .smzip, 7z or RAR. */
-private fun isArchiveDownload(url: Uri): Boolean {
-    val path = url.path.orEmpty().lowercase()
-    return ARCHIVE_EXTENSIONS.any { path.endsWith(it) }
+private fun isArchiveDownload(url: Uri): Boolean = isArchiveFile(url.path.orEmpty())
+
+private fun isArchiveFile(name: String): Boolean {
+    val lower = name.lowercase()
+    return ARCHIVE_EXTENSIONS.any { lower.endsWith(it) }
 }
+
+/** A download to queue: the link to fetch, and the name it is shown and kept under. */
+internal data class ArchiveDownload(val url: String, val name: String)
+
+/** A tapped link to an archive file, named after its own file. */
+internal fun linkedDownload(url: Uri): ArchiveDownload =
+    ArchiveDownload(url.toString(), Uri.decode(url.lastPathSegment.orEmpty()).substringBeforeLast('.'))
+
+/**
+ * A download the page offers ([url]), which the WebView hands over when a
+ * link it loads turns out to be a file: a link without an archive's
+ * extension (`…/get?id=42`), served as an attachment. The link is always what
+ * is fetched. [fileName], guessed from the server's Content-Disposition, only
+ * names it, when it is an archive's. Put in the link's path instead, it
+ * fetched `https://host/Foo.zip?id=42`, a file that is not there.
+ */
+internal fun offeredDownload(url: String, fileName: String): ArchiveDownload =
+    if (isArchiveFile(fileName)) ArchiveDownload(url, fileName.substringBeforeLast('.')) else linkedDownload(Uri.parse(url))
 
 private val ARCHIVE_EXTENSIONS = listOf(".zip", ".smzip", ".7z", ".rar")

@@ -33,14 +33,17 @@
 //
 // Same public interface as the old renderer (configure / set_params /
 // set_bass_management / render / capacity) so the pipeline and JNI are
-// unchanged. Header-only, depends only on <cmath>/<vector>, the baked table
-// and the vendored FFT (../fft.h), and is -fno-exceptions / -fno-rtti safe.
+// unchanged. Header-only, depends only on the standard library, the baked
+// table and the vendored FFT (../fft.h), and is -fno-exceptions / -fno-rtti
+// safe.
 #ifndef TF_ATMOS_RENDER_HRIR_RENDERER_H
 #define TF_ATMOS_RENDER_HRIR_RENDERER_H
 
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <thread>
 #include <vector>
 
 #include "../fft.h"
@@ -122,26 +125,41 @@ class BinauralRenderer {
   // filled, then published atomically, so the audio thread (which only reads the
   // active slot) never races the load. Call from ONE loader thread at a time.
   void set_runtime_hrir(const std::vector<float>& data, const std::vector<float>& delay) {
-    const int cur = active_rt_.load(std::memory_order_acquire);
-    const int slot = (cur == 0) ? 1 : 0;
+    const uint32_t cur = active_rt_.load(std::memory_order_acquire);
+    const int slot = (set_slot(cur) == 0) ? 1 : 0;
+    // The inactive slot can still be in use: a render that read the set
+    // before the last switch reads it until it ends. Renders count in and out
+    // (odd while one runs), and any that starts after this load sees the
+    // switch, so at most the render running now is waited for, and none
+    // while playback is paused.
+    const uint32_t running = renders_.load(std::memory_order_seq_cst);
+    if (running & 1u) {
+      while (renders_.load(std::memory_order_acquire) == running) std::this_thread::yield();
+    }
     rt_data_[slot] = data;
     rt_delay_[slot] = delay;
-    active_rt_.store(slot, std::memory_order_release);
+    publish(cur, slot);
   }
 
   // Reverts to the baked default HRTF.
-  void clear_runtime_hrir() { active_rt_.store(-1, std::memory_order_release); }
+  void clear_runtime_hrir() { publish(active_rt_.load(std::memory_order_acquire), -1); }
 
-  bool has_runtime_hrir() const { return active_rt_.load(std::memory_order_acquire) >= 0; }
+  bool has_runtime_hrir() const {
+    return set_slot(active_rt_.load(std::memory_order_acquire)) >= 0;
+  }
 
   void render(const float* const* objects, const float* obj_az, const float* obj_el,
               int num_objects, const float* const* bed, const float* bed_az,
               const float* bed_el, int bed_channels, int n, float* out) {
+    // Counted in before the set is read, out at the end: see set_runtime_hrir.
+    renders_.fetch_add(1, std::memory_order_seq_cst);
     for (int i = 0; i < 2 * n; ++i) out[i] = 0.0f;
     // Select the HRIR source once per frame (not per source). The baked table is
     // contiguous, so &kHrirData[0][0][0][0] and the flat index below address it
-    // identically to a runtime vector.
-    const int rt = active_rt_.load(std::memory_order_acquire);
+    // identically to a runtime vector. The set's number, read in the same load,
+    // is what tells the sources' cached IR spectra are from another set.
+    cur_set_ = active_rt_.load(std::memory_order_seq_cst);
+    const int rt = set_slot(cur_set_);
     if (rt >= 0) {
       cur_data_ = rt_data_[rt].data();
       cur_delay_ = rt_delay_[rt].data();
@@ -166,6 +184,7 @@ class BinauralRenderer {
       mix_source(sources_[slot], objects[o], obj_az[o], obj_el[o], n, out);
     for (int b = 0; b < bed_channels && slot < capacity(); ++b, ++slot)
       mix_source(sources_[slot], bed[b], bed_az[b], bed_el[b], n, out);
+    renders_.fetch_add(1, std::memory_order_release);
   }
 
   int capacity() const { return static_cast<int>(sources_.size()); }
@@ -212,7 +231,7 @@ class BinauralRenderer {
     int cur = 0;
     float pdl = 0.0f, pdr = 0.0f;
     float paz = 0.0f, pel = 0.0f;
-    const float* ptable = nullptr;  // HRIR set the previous IR came from
+    uint32_t pset = 0;  // HRIR set the previous IR came from (cur_set_)
     bool has_prev = false;
     void reset() {
       for (float& v : tail) v = 0.0f;
@@ -223,10 +242,23 @@ class BinauralRenderer {
       dwrite = 0;
       cur = 0;
       pdl = pdr = paz = pel = 0.0f;
-      ptable = nullptr;
+      pset = 0;
       has_prev = false;
     }
   };
+
+  // The published HRIR set is one word: the slot plus one (0 for the baked
+  // table) in the low two bits, and above them a number every load and clear
+  // moves on.
+  // A slot is copy-assigned in place, so two loads with no render between
+  // leave the same pointer holding new taps: the number is what differs.
+  // Slot and number go out in one store, so a render never reads one
+  // without the other.
+  static int set_slot(uint32_t set) { return static_cast<int>(set & 3u) - 1; }
+  void publish(uint32_t cur, int slot) {
+    const uint32_t next = ((cur >> 2) + 1u) << 2;
+    active_rt_.store(next | static_cast<uint32_t>(slot + 1), std::memory_order_seq_cst);
+  }
 
   // One biquad step, transposed direct form II. c = {b0,b1,b2,a1,a2}; z = 2
   // floats of state.
@@ -332,7 +364,7 @@ class BinauralRenderer {
     // (measured 0.0052 max step on a DC probe; crossfaded: ~0.0002).
     const bool changed = s.has_prev &&
         (std::fabs(az - s.paz) > 1e-4f || std::fabs(el_eff - s.pel) > 1e-4f ||
-         s.ptable != cur_data_);
+         s.pset != cur_set_);
     if (!s.has_prev) {
       s.pdl = dl_;
       s.pdr = dr_;
@@ -452,7 +484,7 @@ class BinauralRenderer {
     s.pdr = dr_;
     s.paz = az;
     s.pel = el_eff;
-    s.ptable = cur_data_;
+    s.pset = cur_set_;
     s.has_prev = true;
   }
 
@@ -482,10 +514,14 @@ class BinauralRenderer {
   // Active HRIR source for the current render() call (set once per frame).
   const float* cur_data_ = &kHrirData[0][0][0][0];
   const float* cur_delay_ = &kHrirDelay[0][0][0];
-  // Double-buffered runtime HRIR sets (from a loaded SOFA). -1 = use the baked
-  // default; 0/1 selects a runtime slot. Only the inactive slot is ever written.
+  uint32_t cur_set_ = 0;  // the published set it came from (see publish)
+  // Double-buffered runtime HRIR sets (from a loaded SOFA). The published set
+  // (see publish) says which: the baked default, or runtime slot 0 or 1. Only
+  // the inactive slot is ever written.
   std::vector<float> rt_data_[2], rt_delay_[2];
-  std::atomic<int> active_rt_{-1};
+  std::atomic<uint32_t> active_rt_{0};
+  // Renders in and out, odd while one runs; for the loader (set_runtime_hrir).
+  std::atomic<uint32_t> renders_{0};
 };
 
 }  // namespace render

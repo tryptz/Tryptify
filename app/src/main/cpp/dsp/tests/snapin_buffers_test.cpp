@@ -1,9 +1,11 @@
 // Host test for the effects' buffers: the delay lines and rings read as they
-// always did without their %, no effect reads past a line at the far end of
-// its knobs, a rate change starts every buffer silent, the limiter runs past
-// the point where its sample counter used to overflow, and the small per-
-// sample savings (the RMS follower, the ladder at no resonance, bitcrush's
-// noise) change nothing they should not. Built with DSP_CHECK_DELAY_RANGE,
+// always did without their %, a lookahead's delay turned mid-stream keeps its
+// ring in order, crossfades to the new delay and allocates nothing, no effect
+// reads past a line at the far end of its knobs, a rate change starts every
+// buffer silent, the limiter runs past the point where its sample counter
+// used to overflow, and the small per-sample savings (the RMS follower, the
+// ladder at no resonance, bitcrush's noise) change nothing they should not.
+// Built with DSP_CHECK_DELAY_RANGE,
 // and run again under AddressSanitizer:
 //
 //   ./run_host_tests.sh
@@ -17,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <vector>
 
 #include "snapins/bitcrush.h"
@@ -39,6 +42,19 @@
 #ifndef DSP_CHECK_DELAY_RANGE
 #error "build with -DDSP_CHECK_DELAY_RANGE"
 #endif
+
+// Allocations are counted while countingAllocations is on, to hold what runs
+// on the audio thread to none.
+static bool countingAllocations = false;
+static long allocationsCounted = 0;
+
+void* operator new(std::size_t size) {
+    if (countingAllocations) ++allocationsCounted;
+    if (void* p = std::malloc(size ? size : 1)) return p;
+    std::abort();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
@@ -404,15 +420,8 @@ void ringsReadAsBefore() {
             const float x = noise();
             same = same && sameBits(now.process(x), was.process(x));
         }
-        // A knob turned mid-stream keeps what is held, as it always did.
-        now.setDelay(delay + 3);
-        was.prepare(delay + 3);
-        for (int i = 0; i < 3 * delay + 7; i++) {
-            const float x = noise();
-            same = same && sameBits(now.process(x), was.process(x));
-        }
     }
-    check(same, "a lookahead buffer delays exactly as it did, its delay knob included");
+    check(same, "a lookahead buffer delays exactly as it did");
     same = true;
     for (int seg : {3, 64, 1000}) {
         CrossfadeBuffer now;
@@ -427,6 +436,200 @@ void ringsReadAsBefore() {
         }
     }
     check(same, "a crossfade buffer reads back exactly as it did");
+}
+
+// What a delay should give: the input [delay] samples back, or silence before
+// heldFrom, the oldest input the ring still held when it last grew.
+struct DelayReference {
+    std::vector<float> in;
+    long heldFrom = 0;
+    float next(float x, int delay) {
+        in.push_back(x);
+        const long at = static_cast<long>(in.size()) - 1 - delay;
+        return at >= 0 && at >= heldFrom ? in[at] : 0.0f;
+    }
+};
+
+void aTurnedDelayKeepsTheRingInOrder() {
+    // Prepared for the longest delay, as the compactor is: every turn, up,
+    // down or to where it was, with runs between shorter and longer than the
+    // delay, gives the input delayed by the new amount from the next sample.
+    // It used to start the ring again at its first sample, out of order.
+    bool inOrder = true;
+    LookaheadBuffer la;
+    DelayReference ref;
+    la.prepare(5, 64);
+    int delay = 5;
+    auto feed = [&](int count) {
+        for (int i = 0; i < count; i++) {
+            const float x = noise();
+            inOrder = inOrder && sameBits(la.process(x), ref.next(x, delay));
+        }
+    };
+    feed(200);
+    for (int turn : {5, 17, 64, 1, 30, 30, 2, 64, 63, 5, 0, 9}) {
+        la.setDelay(turn);
+        delay = turn;
+        feed(1 + static_cast<int>(seed % 150));
+    }
+    check(inOrder, "a lookahead's delay turned mid-stream, up, down or not at all, delays by the new amount at once");
+
+    // Past what it was prepared for (a knob set before prepare()): the ring
+    // grows, oldest first, with silence before what it held.
+    bool grown = true;
+    LookaheadBuffer small;
+    DelayReference smallRef;
+    small.prepare(5);
+    int smallDelay = 5;
+    auto feedSmall = [&](int count) {
+        for (int i = 0; i < count; i++) {
+            const float x = noise();
+            grown = grown && sameBits(small.process(x), smallRef.next(x, smallDelay));
+        }
+    };
+    feedSmall(53);
+    smallRef.heldFrom = static_cast<long>(smallRef.in.size()) - 5;
+    small.setDelay(12);
+    smallDelay = 12;
+    feedSmall(30);
+    small.setDelay(3);
+    smallDelay = 3;
+    feedSmall(4);
+    small.setDelay(12);
+    smallDelay = 12;
+    feedSmall(40);
+    smallRef.heldFrom = static_cast<long>(smallRef.in.size()) - 12;
+    small.setDelay(40);
+    smallDelay = 40;
+    feedSmall(100);
+    check(grown, "and one past its length grows the ring in order, silent before what it held");
+
+    // With a fade, as the compactor has: a turn crossfades from the old read
+    // to the new one instead of jumping, a turn during a fade starts when it
+    // ends, and once the fades are over the delay is exact again. A slow tone
+    // shows a jump: its steps are under 0.01, and a jump by 20 or 35 samples
+    // is up to 0.16 or 0.28, which a 16-sample fade spreads to under 0.03.
+    bool faded = true;
+    float worstStep = 0.0f;
+    LookaheadBuffer fade;
+    DelayReference fadeRef;
+    fade.prepare(5, 64, 16);
+    double phase = 0.0;
+    float last = 0.0f;
+    auto feedFade = [&](int count, int exactDelay) {
+        for (int i = 0; i < count; i++) {
+            const float x = static_cast<float>(std::sin(phase));
+            phase += 0.008;
+            const float out = fade.process(x);
+            const float want = fadeRef.next(x, std::max(exactDelay, 0));
+            if (exactDelay >= 0) faded = faded && sameBits(out, want);
+            if (fadeRef.in.size() > 70) worstStep = std::max(worstStep, std::fabs(out - last));
+            last = out;
+        }
+    };
+    feedFade(200, 5);
+    fade.setDelay(25);
+    feedFade(16, -1);   // fading 5 -> 25
+    feedFade(50, 25);
+    fade.setDelay(45);
+    feedFade(4, -1);    // fading 25 -> 45
+    fade.setDelay(10);  // during it: waits for it to end
+    feedFade(12 + 16, -1);  // the rest of 25 -> 45, then 45 -> 10
+    feedFade(80, 10);
+    fade.setDelay(10);  // the same delay: no fade
+    feedFade(40, 10);
+    check(faded, "with a fade, a turned delay is exact again once its fade (and one it waited for) is over");
+    std::printf("      worst step through the fades: %.4f\n", worstStep);
+    check(worstStep < 0.03f, "and the read never jumps on the way");
+}
+
+/**
+ * The compactor at 0 dB leaves a quiet tone alone, so what comes out is the
+ * tone delayed by the attack, exactly, but for the 2 ms (96 samples) after a
+ * change, which crossfade from the old delay to the new one. [attackMs] gives
+ * the attack set before each block, as a music link sets it once per mix
+ * piece. [worstStep] is the largest step from one sample to the next: 0.0327
+ * for the clean tone, and a jump of the delay is a click well past that.
+ */
+template <typename Attack>
+bool compactorDelaysByItsAttack(int block, Attack attackMs, float* worstStep = nullptr) {
+    CompactorProcessor c;
+    c.setParameter(CompactorProcessor::THRESHOLD, 0.0f);
+    c.setParameter(CompactorProcessor::ATTACK, attackMs(0));
+    c.prepare(48000.0, 1024);
+    DelayReference ref;
+    std::vector<float> l(block), r(block), want(block);
+    double phase = 0.0;
+    bool same = true;
+    int lastSamples = -1;
+    float last = 0.0f, worst = 0.0f;
+    for (int b = 0; b < 300; b++) {
+        const float ms = attackMs(b);
+        c.setParameter(CompactorProcessor::ATTACK, ms);
+        const int samples = std::max(1, static_cast<int>(ms * 0.001f * 48000.0f));
+        const int fading = lastSamples >= 0 && samples != lastSamples ? 96 : 0;
+        lastSamples = samples;
+        for (int i = 0; i < block; i++) {
+            l[i] = r[i] = static_cast<float>(0.25 * std::sin(phase));
+            phase += 2.0 * M_PI * 1000.0 / 48000.0;
+            want[i] = ref.next(l[i], samples);
+        }
+        c.process(l.data(), r.data(), block);
+        for (int i = 0; i < block; i++) {
+            if (i >= fading) same = same && sameBits(l[i], want[i]) && sameBits(r[i], want[i]);
+            worst = std::max(worst, std::fabs(l[i] - last));
+            last = l[i];
+        }
+    }
+    if (worstStep) *worstStep = worst;
+    return same;
+}
+
+void aLinkedAttackKeepsTheCompactorsLookahead() {
+    // A music link moving the attack by less than a sample: it used to jump
+    // the read by up to the whole lookahead each block (a click on every
+    // 1000-frame block), and with blocks shorter than the lookahead, cycle
+    // only the block's length of the ring, shrinking the lookahead to it.
+    auto still = [](int b) { return (b & 1) ? 10.0001f : 10.0f; };
+    check(compactorDelaysByItsAttack(1000, still),
+          "an attack set to the same lookahead every 1000-frame block changes nothing");
+    check(compactorDelaysByItsAttack(256, still),
+          "nor every 256-frame block: the lookahead stays 480 samples, not the block's 256");
+    // Moving it for real, up and down, by less than a block and by more.
+    auto moving = [](int b) {
+        const float ms[] = {10.0f, 20.0f, 0.5f, 50.0f, 50.0f, 3.0f, 0.0f, 37.5f, 10.0f};
+        return ms[(b / 3) % 9];
+    };
+    float worstLong = 0.0f, worstShort = 0.0f;
+    check(compactorDelaysByItsAttack(1000, moving, &worstLong) &&
+              compactorDelaysByItsAttack(256, moving, &worstShort),
+          "an attack really moving delays by the new lookahead once its 2 ms crossfade is over");
+    // And gets there without a click: it used to jump the read, a step of up
+    // to the tone's whole swing (0.5) on every block a link moved it in, as
+    // here, by some samples every 1024-frame mix piece.
+    auto gliding = [](int b) { return 10.0f + 8.0f * static_cast<float>(std::sin(0.03 * b)); };
+    float worstGlide = 0.0f;
+    const bool glideExact = compactorDelaysByItsAttack(1024, gliding, &worstGlide);
+    std::printf("      worst step while it moves: %.4f, %.4f, %.4f (the clean tone: 0.0327)\n",
+                worstLong, worstShort, worstGlide);
+    check(glideExact && std::max(worstLong, std::max(worstShort, worstGlide)) < 0.04f,
+          "and crossfades there: no step past the clean tone's but for the fade's own share");
+
+    // The audio thread sets it (DspEngine::modulateLocked): never an allocation.
+    CompactorProcessor c;
+    c.setParameter(CompactorProcessor::ATTACK, 1.0f);
+    c.prepareOS(48000.0, 1024);
+    std::vector<float> l(64), r(64);
+    countingAllocations = true;
+    allocationsCounted = 0;
+    for (int k = 0; k < 2000; k++) {
+        c.setParameter(CompactorProcessor::ATTACK, static_cast<float>(seed % 5100) / 100.0f);
+        for (int i = 0; i < 64; i++) { l[i] = noise(); r[i] = noise(); }
+        c.processOS(l.data(), r.data(), 64);
+    }
+    countingAllocations = false;
+    std::printf("      allocations while the attack moved: %ld\n", allocationsCounted);
+    check(allocationsCounted == 0, "the attack moving anywhere from 0 to 50 ms while it plays allocates nothing");
 }
 
 void preparedBuffersStartSilent() {
@@ -757,6 +960,8 @@ void bitcrushLeavesRandAlone() {
 int main() {
     delayLineReadsAsBefore();
     ringsReadAsBefore();
+    aTurnedDelayKeepsTheRingInOrder();
+    aLinkedAttackKeepsTheCompactorsLookahead();
     preparedBuffersStartSilent();
     aRateChangeKeepsNoOldAudio();
     noEffectReadsPastItsLine();
