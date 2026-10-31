@@ -55,6 +55,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -557,7 +560,9 @@ fun SearchResultsContent(
                                 )
                                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                             }
-                        } else {
+                        } else if (sourceNote == null) {
+                            // A chosen source with a note (signed out, turned away)
+                            // searched nothing: its line under the chips says why.
                             Text(
                                 text = stringResource(R.string.no_results),
                                 style = MaterialTheme.typography.bodyLarge,
@@ -664,7 +669,10 @@ private fun SearchFilterRow(
                     text = stringResource(sourceNote.text, sourceNote.service),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
+                    // It appears after a search: TalkBack reads it out when it does.
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
         }

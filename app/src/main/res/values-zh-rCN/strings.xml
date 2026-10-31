@@ -676,7 +676,7 @@
     <string name="username_invalid">请使用 1 到 %1$d 个字符。</string>
     <string name="username_update_failed">无法更新用户名：%1$s</string>
     <string name="sign_in_to_tryptify">登录 Tryptify</string>
-    <string name="sign_in_benefit">在多台设备间同步你的收藏和歌单</string>
+    <string name="sign_in_benefit">在多台设备间同步你的收藏和歌单，并播放 SoundCloud</string>
     <string name="continue_with_google">使用 Google 继续</string>
     <string name="continue_with_discord">使用 Discord 继续</string>
     <string name="email">电子邮件</string>
@@ -1719,6 +1719,8 @@
     <string name="notif_stop">停止</string>
     <string name="share_preparing">正在准备分享 %1$s…</string>
     <string name="share_no_file">没有可分享的文件</string>
+    <string name="share_link_preparing">正在为 %1$s 制作 Discord 试听，准备好后会打开分享。</string>
+    <string name="share_no_file_download_first">请先下载这首歌再分享文件，或使用“分享链接”。</string>
     <string name="share_track">分享歌曲</string>
     <string name="notif_system_eq_title">全局均衡器已启用</string>
     <string name="notif_system_eq_text">你的 AutoEQ 校正正应用于这台设备上的所有音频。</string>
@@ -1737,7 +1739,7 @@
     <string name="import_progress_title">正在导入 Spotify 歌单</string>
     <string name="import_channel">歌单导入</string>
     <string name="import_channel_desc">Spotify 歌单导入进度。</string>
-    <string name="import_youtube_unsupported">暂不支持导入 YouTube Music——目前只支持 Spotify 歌单链接。</string>
+    <string name="import_youtube_unsupported">暂时无法导入 YouTube 歌单链接。这里只支持 Spotify 链接；YouTube Music 请使用“文件”标签页。</string>
     <string name="import_unrecognized_url">无法识别的歌单 URL。请粘贴类似 https://open.spotify.com/playlist/… 的 Spotify 歌单链接</string>
     <string name="import_no_tracks">此 Spotify 歌单没有可导入的歌曲。</string>
     <string name="import_default_playlist_name">Spotify 歌单</string>
@@ -3103,7 +3105,7 @@
     <string name="onb_permissions_sub">允许访问此设备上的音乐和播放通知。之后可以在 Android 设置中更改。</string>
     <string name="onb_folders_sub">选择 Tryptify 扫描音乐的文件夹。</string>
     <string name="onb_sources_sub">选择音乐的来源。每个来源都在 设置 › 连接 中设置。</string>
-    <string name="onb_account_sub">登录后可在设备间同步歌单和设置，并使用 Connect。可选。</string>
+    <string name="onb_account_sub">登录后可在设备间同步歌单和设置，并使用 Connect 和 SoundCloud。可选。</string>
     <string name="onb_features_sub">Tryptify 包含的功能。</string>
     <string name="onb_ready_sub">音乐库会在后台扫描，边听边填充。</string>
     <string name="onb_perm_music">音乐和音频</string>
@@ -3136,7 +3138,7 @@
     <string name="onb_feat_visualizer_desc">跟随音乐变化的 MilkDrop 预设</string>
     <string name="onb_hint_permissions">跳过则两项都保持关闭</string>
     <string name="onb_hint_folders">未选文件夹时会扫描整个设备</string>
-    <string name="onb_hint_sources">跳过则只使用此设备</string>
+    <string name="onb_hint_sources">跳过则使用此设备上的音乐和 YouTube</string>
     <string name="onb_hint_account">之后可以在个人资料中登录</string>
     <string name="onb_hint_features">设置完成后即可使用以上所有功能</string>
     <string name="onb_hint_ready_library">打开你的音乐库</string>
@@ -3276,9 +3278,10 @@
     <string name="shared_link_failed">无法播放此分享链接。请在“设置 › 连接”中检查 %1$s API。</string>
     <string name="share_link">分享链接</string>
     <string name="share_album_link">分享专辑链接</string>
-    <string name="share_link_unavailable">这首歌不来自曲库，没有可分享的链接。请改为分享文件。</string>
-    <string name="shared_link_youtube_signed_out">登录后即可播放来自 %1$s 的歌曲。这首歌将改为从 YouTube 播放。</string>
-    <string name="shared_link_youtube_instead">已添加的 API 中都没有这首歌，因此改为从 YouTube 播放。</string>
+    <string name="share_link_unavailable">只有来自 TIDAL、Qobuz、Deezer、Apple Music、YouTube 或 SoundCloud 的歌曲才有可分享的链接。</string>
+    <string name="shared_link_youtube_signed_out">请在账户页面登录后播放来自 %1$s 的歌曲。这首歌将改为从 YouTube 播放。</string>
+    <string name="shared_link_soundcloud_none">请在账户页面登录后播放这首 %1$s 歌曲。YouTube 上也没有这首歌。</string>
+    <string name="shared_link_youtube_instead">你已有的服务中都没有这首歌，因此改为从 YouTube 播放。</string>
     <string name="whats_new_section_sharing">分享</string>
     <string name="whats_new_section_widget">桌面小部件</string>
     <string name="whats_new_1951_share_link_title">分享链接</string>
@@ -3292,16 +3295,17 @@
     <string name="whats_new_1951_share_youtube_body">“分享链接”同样适用于它们：登录后，Discord 会显示封面和播放按钮。被分享的歌曲在你的服务中都找不到，或未登录时打开 SoundCloud 链接，就会改为从 YouTube 播放。</string>
     <string name="whats_new_1951_my_server_title">音乐服务器能做的更多了</string>
     <string name="whats_new_1951_my_server_body">服务器会记录你的播放、为你喜欢的歌曲加星标并提供自己的歌词，“音乐库 › 我的服务器”会列出它的歌单和喜欢的歌曲。使用移动数据时，它可以串流更小的 MP3。</string>
-    <string name="scxyt_note_signed_out">登录后即可搜索 %1$s。</string>
-    <string name="scxyt_note_unavailable">%1$s 目前无法使用。</string>
-    <string name="scxyt_error_signed_out">登录后即可播放或下载来自 %1$s 的歌曲。</string>
-    <string name="scxyt_error_blocked">%1$s 目前拒绝了服务器的请求。请稍后再试。</string>
-    <string name="scxyt_error_blocked_network">%1$s 目前拒绝了此网络的请求。请稍后再试，或换一个网络。</string>
-    <string name="scxyt_error_unavailable">这首歌无法在此播放（年龄验证、地区限制或仅限会员）。</string>
-    <string name="scxyt_error_protected">%1$s 锁定了这首歌，它只能在 %1$s 自己的应用中播放。</string>
-    <string name="scxyt_error_too_long">这首歌太长，无法获取，或者它是直播。</string>
+    <string name="scxyt_note_signed_out">请在账户页面登录后搜索 %1$s。</string>
+    <string name="scxyt_note_unavailable">%1$s 目前无法使用。请稍后再试。</string>
+    <string name="scxyt_error_signed_out">请在账户页面登录后播放或下载来自 %1$s 的歌曲。</string>
+    <string name="scxyt_error_blocked">%1$s 目前正在拦截 Tryptify 的服务器。请稍后再试。</string>
+    <string name="scxyt_error_blocked_network">%1$s 目前正在拦截此网络。请稍后再试，或在 Wi-Fi 和移动数据之间切换。</string>
+    <string name="scxyt_error_unavailable">这首歌无法在此播放：它有年龄限制、在你所在的国家或地区不提供，或仅限会员。</string>
+    <string name="scxyt_error_protected">%1$s 锁定了这首歌，它只能在 %1$s 应用中播放。</string>
+    <string name="scxyt_error_too_long">直播和超过 30 分钟的歌曲无法播放或下载。</string>
     <string name="scxyt_error_not_found">这首歌已不在 %1$s 上，或者已设为私密。</string>
-    <string name="scxyt_error_busy">服务器繁忙。请稍后再试。</string>
+    <string name="scxyt_error_busy">Tryptify 的服务器繁忙。请稍后再试。</string>
     <string name="scxyt_error_timeout">获取这首歌耗时过长。请重试。</string>
     <string name="scxyt_error_failed">无法从 %1$s 获取这首歌。</string>
+    <string name="scxyt_error_network">无法连接 %1$s。请检查网络连接后重试。</string>
 </resources>

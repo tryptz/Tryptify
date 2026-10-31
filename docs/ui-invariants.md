@@ -1423,7 +1423,10 @@ brand's mark, and its colour as the accent when chosen. Their pills
 (`SourceType.YOUTUBE`, `SOUNDCLOUD`) are the brands' own vector marks
 (`logo_youtube`, `logo_soundcloud`) in the brands' colours, untinted, like
 Qobuz's and Deezer's. Both chips are always in the row, signed in or not, as
-My server is with no server.
+My server is with no server. The pill's label on a light theme is a shade
+darker than the brand (`#CC0000`, `#B83D00`), as Qobuz's is: the brands'
+`#FF0000` and `#FF5500` read at 4.0:1 and 3.2:1 on white, under AA for an
+11sp label. The marks keep the true colours.
 
 **Off is quiet.** YouTube is searched from the phone itself
 (NewPipeExtractor) and takes no sign-in, so signed out its songs appear like
@@ -1432,11 +1435,19 @@ server, which takes the Tryptify sign-in; signed out, nothing is asked of it.
 A source that gives nothing because it is off or turned away (`blocked`:
 SoundCloud refusing the server, or YouTube's bot check refusing the phone's
 network) shows only one line of plain text under the chips while its chip is
-chosen (`SearchViewModel.sourceNote`: "Sign in to search SoundCloud.", which
-only SoundCloud's chip can say; "YouTube isn't available right now."). Never
-a toast, an error row or the "couldn't reach search" state, and the other
-sources' results stand. A toast on every search while a service refuses is
-what this prevents.
+chosen (`SearchViewModel.sourceNote`: "Sign in on the Account page to search
+SoundCloud.", which only SoundCloud's chip can say; "YouTube isn't available
+right now. Try again later."). Never a toast, an error row or the "couldn't
+reach search" state, and the other sources' results stand. A toast on every
+search while a service refuses is what this prevents. While the note shows,
+"No results found" does not: nothing was searched, and the note says why. The
+note is a polite live region, so TalkBack reads it when it appears.
+
+**Signing in names the place.** Every line that asks for a sign-in for
+SoundCloud says "Sign in on the Account page", as Tryptify Cloud's does: a bare
+"Sign in to search SoundCloud" reads as a SoundCloud account, which the app
+has nowhere to enter. The onboarding's Account step and the Account page's
+sign-in card list SoundCloud among what signing in turns on.
 
 **Songs only, with no album or artist links.** A song names a channel, not a
 catalogue artist, and its ids are strings: "Go to album/artist" is hidden
@@ -1445,23 +1456,29 @@ catalogue artist, and its ids are strings: "Go to album/artist" is hidden
 **A song that cannot be fetched says why, once.** It is skipped like any
 song that fails, with a toast in words for its error (`ScxytMessages`);
 `blocked` names the service and what it refuses: the phone's network for
-YouTube ("YouTube is turning this network away right now. Try again later, or
-on another network."), the server for SoundCloud ("SoundCloud is turning the
-server away right now. Try again later."). A queue failing for one reason
-says it once, not once a song (`PlayerViewModel.tellResolveFailure`).
+YouTube ("YouTube is blocking this network right now. Try again later, or
+switch between Wi-Fi and mobile data."), Tryptify's server for SoundCloud
+("SoundCloud is blocking Tryptify's server right now. Try again later.").
+Never "the server" alone: the listener has never heard of it. No connection
+has its own line ("Couldn't reach YouTube. Check your connection and try
+again."). A queue failing for one reason says it once, not once a song
+(`PlayerViewModel.tellResolveFailure`).
 
 **Download is in the ⋮ menu**, which registers the song first
 (`PlayerViewModel.downloadUnified`) so the download is fetched by the song's
 own id rather than its hashed one: a YouTube song's is a copy of the file the
 phone fetched to play, a SoundCloud one's comes from the server. Share file
-shares only a song's download. The cover is the service's own https picture,
+shares only a song's download; with none, it says to download the song first
+or use Share link. The cover is the service's own https picture,
 with no sign-in in it.
 
 **Share link is in the ⋮ menu and the player's menu**, as a link to the song
 alone (`ShareLinks.songLink`). The local song menu (`UnifiedTrackContextMenuHost`)
 offers it for these songs only: a file or a server song has no catalog, and a
 catalog song there would be shared by its legacy track, whose album id is a
-hash no catalog loads.
+hash no catalog loads. Signed in, the share waits for the Discord preview
+before the share sheet opens, so its toast says what it is waiting for
+("Making the Discord preview for …"), not a bare "Preparing".
 
 ### Themes
 

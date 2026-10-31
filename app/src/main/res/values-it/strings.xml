@@ -740,7 +740,7 @@
     <string name="username_invalid">Usa da 1 a %1$d caratteri.</string>
     <string name="username_update_failed">Impossibile aggiornare il nome utente: %1$s</string>
     <string name="sign_in_to_tryptify">Accedi a Tryptify</string>
-    <string name="sign_in_benefit">Sincronizza i tuoi preferiti e le tue playlist tra i dispositivi</string>
+    <string name="sign_in_benefit">Sincronizza i tuoi preferiti e le tue playlist tra i dispositivi e ascolta SoundCloud</string>
     <string name="continue_with_google">Continua con Google</string>
     <string name="continue_with_discord">Continua con Discord</string>
     <string name="email">Email</string>
@@ -1815,6 +1815,8 @@
     <string name="notif_stop">Interrompi</string>
     <string name="share_preparing">Preparazione di %1$s per la condivisione…</string>
     <string name="share_no_file">Nessun file disponibile da condividere</string>
+    <string name="share_link_preparing">Creazione dell\'anteprima Discord per %1$s. La condivisione si apre quando è pronta.</string>
+    <string name="share_no_file_download_first">Scarica prima questo brano per condividerne il file, oppure usa «Condividi link».</string>
     <string name="share_track">Condividi brano</string>
     <string name="notif_system_eq_title">EQ a livello di sistema attivo</string>
     <string name="notif_system_eq_text">La correzione AutoEQ viene applicata a tutto l\'audio su questo dispositivo.</string>
@@ -1833,7 +1835,7 @@
     <string name="import_progress_title">Importazione playlist di Spotify</string>
     <string name="import_channel">Importazione playlist</string>
     <string name="import_channel_desc">Avanzamento dell\'importazione delle playlist di Spotify.</string>
-    <string name="import_youtube_unsupported">L\'importazione da YouTube Music non è ancora supportata — funzionano solo i link alle playlist di Spotify.</string>
+    <string name="import_youtube_unsupported">I link alle playlist di YouTube non si possono ancora importare. Qui funzionano solo i link di Spotify; per YouTube Music, usa la scheda «File».</string>
     <string name="import_unrecognized_url">URL playlist non riconosciuto. Incolla un link a una playlist di Spotify come https://open.spotify.com/playlist/…</string>
     <string name="import_no_tracks">Questa playlist di Spotify non contiene brani importabili.</string>
     <string name="import_default_playlist_name">Playlist Spotify</string>
@@ -3255,7 +3257,7 @@
     <string name="onb_permissions_sub">Consenti l’accesso alla musica su questo dispositivo e alle notifiche di riproduzione. Puoi modificarlo in seguito nelle impostazioni di Android.</string>
     <string name="onb_folders_sub">Scegli le cartelle in cui Tryptify cerca la musica.</string>
     <string name="onb_sources_sub">Scegli da dove proviene la tua musica. Ogni sorgente si configura in Impostazioni › Connessioni.</string>
-    <string name="onb_account_sub">Accedi per sincronizzare playlist e impostazioni tra i tuoi dispositivi e usare Connect. Facoltativo.</string>
+    <string name="onb_account_sub">Accedi per sincronizzare playlist e impostazioni tra i tuoi dispositivi e usare Connect e SoundCloud. Facoltativo.</string>
     <string name="onb_features_sub">Cosa include Tryptify.</string>
     <string name="onb_ready_sub">La tua libreria viene scansionata in background e si completa mentre ascolti.</string>
     <string name="onb_perm_music">Musica e audio</string>
@@ -3288,7 +3290,7 @@
     <string name="onb_feat_visualizer_desc">Preset MilkDrop che seguono la musica</string>
     <string name="onb_hint_permissions">Se salti, restano entrambi disattivati</string>
     <string name="onb_hint_folders">Senza cartelle, viene scansionato l’intero dispositivo</string>
-    <string name="onb_hint_sources">Se salti, viene usato solo questo dispositivo</string>
+    <string name="onb_hint_sources">Se salti, vengono usati la musica di questo dispositivo e YouTube</string>
     <string name="onb_hint_account">Potrai accedere più tardi dal tuo profilo</string>
     <string name="onb_hint_features">Tutto questo è disponibile dopo la configurazione</string>
     <string name="onb_hint_ready_library">Apre la tua libreria</string>
@@ -3432,9 +3434,10 @@
     <string name="shared_link_failed">Impossibile riprodurre questo link condiviso. Controlla l’API di %1$s in Impostazioni › Connessioni.</string>
     <string name="share_link">Condividi link</string>
     <string name="share_album_link">Condividi link dell’album</string>
-    <string name="share_link_unavailable">Questo brano non viene da un catalogo, quindi non ha un link da condividere. Condividi invece il file.</string>
-    <string name="shared_link_youtube_signed_out">Accedi per riprodurre i brani da %1$s. Questo viene riprodotto invece da YouTube.</string>
-    <string name="shared_link_youtube_instead">Nessuna delle tue API ha questo brano, quindi viene riprodotto invece da YouTube.</string>
+    <string name="share_link_unavailable">Solo i brani di TIDAL, Qobuz, Deezer, Apple Music, YouTube o SoundCloud hanno un link da condividere.</string>
+    <string name="shared_link_youtube_signed_out">Accedi dalla pagina Account per riprodurre i brani da %1$s. Questo viene riprodotto invece da YouTube.</string>
+    <string name="shared_link_soundcloud_none">Accedi dalla pagina Account per riprodurre questo brano di %1$s. Non è nemmeno su YouTube.</string>
+    <string name="shared_link_youtube_instead">Nessuno dei tuoi servizi ha questo brano, quindi viene riprodotto invece da YouTube.</string>
     <string name="whats_new_section_sharing">Condivisione</string>
     <string name="whats_new_section_widget">Widget della schermata Home</string>
     <string name="whats_new_1951_share_link_title">Condividi link</string>
@@ -3448,16 +3451,17 @@
     <string name="whats_new_1951_share_youtube_body">«Condividi link» funziona anche per loro: con l\'accesso, Discord mostra la copertina con un pulsante di riproduzione. Un brano condiviso che nessuno dei tuoi servizi ha, o un link SoundCloud aperto senza accesso, si ascolta da YouTube.</string>
     <string name="whats_new_1951_my_server_title">Di più dal tuo server musicale</string>
     <string name="whats_new_1951_my_server_body">Conta i tuoi ascolti, mette una stella a ciò che ti piace e invia i suoi testi, e Libreria › Il mio server mostra le sue playlist e i brani che ti piacciono. Con i dati mobili può trasmettere un MP3 più leggero.</string>
-    <string name="scxyt_note_signed_out">Accedi per cercare su %1$s.</string>
-    <string name="scxyt_note_unavailable">%1$s non è disponibile al momento.</string>
-    <string name="scxyt_error_signed_out">Accedi per riprodurre o scaricare i brani da %1$s.</string>
-    <string name="scxyt_error_blocked">%1$s sta rifiutando il server in questo momento. Riprova più tardi.</string>
-    <string name="scxyt_error_blocked_network">%1$s sta rifiutando questa rete in questo momento. Riprova più tardi o da un’altra rete.</string>
-    <string name="scxyt_error_unavailable">Questo brano non può essere riprodotto qui (verifica dell\'età, limitazione regionale o solo per i membri).</string>
-    <string name="scxyt_error_protected">%1$s blocca questo brano: si ascolta solo nell’app di %1$s.</string>
-    <string name="scxyt_error_too_long">Questo brano è troppo lungo da recuperare, oppure è una diretta.</string>
+    <string name="scxyt_note_signed_out">Accedi dalla pagina Account per cercare su %1$s.</string>
+    <string name="scxyt_note_unavailable">%1$s non è disponibile al momento. Riprova più tardi.</string>
+    <string name="scxyt_error_signed_out">Accedi dalla pagina Account per riprodurre o scaricare i brani da %1$s.</string>
+    <string name="scxyt_error_blocked">%1$s sta bloccando il server di Tryptify in questo momento. Riprova più tardi.</string>
+    <string name="scxyt_error_blocked_network">%1$s sta bloccando questa rete in questo momento. Riprova più tardi o passa dal Wi-Fi ai dati mobili, o viceversa.</string>
+    <string name="scxyt_error_unavailable">Questo brano non si può riprodurre qui: ha limiti di età, non è disponibile nel tuo paese o è riservato ai membri.</string>
+    <string name="scxyt_error_protected">%1$s blocca questo brano: si ascolta solo nell\'app di %1$s.</string>
+    <string name="scxyt_error_too_long">Le dirette e i brani oltre i 30 minuti non si possono riprodurre né scaricare.</string>
     <string name="scxyt_error_not_found">Questo brano non esiste più su %1$s, oppure è privato.</string>
-    <string name="scxyt_error_busy">Il server è occupato. Riprova tra un momento.</string>
+    <string name="scxyt_error_busy">Il server di Tryptify è occupato. Riprova tra un momento.</string>
     <string name="scxyt_error_timeout">Il recupero di questo brano ha richiesto troppo tempo. Riprova.</string>
     <string name="scxyt_error_failed">Impossibile recuperare questo brano da %1$s.</string>
+    <string name="scxyt_error_network">Impossibile raggiungere %1$s. Controlla la tua connessione e riprova.</string>
 </resources>

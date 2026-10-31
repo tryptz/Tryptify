@@ -708,7 +708,7 @@
     <string name="username_invalid">1 ile %1$d arasında karakter kullanın.</string>
     <string name="username_update_failed">Kullanıcı adı güncellenemedi: %1$s</string>
     <string name="sign_in_to_tryptify">Tryptify’da oturum açın</string>
-    <string name="sign_in_benefit">Favorilerinizi ve çalma listelerinizi cihazlar arasında eşitleyin</string>
+    <string name="sign_in_benefit">Favorilerinizi ve çalma listelerinizi cihazlar arasında eşitleyin, SoundCloud dinleyin</string>
     <string name="continue_with_google">Google ile devam et</string>
     <string name="continue_with_discord">Discord ile devam et</string>
     <string name="email">E-posta</string>
@@ -1767,6 +1767,8 @@
     <string name="notif_stop">Durdur</string>
     <string name="share_preparing">%1$s paylaşım için hazırlanıyor…</string>
     <string name="share_no_file">Paylaşılacak dosya yok</string>
+    <string name="share_link_preparing">%1$s için Discord ön dinlemesi hazırlanıyor. Hazır olunca paylaşım açılır.</string>
+    <string name="share_no_file_download_first">Dosyasını paylaşmak için önce bu şarkıyı indirin ya da Bağlantıyı paylaş’ı kullanın.</string>
     <string name="share_track">Parçayı paylaş</string>
     <string name="notif_system_eq_title">Sistem genelinde EQ etkin</string>
     <string name="notif_system_eq_text">AutoEQ düzeltmeniz bu cihazdaki tüm seslere uygulanıyor.</string>
@@ -1785,7 +1787,7 @@
     <string name="import_progress_title">Spotify çalma listesi içe aktarılıyor</string>
     <string name="import_channel">Çalma listesi içe aktarma</string>
     <string name="import_channel_desc">Spotify çalma listesi içe aktarmalarının ilerlemesi.</string>
-    <string name="import_youtube_unsupported">YouTube Music’ten içe aktarma henüz desteklenmiyor; yalnızca Spotify çalma listesi bağlantıları çalışır.</string>
+    <string name="import_youtube_unsupported">YouTube çalma listesi bağlantıları henüz içe aktarılamıyor. Burada yalnızca Spotify bağlantıları çalışır; YouTube Music için Dosya sekmesini kullanın.</string>
     <string name="import_unrecognized_url">Tanınmayan çalma listesi URL’si. https://open.spotify.com/playlist/… gibi bir Spotify çalma listesi bağlantısı yapıştırın</string>
     <string name="import_no_tracks">Bu Spotify çalma listesinde içe aktarılabilir parça yok.</string>
     <string name="import_default_playlist_name">Spotify çalma listesi</string>
@@ -3179,7 +3181,7 @@
     <string name="onb_permissions_sub">Bu cihazdaki müziğe ve oynatma bildirimlerine erişime izin verin. Bunu daha sonra Android ayarlarından değiştirebilirsiniz.</string>
     <string name="onb_folders_sub">Tryptify’ın müzik için taradığı klasörleri seçin.</string>
     <string name="onb_sources_sub">Müziğinizin nereden geleceğini seçin. Her kaynak Ayarlar › Bağlantılar bölümünde ayarlanır.</string>
-    <string name="onb_account_sub">Çalma listelerinizi ve ayarlarınızı cihazlarınız arasında eşitlemek ve Connect’i kullanmak için giriş yapın. İsteğe bağlı.</string>
+    <string name="onb_account_sub">Çalma listelerinizi ve ayarlarınızı cihazlarınız arasında eşitlemek, Connect’i ve SoundCloud’u kullanmak için giriş yapın. İsteğe bağlı.</string>
     <string name="onb_features_sub">Tryptify’ın sundukları.</string>
     <string name="onb_ready_sub">Kitaplığınız arka planda taranır ve siz dinlerken dolar.</string>
     <string name="onb_perm_music">Müzik ve ses</string>
@@ -3212,7 +3214,7 @@
     <string name="onb_feat_visualizer_desc">Müziği takip eden MilkDrop ön ayarları</string>
     <string name="onb_hint_permissions">Atlarsanız ikisi de kapalı kalır</string>
     <string name="onb_hint_folders">Klasör seçilmezse tüm cihaz taranır</string>
-    <string name="onb_hint_sources">Atlarsanız yalnızca bu cihaz kullanılır</string>
+    <string name="onb_hint_sources">Atlarsanız bu cihazdaki müzik ve YouTube kullanılır</string>
     <string name="onb_hint_account">Daha sonra profilinizden giriş yapabilirsiniz</string>
     <string name="onb_hint_features">Bunların hepsi kurulumdan sonra kullanılabilir</string>
     <string name="onb_hint_ready_library">Kitaplığınızı açar</string>
@@ -3354,9 +3356,10 @@
     <string name="shared_link_failed">Bu paylaşılan bağlantı çalınamadı. Ayarlar › Bağlantılar’dan %1$s API’sini kontrol edin.</string>
     <string name="share_link">Bağlantıyı paylaş</string>
     <string name="share_album_link">Albüm bağlantısını paylaş</string>
-    <string name="share_link_unavailable">Bu şarkı bir katalogdan değil, paylaşılacak bağlantısı yok. Bunun yerine dosyayı paylaşın.</string>
-    <string name="shared_link_youtube_signed_out">%1$s parçalarını çalmak için oturum açın. Bu parça bunun yerine YouTube’dan çalınıyor.</string>
-    <string name="shared_link_youtube_instead">API’lerinizin hiçbirinde bu parça yok, bu yüzden bunun yerine YouTube’dan çalınıyor.</string>
+    <string name="share_link_unavailable">Yalnızca TIDAL, Qobuz, Deezer, Apple Music, YouTube veya SoundCloud şarkılarının paylaşılacak bağlantısı vardır.</string>
+    <string name="shared_link_youtube_signed_out">%1$s parçalarını çalmak için Hesap sayfasından oturum açın. Bu parça bunun yerine YouTube’dan çalınıyor.</string>
+    <string name="shared_link_soundcloud_none">Bu %1$s şarkısını çalmak için Hesap sayfasından oturum açın. YouTube’da da yok.</string>
+    <string name="shared_link_youtube_instead">Hizmetlerinizin hiçbirinde bu parça yok, bu yüzden bunun yerine YouTube’dan çalınıyor.</string>
     <string name="whats_new_section_sharing">Paylaşım</string>
     <string name="whats_new_section_widget">Ana ekran widget’ı</string>
     <string name="whats_new_1951_share_link_title">Bağlantıyı paylaş</string>
@@ -3370,16 +3373,17 @@
     <string name="whats_new_1951_share_youtube_body">Bağlantıyı paylaş bunlar için de çalışır: oturum açıksa Discord kapağı bir oynat düğmesiyle gösterir. Hizmetlerinizin hiçbirinde olmayan paylaşılmış bir parça ya da oturum açmadan açılan bir SoundCloud bağlantısı YouTube’dan çalar.</string>
     <string name="whats_new_1951_my_server_title">Müzik sunucunuzdan daha fazlası</string>
     <string name="whats_new_1951_my_server_body">Çalmalarınızı sayar, beğendiklerinize yıldız ekler ve kendi sözlerini gönderir; Kitaplık › Sunucum da çalma listelerini ve beğenilen parçaları listeler. Mobil veride daha küçük bir MP3 akışı yapabilir.</string>
-    <string name="scxyt_note_signed_out">%1$s araması için oturum açın.</string>
-    <string name="scxyt_note_unavailable">%1$s şu anda kullanılamıyor.</string>
-    <string name="scxyt_error_signed_out">%1$s parçalarını çalmak veya indirmek için oturum açın.</string>
-    <string name="scxyt_error_blocked">%1$s şu anda sunucuyu geri çeviriyor. Daha sonra tekrar deneyin.</string>
-    <string name="scxyt_error_blocked_network">%1$s şu anda bu ağı geri çeviriyor. Daha sonra ya da başka bir ağda tekrar deneyin.</string>
-    <string name="scxyt_error_unavailable">Bu parça burada çalınamıyor (yaş doğrulaması, bölge kısıtlaması veya yalnızca üyelere özel).</string>
+    <string name="scxyt_note_signed_out">%1$s araması için Hesap sayfasından oturum açın.</string>
+    <string name="scxyt_note_unavailable">%1$s şu anda kullanılamıyor. Daha sonra tekrar deneyin.</string>
+    <string name="scxyt_error_signed_out">%1$s parçalarını çalmak veya indirmek için Hesap sayfasından oturum açın.</string>
+    <string name="scxyt_error_blocked">%1$s şu anda Tryptify’ın sunucusunu engelliyor. Daha sonra tekrar deneyin.</string>
+    <string name="scxyt_error_blocked_network">%1$s şu anda bu ağı engelliyor. Daha sonra tekrar deneyin ya da Wi-Fi ile mobil veri arasında geçiş yapın.</string>
+    <string name="scxyt_error_unavailable">Bu parça burada çalınamıyor: yaş sınırlamalı, ülkenizde sunulmuyor ya da yalnızca üyelere özel.</string>
     <string name="scxyt_error_protected">%1$s bu parçayı kilitliyor; yalnızca %1$s uygulamasında çalınabilir.</string>
-    <string name="scxyt_error_too_long">Bu parça alınamayacak kadar uzun ya da canlı yayın.</string>
+    <string name="scxyt_error_too_long">Canlı yayınlar ve 30 dakikadan uzun şarkılar çalınamaz veya indirilemez.</string>
     <string name="scxyt_error_not_found">Bu parça artık %1$s üzerinde yok ya da gizli.</string>
-    <string name="scxyt_error_busy">Sunucu meşgul. Birazdan tekrar deneyin.</string>
+    <string name="scxyt_error_busy">Tryptify’ın sunucusu meşgul. Birazdan tekrar deneyin.</string>
     <string name="scxyt_error_timeout">Bu parçanın alınması çok uzun sürdü. Tekrar deneyin.</string>
     <string name="scxyt_error_failed">Bu parça %1$s üzerinden alınamadı.</string>
+    <string name="scxyt_error_network">%1$s hizmetine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.</string>
 </resources>

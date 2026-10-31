@@ -120,7 +120,8 @@ class ShareLinks @Inject constructor(
      */
     private suspend fun preview(title: String, mediaId: String): Result<ScxytShare> {
         if (!scxyt.isSignedIn()) return Result.failure(ScxytError.SignedOut())
-        toast(text().getString(R.string.share_preparing, title))
+        // Says what the wait is for: the share sheet opens only once the preview is made.
+        toast(text().getString(R.string.share_link_preparing, title))
         val share = withTimeoutOrNull(PREVIEW_WAIT_MS) { withContext(Dispatchers.IO) { scxyt.share(mediaId) } }
             ?: Result.failure(ScxytError.Timeout())
         share.onFailure { Log.i(TAG, "share link: no preview for $mediaId, shared without it: ${it::class.simpleName}: ${it.message}") }

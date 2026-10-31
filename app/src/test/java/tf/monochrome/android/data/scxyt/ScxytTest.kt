@@ -408,7 +408,7 @@ class ScxytTest {
         assertEquals(R.string.scxyt_error_busy, ScxytMessages.textRes(ScxytError.Busy()))
         assertEquals(R.string.scxyt_error_timeout, ScxytMessages.textRes(ScxytError.Timeout()))
         assertEquals(R.string.scxyt_error_failed, ScxytMessages.textRes(ScxytError.Failed("failed")))
-        assertEquals(R.string.scxyt_error_failed, ScxytMessages.textRes(ScxytError.Network(java.io.IOException())))
+        assertEquals(R.string.scxyt_error_network, ScxytMessages.textRes(ScxytError.Network(java.io.IOException())))
     }
 
     // ── The queue, history and downloads ───────────────────────────────
