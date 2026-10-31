@@ -88,6 +88,7 @@ object WhatsNew {
         MUSIC_LINKS -> R.string.whats_new_section_music_links
         SHARING -> R.string.whats_new_section_sharing
         WIDGET -> R.string.whats_new_section_widget
+        YOUTUBE_SOUNDCLOUD -> R.string.whats_new_section_youtube_soundcloud
         else -> 0
     }
 
@@ -166,6 +167,9 @@ object WhatsNew {
     /** The now playing widget on the home screen. */
     private const val WIDGET = "Home screen widget"
 
+    /** The two services built in from 1.9.51: songs only, YouTube with no sign-in. */
+    private const val YOUTUBE_SOUNDCLOUD = "YouTube and SoundCloud"
+
     /** Sharing a whole look, and taking someone else's. */
     private const val THEME_STORE = "Theme Store"
 
@@ -196,6 +200,22 @@ object WhatsNew {
             versionCode = 196,
             versionName = "1.9.51",
             entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = YOUTUBE_SOUNDCLOUD,
+                    title = "YouTube and SoundCloud, built in",
+                    body = "Search finds songs on YouTube and SoundCloud too, with a chip for each at the end of the source row, and a pasted YouTube link finds that song. YouTube needs no sign-in. For SoundCloud, sign in on the Account page.",
+                    titleRes = R.string.whats_new_1951_youtube_title,
+                    bodyRes = R.string.whats_new_1951_youtube_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = YOUTUBE_SOUNDCLOUD,
+                    title = "They play like any song",
+                    body = "Play, download, like and add them to playlists. A song's first play loads the whole song, so it can take a few seconds to start. Live streams and songs over 30 minutes don't play.",
+                    titleRes = R.string.whats_new_1951_youtube_play_title,
+                    bodyRes = R.string.whats_new_1951_youtube_play_body,
+                ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
@@ -328,7 +348,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = SHARING,
                     title = "Songs shared from TrypT-hifi play here",
-                    body = "A tryptify.com link from TrypT-hifi's share button opens Tryptify and plays the song, then the rest of its album, on whichever service you have: the one it was shared from, else the same song found by its ISRC or by name.",
+                    body = "A tryptify.com link from TrypT-hifi's share button opens Tryptify and plays the song, then the rest of its album, on whichever service you have: the one it was shared from, else the same song found by its ISRC or by name, else on YouTube.",
                     titleRes = R.string.whats_new_1951_shared_open_title,
                     bodyRes = R.string.whats_new_1951_shared_open_body,
                 ),
@@ -336,7 +356,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = SHARING,
                     title = "Share link",
-                    body = "In a song's menu, the player's menu and on an album's page: a tryptify.com link anyone with Tryptify can play, whatever services they use. With a TrypT-hifi under Settings › Connections, Discord shows its cover and a preview.",
+                    body = "In a song's menu, the player's menu and on an album's page: a tryptify.com link anyone with Tryptify can play. Discord shows its cover and a preview with a TrypT-hifi under Settings › Connections, or for a YouTube or SoundCloud song when you're signed in.",
                     titleRes = R.string.whats_new_1951_share_link_title,
                     bodyRes = R.string.whats_new_1951_share_link_body,
                 ),

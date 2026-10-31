@@ -27,6 +27,8 @@ object ScxytMessages {
         is ScxytError.NotFound -> R.string.scxyt_error_not_found
         is ScxytError.Busy -> R.string.scxyt_error_busy
         is ScxytError.Timeout -> R.string.scxyt_error_timeout
+        // Offline, or the request never got an answer: say what to check.
+        is ScxytError.Network -> R.string.scxyt_error_network
         else -> R.string.scxyt_error_failed
     }
 
@@ -38,6 +40,7 @@ object ScxytMessages {
         R.string.scxyt_error_protected,
         R.string.scxyt_error_not_found,
         R.string.scxyt_error_failed,
+        R.string.scxyt_error_network,
     )
 
     /** [error] in words, for the song [mediaId] (`yt:…` or `sc:…`). */

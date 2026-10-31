@@ -962,7 +962,7 @@ class PlayerViewModel @Inject constructor(
                     when (link.source) {
                         // Only signed out, with nothing on YouTube by its name either.
                         tf.monochrome.android.share.SharedLink.Source.SOUNDCLOUD ->
-                            words.getString(R.string.scxyt_error_signed_out, link.source.label)
+                            words.getString(R.string.shared_link_soundcloud_none, link.source.label)
                         // Never for a link that parsed: its id is always one to play.
                         tf.monochrome.android.share.SharedLink.Source.YOUTUBE ->
                             words.getString(R.string.scxyt_error_failed, link.source.label)
@@ -1702,8 +1702,9 @@ class PlayerViewModel @Inject constructor(
                 if (download != null) {
                     trackShareHelper.shareDownloadedTrack(download)
                 } else {
-                    val text = tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.share_no_file)
-                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+                    // Not downloaded: say how to get a file, and that the link needs none.
+                    val text = tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.share_no_file_download_first)
+                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
                 }
             }
             return

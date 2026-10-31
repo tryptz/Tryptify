@@ -83,7 +83,7 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 
 | | |
 | --- | --- |
-| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, and Tryptify Cloud. |
+| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, Tryptify Cloud, YouTube with no sign-in, and SoundCloud with your Tryptify account. |
 | **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $1.29 a month for 10 GB up to 10 TB, with a 7-day free trial. |
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
 | **DSP mixing console** | A C++17 engine with up to 48 buses, 36 processors and EBU R128 meters. |
@@ -109,7 +109,7 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 
 ```mermaid
 flowchart LR
-    S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud"] --> X["ExoPlayer"]
+    S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud · YouTube · SoundCloud"] --> X["ExoPlayer"]
     X --> RG["ReplayGain"]
     RG --> EQ["AutoEQ"]
     EQ --> M["DSP console"]
