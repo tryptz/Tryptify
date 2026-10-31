@@ -1457,6 +1457,12 @@ phone fetched to play, a SoundCloud one's comes from the server. Share file
 shares only a song's download. The cover is the service's own https picture,
 with no sign-in in it.
 
+**Share link is in the ⋮ menu and the player's menu**, as a link to the song
+alone (`ShareLinks.songLink`). The local song menu (`UnifiedTrackContextMenuHost`)
+offers it for these songs only: a file or a server song has no catalog, and a
+catalog song there would be shared by its legacy track, whose album id is a
+hash no catalog loads.
+
 ### Themes
 
 Light variants are **generated**, never hand-written, and every foreground is

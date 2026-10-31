@@ -3381,6 +3381,8 @@
     <string name="share_link">Link teilen</string>
     <string name="share_album_link">Albumlink teilen</string>
     <string name="share_link_unavailable">Dieser Song stammt aus keinem Katalog, daher gibt es keinen Link zum Teilen. Teile stattdessen die Datei.</string>
+    <string name="shared_link_youtube_signed_out">Melde dich an, um Titel von %1$s abzuspielen. Dieser läuft stattdessen über YouTube.</string>
+    <string name="shared_link_youtube_instead">Keine deiner APIs hat diesen Titel, daher läuft er stattdessen über YouTube.</string>
     <string name="whats_new_section_sharing">Teilen</string>
     <string name="whats_new_section_widget">Startbildschirm-Widget</string>
     <string name="whats_new_1951_shared_open_title">Aus TrypT-hifi geteilte Songs spielen hier</string>

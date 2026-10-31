@@ -3381,6 +3381,8 @@
     <string name="share_link">Bağlantıyı paylaş</string>
     <string name="share_album_link">Albüm bağlantısını paylaş</string>
     <string name="share_link_unavailable">Bu şarkı bir katalogdan değil, paylaşılacak bağlantısı yok. Bunun yerine dosyayı paylaşın.</string>
+    <string name="shared_link_youtube_signed_out">%1$s parçalarını çalmak için oturum açın. Bu parça bunun yerine YouTube’dan çalınıyor.</string>
+    <string name="shared_link_youtube_instead">API’lerinizin hiçbirinde bu parça yok, bu yüzden bunun yerine YouTube’dan çalınıyor.</string>
     <string name="whats_new_section_sharing">Paylaşım</string>
     <string name="whats_new_section_widget">Ana ekran widget’ı</string>
     <string name="whats_new_1951_shared_open_title">TrypT-hifi’den paylaşılan şarkılar burada çalar</string>

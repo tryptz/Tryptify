@@ -111,6 +111,20 @@ class SupabaseAuthManager @Inject constructor(
     fun accessToken(): String? = runCatching { auth.currentSessionOrNull()?.accessToken }.getOrNull()
 
     /**
+     * Whether there is a session, once the saved one has been read back. A
+     * link that opens the app cold asks before [initialize] has run, when
+     * [userProfile] still says nobody is signed in.
+     */
+    suspend fun hasSession(): Boolean = try {
+        kotlinx.coroutines.withTimeoutOrNull(SESSION_RESTORE_TIMEOUT_MS) { auth.awaitInitialization() }
+        auth.currentSessionOrNull() != null
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
      * The name other players see: the name chosen in the app, else the
      * provider's, else the email's first part; null when nobody is signed in.
      */
@@ -376,5 +390,9 @@ class SupabaseAuthManager @Inject constructor(
 
     private companion object {
         const val USERNAME_KEY = "username"
+
+        // Reading the saved session back is local and quick; past this, what
+        // is there by now is the answer, rather than a link that never plays.
+        const val SESSION_RESTORE_TIMEOUT_MS = 5_000L
     }
 }

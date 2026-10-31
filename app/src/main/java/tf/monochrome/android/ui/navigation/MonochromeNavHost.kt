@@ -739,8 +739,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
             if (invite != null) navController.navigate(Screen.ListeningParty.route) { launchSingleTop = true }
         }
         // A song or album shared from TrypT-hifi plays at once, through the
-        // album it is on (PlayerViewModel.playSharedLink). Taken first, so it
-        // plays once.
+        // album it is on, a YouTube or SoundCloud song on its own
+        // (PlayerViewModel.playSharedLink). Taken first, so it plays once.
         val sharedLinks = remember(appContext) {
             dagger.hilt.android.EntryPointAccessors.fromApplication(
                 appContext,

@@ -133,7 +133,9 @@
             </intent-filter>
 
             <!-- Songs and albums shared from TrypT-hifi:
-                 https://tryptify.com/listen/<source>/album/<id>[/track/<id>].
+                 https://tryptify.com/listen/<source>/album/<id>[/track/<id>],
+                 and YouTube and SoundCloud songs shared from this app:
+                 https://tryptify.com/listen/<youtube|soundcloud>/track/<id>.
                  tryptify.com's assetlinks.json covers every path, so these
                  open here without asking too. Played at once (SharedLinks,
                  PlayerViewModel.playSharedLink). Its own filter: <data> in

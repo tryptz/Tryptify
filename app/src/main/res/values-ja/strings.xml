@@ -3303,6 +3303,8 @@
     <string name="share_link">リンクを共有</string>
     <string name="share_album_link">アルバムのリンクを共有</string>
     <string name="share_link_unavailable">この曲はカタログの曲ではないため、共有できるリンクがありません。代わりにファイルを共有してください。</string>
+    <string name="shared_link_youtube_signed_out">%1$s の曲を再生するにはサインインしてください。この曲は代わりに YouTube から再生します。</string>
+    <string name="shared_link_youtube_instead">追加した API にこの曲がないため、代わりに YouTube から再生します。</string>
     <string name="whats_new_section_sharing">共有</string>
     <string name="whats_new_section_widget">ホーム画面ウィジェット</string>
     <string name="whats_new_1951_shared_open_title">TrypT-hifi から共有された曲をここで再生</string>

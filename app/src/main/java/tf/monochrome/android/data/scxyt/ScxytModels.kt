@@ -179,6 +179,9 @@ fun ScxytTrack.toUnifiedTrack(): UnifiedTrack? {
         // Leaves the app with the song (the media session, Discord, the
         // synced history), so only a plain https picture.
         artworkUri = cover?.takeIf { it.startsWith("https://") },
+        // A YouTube song's page is made from its id; a SoundCloud one's is
+        // its permalink, which its number does not give.
+        pageUrl = url?.takeIf { service == ScxytSource.SOUNDCLOUD && it.startsWith("https://") },
         source = PlaybackSource.Scxyt(mediaId = id),
         sourceType = service.sourceType,
     )

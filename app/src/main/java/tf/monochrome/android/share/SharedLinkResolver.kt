@@ -6,9 +6,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.repository.MusicRepository
+import tf.monochrome.android.data.scxyt.ScxytRepository
+import tf.monochrome.android.data.scxyt.ScxytSource
 import tf.monochrome.android.domain.model.AlbumDetail
 import tf.monochrome.android.domain.model.SearchResult
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.party.PartyItem
 import tf.monochrome.android.party.PartyMatch
 
@@ -21,30 +24,51 @@ import tf.monochrome.android.party.PartyMatch
  * 3. Else the song (or album) by title, artist and length on every service
  *    this phone has, TIDAL, Qobuz, Deezer then Apple Music, matched as a
  *    listening party matches a song (PartyMatch.best), and its album.
+ * 4. Else, for a song, the same song on YouTube (SharedSongResolver), which
+ *    every phone has: on its own, and said to be a stand-in.
  *
- * Null when none of them has it.
+ * A YouTube or SoundCloud link is a song with no album, and goes to
+ * SharedSongResolver alone. Null when nothing here has it.
  */
 @Singleton
 class SharedLinkResolver @Inject constructor(
     private val repository: MusicRepository,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    scxyt: ScxytRepository,
 ) {
-    data class Resolved(val album: AlbumDetail, val start: Track)
+    sealed interface Resolved {
+        /** An album's songs, and the one to start at. */
+        data class Album(val album: AlbumDetail, val start: Track) : Resolved
+
+        /**
+         * One YouTube or SoundCloud song, played on its own. [substitute]:
+         * found on YouTube for a song this phone could not play from where
+         * it was shared.
+         */
+        data class Song(val track: UnifiedTrack, val substitute: Boolean = false) : Resolved
+    }
+
+    private val songs = SharedSongResolver(
+        signedIn = scxyt::isSignedIn,
+        searchYoutube = { query -> scxyt.search(query, ScxytSource.YOUTUBE, YOUTUBE_CANDIDATES).getOrNull().orEmpty() },
+    )
 
     suspend fun resolve(link: SharedLink): Resolved? =
-        fromSource(link) ?: byIsrc(link) ?: byName(link)
+        route(link, songs) { fromSource(it) ?: byIsrc(it) ?: byName(it) }
 
-    private suspend fun fromSource(link: SharedLink): Resolved? {
+    private suspend fun fromSource(link: SharedLink): Resolved.Album? {
+        val id = link.album ?: return null
         val album = when (link.source) {
-            SharedLink.Source.QOBUZ -> repository.getQobuzAlbum(link.album)
-            SharedLink.Source.DEEZER -> repository.getDeezerAlbum(link.album.toLong())
-            SharedLink.Source.APPLE -> repository.getAppleAlbum(link.album.toLong())
-            SharedLink.Source.TIDAL -> repository.getAlbum(link.album.toLong())
+            SharedLink.Source.QOBUZ -> repository.getQobuzAlbum(id)
+            SharedLink.Source.DEEZER -> repository.getDeezerAlbum(id.toLong())
+            SharedLink.Source.APPLE -> repository.getAppleAlbum(id.toLong())
+            SharedLink.Source.TIDAL -> repository.getAlbum(id.toLong())
+            SharedLink.Source.YOUTUBE, SharedLink.Source.SOUNDCLOUD -> return null
         }.getOrNull()
         return album?.let { startIn(it) { t -> t.id == link.track || t.deezerId == link.track || t.appleId == link.track } }
     }
 
-    private suspend fun byIsrc(link: SharedLink): Resolved? {
+    private suspend fun byIsrc(link: SharedLink): Resolved.Album? {
         val isrc = link.isrc ?: return null
         val match = runCatching { repository.findQobuzByIsrc(isrc) }.getOrNull() ?: return null
         val album = match.albumSlug?.let { repository.getQobuzAlbum(it).getOrNull() } ?: return null
@@ -52,7 +76,7 @@ class SharedLinkResolver @Inject constructor(
         return startIn(album) { t -> link.track != null && t.id == match.trackId }
     }
 
-    private suspend fun byName(link: SharedLink): Resolved? {
+    private suspend fun byName(link: SharedLink): Resolved.Album? {
         val title = link.title ?: return null
         val query = listOfNotNull(link.artist, title).joinToString(" ")
         for (search in searches) {
@@ -62,7 +86,7 @@ class SharedLinkResolver @Inject constructor(
                 val track = PartyMatch.best(want, found.tracks) ?: continue
                 val album = track.album?.id?.let { albumById(it) }
                 return album?.let { startIn(it) { t -> t.id == track.id } }
-                    ?: Resolved(AlbumDetail(track.album ?: continue, listOf(track)), track)
+                    ?: Resolved.Album(AlbumDetail(track.album ?: continue, listOf(track)), track)
             } else {
                 val album = found.albums.firstOrNull { sameAlbum(it.title, it.artist?.name, title, link.artist) } ?: continue
                 return albumById(album.id)?.let { startIn(it) { false } } ?: continue
@@ -88,12 +112,27 @@ class SharedLinkResolver @Inject constructor(
     }.getOrNull()
 
     // [album] from its song [first] picks, or from its first song.
-    private fun startIn(album: AlbumDetail, first: (Track) -> Boolean): Resolved? {
+    private fun startIn(album: AlbumDetail, first: (Track) -> Boolean): Resolved.Album? {
         val tracks = album.tracks.takeIf { it.isNotEmpty() } ?: return null
-        return Resolved(album, tracks.firstOrNull(first) ?: tracks.first())
+        return Resolved.Album(album, tracks.firstOrNull(first) ?: tracks.first())
     }
 
     companion object {
+        /** YouTube's first answers looked through for the song; the right one is near the top or not there. */
+        private const val YOUTUBE_CANDIDATES = 10
+
+        /**
+         * The order [link] is tried in: a YouTube or SoundCloud song by
+         * [songs] alone; a catalog link by [catalogs] (steps 1 to 3), then
+         * on YouTube when it is a song none of them has.
+         */
+        internal suspend fun route(
+            link: SharedLink,
+            songs: SharedSongResolver,
+            catalogs: suspend (SharedLink) -> Resolved.Album?,
+        ): Resolved? =
+            if (link.mediaId != null) songs.resolve(link) else catalogs(link) ?: songs.onYoutube(link)
+
         /** Two names for one album: the same letters (one maybe with an edition on), by the same artist. */
         fun sameAlbum(title: String, artist: String?, wantTitle: String, wantArtist: String?): Boolean {
             fun norm(s: String?) = s.orEmpty().lowercase().filter { it.isLetterOrDigit() }

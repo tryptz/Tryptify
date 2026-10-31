@@ -542,6 +542,12 @@ data class UnifiedTrack(
     // Artwork
     val artworkUri: String? = null,
 
+    // The song's own page on its service, where its id does not give it: a
+    // SoundCloud song's address there, as the server found it (its Track.url).
+    // Share link puts it in its link for the website to link the song to.
+    // Null for everything else.
+    val pageUrl: String? = null,
+
     // Audio quality
     val codec: AudioCodec? = null,
     val sampleRate: Int? = null,

@@ -943,24 +943,50 @@ class PlayerViewModel @Inject constructor(
     }
 
     /**
-     * Plays a song or album shared from TrypT-hifi (a tryptify.com/listen
-     * link) from whichever service this phone has (SharedLinkResolver: the one
-     * it was shared from, else the same song elsewhere), as tapping that song
-     * on its album's page does, so playback carries on through the album. An
-     * album link starts at its first song. Song radio is stopped first, as for
-     * an opened file. When no service here has it, a toast says so.
+     * Plays a song or album shared from TrypT-hifi, or a YouTube or SoundCloud
+     * song shared from this app (a tryptify.com/listen link), from whichever
+     * service this phone has (SharedLinkResolver: the one it was shared from,
+     * else the same song elsewhere), as tapping that song on its album's page
+     * does, so playback carries on through the album. An
+     * album link starts at its first song. A YouTube or SoundCloud song, or a
+     * song found on YouTube instead, plays on its own, as an opened file does.
+     * Song radio is stopped first, as for an opened file. A toast says when
+     * the song plays from YouTube instead, and when nothing here has it.
      */
     fun playSharedLink(link: tf.monochrome.android.share.SharedLink) {
         viewModelScope.launch {
-            val found = sharedLinkResolver.resolve(link)
-            if (found == null) {
-                val text = tf.monochrome.android.locale.AppLanguage.wrap(context)
-                    .getString(R.string.shared_link_failed, link.source.label)
-                android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
-                return@launch
+            val words = tf.monochrome.android.locale.AppLanguage.wrap(context)
+            fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
+            when (val found = sharedLinkResolver.resolve(link)) {
+                null -> say(
+                    when (link.source) {
+                        // Only signed out, with nothing on YouTube by its name either.
+                        tf.monochrome.android.share.SharedLink.Source.SOUNDCLOUD ->
+                            words.getString(R.string.scxyt_error_signed_out, link.source.label)
+                        // Never for a link that parsed: its id is always one to play.
+                        tf.monochrome.android.share.SharedLink.Source.YOUTUBE ->
+                            words.getString(R.string.scxyt_error_failed, link.source.label)
+                        else -> words.getString(R.string.shared_link_failed, link.source.label)
+                    },
+                )
+                is tf.monochrome.android.share.SharedLinkResolver.Resolved.Album -> {
+                    radioQueueManager.stopRadio()
+                    playTrack(found.start, found.album.tracks, ListRef.Album(found.album.album.id))
+                }
+                is tf.monochrome.android.share.SharedLinkResolver.Resolved.Song -> {
+                    if (found.substitute) {
+                        say(
+                            if (link.source == tf.monochrome.android.share.SharedLink.Source.SOUNDCLOUD) {
+                                words.getString(R.string.shared_link_youtube_signed_out, link.source.label)
+                            } else {
+                                words.getString(R.string.shared_link_youtube_instead)
+                            },
+                        )
+                    }
+                    radioQueueManager.stopRadio()
+                    playUnifiedTrack(found.track, listOf(found.track))
+                }
             }
-            radioQueueManager.stopRadio()
-            playTrack(found.start, found.album.tracks, ListRef.Album(found.album.album.id))
         }
     }
 
@@ -1692,7 +1718,12 @@ class PlayerViewModel @Inject constructor(
      * on whichever service the person it's sent to has (ShareLinks).
      */
     fun shareLink(track: Track) {
-        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track)?.source) }
+        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track)) }
+    }
+
+    /** Share a YouTube or SoundCloud song from a list as a tryptify.com link (ShareLinks). */
+    fun shareUnifiedLink(track: UnifiedTrack) {
+        viewModelScope.launch { shareLinks.shareTrack(track.toLegacyTrack(), track) }
     }
 
     /** Share an album page's album as a tryptify.com link (ShareLinks). */

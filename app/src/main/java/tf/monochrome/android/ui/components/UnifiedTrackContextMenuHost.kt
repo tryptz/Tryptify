@@ -87,6 +87,12 @@ fun UnifiedTrackContextMenuHost(
             // Sharing a file fetches it from Qobuz by id, which for a server
             // song is a hash: it would share somebody else's song.
             onShareFile = if (onOwnServer) null else ({ playerViewModel.shareUnifiedTrack(track) }),
+            // A YouTube or SoundCloud song links to itself. Nothing else here
+            // gets one: a file or a server song has no catalog, and the legacy
+            // track's album id is a hash no catalog loads.
+            onShareLink = if (track.source is tf.monochrome.android.domain.model.PlaybackSource.Scxyt) {
+                { playerViewModel.shareUnifiedLink(track) }
+            } else null,
             onGoToAlbum = if (isNavigableAlbumId(track.albumId)) {
                 { navController.openAlbum(track.albumId) }
             } else null,

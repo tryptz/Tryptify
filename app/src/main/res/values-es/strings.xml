@@ -3459,6 +3459,8 @@
     <string name="share_link">Compartir enlace</string>
     <string name="share_album_link">Compartir enlace del álbum</string>
     <string name="share_link_unavailable">Esta canción no es de un catálogo, así que no tiene enlace para compartir. Comparte el archivo.</string>
+    <string name="shared_link_youtube_signed_out">Inicia sesión para reproducir canciones de %1$s. Esta se reproduce desde YouTube en su lugar.</string>
+    <string name="shared_link_youtube_instead">Ninguna de tus API tiene esta canción, así que se reproduce desde YouTube en su lugar.</string>
     <string name="whats_new_section_sharing">Compartir</string>
     <string name="whats_new_section_widget">Widget de pantalla de inicio</string>
     <string name="whats_new_1951_shared_open_title">Las canciones compartidas desde TrypT-hifi suenan aquí</string>

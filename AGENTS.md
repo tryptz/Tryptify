@@ -328,6 +328,22 @@ carry the Supabase session (the token from `CloudRepository.bearer`), and
 signed out SoundCloud is off. A play or a download asks `/api/v1/prepare`
 first and uses the signed link it returns.
 
+**Share link** on a song from either is a tryptify.com link to the song
+alone (`share/SharedLinks.kt`, `ShareLinks.songLink`):
+`https://tryptify.com/listen/youtube/track/<videoId>` or
+`/listen/soundcloud/track/<number>`, with `title`, `artist` and `duration`
+(seconds) in the query, and for SoundCloud `page`, the song's soundcloud.com
+address (the server's `Track.url`, carried on `UnifiedTrack.pageUrl`), only
+when it is `https://soundcloud.com/<artist>/<song>`. No TrypT-hifi signs
+these: the website (tryptz/tryptify.com) makes their page from YouTube's and
+SoundCloud's oEmbed. Opened in the app (`SharedSongResolver`), a YouTube link
+plays that song, with no sign-in; a SoundCloud link plays from the server
+when signed in, and signed out the best match a YouTube search for its artist
+and title finds, with a toast saying so. A catalog song link that no service
+on the phone has falls back to YouTube the same way; an album link does not.
+`SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the match and
+the routing.
+
 `ScxytTest` holds the app to the server's JSON and error codes,
 `ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
 `ChunkedDownloadTest`, `YoutubeAudioCacheTest` and the PO-token tests above

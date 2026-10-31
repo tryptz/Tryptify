@@ -3303,6 +3303,8 @@
     <string name="share_link">分享链接</string>
     <string name="share_album_link">分享专辑链接</string>
     <string name="share_link_unavailable">这首歌不来自曲库，没有可分享的链接。请改为分享文件。</string>
+    <string name="shared_link_youtube_signed_out">登录后即可播放来自 %1$s 的歌曲。这首歌将改为从 YouTube 播放。</string>
+    <string name="shared_link_youtube_instead">已添加的 API 中都没有这首歌，因此改为从 YouTube 播放。</string>
     <string name="whats_new_section_sharing">分享</string>
     <string name="whats_new_section_widget">桌面小部件</string>
     <string name="whats_new_1951_shared_open_title">从 TrypT-hifi 分享的歌曲在这里播放</string>

@@ -35,7 +35,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ScxytRepository @Inject constructor(
-    auth: SupabaseAuthManager,
+    private val auth: SupabaseAuthManager,
     private val cloud: CloudRepository,
     http: HttpClient,
     json: Json,
@@ -53,6 +53,13 @@ class ScxytRepository @Inject constructor(
 
     /** Whether there is a sign-in to use SoundCloud with. */
     val signedIn: Flow<Boolean> = auth.userProfile.map { it != null }.distinctUntilChanged()
+
+    /**
+     * Whether SoundCloud can be used now, asked once: [signedIn] says no
+     * until the saved sign-in is read back, and a shared link may open the
+     * app cold.
+     */
+    suspend fun isSignedIn(): Boolean = auth.hasSession()
 
     /** The first [limit] songs [source] finds for [query]; a pasted link finds that one song. */
     suspend fun search(query: String, source: ScxytSource, limit: Int = SEARCH_LIMIT): Result<List<UnifiedTrack>> =
