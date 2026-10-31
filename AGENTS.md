@@ -264,15 +264,48 @@ applies. `CloudTest` holds the app to the server's error codes and JSON.
 
 ## YouTube and SoundCloud
 
-Built in, through trypt-hifi-scxyt (its own repository; its README's "The API
-Tryptify uses" is the contract), which searches and fetches with yt-dlp on
-its machine. The app side is `data/scxyt/` and `PlaybackSource.Scxyt`. Its
-address is `BuildConfig.SCXYT_URL`, overridable with `scxyt.url` in
-`local.properties`. It holds no secret: calls carry the Supabase session (the
-token from `CloudRepository.bearer`), and signed out the source is off.
-Songs keep the server's ids (`yt:…`, `sc:…`); a play or a download asks
-`/api/v1/prepare` first and uses the signed link it returns. `ScxytTest` holds
-the app to the server's JSON and error codes.
+Both built in, songs only: `data/scxyt/` and `PlaybackSource.Scxyt`, with the
+ids the server has always handed out (`yt:<videoId>`, `sc:<digits>`), so
+saved queues, likes and downloads keep working. `ScxytRouter` sends each call
+its own way.
+
+**YouTube is extracted on the phone**, with NewPipeExtractor
+(`data/youtube/`; GPL-3.0-or-later, from JitPack). YouTube answers a
+data-centre address with its bot check, which is all the server ever got; a
+phone on a home or mobile network is served. No sign-in. Search is YouTube
+Music's songs, or its music videos where the songs answer nothing (a country
+without YouTube Music); a pasted YouTube link finds that one song. A play or
+a download first fetches the whole audio (itag 140, AAC, whenever there is
+one) into `cacheDir/youtube`, in pieces of 1 MiB at most (`ChunkedDownload`:
+googlevideo throttles or refuses open-ended requests), and plays or copies
+that file: a stream link is tied to the phone's address and expires, and the
+player never sees one. The cache holds 256 MiB, least recently played out
+first, never a file used in the last hour (the player may hold it for
+gapless playback); `YoutubeAudioCache`. Live streams and songs over 30
+minutes are refused, as the server refused them. NewPipe needs the R8 rules
+at the end of `proguard-rules.pro` (from NewPipe's own app): Rhino runs
+YouTube's player script and reaches Java by reflection, protobuf-lite reads
+fields by name. It also needs core library desugaring with
+`desugar_jdk_libs_nio`, as NewPipe's app has: it calls Java APIs Android only
+has from 13 on (URLEncoder and URLDecoder with a Charset,
+`Collectors.toUnmodifiableList`) in every search, which would crash YouTube
+on Android 8 to 12 without it. v0.26.5 asks for no PO token (it uses YouTube's Android
+"reel" and visionOS clients); if phones start being refused, NewPipe's app
+makes them in a WebView (`util/potoken/` in TeamNewPipe/NewPipe) and hands
+them to `YoutubeStreamExtractor.setPoTokenProvider`.
+
+**SoundCloud goes through trypt-hifi-scxyt** (its own repository; its
+README's "The API Tryptify uses" is the contract), which searches and fetches
+with yt-dlp on its machine. Its address is `BuildConfig.SCXYT_URL`,
+overridable with `scxyt.url` in `local.properties`. It holds no secret: calls
+carry the Supabase session (the token from `CloudRepository.bearer`), and
+signed out SoundCloud is off. A play or a download asks `/api/v1/prepare`
+first and uses the signed link it returns.
+
+`ScxytTest` holds the app to the server's JSON and error codes,
+`ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
+`ChunkedDownloadTest` and `YoutubeAudioCacheTest` the YouTube side, all
+without a network.
 
 ## projectM is patched, and its presets are scanned
 

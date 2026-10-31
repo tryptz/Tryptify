@@ -1425,29 +1425,37 @@ brand's mark, and its colour as the accent when chosen. Their pills
 Qobuz's and Deezer's. Both chips are always in the row, signed in or not, as
 My server is with no server.
 
-**Off is quiet.** The songs come through the built-in trypt-hifi-scxyt
-server, which takes the Tryptify sign-in. Signed out, nothing is asked of it;
-with YouTube turning it away (the bot check, `blocked`), it gives nothing.
-Either way the only sign is one line of plain text under the chips while that
-chip is chosen (`SearchViewModel.sourceNote`: "Sign in to search YouTube.",
-"YouTube isn't available right now."). Never a toast, an error row or the
-"couldn't reach search" state, and the other sources' results stand. A toast
-on every search while YouTube refuses the server is what this prevents.
+**Off is quiet.** YouTube is searched from the phone itself
+(NewPipeExtractor) and takes no sign-in, so signed out its songs appear like
+any other source's. SoundCloud comes through the built-in trypt-hifi-scxyt
+server, which takes the Tryptify sign-in; signed out, nothing is asked of it.
+A source that gives nothing because it is off or turned away (`blocked`:
+SoundCloud refusing the server, or YouTube's bot check refusing the phone's
+network) shows only one line of plain text under the chips while its chip is
+chosen (`SearchViewModel.sourceNote`: "Sign in to search SoundCloud.", which
+only SoundCloud's chip can say; "YouTube isn't available right now."). Never
+a toast, an error row or the "couldn't reach search" state, and the other
+sources' results stand. A toast on every search while a service refuses is
+what this prevents.
 
 **Songs only, with no album or artist links.** A song names a channel, not a
 catalogue artist, and its ids are strings: "Go to album/artist" is hidden
 (`CatalogNav`), as for My server.
 
 **A song that cannot be fetched says why, once.** It is skipped like any
-song that fails, with a toast in words for the server's code
-(`ScxytMessages`); `blocked` names the service ("YouTube is turning the server
-away right now. Try again later."). A queue failing for one reason says it
-once, not once a song (`PlayerViewModel.tellResolveFailure`).
+song that fails, with a toast in words for its error (`ScxytMessages`);
+`blocked` names the service and what it refuses: the phone's network for
+YouTube ("YouTube is turning this network away right now. Try again later, or
+on another network."), the server for SoundCloud ("SoundCloud is turning the
+server away right now. Try again later."). A queue failing for one reason
+says it once, not once a song (`PlayerViewModel.tellResolveFailure`).
 
 **Download is in the ⋮ menu**, which registers the song first
-(`PlayerViewModel.downloadUnified`) so the download goes through the server by
-its own id rather than its hashed one; Share file shares only a song's
-download. The cover is the service's own https picture, with no sign-in in it.
+(`PlayerViewModel.downloadUnified`) so the download is fetched by the song's
+own id rather than its hashed one: a YouTube song's is a copy of the file the
+phone fetched to play, a SoundCloud one's comes from the server. Share file
+shares only a song's download. The cover is the service's own https picture,
+with no sign-in in it.
 
 ### Themes
 

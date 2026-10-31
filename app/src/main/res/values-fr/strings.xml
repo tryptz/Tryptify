@@ -3473,6 +3473,7 @@
     <string name="scxyt_note_unavailable">%1$s n’est pas disponible pour le moment.</string>
     <string name="scxyt_error_signed_out">Connectez-vous pour lire ou télécharger les titres de %1$s.</string>
     <string name="scxyt_error_blocked">%1$s refuse le serveur pour le moment. Réessayez plus tard.</string>
+    <string name="scxyt_error_blocked_network">%1$s refuse ce réseau pour le moment. Réessayez plus tard, ou sur un autre réseau.</string>
     <string name="scxyt_error_unavailable">Ce titre ne peut pas être lu ici (vérification de l’âge, restriction régionale ou réservé aux membres).</string>
     <string name="scxyt_error_protected">%1$s verrouille ce titre : il ne se lit que dans l’application %1$s.</string>
     <string name="scxyt_error_too_long">Ce titre est trop long pour être récupéré, ou c’est un direct.</string>

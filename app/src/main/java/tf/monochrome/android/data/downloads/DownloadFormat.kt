@@ -12,11 +12,22 @@ package tf.monochrome.android.data.downloads
  *
  * Kept free of Android types so it can be unit tested.
  */
-enum class DownloadFormat(val extension: String, val mimeType: String) {
-    FLAC("flac", "audio/flac"),
-    /** MP4 audio: AAC from TIDAL, ALAC/AAC/E-AC-3 from Apple. */
-    M4A("m4a", "audio/mp4"),
-    MP3("mp3", "audio/mpeg");
+enum class DownloadFormat(
+    val extension: String,
+    val mimeType: String,
+    /** Whether the downloader writes the song's tags into it. */
+    val taggable: Boolean,
+) {
+    FLAC("flac", "audio/flac", taggable = true),
+    /** MP4 audio: AAC from TIDAL and YouTube, ALAC/AAC/E-AC-3 from Apple. */
+    M4A("m4a", "audio/mp4", taggable = true),
+    /** Left with the tags its server wrote, if any: nothing here writes ID3. */
+    MP3("mp3", "audio/mpeg", taggable = false),
+    /**
+     * Opus in WebM, from YouTube when a video has no AAC. JAudioTagger cannot
+     * write Matroska, so it is kept as it came.
+     */
+    WEBM("webm", "audio/webm", taggable = false);
 
     companion object {
         /**
@@ -28,8 +39,12 @@ enum class DownloadFormat(val extension: String, val mimeType: String) {
             header.startsWith("fLaC") -> FLAC
             // ISO BMFF: a box size, then the "ftyp" box type at offset 4.
             header.size >= 8 && header.copyOfRange(4, 8).contentEquals("ftyp".toByteArray()) -> M4A
+            // Matroska and WebM open with the EBML header's ID.
+            header.size >= 4 && header.copyOfRange(0, 4).contentEquals(EBML) -> WEBM
             else -> MP3
         }
+
+        private val EBML = byteArrayOf(0x1A, 0x45, 0xDF.toByte(), 0xA3.toByte())
 
         private fun ByteArray.startsWith(magic: String): Boolean =
             size >= magic.length && copyOfRange(0, magic.length).contentEquals(magic.toByteArray())

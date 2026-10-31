@@ -3395,6 +3395,7 @@
     <string name="scxyt_note_unavailable">%1$s ist gerade nicht verfügbar.</string>
     <string name="scxyt_error_signed_out">Melde dich an, um Titel von %1$s abzuspielen oder herunterzuladen.</string>
     <string name="scxyt_error_blocked">%1$s weist den Server gerade ab. Versuche es später noch einmal.</string>
+    <string name="scxyt_error_blocked_network">%1$s weist dieses Netzwerk gerade ab. Versuche es später noch einmal oder in einem anderen Netzwerk.</string>
     <string name="scxyt_error_unavailable">Dieser Titel kann hier nicht abgespielt werden (Altersprüfung, Regionssperre oder nur für Mitglieder).</string>
     <string name="scxyt_error_protected">%1$s sperrt diesen Titel; er läuft nur in der App von %1$s.</string>
     <string name="scxyt_error_too_long">Dieser Titel ist zu lang zum Abrufen, oder es ist ein Livestream.</string>

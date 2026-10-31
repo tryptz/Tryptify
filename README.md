@@ -137,7 +137,8 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
 - **Third-party parts keep their own licences:** projectM (LGPL-2.1), libusb
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,
-  `app/src/main/assets/fonts/LICENSES.txt`) and the rest named in their
+  `app/src/main/assets/fonts/LICENSES.txt`), NewPipeExtractor for YouTube
+  (GPL-3.0-or-later, a library the build fetches) and the rest named in their
   folders.
 
 Built by **[tryptz](https://github.com/tryptz)**.

@@ -3398,6 +3398,7 @@
     <string name="scxyt_note_unavailable">%1$s isn’t available right now.</string>
     <string name="scxyt_error_signed_out">Sign in to play or download songs from %1$s.</string>
     <string name="scxyt_error_blocked">%1$s is turning the server away right now. Try again later.</string>
+    <string name="scxyt_error_blocked_network">%1$s is turning this network away right now. Try again later, or on another network.</string>
     <string name="scxyt_error_unavailable">This song can’t be played here (age check, region or members only).</string>
     <string name="scxyt_error_protected">%1$s locks this song, so it only plays in %1$s’s own app.</string>
     <string name="scxyt_error_too_long">This song is too long to fetch, or it’s a live stream.</string>

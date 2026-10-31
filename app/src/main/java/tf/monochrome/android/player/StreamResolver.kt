@@ -273,14 +273,18 @@ class StreamResolver @Inject constructor(
     }
 
     /**
-     * A YouTube or SoundCloud song, played from the trypt-hifi-scxyt server.
+     * A YouTube or SoundCloud song.
      *
-     * The server has to fetch the song before it can serve it, which takes a
-     * few seconds (up to a minute for a long one it has never seen), so that
-     * is asked for here with a timeout of its own rather than left to the
-     * player's. What comes back is a signed link that needs no headers,
-     * played as a plain progressive stream. A failure says why, in the
-     * listener's words: "YouTube is turning the server away" is something
+     * YouTube is fetched whole on the phone (data/youtube) and played from
+     * the file in the app's cache: googlevideo links are tied to the address
+     * that asked and expire, and the player never sees one. SoundCloud is
+     * fetched by the trypt-hifi-scxyt server first, which takes a few seconds
+     * (up to a minute for a long one it has never seen), so that is asked for
+     * here with a timeout of its own rather than left to the player's; what
+     * comes back is a signed link that needs no headers, played as a plain
+     * progressive stream. Either way the address is [ScxytStream.link] and
+     * its type [ScxytStream.mime]. A failure says why, in the
+     * listener's words: "YouTube is turning this network away" is something
      * they can act on, and a silent skip is not.
      */
     @OptIn(UnstableApi::class)
@@ -302,8 +306,8 @@ class StreamResolver @Inject constructor(
             .apply {
                 if (stream != null) {
                     setUri(stream.link.toUri())
-                    // The link ends in a query, not a file name; the server
-                    // says what it is.
+                    // The server's link ends in a query, not a file name;
+                    // the source says what it is.
                     if (stream.mime.isNotBlank()) setMimeType(stream.mime)
                 }
             }

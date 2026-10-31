@@ -3317,6 +3317,7 @@
     <string name="scxyt_note_unavailable">%1$s は現在利用できません。</string>
     <string name="scxyt_error_signed_out">%1$s の曲を再生またはダウンロードするにはサインインしてください。</string>
     <string name="scxyt_error_blocked">%1$s が現在サーバーからの接続を拒否しています。しばらくしてからもう一度お試しください。</string>
+    <string name="scxyt_error_blocked_network">%1$s が現在このネットワークからの接続を拒否しています。しばらくしてからもう一度お試しいただくか、別のネットワークでお試しください。</string>
     <string name="scxyt_error_unavailable">この曲はここでは再生できません（年齢確認、地域制限、またはメンバー限定）。</string>
     <string name="scxyt_error_protected">この曲は %1$s によって保護されているため、%1$s の公式アプリでしか再生できません。</string>
     <string name="scxyt_error_too_long">この曲は長すぎて取得できないか、ライブ配信です。</string>

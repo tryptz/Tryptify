@@ -30,6 +30,14 @@ zxing = "3.5.3"
 # StepMania themes, noteskins and announcers as 7z (zip needs nothing).
 commonsCompress = "1.27.1"
 xz = "1.10"
+# YouTube search and audio, extracted on the phone (data/youtube). From
+# JitPack; GPL-3.0-or-later, like the app.
+newpipeExtractor = "v0.26.5"
+# Java APIs newer than minSdk 26 that NewPipeExtractor calls on every search
+# and extraction (URLEncoder/URLDecoder with a Charset, Collectors.
+# toUnmodifiableList: Android 13). Only the nio flavour covers the URL
+# coders; NewPipe's own app uses the same.
+desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 robolectric = "4.14.1"
 
@@ -41,6 +49,8 @@ uiautomator = "2.3.0"
 [libraries]
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
+newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version.ref = "newpipeExtractor" }
+desugar-jdk-libs-nio = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
 # Compose
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }

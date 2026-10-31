@@ -152,20 +152,24 @@ class TrackDownloader @Inject constructor(
             // own server's download route.
             // Set when TIDAL's Dolby Atmos mix is what downloads (TIDAL Dolby Atmos on).
             var isAtmosDownload = false
+            // A YouTube song is fetched whole into the app's cache first, and
+            // the download is a copy of that file rather than a second fetch.
+            var cachedAudio: File? = null
             val streamUrl = if (scxytId != null) {
-                // The server fetches the song first (seconds, up to a minute),
-                // then hands back a signed link that needs no headers. Its
-                // file already carries the title, artist and cover: an .m4a
-                // is tagged again below as every download is, and an MP3,
-                // which nothing here tags, keeps the server's.
-                Log.i(TAG, "\"$trackTitle\" is $scxytId - fetching it through the YouTube and SoundCloud server")
+                // YouTube is fetched on the phone (seconds); SoundCloud by the
+                // server (seconds, up to a minute), which hands back a signed
+                // link that needs no headers. The server's file already
+                // carries the title, artist and cover: an .m4a is tagged
+                // again below as every download is, and an MP3, which nothing
+                // here tags, keeps the server's. YouTube's carries none.
+                Log.i(TAG, "\"$trackTitle\" is $scxytId - fetching it from ${scxytService?.label}")
                 val prepared = scxyt.prepare(scxytId)
-                prepared.getOrNull()?.link ?: run {
+                prepared.getOrNull()?.also { cachedAudio = it.file }?.link ?: run {
                     val error = prepared.exceptionOrNull()
-                    Log.w(TAG, "the server could not fetch $scxytId (\"$trackTitle\"): ${error?.message}")
+                    Log.w(TAG, "${scxytService?.label} could not be fetched for $scxytId (\"$trackTitle\"): ${error?.message}")
                     error?.let { onFailure(tf.monochrome.android.data.scxyt.ScxytMessages.text(context, it, scxytId)) }
-                    // Busy, a timeout or no answer may pass; YouTube turning
-                    // the server away, an age check or a missing video will not.
+                    // Busy, a timeout or no answer may pass; YouTube's bot
+                    // check, an age check or a missing video will not.
                     val retryable = (error as? tf.monochrome.android.data.scxyt.ScxytError)?.retryable ?: true
                     return if (retryable) Outcome.RETRYABLE else Outcome.PERMANENT
                 }
@@ -227,7 +231,13 @@ class TrackDownloader @Inject constructor(
             onProgress(0.05f)
             val tempAudio = File.createTempFile("dl_audio", ".dl", context.cacheDir)
             try {
-            val fetched = httpClient.prepareGet(streamUrl).execute { response ->
+            val local = cachedAudio
+            val fetched = if (local != null) {
+                // Copied, not moved: the tags below rewrite the file, and the
+                // cache's copy is what the player plays.
+                local.copyTo(tempAudio, overwrite = true)
+                true
+            } else httpClient.prepareGet(streamUrl).execute { response ->
                 if (!response.status.isSuccess()) return@execute false
                 val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
                 val channel = response.bodyAsChannel()
@@ -307,7 +317,7 @@ class TrackDownloader @Inject constructor(
             // failure never fails the download (the bytes are good).
             Log.i(TAG, "\"$trackTitle\" (id=$trackId) from $from: ${format.extension}" + if (isAtmosDownload) ", Dolby Atmos" else "")
             if (format == DownloadFormat.FLAC) repairFlacHeader(tempAudio, trackTitle)
-            if (!isApple && !isAtmosDownload && format != DownloadFormat.MP3) {
+            if (!isApple && !isAtmosDownload && format.taggable) {
                 tagAudioFile(
                     file = tempAudio,
                     format = format,

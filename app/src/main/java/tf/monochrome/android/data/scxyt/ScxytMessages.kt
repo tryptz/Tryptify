@@ -11,10 +11,16 @@ import tf.monochrome.android.R
  */
 object ScxytMessages {
 
+    /**
+     * The line for [error] from [service]. Being turned away means the
+     * server for SoundCloud, and the phone's own network for YouTube, which
+     * is fetched from the phone.
+     */
     @StringRes
-    fun textRes(error: Throwable): Int = when (error) {
+    fun textRes(error: Throwable, service: ScxytSource? = null): Int = when (error) {
         is ScxytError.SignedOut -> R.string.scxyt_error_signed_out
-        is ScxytError.Blocked -> R.string.scxyt_error_blocked
+        is ScxytError.Blocked ->
+            if (service == ScxytSource.YOUTUBE) R.string.scxyt_error_blocked_network else R.string.scxyt_error_blocked
         is ScxytError.Protected -> R.string.scxyt_error_protected
         is ScxytError.Unavailable -> R.string.scxyt_error_unavailable
         is ScxytError.TooLong -> R.string.scxyt_error_too_long
@@ -28,6 +34,7 @@ object ScxytMessages {
     private val NAMES_SERVICE = setOf(
         R.string.scxyt_error_signed_out,
         R.string.scxyt_error_blocked,
+        R.string.scxyt_error_blocked_network,
         R.string.scxyt_error_protected,
         R.string.scxyt_error_not_found,
         R.string.scxyt_error_failed,
@@ -35,10 +42,10 @@ object ScxytMessages {
 
     /** [error] in words, for the song [mediaId] (`yt:…` or `sc:…`). */
     fun text(context: Context, error: Throwable, mediaId: String): String {
-        val res = textRes(error)
+        val service = ScxytSource.ofId(mediaId) ?: ScxytSource.YOUTUBE
+        val res = textRes(error, service)
         val words = tf.monochrome.android.locale.AppLanguage.wrap(context)
         if (res !in NAMES_SERVICE) return words.getString(res)
-        val service = ScxytSource.ofId(mediaId) ?: ScxytSource.YOUTUBE
         return words.getString(res, service.label)
     }
 }

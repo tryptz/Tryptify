@@ -30,4 +30,17 @@ class DownloadFormatTest {
         assertEquals(DownloadFormat.MP3, DownloadFormat.sniff(ByteArray(0)))
         assertEquals(DownloadFormat.MP3, DownloadFormat.sniff(bytes(0x00, 0x00, 0x00, 0x18, 0x66)))
     }
+
+    @Test
+    fun `YouTube's Opus in WebM is saved as webm, untagged`() {
+        // The EBML header's ID, then its size and the "webm" doc type further on.
+        val header = bytes(0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 0x01)
+        assertEquals(DownloadFormat.WEBM, DownloadFormat.sniff(header))
+        assertEquals("webm", DownloadFormat.WEBM.extension)
+        assertEquals("audio/webm", DownloadFormat.WEBM.mimeType)
+        assertEquals(false, DownloadFormat.WEBM.taggable)
+        assertEquals(true, DownloadFormat.M4A.taggable)
+        assertEquals(true, DownloadFormat.FLAC.taggable)
+        assertEquals(false, DownloadFormat.MP3.taggable)
+    }
 }

@@ -12,9 +12,15 @@ import kotlin.math.roundToInt
  * The YouTube and SoundCloud source's wire, as trypt-hifi-scxyt speaks it
  * (its README, "The API Tryptify uses"). Every answer is
  * `{"success": true, "data": …}` or `{"success": false, "error": code, "message": …}`.
+ * Only SoundCloud goes there now; YouTube is fetched on the phone
+ * (data/youtube) into the same models.
  */
 
-/** The two services the server fetches from, and how each names its songs. */
+/**
+ * The two services, and how each names its songs. YouTube's ids are the
+ * ones the server handed out before YouTube moved onto the phone, so songs
+ * saved then still play.
+ */
 enum class ScxytSource(
     /** The `source` the search takes. */
     val wire: String,
@@ -82,25 +88,31 @@ internal data class ScxytPrepared(
 )
 
 /**
- * A song the server has fetched and is ready to serve. [link] is absolute,
+ * A song ready to play. From the server (SoundCloud), [link] is absolute,
  * signed for six hours and needs no headers, so the player and the
- * downloader take it as it is.
+ * downloader take it as it is. Fetched on the phone (YouTube), [file] is the
+ * whole song in the app's cache and [link] its `file://` address.
  */
 data class ScxytStream(
     val id: String,
-    /** `m4a` or `mp3`. */
+    /** `m4a` or `mp3` from the server; `m4a` or `webm` from the phone. */
     val format: String,
-    /** `audio/mp4` or `audio/mpeg`. */
+    /** `audio/mp4` or `audio/mpeg`; `audio/webm` for a WebM from the phone. */
     val mime: String,
     val size: Long,
     val link: String,
+    val file: java.io.File? = null,
 )
 
 /** Why a call to the server failed, in terms the app can word. */
 sealed class ScxytError(message: String) : Exception(message) {
-    /** No sign-in, or one the server would not take: the source is off. */
+    /** No sign-in, or one the server would not take: SoundCloud is off. YouTube never asks for one. */
     class SignedOut : ScxytError("signed out")
-    /** YouTube or SoundCloud turned the server away; it lasts until the server is fixed. */
+    /**
+     * SoundCloud turned the server away, which lasts until the server is
+     * fixed; or YouTube turned this phone's network away (its bot check),
+     * which may pass, or not happen on another network.
+     */
     class Blocked(message: String? = null) : ScxytError(message ?: "blocked")
     /** Locked by the service itself (DRM): SoundCloud's uploads by big labels. */
     class Protected(message: String? = null) : ScxytError(message ?: "protected")

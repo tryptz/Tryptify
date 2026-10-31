@@ -3395,6 +3395,7 @@
     <string name="scxyt_note_unavailable">%1$s şu anda kullanılamıyor.</string>
     <string name="scxyt_error_signed_out">%1$s parçalarını çalmak veya indirmek için oturum açın.</string>
     <string name="scxyt_error_blocked">%1$s şu anda sunucuyu geri çeviriyor. Daha sonra tekrar deneyin.</string>
+    <string name="scxyt_error_blocked_network">%1$s şu anda bu ağı geri çeviriyor. Daha sonra ya da başka bir ağda tekrar deneyin.</string>
     <string name="scxyt_error_unavailable">Bu parça burada çalınamıyor (yaş doğrulaması, bölge kısıtlaması veya yalnızca üyelere özel).</string>
     <string name="scxyt_error_protected">%1$s bu parçayı kilitliyor; yalnızca %1$s uygulamasında çalınabilir.</string>
     <string name="scxyt_error_too_long">Bu parça alınamayacak kadar uzun ya da canlı yayın.</string>

@@ -180,9 +180,9 @@ class SearchViewModel @Inject constructor(
     private val _allPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
 
     // YouTube and SoundCloud as the last search left them: the note each
-    // gets under the chips when it gave nothing because it is off (signed
-    // out) or turned away. Never an error row or a toast — the other sources'
-    // results stand.
+    // gets under the chips when it gave nothing because it is off (SoundCloud
+    // signed out; YouTube needs no sign-in) or turned away. Never an error
+    // row or a toast — the other sources' results stand.
     private val _scxytNotes = MutableStateFlow<Map<SourceType, Int>>(emptyMap())
 
     // Which catalog each album / artist result came from. Tracks carry their
@@ -403,8 +403,10 @@ class SearchViewModel @Inject constructor(
                     runCatching { subsonicRepository.searchSongs(trimmedQuery) }.getOrNull()
                 }.orEmpty()
             }
-            // YouTube and SoundCloud, songs only, one request each, and only
-            // signed in: without a session nothing is sent at all. Same budget.
+            // YouTube and SoundCloud, songs only, one request each. YouTube is
+            // searched from the phone, signed in or not; SoundCloud goes to
+            // the server only signed in: without a session nothing is sent at
+            // all. Same budget.
             val youtubeDeferred = async { searchScxyt(trimmedQuery, tf.monochrome.android.data.scxyt.ScxytSource.YOUTUBE) }
             val soundcloudDeferred = async { searchScxyt(trimmedQuery, tf.monochrome.android.data.scxyt.ScxytSource.SOUNDCLOUD) }
             deezerSearch = deezerDeferred.await()
@@ -686,8 +688,9 @@ class SearchViewModel @Inject constructor(
 
     /**
      * [source]'s first page for [query]. Every failure is quiet: signed out,
-     * the source is off; turned away (YouTube's bot check), it gives nothing
-     * until the server is fixed; anything else, it gives nothing this time.
+     * SoundCloud is off; turned away (SoundCloud refusing the server, or
+     * YouTube's bot check refusing this network), it gives nothing until
+     * that passes; anything else, it gives nothing this time.
      */
     private suspend fun searchScxyt(query: String, source: tf.monochrome.android.data.scxyt.ScxytSource): ScxytPage {
         val result = withTimeoutOrNull(QOBUZ_BUDGET_MS) { scxytRepository.search(query, source) }
@@ -696,7 +699,7 @@ class SearchViewModel @Inject constructor(
             null -> ScxytPage(result.getOrDefault(emptyList()))
             is tf.monochrome.android.data.scxyt.ScxytError.SignedOut -> ScxytPage(note = R.string.scxyt_note_signed_out)
             is tf.monochrome.android.data.scxyt.ScxytError.Blocked -> {
-                android.util.Log.d(TAG, "${source.label} is turning the server away: ${error.message}")
+                android.util.Log.d(TAG, "${source.label} is turning us away: ${error.message}")
                 ScxytPage(note = R.string.scxyt_note_unavailable)
             }
             else -> {

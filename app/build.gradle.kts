@@ -203,6 +203,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // NewPipeExtractor calls Java APIs Android only has from 13 on
+        // (URLEncoder/URLDecoder with a Charset, Collectors.
+        // toUnmodifiableList), in every search and extraction; without this,
+        // YouTube would crash on Android 8 to 12. D8 backports the rest.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -461,6 +466,12 @@ dependencies {
     // Trypt Mania's StepMania styles (noteskins, themes, announcers) packed as 7z.
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    // YouTube on the phone (data/youtube): YouTube turns data-centre
+    // addresses away, so the search and the audio are fetched from the
+    // listener's own network. Brings jsoup, Rhino, protobuf-lite and
+    // nanojson, none of which the app had already.
+    implementation(libs.newpipe.extractor)
+    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     // Where the generated profile comes from. profileinstaller above is the
     // runtime half — it installs a profile at first launch — and until this
     // existed the only profiles it had to install were the ones the AndroidX
