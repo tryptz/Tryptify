@@ -13,7 +13,8 @@ import kotlin.math.roundToInt
  * (its README, "The API Tryptify uses"). Every answer is
  * `{"success": true, "data": …}` or `{"success": false, "error": code, "message": …}`.
  * Only SoundCloud goes there now; YouTube is fetched on the phone
- * (data/youtube) into the same models.
+ * (data/youtube) into the same models, and goes there only to make a shared
+ * song's preview ([ScxytShare]).
  */
 
 /**
@@ -102,6 +103,26 @@ data class ScxytStream(
     val size: Long,
     val link: String,
     val file: java.io.File? = null,
+)
+
+@Serializable
+internal data class ScxytShared(
+    val id: String = "",
+    val s: String = "",
+    val page: String? = null,
+)
+
+/**
+ * A shared song's preview, made by the server: the 30-second clip Discord
+ * plays under the song's cover. [s] is its signature, which goes in the
+ * song's tryptify.com link as `s=`; the website shows the preview only for a
+ * link carrying it. [page] is a SoundCloud song's soundcloud.com address, as
+ * the server found it (null for YouTube, or when it found none).
+ */
+data class ScxytShare(
+    val id: String,
+    val s: String,
+    val page: String? = null,
 )
 
 /** Why a call to the server failed, in terms the app can word. */

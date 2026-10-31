@@ -334,18 +334,34 @@ alone (`share/SharedLinks.kt`, `ShareLinks.songLink`):
 `/listen/soundcloud/track/<number>`, with `title`, `artist` and `duration`
 (seconds) in the query, and for SoundCloud `page`, the song's soundcloud.com
 address (the server's `Track.url`, carried on `UnifiedTrack.pageUrl`), only
-when it is `https://soundcloud.com/<artist>/<song>`. No TrypT-hifi signs
-these: the website (tryptz/tryptify.com) makes their page from YouTube's and
-SoundCloud's oEmbed. Opened in the app (`SharedSongResolver`), a YouTube link
-plays that song, with no sign-in; a SoundCloud link plays from the server
-when signed in, and signed out the best match a YouTube search for its artist
-and title finds, with a toast saying so. A catalog song link that no service
-on the phone has falls back to YouTube the same way; an album link does not.
-`SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the match and
-the routing.
+when it is `https://soundcloud.com/<artist>/<song>`. Last comes `s`, the
+signature of the preview Discord plays under the cover (its play button).
+No TrypT-hifi signs these; trypt-hifi-scxyt does, when the song is shared
+(`ShareLinks.signedSongLink`, `ScxytClient.share`): `POST /api/v1/share?id=`
+with the Supabase session makes the 30-second clip and answers `s`, and for
+SoundCloud the page, used when the song has none. YouTube turns the server
+away, so for a YouTube song the phone sends the audio itself: the whole file
+from `YoutubeAudioCache` (fetched first, as a play fetches it, when it is not
+there; usually it has just played) as the request body, streamed, with its
+type (`audio/mp4` or `audio/webm`), up to 40 MB. A SoundCloud song the server
+fetches. That takes seconds, so the share says it is preparing the song
+(`share_preparing`) and the share sheet opens when the answer comes. Signed
+out, or when anything fails (no network, the server's refusal, a song too
+large, two minutes without an answer), the link goes without `s`: it opens
+and plays the same, and Discord shows a small card. A failed preview never
+stops the share. The website (tryptz/tryptify.com) makes the rest of the page
+from YouTube's and SoundCloud's oEmbed, and shows the preview only for an
+`s` of 16 base64url characters the server vouches for. Opened in the app
+(`SharedSongResolver`), `s` is ignored: a YouTube link plays that song, with
+no sign-in; a SoundCloud link plays from the server when signed in, and
+signed out the best match a YouTube search for its artist and title finds,
+with a toast saying so. A catalog song link that no service on the phone has
+falls back to YouTube the same way; an album link does not.
+`SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the
+signature and its fallback, the match and the routing.
 
-`ScxytTest` holds the app to the server's JSON and error codes,
-`ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
+`ScxytTest` holds the app to the server's JSON and error codes (the share's
+upload too), `ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
 `ChunkedDownloadTest`, `YoutubeAudioCacheTest` and the PO-token tests above
 the YouTube side, all without a network.
 

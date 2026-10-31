@@ -2,6 +2,7 @@ package tf.monochrome.android.data.scxyt
 
 import kotlinx.coroutines.CancellationException
 import tf.monochrome.android.domain.model.UnifiedTrack
+import java.io.File
 
 /** Where the songs of one of the two services are searched and fetched. */
 interface ScxytBackend {
@@ -9,6 +10,12 @@ interface ScxytBackend {
 
     /** Makes [id] (`yt:…` or `sc:…`) ready to play. */
     suspend fun prepare(id: String): ScxytStream
+}
+
+/** trypt-hifi-scxyt, which also makes shared songs' previews, YouTube's included. */
+interface ScxytServer : ScxytBackend {
+    /** Makes [id]'s preview, from [audio] when given (a YouTube song's file, as [mime]). */
+    suspend fun share(id: String, audio: File?, mime: String?): ScxytShare
 }
 
 /**
@@ -20,7 +27,7 @@ interface ScxytBackend {
  * [ScxytError] it means.
  */
 class ScxytRouter(
-    private val server: ScxytBackend,
+    private val server: ScxytServer,
     private val youtube: ScxytBackend,
 ) {
     private fun backendFor(source: ScxytSource?): ScxytBackend =
@@ -39,6 +46,23 @@ class ScxytRouter(
      */
     suspend fun prepare(mediaId: String): Result<ScxytStream> = call {
         backendFor(ScxytSource.ofId(mediaId)).prepare(mediaId)
+    }
+
+    /**
+     * Has the server make [mediaId]'s preview for its shared link and
+     * returns the signature. Both services' previews go to the server, which
+     * makes and serves them; a YouTube song is first made ready on the phone
+     * as a play would make it (usually it is in the cache already, having
+     * just played) and its file sent up, because YouTube turns the server
+     * away. A SoundCloud song the server fetches itself.
+     */
+    suspend fun share(mediaId: String): Result<ScxytShare> = call {
+        if (ScxytSource.ofId(mediaId) == ScxytSource.YOUTUBE) {
+            val audio = youtube.prepare(mediaId)
+            server.share(mediaId, audio.file ?: throw ScxytError.Failed("no_file"), audio.mime)
+        } else {
+            server.share(mediaId, null, null)
+        }
     }
 
     private suspend fun <T> call(block: suspend () -> T): Result<T> =

@@ -9,9 +9,16 @@ import android.widget.Toast
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.R
 import tf.monochrome.android.data.api.HiFiApiClient
 import tf.monochrome.android.data.api.QobuzIdRegistry
+import tf.monochrome.android.data.scxyt.ScxytError
+import tf.monochrome.android.data.scxyt.ScxytRepository
+import tf.monochrome.android.data.scxyt.ScxytShare
 import tf.monochrome.android.data.scxyt.ScxytSource
 import tf.monochrome.android.domain.model.AlbumDetail
 import tf.monochrome.android.domain.model.PlaybackSource
@@ -28,22 +35,30 @@ import tf.monochrome.android.locale.AppLanguage
  * The link is signed by a TrypT-hifi this phone has added when one answers,
  * so its page shows the cover and Discord plays a preview; else it is made
  * here, unsigned, and still plays. A YouTube or SoundCloud song gets a link
- * to the song alone, never signed: the website makes its page from YouTube's
- * or SoundCloud's own preview. A local file, a music server's song, a
- * collection or a radio station has no catalog to point at, so it has no link.
+ * to the song alone, signed by trypt-hifi-scxyt, which makes its preview
+ * when it is shared ([signedSongLink]); the website makes the rest of its
+ * page from YouTube's or SoundCloud's own preview. A local file, a music
+ * server's song, a collection or a radio station has no catalog to point
+ * at, so it has no link.
  */
 @Singleton
 class ShareLinks @Inject constructor(
     @ApplicationContext private val context: Context,
     private val apiClient: HiFiApiClient,
     private val qobuzIdRegistry: QobuzIdRegistry,
+    private val scxyt: ScxytRepository,
 ) {
     /**
      * Shares [track], played as [unified] says (null: a legacy track, its
      * catalog read from its ids).
      */
     suspend fun shareTrack(track: Track, unified: UnifiedTrack?) {
-        val link = linkFor(track, unified?.source, unified?.pageUrl)
+        val source = unified?.source
+        val link = if (source is PlaybackSource.Scxyt) {
+            signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it) }
+        } else {
+            linkFor(track, source, unified?.pageUrl)
+        }
         if (link == null) {
             toast(text().getString(R.string.share_link_unavailable))
             return
@@ -97,6 +112,21 @@ class ShareLinks @Inject constructor(
         )
     }
 
+    /**
+     * The preview of the YouTube or SoundCloud song [mediaId], from
+     * trypt-hifi-scxyt: seconds of sending a YouTube song up and encoding its
+     * clip, so the listener is told the tap was taken. Signed out there is
+     * nothing to wait for: the server would only refuse it.
+     */
+    private suspend fun preview(title: String, mediaId: String): Result<ScxytShare> {
+        if (!scxyt.isSignedIn()) return Result.failure(ScxytError.SignedOut())
+        toast(text().getString(R.string.share_preparing, title))
+        val share = withTimeoutOrNull(PREVIEW_WAIT_MS) { withContext(Dispatchers.IO) { scxyt.share(mediaId) } }
+            ?: Result.failure(ScxytError.Timeout())
+        share.onFailure { Log.i(TAG, "share link: no preview for $mediaId, shared without it: ${it::class.simpleName}: ${it.message}") }
+        return share
+    }
+
     private suspend fun share(link: SharedLink, title: String) {
         val url = link.album?.let { apiClient.shareLink(link.source.slug, it, link.track) } ?: SharedLink.url(link)
         val send = Intent(Intent.ACTION_SEND).apply {
@@ -119,12 +149,46 @@ class ShareLinks @Inject constructor(
         private const val TAG = "ShareLinks"
 
         /**
+         * The longest a share waits for its preview, the song's fetch onto
+         * the phone included when it is not in the cache, before it goes
+         * without one.
+         */
+        const val PREVIEW_WAIT_MS = 120_000L
+
+        /**
+         * [songLink], signed with the preview [preview] has the server make,
+         * so Discord shows the song's cover with a play button. Whatever goes
+         * wrong (signed out, no network, the server's refusal, a song too
+         * large to send), the link goes without it: it opens and plays all
+         * the same, and Discord shows a small card instead. Nothing is asked
+         * for an id that has no link.
+         */
+        suspend fun signedSongLink(
+            track: Track,
+            source: PlaybackSource.Scxyt,
+            page: String?,
+            preview: suspend (mediaId: String) -> Result<ScxytShare>,
+        ): SharedLink? {
+            if (songLink(track, source, page) == null) return null
+            val share = try {
+                preview(source.mediaId).getOrNull()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            return songLink(track, source, page, share)
+        }
+
+        /**
          * A YouTube or SoundCloud song's link: its video id or track number,
          * its title, artist and length, so a phone signed out of SoundCloud
          * can find it on YouTube, and a SoundCloud song's [page] when it is
-         * known (null for an id neither service hands out).
+         * known, else the one the server found when it made the [share]
+         * (null for an id neither service hands out). The [share]'s
+         * signature lets the website show the song's preview.
          */
-        fun songLink(track: Track, source: PlaybackSource.Scxyt, page: String?): SharedLink? {
+        fun songLink(track: Track, source: PlaybackSource.Scxyt, page: String?, share: ScxytShare? = null): SharedLink? {
             val service = when (ScxytSource.ofId(source.mediaId)) {
                 ScxytSource.YOUTUBE -> SharedLink.Source.YOUTUBE
                 ScxytSource.SOUNDCLOUD -> SharedLink.Source.SOUNDCLOUD
@@ -138,7 +202,9 @@ class ShareLinks @Inject constructor(
                 artist = track.displayArtist.takeIf { it.isNotBlank() },
                 durationSec = track.duration.takeIf { it > 0 },
                 song = source.mediaId.substringAfter(':'),
-                page = page?.takeIf { service == SharedLink.Source.SOUNDCLOUD && SharedLink.isSoundcloudPage(it) },
+                page = listOfNotNull(page, share?.page)
+                    .firstOrNull { service == SharedLink.Source.SOUNDCLOUD && SharedLink.isSoundcloudPage(it) },
+                signature = share?.s,
             )
         }
     }

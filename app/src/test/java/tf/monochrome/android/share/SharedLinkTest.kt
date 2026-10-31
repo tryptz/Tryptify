@@ -141,6 +141,69 @@ class SharedLinkTest {
     }
 
     @Test
+    fun aSongLinkCarriesThePreviewsSignatureLast() {
+        val youtube = SharedLink(
+            SharedLink.Source.YOUTUBE, album = null, track = null,
+            title = "One More Time", artist = "Daft Punk", durationSec = 320, song = "FGBhQbmPwH8",
+            signature = "Q0iqjfn2xWlNUgxv",
+        )
+        assertEquals(
+            "https://tryptify.com/listen/youtube/track/FGBhQbmPwH8?title=One+More+Time&artist=Daft+Punk&duration=320&s=Q0iqjfn2xWlNUgxv",
+            SharedLink.url(youtube),
+        )
+        val soundcloud = SharedLink(
+            SharedLink.Source.SOUNDCLOUD, album = null, track = null,
+            title = "Strobe (Club Edit)", artist = "deadmau5", durationSec = 637, song = "199428706",
+            page = "https://soundcloud.com/deadmau5/strobe-club-edit", signature = "AbCdEfGhIjKlMn-_",
+        )
+        assertEquals(
+            "https://tryptify.com/listen/soundcloud/track/199428706?title=Strobe+%28Club+Edit%29&artist=deadmau5&duration=637" +
+                "&page=https%3A%2F%2Fsoundcloud.com%2Fdeadmau5%2Fstrobe-club-edit&s=AbCdEfGhIjKlMn-_",
+            SharedLink.url(soundcloud),
+        )
+        // Alone, it still makes a query of its own.
+        assertEquals(
+            "https://tryptify.com/listen/youtube/track/FGBhQbmPwH8?s=Q0iqjfn2xWlNUgxv",
+            SharedLink.url(SharedLink(SharedLink.Source.YOUTUBE, null, null, song = "FGBhQbmPwH8", signature = "Q0iqjfn2xWlNUgxv")),
+        )
+        // Opened here, the signature is not needed and is left out, as a catalog link's is.
+        assertEquals(youtube.copy(signature = null), roundTrip(youtube))
+        assertEquals(soundcloud.copy(signature = null), roundTrip(soundcloud))
+    }
+
+    @Test
+    fun aSignatureTheWebsiteWouldNotTakeIsLeftOut() {
+        val plain = SharedLink(SharedLink.Source.YOUTUBE, null, null, title = "One More Time", song = "FGBhQbmPwH8")
+        // Too short, too long, base64's own + / =, or empty: the website asks the
+        // server only about 16 base64url characters.
+        for (s in listOf("Q0iqjfn2xWlNUgx", "Q0iqjfn2xWlNUgxvv", "Q0iqjfn2xWlNUg+/", "Q0iqjfn2xWlNUgx=", "", "Q0iqjfn2xWlN&gxv")) {
+            assertEquals(s, SharedLink.url(plain), SharedLink.url(plain.copy(signature = s)))
+        }
+        assertTrue(SharedLink.isSignature("Q0iqjfn2xWlNUgxv"))
+        assertFalse(SharedLink.isSignature(null))
+    }
+
+    @Test
+    fun catalogLinksNeverWriteASongsSignature() {
+        // A catalog link's signature comes from TrypT-hifi, whole: one made here
+        // is written as it always was.
+        assertEquals(
+            "https://tryptify.com/listen/deezer/album/6575789/track/67238728?isrc=USQX91300101&title=Give+Life+Back+to+Music&artist=Daft+Punk&duration=274",
+            SharedLink.url(
+                SharedLink(SharedLink.Source.DEEZER, "6575789", 67238728L, "USQX91300101", "Give Life Back to Music", "Daft Punk", 274, signature = "Q0iqjfn2xWlNUgxv"),
+            ),
+        )
+        assertEquals(
+            "https://tryptify.com/listen/tidal/album/1234",
+            SharedLink.url(SharedLink(SharedLink.Source.TIDAL, "1234", null, signature = "Q0iqjfn2xWlNUgxv")),
+        )
+        // And reading one ignores its s=, as before.
+        val query = mapOf("s" to "Q0iqjfn2xWlNUgxv")
+        assertNull(SharedLink.parse("https", "tryptify.com", "/listen/youtube/track/FGBhQbmPwH8") { query[it] }?.signature)
+        assertNull(SharedLink.parse("https", "tryptify.com", "/listen/tidal/album/1234") { query[it] }?.signature)
+    }
+
+    @Test
     fun aSongLinkWithABadIdIsNoLink() {
         for (path in listOf(
             "/listen/youtube/track/dQw4w9WgXc", // 10 characters

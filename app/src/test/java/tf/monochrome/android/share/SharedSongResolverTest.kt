@@ -8,6 +8,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.data.scxyt.ScxytError
+import tf.monochrome.android.data.scxyt.ScxytShare
 import tf.monochrome.android.data.scxyt.ScxytTrack
 import tf.monochrome.android.data.scxyt.toUnifiedTrack
 import tf.monochrome.android.domain.model.Album
@@ -67,6 +69,77 @@ class SharedSongResolverTest {
         val track = Track(id = 1, title = "x", duration = 10, artist = Artist(1, "y"))
         assertNull(ShareLinks.songLink(track, PlaybackSource.Scxyt("yt:short"), null))
         assertNull(ShareLinks.songLink(track, PlaybackSource.Scxyt("sp:123"), null))
+    }
+
+    // ── The preview's signature ────────────────────────────────────────
+
+    private val strobe = ScxytTrack(id = "sc:199428706", title = "Strobe (Club Edit)", artist = "deadmau5", duration = 637.0).toUnifiedTrack()!!
+
+    @Test
+    fun `a shared song carries the preview's signature`() = runBlocking {
+        val unified = youtube("FGBhQbmPwH8", "One More Time", "Daft Punk", 320)
+        val asked = mutableListOf<String>()
+        val link = ShareLinks.signedSongLink(unified.toLegacyTrack(), unified.source as PlaybackSource.Scxyt, unified.pageUrl) {
+            asked += it
+            Result.success(ScxytShare(it, "Q0iqjfn2xWlNUgxv"))
+        }!!
+        assertEquals(listOf("yt:FGBhQbmPwH8"), asked)
+        assertEquals("Q0iqjfn2xWlNUgxv", link.signature)
+        assertEquals(
+            "https://tryptify.com/listen/youtube/track/FGBhQbmPwH8?title=One+More+Time&artist=Daft+Punk&duration=320&s=Q0iqjfn2xWlNUgxv",
+            SharedLink.url(link),
+        )
+    }
+
+    @Test
+    fun `a SoundCloud song without a page takes the one the server found`() {
+        assertNull(strobe.pageUrl)
+        val source = strobe.source as PlaybackSource.Scxyt
+        val share = ScxytShare("sc:199428706", "AbCdEfGhIjKlMn-_", page = "https://soundcloud.com/deadmau5/strobe-club-edit")
+        val link = ShareLinks.songLink(strobe.toLegacyTrack(), source, null, share)!!
+        assertEquals("https://soundcloud.com/deadmau5/strobe-club-edit", link.page)
+        assertEquals("AbCdEfGhIjKlMn-_", link.signature)
+        // The song's own page stays when it has one, and a page the website
+        // would not link to is passed over for the server's.
+        assertEquals(
+            "https://soundcloud.com/deadmau5/strobe",
+            ShareLinks.songLink(strobe.toLegacyTrack(), source, "https://soundcloud.com/deadmau5/strobe", share)!!.page,
+        )
+        assertEquals(
+            "https://soundcloud.com/deadmau5/strobe-club-edit",
+            ShareLinks.songLink(strobe.toLegacyTrack(), source, "https://soundcloud.com/deadmau5/strobe/s-x1", share)!!.page,
+        )
+        assertNull(ShareLinks.songLink(strobe.toLegacyTrack(), source, null, share.copy(page = "https://evil.example/a/b"))!!.page)
+        // A YouTube song never takes one.
+        val yt = youtube("FGBhQbmPwH8", "One More Time", "Daft Punk", 320)
+        assertNull(ShareLinks.songLink(yt.toLegacyTrack(), yt.source as PlaybackSource.Scxyt, null, share)!!.page)
+    }
+
+    @Test
+    fun `a preview that fails never stops the share, it goes without the signature`() = runBlocking {
+        val track = strobe.toLegacyTrack()
+        val source = strobe.source as PlaybackSource.Scxyt
+        val plain = ShareLinks.songLink(track, source, null)!!
+        for (failure in listOf<suspend (String) -> Result<ScxytShare>>(
+            { Result.failure(ScxytError.SignedOut()) },
+            { Result.failure(ScxytError.Network(java.io.IOException("reset"))) },
+            { Result.failure(ScxytError.TooLong()) },
+            { Result.failure(ScxytError.Timeout()) },
+            { throw IllegalStateException("odd") },
+        )) {
+            val link = ShareLinks.signedSongLink(track, source, null, failure)
+            assertEquals(plain, link)
+            assertNull(link!!.signature)
+            assertEquals("https://tryptify.com/listen/soundcloud/track/199428706?title=Strobe+%28Club+Edit%29&artist=deadmau5&duration=637", SharedLink.url(link))
+        }
+    }
+
+    @Test
+    fun `nothing is sent up for a song that has no link`() = runBlocking {
+        val track = Track(id = 1, title = "x", duration = 10, artist = Artist(1, "y"))
+        var asked = 0
+        assertNull(ShareLinks.signedSongLink(track, PlaybackSource.Scxyt("yt:short"), null) { asked++; Result.success(ScxytShare(it, "Q0iqjfn2xWlNUgxv")) })
+        assertEquals(0, asked)
     }
 
     // ── Opening ────────────────────────────────────────────────────────

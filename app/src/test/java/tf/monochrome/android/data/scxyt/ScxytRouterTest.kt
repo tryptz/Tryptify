@@ -16,8 +16,9 @@ import java.io.File
 class ScxytRouterTest {
 
     /** Records what it was asked; fails every call with [error] when given one. */
-    private class FakeBackend(private val name: String, private val error: ScxytError? = null) : ScxytBackend {
+    private class FakeBackend(private val name: String, private val error: ScxytError? = null) : ScxytServer {
         val asked = mutableListOf<String>()
+        val shared = mutableListOf<Triple<String, File?, String?>>()
 
         override suspend fun search(query: String, source: ScxytSource, limit: Int): List<ScxytTrack> {
             asked += "search:${source.wire}:$query"
@@ -30,6 +31,13 @@ class ScxytRouterTest {
             asked += "prepare:$id"
             error?.let { throw it }
             return ScxytStream(id, "m4a", "audio/mp4", 1, "$name://$id", file = if (name == "phone") File("/cache/youtube/x.m4a") else null)
+        }
+
+        override suspend fun share(id: String, audio: File?, mime: String?): ScxytShare {
+            asked += "share:$id"
+            shared += Triple(id, audio, mime)
+            error?.let { throw it }
+            return ScxytShare(id, "Q0iqjfn2xWlNUgxv", page = if (id.startsWith("sc:")) "https://soundcloud.com/a/b" else null)
         }
     }
 
@@ -91,6 +99,38 @@ class ScxytRouterTest {
             },
         )
         assertTrue(odd.search("x", ScxytSource.YOUTUBE, 20).exceptionOrNull() is ScxytError.Network)
+    }
+
+    @Test
+    fun `a yt song's preview is made from the phone's file, an sc song's by the server alone`() = runBlocking {
+        val server = FakeBackend("server")
+        val phone = FakeBackend("phone")
+        val router = ScxytRouter(server = server, youtube = phone)
+
+        val yt = router.share("yt:dQw4w9WgXcQ").getOrThrow()
+        // Made ready as a play would, then that very file sent, with its type.
+        assertEquals(listOf("prepare:yt:dQw4w9WgXcQ"), phone.asked)
+        assertEquals(Triple("yt:dQw4w9WgXcQ", File("/cache/youtube/x.m4a"), "audio/mp4"), server.shared.single())
+        assertEquals("Q0iqjfn2xWlNUgxv", yt.s)
+
+        val sc = router.share("sc:123456").getOrThrow()
+        // Nothing fetched on the phone, nothing sent up.
+        assertEquals(listOf("prepare:yt:dQw4w9WgXcQ"), phone.asked)
+        assertEquals(Triple("sc:123456", null, null), server.shared.last())
+        assertEquals("https://soundcloud.com/a/b", sc.page)
+    }
+
+    @Test
+    fun `a preview that cannot be made comes back as its error`() = runBlocking {
+        // YouTube turned the phone away: nothing goes to the server.
+        val server = FakeBackend("server")
+        val blocked = ScxytRouter(server = server, youtube = FakeBackend("phone", ScxytError.Blocked("bot check")))
+        assertTrue(blocked.share("yt:dQw4w9WgXcQ").exceptionOrNull() is ScxytError.Blocked)
+        assertTrue(server.shared.isEmpty())
+        // The server refused it.
+        val refused = ScxytRouter(server = FakeBackend("server", ScxytError.TooLong()), youtube = FakeBackend("phone"))
+        assertTrue(refused.share("yt:dQw4w9WgXcQ").exceptionOrNull() is ScxytError.TooLong)
+        assertTrue(refused.share("sc:123456").exceptionOrNull() is ScxytError.TooLong)
     }
 
     @Test

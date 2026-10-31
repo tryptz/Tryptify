@@ -20,11 +20,14 @@ import kotlinx.coroutines.flow.asStateFlow
  * the website's preview and is not needed here.
  *
  * A YouTube or SoundCloud song has no album, so its link names the song
- * alone: `https://tryptify.com/listen/<youtube|soundcloud>/track/<song>?title=…&artist=…&duration=…[&page=…]`,
+ * alone: `https://tryptify.com/listen/<youtube|soundcloud>/track/<song>?title=…&artist=…&duration=…[&page=…][&s=…]`,
  * with [album] and [track] null and [song] its video id or track number.
  * [page] is a SoundCloud song's soundcloud.com address, which its number
  * does not give: the website links the song there. Their page is made from
- * YouTube's and SoundCloud's oEmbed, so there is no signature.
+ * YouTube's and SoundCloud's oEmbed; [signature] is trypt-hifi-scxyt's `s=`
+ * for the preview it made when the song was shared (ShareLinks), without
+ * which the website shows no player. Like a catalog link's, it is not
+ * needed here, so [parse] leaves it out.
  */
 data class SharedLink(
     val source: Source,
@@ -36,6 +39,7 @@ data class SharedLink(
     val durationSec: Int? = null,
     val song: String? = null,
     val page: String? = null,
+    val signature: String? = null,
 ) {
     /** [catalog]: shared as an album and a song on it; else as a song alone. */
     enum class Source(val slug: String, val label: String, val catalog: Boolean = true) {
@@ -69,11 +73,18 @@ data class SharedLink(
 
         fun isSoundcloudPage(url: String?): Boolean = url != null && SOUNDCLOUD_PAGE.matches(url)
 
+        /** The only `s=` the website asks the server about (its worker's songPreview): 16 base64url characters. */
+        private val SIGNATURE = Regex("""[A-Za-z0-9_-]{16}""")
+
+        fun isSignature(s: String?): Boolean = s != null && SIGNATURE.matches(s)
+
         /**
          * The link for [link], as TrypT-hifi's share button makes it, less its
          * signature: what this phone shares when no TrypT-hifi it has added
          * will sign one. It opens and plays in Tryptify all the same; only the
          * website's preview (the cover, Discord's player) needs the signature.
+         * A YouTube or SoundCloud song's link carries its [signature] when it
+         * has one, since no TrypT-hifi makes those.
          */
         fun url(link: SharedLink): String {
             if (link.album == null) return songUrl(link)
@@ -88,13 +99,15 @@ data class SharedLink(
         }
 
         // A YouTube or SoundCloud song's link, as the website reads it: the
-        // song alone, its page only when it is one the website would link to.
+        // song alone, its page and signature only when they are ones the
+        // website would use. The signature goes last, as TrypT-hifi puts it.
         private fun songUrl(link: SharedLink): String {
             val query = listOfNotNull(
                 link.title?.let { "title=${enc(it.take(200))}" },
                 link.artist?.let { "artist=${enc(it.take(200))}" },
                 link.durationSec?.takeIf { it > 0 }?.let { "duration=$it" },
                 link.page?.takeIf { link.source == Source.SOUNDCLOUD && isSoundcloudPage(it) }?.let { "page=${enc(it)}" },
+                link.signature?.takeIf { isSignature(it) }?.let { "s=$it" },
             ).joinToString("&")
             val path = "/listen/${link.source.slug}/track/${link.song.orEmpty()}"
             return "https://tryptify.com$path" + (if (query.isEmpty()) "" else "?$query")

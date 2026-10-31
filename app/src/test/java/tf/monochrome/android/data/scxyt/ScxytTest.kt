@@ -35,14 +35,25 @@ class ScxytTest {
 
     private val base = "https://scxyt.example"
 
-    /** Answers each GET with the next of [replies], and remembers what was asked with which token. */
+    /** One POST as the transport was handed it. */
+    private data class Post(val url: String, val token: String, val body: java.io.File?, val contentType: String?)
+
+    /** Answers each request with the next of [replies], and remembers what was asked with which token. */
     private class FakeTransport(vararg replies: ScxytClient.Reply) : ScxytClient.Transport {
         private val queue = ArrayDeque(replies.toList())
         val asked = mutableListOf<Pair<String, String>>()
         val timeouts = mutableListOf<Long>()
+        val posts = mutableListOf<Post>()
         override suspend fun get(url: String, token: String, timeoutMs: Long): ScxytClient.Reply {
             asked += url to token
             timeouts += timeoutMs
+            return queue.removeFirst()
+        }
+
+        override suspend fun post(url: String, token: String, body: java.io.File?, contentType: String?, timeoutMs: Long): ScxytClient.Reply {
+            asked += url to token
+            timeouts += timeoutMs
+            posts += Post(url, token, body, contentType)
             return queue.removeFirst()
         }
     }
@@ -165,6 +176,113 @@ class ScxytTest {
             fail("no link should not be playable")
         } catch (e: ScxytError.Failed) {
             assertEquals("no_link", e.code)
+        }
+    }
+
+    // ── A shared song's preview ────────────────────────────────────────
+
+    private fun audioFile(bytes: Int = 1024): java.io.File =
+        java.io.File.createTempFile("song", ".m4a").apply { deleteOnExit(); writeBytes(ByteArray(bytes) { it.toByte() }) }
+
+    @Test
+    fun `a YouTube song's preview is made from the file the phone sends`() = runBlocking {
+        val file = audioFile()
+        val transport = FakeTransport(
+            ScxytClient.Reply(200, """{"success":true,"data":{"id":"yt:dQw4w9WgXcQ","s":"Q0iqjfn2xWlNUgxv"}}"""),
+        )
+        val share = client(transport).share("yt:dQw4w9WgXcQ", file, "audio/mp4")
+
+        assertEquals(ScxytShare(id = "yt:dQw4w9WgXcQ", s = "Q0iqjfn2xWlNUgxv", page = null), share)
+        val post = transport.posts.single()
+        assertEquals("$base/api/v1/share?id=yt%3AdQw4w9WgXcQ", post.url)
+        assertEquals("t1", post.token)
+        // The cached file itself, as the type it is: the server cannot fetch YouTube.
+        assertEquals(file, post.body)
+        assertEquals("audio/mp4", post.contentType)
+        // Sending a song up and encoding its clip takes far longer than a search.
+        assertEquals(ScxytClient.SHARE_TIMEOUT_MS, transport.timeouts.single())
+        assertTrue(ScxytClient.SHARE_TIMEOUT_MS >= 90_000L)
+    }
+
+    @Test
+    fun `a SoundCloud song's preview sends no body, and its page comes back`() = runBlocking {
+        val transport = FakeTransport(
+            ScxytClient.Reply(
+                200,
+                """{"success":true,"data":{"id":"sc:199428706","s":"AbCdEfGhIjKlMn-_","page":"https://soundcloud.com/deadmau5/strobe-club-edit"}}""",
+            ),
+        )
+        val share = client(transport).share("sc:199428706")
+        assertEquals("AbCdEfGhIjKlMn-_", share.s)
+        assertEquals("https://soundcloud.com/deadmau5/strobe-club-edit", share.page)
+        val post = transport.posts.single()
+        assertEquals("$base/api/v1/share?id=sc%3A199428706", post.url)
+        assertNull(post.body)
+        assertNull(post.contentType)
+
+        // The server found no page: null, as when it says nothing.
+        val none = FakeTransport(ScxytClient.Reply(200, """{"success":true,"data":{"id":"sc:1","s":"AbCdEfGhIjKlMn-_","page":null}}"""))
+        assertNull(client(none).share("sc:1").page)
+    }
+
+    @Test
+    fun `a refused token sends the whole file again with a fresh one`() = runBlocking {
+        val file = audioFile()
+        val session = FakeSession()
+        val transport = FakeTransport(
+            ScxytClient.Reply(401, """{"success":false,"error":"signed_out"}"""),
+            ScxytClient.Reply(200, """{"success":true,"data":{"id":"yt:dQw4w9WgXcQ","s":"Q0iqjfn2xWlNUgxv"}}"""),
+        )
+        assertEquals("Q0iqjfn2xWlNUgxv", client(transport, session).share("yt:dQw4w9WgXcQ", file, "audio/webm").s)
+        assertEquals(listOf("t1", "t2"), transport.posts.map { it.token })
+        assertEquals(listOf(file, file), transport.posts.map { it.body })
+        assertEquals(listOf("audio/webm", "audio/webm"), transport.posts.map { it.contentType })
+        assertEquals(listOf(null, "t1"), session.staleAsked)
+    }
+
+    @Test
+    fun `a song larger than the server takes is not sent at all`() = runBlocking {
+        // Sparse: as long as a 41 MB song without writing one.
+        val big = java.io.File.createTempFile("big", ".m4a").apply { deleteOnExit() }
+        java.io.RandomAccessFile(big, "rw").use { it.setLength(ScxytClient.SHARE_MAX_BYTES + 1) }
+        val transport = FakeTransport()
+        try {
+            client(transport).share("yt:dQw4w9WgXcQ", big, "audio/mp4")
+            fail("too large should not go up")
+        } catch (e: ScxytError.TooLong) {
+            assertTrue(transport.asked.isEmpty())
+        } finally {
+            big.delete()
+        }
+        assertEquals(40L * 1024 * 1024, ScxytClient.SHARE_MAX_BYTES)
+    }
+
+    @Test
+    fun `a preview the server could not make is thrown as its error`() = runBlocking {
+        val file = audioFile()
+        val transport = FakeTransport(
+            ScxytClient.Reply(422, body("too_long")),
+            ScxytClient.Reply(502, body("failed")),
+            ScxytClient.Reply(200, """{"success":true,"data":{"id":"yt:dQw4w9WgXcQ","s":""}}"""),
+        )
+        val c = client(transport)
+        try {
+            c.share("yt:dQw4w9WgXcQ", file, "audio/mp4")
+            fail("too_long should throw")
+        } catch (e: ScxytError.TooLong) {
+        }
+        try {
+            c.share("sc:1")
+            fail("failed should throw")
+        } catch (e: ScxytError.Failed) {
+            assertEquals("failed", e.code)
+        }
+        // An answer without a signature is no preview.
+        try {
+            c.share("yt:dQw4w9WgXcQ", file, "audio/mp4")
+            fail("no signature should throw")
+        } catch (e: ScxytError.Failed) {
+            assertEquals("no_signature", e.code)
         }
     }
 
