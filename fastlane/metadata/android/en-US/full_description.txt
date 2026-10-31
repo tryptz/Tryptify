@@ -1,0 +1,35 @@
+<p>Tryptify is a native Android hi-fi music player: a C++17 DSP console, headphone AutoEQ from real measurements, bit-perfect USB DAC output, and a player you can watch.</p>
+
+<p><b>Sound</b></p>
+<ul>
+<li>Local FLAC, ALAC, WAV, MP3, AAC, Opus and more, with FFmpeg for the formats the phone cannot decode itself.</li>
+<li>A DSP mixing console in C++17 with up to 48 buses, 36 processors and EBU R128 meters.</li>
+<li>Headphone AutoEQ from over 4,000 measurements against 10 targets, with a filter editor.</li>
+<li>Bit-perfect USB DAC output through its own UAC1/UAC2 driver.</li>
+<li>ReplayGain aimed at the loudness you pick, without ever clipping.</li>
+<li>Speed, pitch and tempo from 0.25× to 3.0×, with two pitch engines.</li>
+<li>Bluetooth sync: measure your headphones' delay once, and lyrics, visuals and the game wait for it.</li>
+</ul>
+
+<p><b>Sources</b></p>
+<ul>
+<li>Your phone's own files and folders.</li>
+<li>Your own Navidrome or other Subsonic server.</li>
+<li>Optional online sources and services you add yourself under Settings › Connections.</li>
+</ul>
+
+<p><b>Something to watch</b></p>
+<ul>
+<li>A spectrum waterfall from a 16K-point FFT, in six styles, up to 120 fps.</li>
+<li>The projectM MilkDrop visualizer, with 9,795 presets.</li>
+<li>Synced lyrics, a CRT effect, themes and typography you can change down to each text style.</li>
+<li>Your library as a galaxy: artists as stars, albums as planets and tracks as moons.</li>
+</ul>
+
+<p><b>And more</b></p>
+<ul>
+<li>Trypt Mania, a rhythm game on your own songs.</li>
+<li>Music links: sliders and mixer knobs that move with the kick, vocals, snare or hi-hats.</li>
+<li>A glass home screen widget, Android Auto, Last.fm and ListenBrainz scrobbling.</li>
+<li>Eight languages: English, 简体中文, 日本語, Français, Español, Türkçe, Deutsch and Italiano.</li>
+</ul>

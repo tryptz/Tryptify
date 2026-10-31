@@ -18,9 +18,6 @@ coroutines = "1.9.0"
 serialization = "1.7.3"
 glance = "1.1.1"
 palette = "1.0.0"
-castFramework = "22.0.0"
-credentials = "1.5.0-beta01"
-googleid = "1.1.1"
 accompanist = "0.36.0"
 haze = "1.7.1"
 nextlibMedia3ext = "0.8.4"
@@ -65,7 +62,6 @@ media3-exoplayer-dash = { group = "androidx.media3", name = "media3-exoplayer-da
 media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
-media3-cast = { group = "androidx.media3", name = "media3-cast", version.ref = "media3" }
 media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
 media3-muxer = { group = "androidx.media3", name = "media3-muxer", version.ref = "media3" }
 
@@ -131,9 +127,6 @@ glance-material3 = { group = "androidx.glance", name = "glance-material3", versi
 # Palette
 palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 
-# Cast
-cast-framework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "castFramework" }
-
 # AndroidX Core
 core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.15.0" }
 core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version = "1.0.1" }
@@ -145,11 +138,6 @@ media = { group = "androidx.media", name = "media", version = "1.7.0" }
 
 # Security
 security-crypto = { group = "androidx.security", name = "security-crypto", version = "1.1.0-alpha06" }
-
-# Credentials (Google Sign-In)
-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
-googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 
 # Accompanist
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }

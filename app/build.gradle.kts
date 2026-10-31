@@ -351,7 +351,6 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.session)
     implementation(libs.media3.ui)
-    implementation(libs.media3.cast)
     // Turns a song too big for the rooms server into Opus before it is shared.
     implementation(libs.media3.transformer)
     // Its MP4 muxer: the only one of Media3's that writes Opus into an .m4a.
@@ -359,7 +358,20 @@ dependencies {
     // Prebuilt FFmpeg audio decoder wired as FfmpegAudioRenderer. Drops in
     // support for DSD/DSF, APE, TAK, WavPack, Musepack, TrueHD/MLP, DTS, AC-3,
     // and a long tail of codecs the platform MediaCodec can't handle.
-    implementation(libs.nextlib.media3ext)
+    //
+    // F-Droid builds every native library from source, so it cannot take
+    // this one's prebuilt .so files. `nextlib.aar` (a -P property or a
+    // local.properties key) swaps in a media3ext AAR built from nextlib's
+    // own tree at the same tag, FFmpeg included; docs/fdroid.md has the
+    // recipe. The AAR's only dependency is media3-exoplayer, which is
+    // already above, so nothing transitive is lost.
+    val nextlibAar = (providers.gradleProperty("nextlib.aar").orNull ?: localProperties.getProperty("nextlib.aar"))
+        ?.trim()?.takeIf { it.isNotEmpty() }
+    if (nextlibAar != null) {
+        implementation(files(nextlibAar))
+    } else {
+        implementation(libs.nextlib.media3ext)
+    }
 
     // JAudioTagger — write Vorbis comments into downloaded FLACs (THX designation)
     // and read them back on rescan. Pure JVM; only text tags are touched.
@@ -415,9 +427,6 @@ dependencies {
     // Palette
     implementation(libs.palette)
 
-    // Cast
-    implementation(libs.cast.framework)
-
     // AndroidX Core
     implementation(libs.core.ktx)
     implementation(libs.core.splashscreen)
@@ -430,11 +439,6 @@ dependencies {
 
     // Security (Keystore for collection encryption keys)
     implementation(libs.security.crypto)
-
-    // Google Sign-In (Credential Manager)
-    implementation(libs.credentials)
-    implementation(libs.credentials.play.services)
-    implementation(libs.googleid)
 
     // Accompanist
     implementation(libs.accompanist.permissions)

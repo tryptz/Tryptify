@@ -1,0 +1,1 @@
+Hi-fi music player with a DSP console, headphone AutoEQ and bit-perfect USB DAC
