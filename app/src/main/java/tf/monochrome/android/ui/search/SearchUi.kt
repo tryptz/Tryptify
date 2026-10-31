@@ -213,6 +213,9 @@ fun SearchResultsContent(
     // Catalog of each album / artist result, for the pill under its card.
     albumSources: Map<Long, SourceType> = emptyMap(),
     artistSources: Map<Long, SourceType> = emptyMap(),
+    // Why the chosen source gave nothing, when it is off (YouTube or
+    // SoundCloud signed out, or turned away): one line under the chips.
+    sourceNote: SearchViewModel.SourceNote? = null,
 ) {
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -287,10 +290,10 @@ fun SearchResultsContent(
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
-                playerViewModel.addTracksToPlaylist(
-                    playlist.id,
-                    tracks.filter { it.id in selection.selectedIds }.map { it.toLegacyTrack() },
-                )
+                val picked = tracks.filter { it.id in selection.selectedIds }
+                // So a YouTube or SoundCloud song is filed as one (PlayerViewModel.registerUnified).
+                playerViewModel.registerUnified(picked)
+                playerViewModel.addTracksToPlaylist(playlist.id, picked.map { it.toLegacyTrack() })
                 showAddToPlaylistForSelection = false
                 selection.clear()
             },
@@ -313,7 +316,8 @@ fun SearchResultsContent(
                 onTypeSelected = onTypeSelected,
                 selectedSource = selectedSource,
                 onSourceSelected = onSourceSelected,
-                showSourceFilter = showSourceFilter
+                showSourceFilter = showSourceFilter,
+                sourceNote = sourceNote,
             )
             LoadingScreen()
         }
@@ -402,7 +406,8 @@ fun SearchResultsContent(
                         onTypeSelected = onTypeSelected,
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
-                        showSourceFilter = showSourceFilter
+                        showSourceFilter = showSourceFilter,
+                        sourceNote = sourceNote,
                     )
                 }
 
@@ -611,7 +616,8 @@ private fun SearchFilterRow(
     onTypeSelected: (SearchViewModel.SearchTypeFilter) -> Unit,
     selectedSource: SearchViewModel.SearchSourceFilter,
     onSourceSelected: (SearchViewModel.SearchSourceFilter) -> Unit,
-    showSourceFilter: Boolean
+    showSourceFilter: Boolean,
+    sourceNote: SearchViewModel.SourceNote? = null,
 ) {
     Column(
         modifier = Modifier
@@ -650,6 +656,16 @@ private fun SearchFilterRow(
                         leadingContent = brand?.let { { SourceBrandMark(it, size = 16.dp) } },
                     )
                 }
+            }
+            // Plain text in the filters' own item, so it scrolls under the
+            // search glass with the chips: no panel, no error row.
+            if (sourceNote != null) {
+                Text(
+                    text = stringResource(sourceNote.text, sourceNote.service),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
         }
     }

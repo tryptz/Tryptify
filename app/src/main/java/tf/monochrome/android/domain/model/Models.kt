@@ -326,8 +326,10 @@ enum class GenreConfidence {
 // algorithmic queue-maker that seeds a station from a track, and the two would
 // be read as the same thing by anyone grepping for it.
 // SUBSONIC is the listener's own server (Navidrome, Gonic, Airsonic…), added
-// under Settings › Connections. Appended last: the enum is serialized by name.
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, DEEZER, LIVE_RADIO, SUBSONIC }
+// under Settings › Connections. YOUTUBE and SOUNDCLOUD come through the
+// built-in trypt-hifi-scxyt server (PlaybackSource.Scxyt). Appended last: the
+// enum is serialized by name.
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, DEEZER, LIVE_RADIO, SUBSONIC, YOUTUBE, SOUNDCLOUD }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -464,6 +466,19 @@ sealed class PlaybackSource {
         val suffix: String? = null,
         val bitRateKbps: Int? = null,
     ) : PlaybackSource()
+
+    /**
+     * A YouTube video or SoundCloud track, fetched by the built-in
+     * trypt-hifi-scxyt server (data/scxyt) and played from it.
+     *
+     * Only the server's id (`yt:<video id>` or `sc:<track id>`). The stream
+     * link is asked for when it is played (StreamResolver): the server has to
+     * fetch the song first, and the link it hands back is signed for six
+     * hours, too short to keep in a saved queue.
+     */
+    @Serializable
+    @SerialName("Scxyt")
+    data class Scxyt(val mediaId: String) : PlaybackSource()
 }
 
 @Serializable

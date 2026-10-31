@@ -109,7 +109,8 @@ class DownloadQueueWorker @AssistedInject constructor(
         running.remove(item.trackId)
         when (outcome) {
             TrackDownloader.Outcome.SUCCESS -> queue.complete(item.trackId)
-            TrackDownloader.Outcome.RETRYABLE -> queue.fail(item.trackId, retryable = true)
+            // The reason is kept only if this was the last attempt.
+            TrackDownloader.Outcome.RETRYABLE -> queue.fail(item.trackId, retryable = true, reason = reason)
             TrackDownloader.Outcome.PERMANENT -> queue.fail(item.trackId, retryable = false, reason = reason)
         }
     }

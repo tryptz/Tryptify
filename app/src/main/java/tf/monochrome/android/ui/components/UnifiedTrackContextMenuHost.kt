@@ -81,8 +81,9 @@ fun UnifiedTrackContextMenuHost(
             removeLabel = removeLabel,
             // Already on disk — nothing to fetch. A song on the listener's own
             // server has no catalogue download: the downloader would look its
-            // hashed id up on TIDAL.
-            onDownloadTrack = if (isLocal || onOwnServer) null else ({ playerViewModel.downloadTrack(legacy) }),
+            // hashed id up on TIDAL. A YouTube or SoundCloud song downloads
+            // through its own server, which needs it registered with its id.
+            onDownloadTrack = if (isLocal || onOwnServer) null else ({ playerViewModel.downloadUnified(track) }),
             // Sharing a file fetches it from Qobuz by id, which for a server
             // song is a hash: it would share somebody else's song.
             onShareFile = if (onOwnServer) null else ({ playerViewModel.shareUnifiedTrack(track) }),
@@ -103,6 +104,7 @@ fun UnifiedTrackContextMenuHost(
             playlists = playlists,
             onDismiss = { addToPlaylistFor = null },
             onPlaylistSelected = { playlist ->
+                playerViewModel.registerUnified(listOf(pending))
                 playerViewModel.addTrackToPlaylist(playlist.id, pending.toLegacyTrack())
                 addToPlaylistFor = null
             },
@@ -117,6 +119,7 @@ fun UnifiedTrackContextMenuHost(
         CreatePlaylistDialog(
             onDismiss = { createPlaylistFor = null },
             onSubmit = { name, description ->
+                playerViewModel.registerUnified(listOf(pending))
                 playerViewModel.createPlaylist(name, description, listOf(pending.toLegacyTrack()))
                 createPlaylistFor = null
             },

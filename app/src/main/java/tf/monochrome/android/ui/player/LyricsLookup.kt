@@ -13,10 +13,12 @@ internal object LyricsLookup {
      * its id is not a TIDAL id. Qobuz and Deezer ids name other songs on
      * TIDAL; a local file's or a collection's is a hash of its own key
      * ("local_123"), which TIDAL either does not know or knows as some other
-     * song entirely. TIDAL is then matched by title and artist instead.
+     * song entirely, and a YouTube or SoundCloud song's a hash of its server
+     * id. TIDAL is then matched by title and artist instead.
      */
     fun skipsTidalById(source: SourceType?): Boolean = when (source) {
-        SourceType.QOBUZ, SourceType.DEEZER, SourceType.LOCAL, SourceType.COLLECTION -> true
+        SourceType.QOBUZ, SourceType.DEEZER, SourceType.LOCAL, SourceType.COLLECTION,
+        SourceType.YOUTUBE, SourceType.SOUNDCLOUD -> true
         else -> false
     }
 

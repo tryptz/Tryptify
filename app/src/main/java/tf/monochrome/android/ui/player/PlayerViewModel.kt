@@ -1387,6 +1387,7 @@ class PlayerViewModel @Inject constructor(
                     unifiedTrackRegistry.put(track.id, unifiedTrack)
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
                     if (!resolved.isPlayable) {
+                        resolved.failureReason?.let(::tellResolveFailure)
                         handleResolveFailure()
                         return@launch
                     }
@@ -1468,7 +1469,23 @@ class PlayerViewModel @Inject constructor(
 
     private fun onResolveSucceeded() {
         consecutiveResolveFailures = 0
+        lastResolveFailureReason = null
         _playbackError.value = null
+    }
+
+    /** The reason last told, so a run of songs failing for one reason tells it once. */
+    private var lastResolveFailureReason: String? = null
+
+    /**
+     * Says why a song could not be played, when its source said why (YouTube
+     * turning the server away, an age check). The skip goes on as for any
+     * failure; a queue of YouTube songs while YouTube refuses the server says
+     * so once, not once a song.
+     */
+    private fun tellResolveFailure(reason: String) {
+        if (reason == lastResolveFailureReason) return
+        lastResolveFailureReason = reason
+        android.widget.Toast.makeText(context, reason, android.widget.Toast.LENGTH_LONG).show()
     }
 
     /**
@@ -1599,6 +1616,27 @@ class PlayerViewModel @Inject constructor(
         downloadManager.downloadTrack(track)
     }
 
+    /**
+     * Registers [tracks] as playing them would, before an action on them from
+     * a list (adding them to a playlist): a YouTube or SoundCloud song is then
+     * filed and played as one, not by its hashed id alone.
+     */
+    fun registerUnified(tracks: List<UnifiedTrack>) {
+        tracks.forEach { unifiedTrackRegistry.put(it.legacyId, it) }
+    }
+
+    /**
+     * Downloads [track] from a list, where it may not have been played or
+     * queued yet. Registered first, as playing it would, so the download knows
+     * where it comes from: a YouTube or SoundCloud song is fetched through its
+     * server by its own id, which its hashed Track id does not carry.
+     */
+    fun downloadUnified(track: UnifiedTrack) {
+        val legacy = track.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, track)
+        downloadTrack(legacy)
+    }
+
     fun downloadAllTracks(tracks: List<Track>) {
         val remote = tracks.filterNot { isLocalTrack(it) || isOwnServerTrack(it) }
         downloadManager.downloadTracks(remote)
@@ -1631,6 +1669,19 @@ class PlayerViewModel @Inject constructor(
         }
         // The share helper would fetch the file from Qobuz by this hashed id.
         if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.Subsonic) return
+        // So it would for a YouTube or SoundCloud song: only its download is shared.
+        if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.Scxyt) {
+            viewModelScope.launch {
+                val download = libraryRepository.getDownloadedTrack(track.id)
+                if (download != null) {
+                    trackShareHelper.shareDownloadedTrack(download)
+                } else {
+                    val text = tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.share_no_file)
+                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            return
+        }
         viewModelScope.launch {
             trackShareHelper.shareTrack(track)
         }
@@ -1663,7 +1714,11 @@ class PlayerViewModel @Inject constructor(
             trackShareHelper.shareLocalPath(local.filePath, track.title)
             return
         }
-        shareTrack(track.toLegacyTrack())
+        // Registered first, as a like or a download from a list is, so
+        // shareTrack knows a YouTube or SoundCloud song it has not seen played.
+        val legacy = track.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, track)
+        shareTrack(legacy)
     }
 
     /** True when this UnifiedTrack is a file already on disk. */

@@ -3469,4 +3469,14 @@
     <string name="whats_new_1951_widget_body">Du verre plat et transparent avec la pochette et un bouton de lecture, en Petit, Moyen et Grand, tous redimensionnables. Paramètres › Apparence › Widget d’écran d’accueil règle couleur, opacité, bord, pochette, barre de progression, bouton et texte, avec un aperçu en direct.</string>
     <string name="whats_new_1951_lyrics_beat_title">Les paroles battent au rythme de la grosse caisse</string>
     <string name="whats_new_1951_lyrics_beat_body">La pulsation, la lueur et les rayons des paroles suivent désormais la grosse caisse (40–110 Hz), comme les liens musicaux : une voix qui monte ne décale plus le rythme, et après une pause la pulsation ne gonfle plus pour rester bloquée.</string>
+    <string name="scxyt_note_signed_out">Connectez-vous pour rechercher sur %1$s.</string>
+    <string name="scxyt_note_unavailable">%1$s n’est pas disponible pour le moment.</string>
+    <string name="scxyt_error_signed_out">Connectez-vous pour lire ou télécharger les titres de %1$s.</string>
+    <string name="scxyt_error_blocked">%1$s refuse le serveur pour le moment. Réessayez plus tard.</string>
+    <string name="scxyt_error_unavailable">Ce titre ne peut pas être lu ici (vérification de l’âge, restriction régionale ou réservé aux membres).</string>
+    <string name="scxyt_error_too_long">Ce titre est trop long pour être récupéré, ou c’est un direct.</string>
+    <string name="scxyt_error_not_found">Ce titre n’existe plus sur %1$s, ou il est privé.</string>
+    <string name="scxyt_error_busy">Le serveur est occupé. Réessayez dans un instant.</string>
+    <string name="scxyt_error_timeout">La récupération de ce titre a pris trop de temps. Réessayez.</string>
+    <string name="scxyt_error_failed">Impossible de récupérer ce titre depuis %1$s.</string>
 </resources>

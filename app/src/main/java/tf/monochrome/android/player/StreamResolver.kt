@@ -40,6 +40,9 @@ data class ResolvedMedia(
     // FileDataSource opens an empty path → ENOENT, or
     // DefaultMediaSourceFactory NPEs on a null localConfiguration.
     val isPlayable: Boolean = true,
+    // Why it can't be played, in the listener's words, when the source said
+    // (the YouTube and SoundCloud server's error codes). Null for the rest.
+    val failureReason: String? = null,
 )
 
 @Singleton
@@ -51,6 +54,9 @@ class StreamResolver @Inject constructor(
     private val localTrackLocator: LocalTrackLocator,
     private val sourceConsent: SourceConsent,
     private val subsonicRepository: tf.monochrome.android.data.subsonic.SubsonicRepository,
+    private val scxytRepository: tf.monochrome.android.data.scxyt.ScxytRepository,
+    private val unifiedTrackRegistry: UnifiedTrackRegistry,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) {
     private fun normalizeArtworkUri(raw: String?): Uri? {
         if (raw.isNullOrBlank()) return null
@@ -120,6 +126,14 @@ class StreamResolver @Inject constructor(
         // getLyrics already applies for the same reason.
         if (qobuzIdRegistry.isQobuzTrack(track.id)) {
             return Pair(qobuzCachedMediaItem(track, quality), null)
+        }
+
+        // A liked YouTube or SoundCloud song this run has not seen: its id is
+        // a hash, and TIDAL would play whatever it has under that number.
+        // Searching for it again, or queueing it from Recently Played, brings
+        // back its own id.
+        if (unifiedTrackRegistry.isUnresolvedScxyt(track.id)) {
+            return Pair(null, null)
         }
 
         // Deezer ids share the number range with TIDAL's, so this must come
@@ -234,6 +248,8 @@ class StreamResolver @Inject constructor(
                     is PlaybackSource.QobuzCached -> source.qobuzId
                     is PlaybackSource.AppleCached -> source.appleId
                     is PlaybackSource.DeezerPreview -> source.deezerId
+                    // Its download is kept under the hashed id the queue gives it.
+                    is PlaybackSource.Scxyt -> track.legacyId
                     else -> null
                 },
                 isrc = track.isrc,
@@ -252,7 +268,55 @@ class StreamResolver @Inject constructor(
             is PlaybackSource.DeezerPreview -> resolveDeezer(track, source, quality)
             is PlaybackSource.RadioStream -> resolveRadioStream(track, source)
             is PlaybackSource.Subsonic -> resolveSubsonic(track, source)
+            is PlaybackSource.Scxyt -> resolveScxyt(track, source)
         }
+    }
+
+    /**
+     * A YouTube or SoundCloud song, played from the trypt-hifi-scxyt server.
+     *
+     * The server has to fetch the song before it can serve it, which takes a
+     * few seconds (up to a minute for a long one it has never seen), so that
+     * is asked for here with a timeout of its own rather than left to the
+     * player's. What comes back is a signed link that needs no headers,
+     * played as a plain progressive stream. A failure says why, in the
+     * listener's words: "YouTube is turning the server away" is something
+     * they can act on, and a silent skip is not.
+     */
+    @OptIn(UnstableApi::class)
+    private suspend fun resolveScxyt(
+        track: UnifiedTrack,
+        source: PlaybackSource.Scxyt,
+    ): ResolvedMedia {
+        val prepared = scxytRepository.prepare(source.mediaId)
+        val stream = prepared.getOrNull()
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artistName)
+            .setAlbumTitle(track.albumTitle)
+            .setArtworkUri(normalizeArtworkUri(track.artworkUri))
+            .build()
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(track.id)
+            .setMediaMetadata(metadata)
+            .apply {
+                if (stream != null) {
+                    setUri(stream.link.toUri())
+                    // The link ends in a query, not a file name; the server
+                    // says what it is.
+                    if (stream.mime.isNotBlank()) setMimeType(stream.mime)
+                }
+            }
+            .build()
+        val failure = prepared.exceptionOrNull()
+        if (failure != null) android.util.Log.w("StreamResolver", "${source.mediaId} could not be prepared: ${failure.message}")
+        return ResolvedMedia(
+            mediaItem = mediaItem,
+            isPlayable = stream != null,
+            failureReason = failure?.let {
+                tf.monochrome.android.data.scxyt.ScxytMessages.text(context, it, source.mediaId)
+            },
+        )
     }
 
     /**

@@ -78,6 +78,15 @@ android {
             "\"${localProperties.getProperty("tryptifyCloud.url") ?: "https://cloud.tryptify.com"}\"",
         )
 
+        // The YouTube and SoundCloud source (trypt-hifi-scxyt, on Railway): it
+        // searches and fetches through yt-dlp on the server. Like the Theme Store
+        // it holds no secret; calls carry the listener's Supabase session.
+        buildConfigField(
+            "String",
+            "SCXYT_URL",
+            "\"${localProperties.getProperty("scxyt.url") ?: "https://trypt-hifi-scxyt-production.up.railway.app"}\"",
+        )
+
         // Last.fm application key, shared by every install — CHARTS ONLY.
         //
         // Genre charts call tag.getTopTracks: unauthenticated, read-only, public

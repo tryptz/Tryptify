@@ -3313,4 +3313,14 @@
     <string name="whats_new_1951_widget_body">カバーと再生ボタンを載せた、平らで透けるガラス。小・中・大の 3 サイズで、どれもサイズを変えられます。「設定 › 外観 › ホーム画面ウィジェット」で色、不透明度、縁、カバー、進捗バー、ボタン、文字をライブプレビューしながら設定できます。</string>
     <string name="whats_new_1951_lyrics_beat_title">歌詞がキックに合わせて脈打つ</string>
     <string name="whats_new_1951_lyrics_beat_body">歌詞の脈動、グロー、光線はミュージックリンクと同じくキック（40–110 Hz）に従うようになりました。ボーカルが上がっても拍がずれず、一時停止の後に脈動が膨らんだまま止まることもありません。</string>
+    <string name="scxyt_note_signed_out">%1$s を検索するにはサインインしてください。</string>
+    <string name="scxyt_note_unavailable">%1$s は現在利用できません。</string>
+    <string name="scxyt_error_signed_out">%1$s の曲を再生またはダウンロードするにはサインインしてください。</string>
+    <string name="scxyt_error_blocked">%1$s が現在サーバーからの接続を拒否しています。しばらくしてからもう一度お試しください。</string>
+    <string name="scxyt_error_unavailable">この曲はここでは再生できません（年齢確認、地域制限、またはメンバー限定）。</string>
+    <string name="scxyt_error_too_long">この曲は長すぎて取得できないか、ライブ配信です。</string>
+    <string name="scxyt_error_not_found">この曲は %1$s に存在しないか、非公開です。</string>
+    <string name="scxyt_error_busy">サーバーが混み合っています。少し待ってからもう一度お試しください。</string>
+    <string name="scxyt_error_timeout">この曲の取得に時間がかかりすぎました。もう一度お試しください。</string>
+    <string name="scxyt_error_failed">%1$s からこの曲を取得できませんでした。</string>
 </resources>

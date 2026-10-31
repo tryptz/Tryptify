@@ -33,6 +33,10 @@ data class DownloadItem(
     // after startup: a queue restored before it has would send them to TIDAL,
     // where the same number is some other recording.
     val isQobuz: Boolean = false,
+    // A YouTube or SoundCloud song's server id (`yt:…`, `sc:…`), captured at
+    // enqueue: its [trackId] is only a hash of it, which no catalogue knows.
+    // Null for every other song, and in a queue saved before it existed.
+    val scxytId: String? = null,
     val title: String,
     val artistName: String,
     val albumTitle: String? = null,
@@ -53,11 +57,12 @@ data class DownloadItem(
     val genre: String? = null,
 ) {
     companion object {
-        fun from(track: Track, isQobuz: Boolean = false): DownloadItem = DownloadItem(
+        fun from(track: Track, isQobuz: Boolean = false, scxytId: String? = null): DownloadItem = DownloadItem(
             trackId = track.id,
             appleId = track.appleId ?: -1L,
             deezerId = track.deezerId ?: -1L,
             isQobuz = isQobuz,
+            scxytId = scxytId,
             title = track.title,
             artistName = track.artist?.name
                 ?: track.displayArtist.ifBlank { "Unknown Artist" },

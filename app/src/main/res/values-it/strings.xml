@@ -3469,4 +3469,14 @@
     <string name="whats_new_1951_widget_body">Vetro piatto e trasparente con copertina e pulsante di riproduzione, in Piccolo, Medio e Grande, tutti ridimensionabili. Impostazioni › Aspetto › Widget della schermata Home regola colore, opacità, bordo, copertina, barra di avanzamento, pulsante e testo, con anteprima dal vivo.</string>
     <string name="whats_new_1951_lyrics_beat_title">Il testo pulsa con la cassa</string>
     <string name="whats_new_1951_lyrics_beat_body">Pulsazione, bagliore e raggi del testo seguono ora la cassa (40–110 Hz), come i collegamenti musicali: una voce che sale non sposta più il ritmo e, dopo una pausa, la pulsazione non si gonfia più restando bloccata.</string>
+    <string name="scxyt_note_signed_out">Accedi per cercare su %1$s.</string>
+    <string name="scxyt_note_unavailable">%1$s non è disponibile al momento.</string>
+    <string name="scxyt_error_signed_out">Accedi per riprodurre o scaricare i brani da %1$s.</string>
+    <string name="scxyt_error_blocked">%1$s sta rifiutando il server in questo momento. Riprova più tardi.</string>
+    <string name="scxyt_error_unavailable">Questo brano non può essere riprodotto qui (verifica dell\'età, limitazione regionale o solo per i membri).</string>
+    <string name="scxyt_error_too_long">Questo brano è troppo lungo da recuperare, oppure è una diretta.</string>
+    <string name="scxyt_error_not_found">Questo brano non esiste più su %1$s, oppure è privato.</string>
+    <string name="scxyt_error_busy">Il server è occupato. Riprova tra un momento.</string>
+    <string name="scxyt_error_timeout">Il recupero di questo brano ha richiesto troppo tempo. Riprova.</string>
+    <string name="scxyt_error_failed">Impossibile recuperare questo brano da %1$s.</string>
 </resources>

@@ -197,7 +197,7 @@ and `1` when it was left out; the second must print `0`. The cloud setup below w
 workflow sets neither variable, so an APK it builds has no built-in servers.
 
 The other settings `local.properties` can override (`themeStore.url`,
-`lastfm.apiKey`) are public and have committed defaults.
+`lastfm.apiKey`, `scxyt.url`) are public and have committed defaults.
 They are not secrets, but the rule for `local.properties` stays the same: it is
 never committed.
 
@@ -261,6 +261,18 @@ Supabase session.
 The cloud is played by saving it as the Subsonic server, with a device
 password from `POST /v1/subsonic-keys`, so everything above about that server
 applies. `CloudTest` holds the app to the server's error codes and JSON.
+
+## YouTube and SoundCloud
+
+Built in, through trypt-hifi-scxyt (its own repository; its README's "The API
+Tryptify uses" is the contract), which searches and fetches with yt-dlp on
+its machine. The app side is `data/scxyt/` and `PlaybackSource.Scxyt`. Its
+address is `BuildConfig.SCXYT_URL`, overridable with `scxyt.url` in
+`local.properties`. It holds no secret: calls carry the Supabase session (the
+token from `CloudRepository.bearer`), and signed out the source is off.
+Songs keep the server's ids (`yt:…`, `sc:…`); a play or a download asks
+`/api/v1/prepare` first and uses the signed link it returns. `ScxytTest` holds
+the app to the server's JSON and error codes.
 
 ## projectM is patched, and its presets are scanned
 

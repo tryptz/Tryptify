@@ -81,7 +81,7 @@ Name a menu as the person's own device shows it in their language.
 ## Never translated
 
 Brand and format names: Tryptify, Spotify, Apple Music, YouTube Music,
-TuneMyMusic, exportify.net and Exportify, THX (but “Spatial Audio” after it
+YouTube, SoundCloud, TuneMyMusic, exportify.net and Exportify, THX (but “Spatial Audio” after it
 is), AutoEQ, CSV, JSPF, XSPF, XML, FLAC, projectM, MilkDrop, Wave Candy,
 Oxford, Nothing Ear, Nothing X.
 

@@ -1,6 +1,7 @@
 package tf.monochrome.android.player
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -82,6 +83,42 @@ class UnifiedTrackRegistryTest {
         queue.clearQueue()
         assertEquals(keep, registry.size)
         assertNotNull(registry[3_000L])
+    }
+
+    @Test
+    fun `a YouTube or SoundCloud song is never let go, its hashed id being the only way back`() {
+        val youtube = UnifiedTrack(
+            id = "yt:dQw4w9WgXcQ",
+            title = "Liked from search",
+            durationSeconds = 213,
+            artistName = "Artist",
+            source = PlaybackSource.Scxyt("yt:dQw4w9WgXcQ"),
+            sourceType = SourceType.YOUTUBE,
+        )
+        registry.put(youtube.legacyId, youtube)
+        queue.setQueue(put(1L..5_000L), 0)
+        queue.setQueue(put(10_001L..10_010L), 0)
+        assertEquals(youtube, registry[youtube.legacyId])
+    }
+
+    @Test
+    fun `a liked YouTube song known only by its hash is unplayable until its own id comes back`() {
+        val youtube = UnifiedTrack(
+            id = "yt:dQw4w9WgXcQ",
+            title = "Liked before a restart",
+            durationSeconds = 213,
+            artistName = "Artist",
+            source = PlaybackSource.Scxyt("yt:dQw4w9WgXcQ"),
+            sourceType = SourceType.YOUTUBE,
+        )
+        // After a restart the like has only the hash, marked by its source.
+        registry.markScxytHash(youtube.legacyId)
+        assertTrue(registry.isUnresolvedScxyt(youtube.legacyId))
+        // A TIDAL song nobody marked is untouched.
+        assertFalse(registry.isUnresolvedScxyt(12_345L))
+        // Search or Recently Played puts the song back: playable again.
+        registry.put(youtube.legacyId, youtube)
+        assertFalse(registry.isUnresolvedScxyt(youtube.legacyId))
     }
 
     @Test

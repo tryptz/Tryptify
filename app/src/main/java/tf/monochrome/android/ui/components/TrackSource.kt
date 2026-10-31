@@ -19,12 +19,20 @@ import javax.inject.Singleton
 @Singleton
 class TrackSourceResolver @Inject constructor(
     private val registry: QobuzIdRegistry,
+    private val unified: tf.monochrome.android.player.UnifiedTrackRegistry,
 ) {
-    fun of(track: Track): SourceType = when {
-        track.deezerId != null || registry.isDeezerTrack(track.id) -> SourceType.DEEZER
-        registry.isAppleTrack(track.id) -> SourceType.APPLE
-        registry.isQobuzTrack(track.id) -> SourceType.QOBUZ
-        else -> SourceType.API
+    fun of(track: Track): SourceType {
+        // A YouTube or SoundCloud song's number is a hash no catalogue
+        // registry knows, and would read as TIDAL's; the song's own record says.
+        unified[track.id]?.sourceType
+            ?.takeIf { it == SourceType.YOUTUBE || it == SourceType.SOUNDCLOUD }
+            ?.let { return it }
+        return when {
+            track.deezerId != null || registry.isDeezerTrack(track.id) -> SourceType.DEEZER
+            registry.isAppleTrack(track.id) -> SourceType.APPLE
+            registry.isQobuzTrack(track.id) -> SourceType.QOBUZ
+            else -> SourceType.API
+        }
     }
 }
 

@@ -92,6 +92,7 @@ class LibraryRepository @Inject constructor(
             TrackSource.QOBUZ -> qobuzIdRegistry.registerTrack(id)
             TrackSource.DEEZER -> qobuzIdRegistry.registerDeezerTrack(id)
             TrackSource.APPLE -> qobuzIdRegistry.registerAppleTrack(id)
+            TrackSource.YOUTUBE, TrackSource.SOUNDCLOUD -> unifiedTrackRegistry.markScxytHash(id)
         }
     }
 
@@ -104,12 +105,19 @@ class LibraryRepository @Inject constructor(
      * from says it outright; a bare Track falls back to the registry, as
      * toUnifiedTrackAuto does.
      */
-    private fun sourceOf(track: Track): String = when (unifiedTrackRegistry[track.id]?.source) {
+    private fun sourceOf(track: Track): String = when (val source = unifiedTrackRegistry[track.id]?.source) {
         is PlaybackSource.LocalFile -> TrackSource.LOCAL
         is PlaybackSource.QobuzCached -> TrackSource.QOBUZ
         is PlaybackSource.DeezerPreview -> TrackSource.DEEZER
         is PlaybackSource.AppleCached -> TrackSource.APPLE
         is PlaybackSource.Subsonic -> TrackSource.SUBSONIC
+        // Its id is a hash: filed as TIDAL's, other devices would play whatever has that number there.
+        is PlaybackSource.Scxyt ->
+            if (tf.monochrome.android.data.scxyt.ScxytSource.ofId(source.mediaId) == tf.monochrome.android.data.scxyt.ScxytSource.SOUNDCLOUD) {
+                TrackSource.SOUNDCLOUD
+            } else {
+                TrackSource.YOUTUBE
+            }
         is PlaybackSource.HiFiApi -> TrackSource.TIDAL
         else -> when {
             track.deezerId != null || qobuzIdRegistry.isDeezerTrack(track.id) -> TrackSource.DEEZER
@@ -234,7 +242,9 @@ class LibraryRepository @Inject constructor(
         syncScope.launch {
             val sessionId = playSessionManager.sessionFor(event.playedAt)
             val deviceId = deviceRegistry.snapshotRemoteId()
-            val sourceType = track.cloudSourceType(local)
+            // A YouTube or SoundCloud song's id is a hash, not TIDAL's: it is
+            // kept in the catalogue the way a file's is, by its tags.
+            val sourceType = track.cloudSourceType(local || unified?.source is PlaybackSource.Scxyt)
             val sourceRef = track.cloudSourceRef(sourceType)
             val cloudId = supabaseSync.pushPlayEvent(
                 event = event,
@@ -539,5 +549,7 @@ object TrackSource {
     const val DEEZER = "deezer"
     const val APPLE = "apple"
     const val SUBSONIC = "subsonic"
+    const val YOUTUBE = "youtube"
+    const val SOUNDCLOUD = "soundcloud"
     const val LOCAL = "local"
 }

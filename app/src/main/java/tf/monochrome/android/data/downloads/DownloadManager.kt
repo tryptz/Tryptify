@@ -66,6 +66,7 @@ class DownloadManager @Inject constructor(
     private val queue: DownloadQueue,
     private val preferences: PreferencesManager,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
+    private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -128,7 +129,18 @@ class DownloadManager @Inject constructor(
 
     fun downloadTracks(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        queue.enqueue(tracks.map { DownloadItem.from(it, isQobuz = qobuzIdRegistry.isQobuzTrack(it.id)) })
+        queue.enqueue(
+            // A liked YouTube or SoundCloud song this run has not seen has
+            // only its hash, which would download whatever TIDAL has under it.
+            tracks.filterNot { unifiedTrackRegistry.isUnresolvedScxyt(it.id) }.map {
+                DownloadItem.from(
+                    it,
+                    isQobuz = qobuzIdRegistry.isQobuzTrack(it.id),
+                    // Only the registry knows a YouTube or SoundCloud song's own id.
+                    scxytId = (unifiedTrackRegistry[it.id]?.source as? tf.monochrome.android.domain.model.PlaybackSource.Scxyt)?.mediaId,
+                )
+            },
+        )
         startWorker()
     }
 

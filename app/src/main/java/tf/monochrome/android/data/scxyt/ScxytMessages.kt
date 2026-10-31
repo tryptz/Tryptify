@@ -1,0 +1,42 @@
+package tf.monochrome.android.data.scxyt
+
+import android.content.Context
+import androidx.annotation.StringRes
+import tf.monochrome.android.R
+
+/**
+ * What the listener reads when a YouTube or SoundCloud song could not be
+ * played or downloaded: one line per error code, in the app's language. The
+ * server's own `message` is English and goes to the log only.
+ */
+object ScxytMessages {
+
+    @StringRes
+    fun textRes(error: Throwable): Int = when (error) {
+        is ScxytError.SignedOut -> R.string.scxyt_error_signed_out
+        is ScxytError.Blocked -> R.string.scxyt_error_blocked
+        is ScxytError.Unavailable -> R.string.scxyt_error_unavailable
+        is ScxytError.TooLong -> R.string.scxyt_error_too_long
+        is ScxytError.NotFound -> R.string.scxyt_error_not_found
+        is ScxytError.Busy -> R.string.scxyt_error_busy
+        is ScxytError.Timeout -> R.string.scxyt_error_timeout
+        else -> R.string.scxyt_error_failed
+    }
+
+    /** The lines that name the service. */
+    private val NAMES_SERVICE = setOf(
+        R.string.scxyt_error_signed_out,
+        R.string.scxyt_error_blocked,
+        R.string.scxyt_error_not_found,
+        R.string.scxyt_error_failed,
+    )
+
+    /** [error] in words, for the song [mediaId] (`yt:…` or `sc:…`). */
+    fun text(context: Context, error: Throwable, mediaId: String): String {
+        val res = textRes(error)
+        val words = tf.monochrome.android.locale.AppLanguage.wrap(context)
+        if (res !in NAMES_SERVICE) return words.getString(res)
+        val service = ScxytSource.ofId(mediaId) ?: ScxytSource.YOUTUBE
+        return words.getString(res, service.label)
+    }
+}

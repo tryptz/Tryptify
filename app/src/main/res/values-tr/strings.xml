@@ -3391,4 +3391,14 @@
     <string name="whats_new_1951_widget_body">Kapak ve oynat düğmesiyle düz, saydam cam; Küçük, Orta ve Büyük boyutlarda, hepsi yeniden boyutlandırılabilir. Ayarlar › Görünüm › Ana ekran widget’ı; renk, opaklık, kenar, kapak, ilerleme çubuğu, düğme ve yazıyı canlı önizlemeyle ayarlar.</string>
     <string name="whats_new_1951_lyrics_beat_title">Şarkı sözleri kick davulla atıyor</string>
     <string name="whats_new_1951_lyrics_beat_body">Şarkı sözlerinin nabzı, parıltısı ve ışınları artık müzik bağlantıları gibi kick davulu (40–110 Hz) izliyor: yükselen vokal ritmi kaydırmıyor, duraklamadan sonra nabız şişip takılı kalmıyor.</string>
+    <string name="scxyt_note_signed_out">%1$s araması için oturum açın.</string>
+    <string name="scxyt_note_unavailable">%1$s şu anda kullanılamıyor.</string>
+    <string name="scxyt_error_signed_out">%1$s parçalarını çalmak veya indirmek için oturum açın.</string>
+    <string name="scxyt_error_blocked">%1$s şu anda sunucuyu geri çeviriyor. Daha sonra tekrar deneyin.</string>
+    <string name="scxyt_error_unavailable">Bu parça burada çalınamıyor (yaş doğrulaması, bölge kısıtlaması veya yalnızca üyelere özel).</string>
+    <string name="scxyt_error_too_long">Bu parça alınamayacak kadar uzun ya da canlı yayın.</string>
+    <string name="scxyt_error_not_found">Bu parça artık %1$s üzerinde yok ya da gizli.</string>
+    <string name="scxyt_error_busy">Sunucu meşgul. Birazdan tekrar deneyin.</string>
+    <string name="scxyt_error_timeout">Bu parçanın alınması çok uzun sürdü. Tekrar deneyin.</string>
+    <string name="scxyt_error_failed">Bu parça %1$s üzerinden alınamadı.</string>
 </resources>

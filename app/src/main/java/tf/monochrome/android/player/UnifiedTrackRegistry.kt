@@ -41,7 +41,8 @@ import javax.inject.Singleton
  * A song from the listener's own server is never let go. Liked Songs,
  * playlists and search show plain tracks and never put their rows here, and
  * for a server song this is the only record of where it plays from: forgotten,
- * a tap on it went to TIDAL with its hashed id. A local file forgotten is
+ * a tap on it went to TIDAL with its hashed id. The same holds for a YouTube
+ * or SoundCloud song, whose id is a hash too. A local file forgotten is
  * still found, by its tags (StreamResolver's local lookup).
  */
 @Singleton
@@ -71,6 +72,18 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
 
     operator fun get(trackId: Long): UnifiedTrack? = map[trackId]?.track
 
+    // A liked or playlisted YouTube or SoundCloud song keeps only its hashed
+    // id, with FavoriteTrackEntity.source naming the service. Until this run
+    // sees the song itself, that number must not reach TIDAL, whose catalogue
+    // may hold a different song under it.
+    private val scxytHashes = ConcurrentHashMap.newKeySet<Long>()
+
+    fun markScxytHash(trackId: Long) { scxytHashes.add(trackId) }
+
+    /** A YouTube or SoundCloud song known only by its hash: nothing here can play it. */
+    fun isUnresolvedScxyt(trackId: Long): Boolean =
+        trackId in scxytHashes && get(trackId)?.source !is PlaybackSource.Scxyt
+
     fun clear() { map.clear() }
 
     /** How many tracks it holds. */
@@ -91,7 +104,7 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
 
         val outside = ArrayList<Map.Entry<Long, Entry>>()
         for (entry in map.entries) {
-            if (entry.value.queuedAt != now && entry.value.track.source !is PlaybackSource.Subsonic) outside += entry
+            if (entry.value.queuedAt != now && !entry.value.track.source.keptForGood()) outside += entry
         }
         if (outside.size <= KEEP_OUTSIDE_QUEUE) return
 
@@ -102,6 +115,9 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
             if (keys[i] < cutoff) map.remove(outside[i].key, outside[i].value)
         }
     }
+
+    /** A song whose hashed id is the only way back to where it plays from; see the class comment. */
+    private fun PlaybackSource.keptForGood(): Boolean = this is PlaybackSource.Subsonic || this is PlaybackSource.Scxyt
 
     /** Higher is kept first; see the class comment. */
     private fun rank(entry: Entry): Long =

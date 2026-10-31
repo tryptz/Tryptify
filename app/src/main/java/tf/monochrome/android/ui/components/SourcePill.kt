@@ -63,6 +63,11 @@ fun SourceType.brand(): SourceBrand = when (this) {
     SourceType.LIVE_RADIO -> SourceBrand("Live", labelRes = R.string.source_live, light = null, dark = null, icon = Icons.Default.Radio)
     // Navidrome, Gonic, Airsonic… all the same to the listener: their own server.
     SourceType.SUBSONIC -> SourceBrand("My server", labelRes = R.string.source_subsonic, light = null, dark = null, icon = Icons.Default.Dns)
+    // Through the built-in trypt-hifi-scxyt server. The marks are vectors in
+    // the brands' own colours: YouTube's red play button, SoundCloud's
+    // orange cloud simplified to read at pill size.
+    SourceType.YOUTUBE -> SourceBrand("YouTube", Color(0xFFFF0000), Color(0xFFFF5C5C), logo = R.drawable.logo_youtube)
+    SourceType.SOUNDCLOUD -> SourceBrand("SoundCloud", Color(0xFFFF5500), Color(0xFFFF8A4C), logo = R.drawable.logo_soundcloud)
 }
 
 /** The brand colour for the current theme, or the theme's own when the brand has none. */

@@ -3394,4 +3394,14 @@
     <string name="whats_new_1951_widget_body">Flat see-through glass with the cover and a play button, in Small, Medium and Large, each resizable. Settings › Appearance › Home screen widget sets its colour, opacity, edge, cover, progress bar, button and text, with a live preview.</string>
     <string name="whats_new_1951_lyrics_beat_title">The lyrics pump to the kick drum</string>
     <string name="whats_new_1951_lyrics_beat_body">The lyrics\' pump, glow and rays now follow the kick (40–110 Hz), as music links do, so a rising vocal no longer shifts the beat, and after a pause the pump no longer swells and sticks.</string>
+    <string name="scxyt_note_signed_out">Sign in to search %1$s.</string>
+    <string name="scxyt_note_unavailable">%1$s isn’t available right now.</string>
+    <string name="scxyt_error_signed_out">Sign in to play or download songs from %1$s.</string>
+    <string name="scxyt_error_blocked">%1$s is turning the server away right now. Try again later.</string>
+    <string name="scxyt_error_unavailable">This song can’t be played here (age check, region or members only).</string>
+    <string name="scxyt_error_too_long">This song is too long to fetch, or it’s a live stream.</string>
+    <string name="scxyt_error_not_found">This song no longer exists on %1$s, or it’s private.</string>
+    <string name="scxyt_error_busy">The server is busy. Try again in a moment.</string>
+    <string name="scxyt_error_timeout">Fetching this song took too long. Try again.</string>
+    <string name="scxyt_error_failed">Couldn’t fetch this song from %1$s.</string>
 </resources>

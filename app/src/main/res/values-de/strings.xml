@@ -3391,4 +3391,14 @@
     <string name="whats_new_1951_widget_body">Flaches, durchsichtiges Glas mit Cover und Wiedergabeknopf, in Klein, Mittel und Groß, jede Größe veränderbar. Einstellungen › Darstellung › Startbildschirm-Widget stellt Farbe, Deckkraft, Rand, Cover, Fortschrittsbalken, Knopf und Text ein, mit Live-Vorschau.</string>
     <string name="whats_new_1951_lyrics_beat_title">Der Songtext pumpt zur Bassdrum</string>
     <string name="whats_new_1951_lyrics_beat_body">Pumpen, Glühen und Strahlen des Songtexts folgen jetzt der Bassdrum (40–110 Hz), wie die Musik-Kopplungen: Steigender Gesang verschiebt den Beat nicht mehr, und nach einer Pause schwillt das Pumpen nicht mehr an und bleibt hängen.</string>
+    <string name="scxyt_note_signed_out">Melde dich an, um auf %1$s zu suchen.</string>
+    <string name="scxyt_note_unavailable">%1$s ist gerade nicht verfügbar.</string>
+    <string name="scxyt_error_signed_out">Melde dich an, um Titel von %1$s abzuspielen oder herunterzuladen.</string>
+    <string name="scxyt_error_blocked">%1$s weist den Server gerade ab. Versuche es später noch einmal.</string>
+    <string name="scxyt_error_unavailable">Dieser Titel kann hier nicht abgespielt werden (Altersprüfung, Regionssperre oder nur für Mitglieder).</string>
+    <string name="scxyt_error_too_long">Dieser Titel ist zu lang zum Abrufen, oder es ist ein Livestream.</string>
+    <string name="scxyt_error_not_found">Dieser Titel existiert auf %1$s nicht mehr oder ist privat.</string>
+    <string name="scxyt_error_busy">Der Server ist ausgelastet. Versuche es gleich noch einmal.</string>
+    <string name="scxyt_error_timeout">Das Abrufen dieses Titels hat zu lange gedauert. Versuche es noch einmal.</string>
+    <string name="scxyt_error_failed">Dieser Titel konnte nicht von %1$s abgerufen werden.</string>
 </resources>
