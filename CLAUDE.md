@@ -75,6 +75,26 @@ the signer SHA-256 starts `70:96:05:04` with `apksigner verify --print-certs`,
 then zip, split into 29 MB parts, prove the round trip and send every part, as
 AGENTS.md describes. Name the parts after the short commit hash.
 
+## Working habits
+
+Learned the hard way; each one cost a session time.
+
+- **Look before building.** Check what already exists (a grant in the
+  database, a setting, a branch) and whether a plain data change does the job
+  before writing code. Offer the simplest option first.
+- **A guess is a guess.** Say "I think" until a log or a test proves it, and
+  check the evidence before naming a cause.
+- **Long jobs run in the background.** Start builds and installs with
+  `run_in_background` and keep the owner posted; never sit silently waiting on one.
+- **Check what is live before deploying.** Compare the live version with the
+  branch being deployed, not just that the feature exists.
+- **Every commit is tryptz.** `git revert`, `--amend` and `cherry-pick` take
+  the session's own identity unless told otherwise: export `GIT_AUTHOR_NAME`,
+  `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` first, and
+  check `git log --format='%an / %cn'` before pushing.
+- **Short replies.** The shortest message that says what changed, why, and
+  what to do next.
+
 ## Talking to the owner
 
 The owner has ADHD and is learning as they go. Keep replies easy to scan: short
