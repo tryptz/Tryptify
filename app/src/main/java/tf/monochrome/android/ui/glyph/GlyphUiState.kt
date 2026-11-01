@@ -429,6 +429,10 @@ data class GlyphGameplayUi(
     val failedAtMs: Long = 0L,
     /** That fail stopped the run (Immediate): it holds under FAILED, then shows the results. */
     val failStops: Boolean = false,
+    /** When the last note was judged and the song began playing out, wall-clock ms; 0 before. */
+    val outroStartedAtMs: Long = 0L,
+    /** When the stripes began closing over the field on the way to the results, wall-clock ms; 0 before. */
+    val endingAtMs: Long = 0L,
 ) {
     val progress: Float
         get() = if (durationSeconds <= 0f) 0f else (positionSeconds / durationSeconds).coerceIn(0f, 1f)

@@ -1624,6 +1624,8 @@ class GlyphViewModel @Inject constructor(
                 introStartedAtMs = if (intro) System.currentTimeMillis() else 0L,
                 failedAtMs = 0L,
                 failStops = false,
+                outroStartedAtMs = 0L,
+                endingAtMs = 0L,
             ),
             results = null,
         )
@@ -1803,8 +1805,9 @@ class GlyphViewModel @Inject constructor(
                         publish(position, running, judged)
                     }
                     if (running.isFinished && transport.loop == null) {
-                        finish()
-                        return@launch
+                        if (playOut(position)) return@launch
+                        delay(TICK_MILLIS)
+                        continue
                     }
                     // The bar has emptied. The screen shakes; on StepMania's
                     // Immediate the run also stops where it is, holds under
@@ -1825,7 +1828,7 @@ class GlyphViewModel @Inject constructor(
                             failJob = viewModelScope.launch {
                                 delay(FAIL_HOLD_MILLIS)
                                 // Still this run, still on its screen: not left or restarted meanwhile.
-                                if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.failedAtMs == at) finish()
+                                if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.failedAtMs == at) endRun()
                             }
                             return@launch
                         }
@@ -1839,6 +1842,56 @@ class GlyphViewModel @Inject constructor(
     private fun stopTick() {
         tickJob?.cancel()
         tickJob = null
+    }
+
+    /**
+     * After the last note: the song plays on to its end, then [endRun].
+     * Called by the tick; true when the tick should stop. A test play goes
+     * straight back to the editor, and a room's run does not keep the room
+     * waiting on the song's tail.
+     */
+    private fun playOut(position: Float): Boolean {
+        val gameplay = _ui.value.gameplay
+        if (gameplay.endingAtMs > 0L) return true
+        if (_ui.value.editor?.testing == true) {
+            finish()
+            return true
+        }
+        if (_ui.value.inRoomPlay) {
+            endRun()
+            return true
+        }
+        if (gameplay.outroStartedAtMs == 0L) {
+            _ui.value = _ui.value.copy(gameplay = gameplay.copy(outroStartedAtMs = System.currentTimeMillis()))
+        }
+        val duration = transport.durationSeconds
+        if (transport.hasEnded || (duration > 0f && position >= duration - SONG_END_SLACK_SECONDS)) {
+            endRun()
+            return true
+        }
+        return false
+    }
+
+    /**
+     * The way out to the results: the stripes close over the field and the
+     * music fades with them ([GLYPH_END_WIPE_MILLIS]), then [finish].
+     * Restart and Quit cancel it, as they cancel the fail's hold.
+     */
+    private fun endRun() {
+        if (_ui.value.gameplay.endingAtMs > 0L) return
+        val at = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(endingAtMs = at))
+        failJob?.cancel()
+        failJob = viewModelScope.launch {
+            val from = transport.volume
+            for (step in 1..END_FADE_STEPS) {
+                delay(GLYPH_END_WIPE_MILLIS / END_FADE_STEPS)
+                transport.volume = from * (1f - step.toFloat() / END_FADE_STEPS)
+            }
+            delay(END_BLACK_HOLD_MILLIS)
+            // Still this run, still on its screen: not left or restarted meanwhile.
+            if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.endingAtMs == at) finish()
+        }
     }
 
     /**
@@ -1936,6 +1989,13 @@ class GlyphViewModel @Inject constructor(
     private fun pressLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
         if (!_ui.value.gameplay.isPlaying || _ui.value.gameplay.isPaused) return
+        // The song playing out after the last note: a tap skips to the
+        // results, once the steps still landing from the last notes are past.
+        val outro = _ui.value.gameplay.outroStartedAtMs
+        if (outro > 0L) {
+            if (System.currentTimeMillis() - outro >= SKIP_OUTRO_AFTER_MILLIS) endRun()
+            return
+        }
         // A run stopped by a fail is over: a step under FAILED would still be
         // judged at the stopped music, and the results read the engine's count.
         if (_ui.value.gameplay.failStops) return
@@ -1986,6 +2046,8 @@ class GlyphViewModel @Inject constructor(
     }
 
     private fun togglePause() {
+        // On the way to the results: nothing is left to pause.
+        if (_ui.value.gameplay.endingAtMs > 0L) return
         // A failed run has stopped for good: Resume would only start its music
         // again under FAILED.
         if (_ui.value.gameplay.failStops) return
@@ -2058,6 +2120,8 @@ class GlyphViewModel @Inject constructor(
                 introStartedAtMs = 0L,
                 failedAtMs = 0L,
                 failStops = false,
+                outroStartedAtMs = 0L,
+                endingAtMs = 0L,
             ),
         )
         failJob?.cancel()
@@ -3635,6 +3699,14 @@ class GlyphViewModel @Inject constructor(
         /** A failed run's stop: the shake, FAILED landing, and a beat to read it, before the results. */
         const val FAIL_HOLD_MILLIS = 2_200L
 
+        /** Black, held a moment before the results. */
+        const val END_BLACK_HOLD_MILLIS = 150L
+        private const val END_FADE_STEPS = 18
+        /** After the last note, a tap skips the song's tail from this long on. */
+        private const val SKIP_OUTRO_AFTER_MILLIS = 1_000L
+        /** The song counts as over this close to its end: the player's last reading can fall just short. */
+        private const val SONG_END_SLACK_SECONDS = 0.05f
+
         /** Older than this, a touch stamp is not trusted (see touchNanos). */
         const val MAX_TOUCH_AGE_NANOS = 250_000_000L
 
@@ -3692,3 +3764,6 @@ private data class RoomPlan(
     val hash: String,
     val sameChart: Boolean,
 )
+
+/** The stripes closing over the field at a run's end, and the music fading with them. */
+internal const val GLYPH_END_WIPE_MILLIS = 900L

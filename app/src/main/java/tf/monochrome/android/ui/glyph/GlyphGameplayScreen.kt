@@ -49,6 +49,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -386,6 +389,11 @@ fun GlyphGameplayScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
+        // Last, over the HUD too: the run's way out to its results.
+        if (gameplay.endingAtMs > 0L) {
+            StripesOut(reducedMotion = reduced, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -659,6 +667,59 @@ private fun FailedOverlay(fonts: GlyphStepFonts, reducedMotion: Boolean, modifie
 }
 
 private const val VEIL_MILLIS = 450
+
+/**
+ * A run's way out, once the song has played to its end (or a tap skipped
+ * it): black stripes sweep in from alternate sides, each a little after the
+ * one above, over a fade to black, and the music fades with them
+ * ([GLYPH_END_WIPE_MILLIS]). The screen is wholly black when it is
+ * done, and the results cut in from black. Reduced motion is the fade alone.
+ */
+@Composable
+private fun StripesOut(reducedMotion: Boolean, modifier: Modifier = Modifier) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(GLYPH_END_WIPE_MILLIS.toInt(), easing = LinearEasing))
+    }
+    val edge = with(LocalDensity.current) { END_STRIPE_EDGE.toPx() }
+    Canvas(modifier) {
+        val p = progress.value
+        // Under the stripes, so the gaps between them darken too.
+        drawRect(Color.Black, alpha = if (reducedMotion) p else p * p)
+        if (reducedMotion) return@Canvas
+        val band = size.height / END_STRIPES
+        for (i in 0 until END_STRIPES) {
+            val cover = endStripeCover(p, i, END_STRIPES)
+            if (cover <= 0f) continue
+            val width = size.width * cover
+            val fromLeft = i % 2 == 0
+            val left = if (fromLeft) 0f else size.width - width
+            val top = i * band
+            // A hair over the band, so no seam shows between two closed stripes.
+            drawRect(Color.Black, topLeft = Offset(left, top), size = Size(width, band + 1f))
+            // The stripe's leading edge, a light line that fades as it closes.
+            if (cover < 1f) {
+                val x = if (fromLeft) width - edge else size.width - width
+                drawRect(GlyphTheme.Paper.copy(alpha = 0.55f * (1f - cover)), topLeft = Offset(x, top), size = Size(edge, band))
+            }
+        }
+    }
+}
+
+/**
+ * How far stripe [index] of [count] has closed at [progress] (both 0 to 1):
+ * each starts a little after the one above, and every one is shut at 1.
+ */
+internal fun endStripeCover(progress: Float, index: Int, count: Int): Float {
+    val start = if (count <= 1) 0f else index.toFloat() / (count - 1) * END_STRIPE_STAGGER
+    val local = ((progress - start) / (1f - END_STRIPE_STAGGER)).coerceIn(0f, 1f)
+    return if (local >= 1f) 1f else FastOutSlowInEasing.transform(local)
+}
+
+private const val END_STRIPES = 12
+/** The share of the wipe the last stripe waits before it starts. */
+private const val END_STRIPE_STAGGER = 0.35f
+private val END_STRIPE_EDGE = 2.dp
 
 /**
  * The count-in.

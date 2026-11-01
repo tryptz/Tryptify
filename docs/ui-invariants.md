@@ -2344,6 +2344,18 @@ the stopped music, and the results count the engine's judgements. Imm. Continue 
 cancels the hold. Reduced motion keeps all of it still: the intro, roll, pop,
 fall and shake are skipped, and FAILED shows at once.
 
+**A run ends when its song does, through stripes.** After the last note the
+song plays on to its end (`playOut`); from a second after the last note a tap
+skips the rest. Then black stripes sweep in from alternate sides, each a
+little after the one above, over a fade to black, while the music fades
+with them (`GLYPH_END_WIPE_MILLIS`), and the results cut in from black.
+Every stripe is shut when the wipe ends (`GlyphEndStripesTest`): one still
+open would show the field under the results' first frame. A fail on Immediate leaves through the
+same stripes after its hold. A room's run does not wait for the song's tail,
+since the room is waiting on every phone, and an editor test play goes
+straight back to the editor. Pause does nothing during the wipe. Reduced
+motion is the fade alone.
+
 **Motion blur trails a note, it never blurs one.** Graphics › Motion blur,
 off by default, from Off to Cinematic. A note's face is where the player reads
 its timing, so the sharp note is drawn as always and a few faded copies of its

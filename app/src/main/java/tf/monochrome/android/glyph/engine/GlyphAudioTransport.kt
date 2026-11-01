@@ -60,6 +60,16 @@ class GlyphAudioTransport(
 
     val isPlaying: Boolean get() = player.isPlaying
 
+    /** The song has played to its end. */
+    val hasEnded: Boolean get() = player.playbackState == Player.STATE_ENDED
+
+    /** The song's volume, 0 to 1: the run's fade out. Back to 1 on every [prepare] and [play]. */
+    var volume: Float
+        get() = player.volume
+        set(value) {
+            player.volume = value.coerceIn(0f, 1f)
+        }
+
     /** Told when the song starts or stops sounding, on the main thread: for whoever routes the volume keys. */
     var onPlayingChanged: ((Boolean) -> Unit)? = null
 
@@ -80,12 +90,14 @@ class GlyphAudioTransport(
     fun prepare(uri: Uri) {
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
+        player.volume = 1f
         isPrepared = true
         clock.reset()
         onPrepared?.invoke(uri)
     }
 
     fun play() {
+        player.volume = 1f
         player.playWhenReady = true
         clock.sync(player.currentPosition / 1000f, System.nanoTime())
         clock.start(System.nanoTime())

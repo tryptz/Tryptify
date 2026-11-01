@@ -63,6 +63,9 @@
 #### Race your best in Trypt Mania
 - **Player options › Judge › Race your best** (on by default): your best full run of the chart plays beside you as a score, on the board multiplayer rooms use, scored by the same rules as you and ending on the score its results showed. The best run of each difficulty now keeps its ghost, as the latest run's always did. Not in rooms, Training Ground or auto play.
 
+#### A run's end in Trypt Mania
+- **The song plays to its end** after the last note, instead of cutting to the results; a tap skips the rest. Then black stripes sweep across the screen and it fades to black with the music, and the results come in. A fail on Immediate leaves the same way. Multiplayer rooms skip the song's tail; reduced motion is a plain fade.
+
 #### Auto play in Trypt Mania
 - **Player options › Judge › Auto play**: the game plays the run itself, as the options' preview does, with an AUTO tag while it plays. Touches are ignored, and the run is never kept: no score, history, ghost or leaderboard. Off in multiplayer rooms, and off again each time the app starts.
 
