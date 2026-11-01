@@ -99,6 +99,7 @@
 - **Lyrics timed on a chart server.** The TryptMania Parser no longer times lyrics, so the app stops asking, and the Server lyrics setting is gone. Lyrics a server timed before, and those you time in the lyrics editor, stay; a saved server that listed lyrics loads without them.
 
 ### Fixed
+- **The Oxford Compressor no longer distorts bass under a fast release.** Its detector reads a rectified wave that falls to nothing at every zero crossing, so with a release shorter than a bass wave (20:1, 0.1 ms attack, 5 ms release) the gain rose and fell inside every cycle: 13-18 % distortion on 30-100 Hz. It now holds each peak until the next crest is due (the gap between the last two, up to 25 ms), so a steady tone sees a steady gain, while treble and transients keep their quick release (2.3 ms against 2.1 ms after a loud 1 kHz burst).
 - **The Compactor no longer clicks** when a music link moves its Attack, and its lookahead is the attack you set even with short audio blocks; a real change of attack crossfades over 2 ms.
 - **Atmos to headphones keeps up with SOFA changes.** Picking two SOFA files in a row while paused left beds and still objects on the first one.
 - **The home screen widget's Album colour** is the cover's average, not the colour at its centre, and its settings page reads the wallpaper's colours off the main thread.

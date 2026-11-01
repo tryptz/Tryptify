@@ -228,12 +228,91 @@ void inflatorSplitTurnsOnSeamlessly() {
 
 }  // namespace
 
+
+// The settings that distorted: 20:1, threshold -50.3 dB, 0.1 ms attack, 5 ms
+// release. Total harmonic distortion of a steady tone, from its spectrum.
+double compressedTone(double hz, double* grDb) {
+    CompressorProcessor comp;
+    comp.prepare(kRate, 2);
+    comp.params.thresholdDb = -50.3f;
+    comp.params.ratio = 20.0f;
+    comp.params.attackMs = 0.1f;
+    comp.params.releaseMs = 5.0f;
+    comp.params.makeupDb = -3.2f;
+    const int total = kRate, start = kRate / 2;
+    std::vector<float> l(kFrames), r(kFrames), out;
+    float* planes[2] = {l.data(), r.data()};
+    for (int n0 = 0; n0 + kFrames <= total; n0 += kFrames) {
+        for (int i = 0; i < kFrames; i++) l[i] = r[i] = static_cast<float>(0.3 * std::sin(2 * M_PI * hz * (n0 + i) / kRate));
+        comp.process(planes, kFrames);
+        if (n0 >= start) out.insert(out.end(), l.begin(), l.end());
+    }
+    const int len = static_cast<int>(out.size());
+    // Power at the tone and at each harmonic below 20 kHz, Hann-windowed.
+    auto power = [&](double f) {
+        double re = 0, im = 0;
+        for (int i = 0; i < len; i++) {
+            const double w = 0.5 - 0.5 * std::cos(2 * M_PI * i / (len - 1));
+            re += w * out[i] * std::cos(2 * M_PI * f * i / kRate);
+            im -= w * out[i] * std::sin(2 * M_PI * f * i / kRate);
+        }
+        return re * re + im * im;
+    };
+    double harm = 0;
+    for (int k = 2; k * hz < 20000 && k <= 40; k++) harm += power(k * hz);
+    *grDb = comp.params.gainReductionDb.load();
+    return 100 * std::sqrt(harm / power(hz));
+}
+
+void fastReleaseDoesNotReshapeBass() {
+    for (double hz : {30.0, 50.0, 100.0, 1000.0}) {
+        double gr = 0;
+        const double thd = compressedTone(hz, &gr);
+        std::printf("      %4.0f Hz at 20:1, 0.1/5 ms: THD %.2f %%, GR %.1f dB\n", hz, thd, gr);
+        check(thd < 1.0, "a steady tone stays clean under a fast release");
+        check(gr > 30.0, "and is still compressed");
+    }
+}
+
+void fastReleaseStillRecoversFast() {
+    // A loud 1 kHz burst, then quiet: crests come every half millisecond,
+    // so the hold is short and the 5 ms release still lets go quickly.
+    CompressorProcessor comp;
+    comp.prepare(kRate, 1);
+    comp.params.thresholdDb = -50.3f;
+    comp.params.ratio = 20.0f;
+    comp.params.attackMs = 0.1f;
+    comp.params.releaseMs = 5.0f;
+    float sample = 0;
+    float* planes[1] = {&sample};
+    int n = 0;
+    double loudGr = 0;
+    for (; n < kRate / 5; n++) {
+        const float in = static_cast<float>(0.3 * std::sin(2 * M_PI * 1000 * n / kRate));
+        sample = in;
+        comp.process(planes, 1);
+        if (std::fabs(in) > 0.2f) loudGr = -20 * std::log10(std::fabs(sample) / std::fabs(in));
+    }
+    // The meter's own 30 ms smoothing would hide the release; read the gain.
+    int fellAt = -1;
+    for (int i = 0; i < kRate / 5 && fellAt < 0; i++, n++) {
+        const float in = static_cast<float>(0.003 * std::sin(2 * M_PI * 1000 * n / kRate));
+        sample = in;
+        comp.process(planes, 1);
+        if (std::fabs(in) > 0.002f && -20 * std::log10(std::fabs(sample) / std::fabs(in)) < loudGr - 15) fellAt = i;
+    }
+    std::printf("      gain reduction falls 15 dB %.1f ms after a loud 1 kHz burst\n", 1000.0 * fellAt / kRate);
+    check(fellAt >= 0 && fellAt < kRate * 5 / 1000, "a 5 ms release still lets go within 5 ms");
+}
+
 int main() {
     compressorIsLinkedAcrossTheBed();
     inflatorTreatsEveryChannelAlike();
     firFedWithoutOutputIsTheSameFilter();
     inflatorWithoutSplitIsAsBefore();
     inflatorSplitTurnsOnSeamlessly();
+    fastReleaseDoesNotReshapeBass();
+    fastReleaseStillRecoversFast();
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILURES");
     return failures == 0 ? 0 : 1;
 }
