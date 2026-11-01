@@ -272,9 +272,16 @@ its own way.
 **YouTube is extracted on the phone**, with NewPipeExtractor
 (`data/youtube/`; GPL-3.0-or-later, from JitPack). YouTube answers a
 data-centre address with its bot check, which is all the server ever got; a
-phone on a home or mobile network is served. No sign-in. Search is YouTube
-Music's songs, or its music videos where the songs answer nothing (a country
-without YouTube Music); a pasted YouTube link finds that one song. A play or
+phone on a home or mobile network is served. No sign-in. Search asks YouTube
+Music's songs (or its music videos where the songs answer nothing, as in a
+country without YouTube Music) and YouTube's own videos at once, and takes
+from each in turn (`YoutubeMapping.mix`): a song that is only someone's
+upload is in YouTube's videos alone. An upload's title names the artist
+("East Clubbers- To The Moon And Back"), so it is split at its first spaced
+dash and bracketed noise like "(Official Video)" is dropped
+(`titleAndArtistOfVideo`); a "- Topic" channel's title is kept whole. A
+result over 30 minutes is left out. A pasted YouTube link finds that one
+song. A play or
 a download first fetches the whole audio (itag 140, AAC, whenever there is
 one) into `cacheDir/youtube`, in pieces of 1 MiB at most (`ChunkedDownload`:
 googlevideo throttles or refuses open-ended requests), and plays or copies

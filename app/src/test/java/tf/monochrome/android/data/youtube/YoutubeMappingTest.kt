@@ -127,6 +127,70 @@ class YoutubeMappingTest {
         assertNull(YoutubeMapping.toTrack(song().apply { contentAvailability = ContentAvailability.PAID }))
     }
 
+    private fun upload(title: String, channel: String = "rvd107", seconds: Long = 220) =
+        StreamInfoItem(0, "https://www.youtube.com/watch?v=IBO2UWSslVE", title, StreamType.VIDEO_STREAM).apply {
+            uploaderName = channel
+            duration = seconds
+        }
+
+    @Test
+    fun `a fan upload names its artist in the title, not in the channel`() {
+        val track = YoutubeMapping.toTrack(upload("East Clubbers- To The Moon And Back"), plainVideo = true)!!
+        assertEquals("yt:IBO2UWSslVE", track.id)
+        assertEquals("To The Moon And Back", track.title)
+        assertEquals("East Clubbers", track.artist)
+    }
+
+    @Test
+    fun `a plain video's title is split at a spaced dash and loses its upload noise`() {
+        fun read(title: String, channel: String = "SomeChannel") = YoutubeMapping.titleAndArtistOfVideo(title, channel)
+        assertEquals("Never Gonna Give You Up" to "Rick Astley", read("Rick Astley - Never Gonna Give You Up (Official Music Video)"))
+        assertEquals("Song" to "Artist", read("Artist –Song [HQ]"))
+        assertEquals("Song" to "Artist", read("Artist — Song (Lyrics)"))
+        // A hyphen inside a name is not a separator.
+        assertEquals("Run This Town" to "Jay-Z", read("Jay-Z - Run This Town"))
+        // A remix in brackets is the song's, not noise.
+        assertEquals("Song (Club Remix)" to "Artist", read("Artist - Song (Club Remix)"))
+        // No artist in the title: the channel stands in.
+        assertEquals("Just A Title" to "SomeChannel", read("Just A Title (Official Video)"))
+        // A version after the dash: the left side is the title.
+        assertEquals("Song - Live at Wembley" to "SomeChannel", read("Song - Live at Wembley"))
+        assertEquals("Song - 2011 Remaster" to "SomeChannel", read("Song - 2011 Remaster"))
+        // A Topic channel's title is already the song's.
+        assertEquals("Intro - Part 2" to "Band", read("Intro - Part 2", "Band - Topic"))
+    }
+
+    @Test
+    fun `YouTube Music results keep their title whole`() {
+        val track = YoutubeMapping.toTrack(upload("Intro - Part 2", channel = "Band"))!!
+        assertEquals("Intro - Part 2", track.title)
+        assertEquals("Band", track.artist)
+    }
+
+    @Test
+    fun `results longer than the longest song fetched are left out`() {
+        assertNull(YoutubeMapping.toTrack(upload("DJ - 2 Hour Mix", seconds = 2 * 60 * 60), plainVideo = true))
+        assertTrue(YoutubeMapping.toTrack(upload("DJ - Song", seconds = 30 * 60), plainVideo = true) != null)
+        // An unknown length is not a reason to leave one out.
+        assertTrue(YoutubeMapping.toTrack(upload("DJ - Song", seconds = -1), plainVideo = true) != null)
+    }
+
+    private fun track(id: String) = tf.monochrome.android.data.scxyt.ScxytTrack(
+        id = "yt:$id", source = "youtube", title = id, artist = "", duration = 0.0,
+    )
+
+    @Test
+    fun `songs and videos are taken in turn, each once, up to the limit`() {
+        val songs = listOf("s1", "s2", "both", "s3").map(::track)
+        val videos = listOf("both", "v1", "v2").map(::track)
+        assertEquals(
+            listOf("s1", "both", "s2", "v1", "v2", "s3"),
+            YoutubeMapping.mix(songs, videos, 20).map { it.title },
+        )
+        assertEquals(listOf("s1", "both", "s2"), YoutubeMapping.mix(songs, videos, 3).map { it.title })
+        assertEquals(listOf("v1", "v2"), YoutubeMapping.mix(emptyList(), videos.drop(1), 20).map { it.title })
+    }
+
     @Test
     fun `the cover is the largest square, else the largest, and always https`() {
         val video = listOf(

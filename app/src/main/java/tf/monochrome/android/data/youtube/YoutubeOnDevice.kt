@@ -8,6 +8,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runInterruptible
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
@@ -37,7 +39,8 @@ import javax.inject.Singleton
  * YouTube answers a data-centre address with its bot check ("Sign in to
  * confirm you're not a bot"), which is all trypt-hifi-scxyt ever got from
  * it. A phone is on a home or mobile network, which YouTube serves, so
- * everything goes from here: the search (YouTube Music's songs), the player
+ * everything goes from here: the search (YouTube Music's songs and
+ * YouTube's videos), the player
  * answers, and the audio itself. No Tryptify sign-in is involved.
  *
  * A song is fetched whole into the app's cache ([YoutubeAudioCache]) before
@@ -99,31 +102,71 @@ class YoutubeOnDevice @Inject constructor(
     }
 
     /**
-     * YouTube Music's songs for [query], first page, or the one song a
-     * pasted YouTube link names. Another site's link is not searched for as
-     * words.
+     * YouTube Music's songs for [query] mixed with YouTube's own videos,
+     * first page of each, or the one song a pasted YouTube link names.
+     * Another site's link is not searched for as words.
      *
-     * YouTube Music's song catalogue is not offered everywhere: from a
-     * country without YouTube Music every query answers "No results" there
-     * (as one did from a test network), while its music videos still come.
-     * So when the songs give nothing, the music videos stand in.
+     * YouTube Music's catalogue holds only what labels put there; a song
+     * that is only on YouTube as someone's upload (a fan's copy of an old
+     * club track, say) is found only by YouTube's video search, so both are
+     * asked at once and [YoutubeMapping.mix] takes from each in turn.
+     *
+     * The song catalogue is not offered everywhere: from a country without
+     * YouTube Music every query answers "No results" there (as one did from
+     * a test network), while its music videos still come. So when the songs
+     * give nothing, the music videos stand in for them.
+     *
+     * One side failing leaves the other's answer; only when both fail is
+     * the songs' error thrown (YouTube's bot check turns both away alike).
      */
-    override suspend fun search(query: String, source: ScxytSource, limit: Int): List<ScxytTrack> = extract {
+    override suspend fun search(query: String, source: ScxytSource, limit: Int): List<ScxytTrack> {
         val linked = YoutubeMapping.videoIdFromLink(query)
-        when {
-            linked != null -> listOfNotNull(YoutubeMapping.toTrack(streamInfo(linked)))
+        return when {
+            linked != null -> extract { listOfNotNull(YoutubeMapping.toTrack(streamInfo(linked))) }
             YoutubeMapping.isLink(query) -> emptyList()
-            else -> searchMusic(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, limit)
-                .ifEmpty { searchMusic(query, YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS, limit) }
+            else -> searchWords(query, limit)
         }
     }
 
-    private fun searchMusic(query: String, filter: String, limit: Int): List<ScxytTrack> {
+    private suspend fun searchWords(query: String, limit: Int): List<ScxytTrack> = coroutineScope {
+        val songs = async {
+            orError {
+                extract {
+                    searchPage(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS, limit, plainVideo = false)
+                        .ifEmpty { searchPage(query, YoutubeSearchQueryHandlerFactory.MUSIC_VIDEOS, limit, plainVideo = false) }
+                }
+            }
+        }
+        val videos = async {
+            orError { extract { searchPage(query, YoutubeSearchQueryHandlerFactory.VIDEOS, limit, plainVideo = true) } }
+        }
+        val fromSongs = songs.await()
+        val fromVideos = videos.await()
+        if (fromSongs is SearchSide.Failed && fromVideos is SearchSide.Failed) throw fromSongs.error
+        if (fromVideos is SearchSide.Failed) Log.d(TAG, "video search failed: ${fromVideos.error.message}")
+        if (fromSongs is SearchSide.Failed) Log.d(TAG, "song search failed: ${fromSongs.error.message}")
+        YoutubeMapping.mix(fromSongs.tracks, fromVideos.tracks, limit)
+    }
+
+    /** One half of a search: its songs, or why it has none. */
+    private sealed class SearchSide(val tracks: List<ScxytTrack>) {
+        class Found(tracks: List<ScxytTrack>) : SearchSide(tracks)
+        class Failed(val error: ScxytError) : SearchSide(emptyList())
+    }
+
+    private suspend fun orError(block: suspend () -> List<ScxytTrack>): SearchSide =
+        try {
+            SearchSide.Found(block())
+        } catch (e: ScxytError) {
+            SearchSide.Failed(e)
+        }
+
+    private fun searchPage(query: String, filter: String, limit: Int, plainVideo: Boolean): List<ScxytTrack> {
         val search = ServiceList.YouTube.getSearchExtractor(query, listOf(filter), "")
         search.fetchPage()
         return search.initialPage.items
             .filterIsInstance<StreamInfoItem>()
-            .mapNotNull(YoutubeMapping::toTrack)
+            .mapNotNull { YoutubeMapping.toTrack(it, plainVideo) }
             .distinctBy { it.id }
             .take(limit)
     }

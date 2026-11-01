@@ -123,6 +123,54 @@ internal object YoutubeMapping {
     fun artistOf(uploader: String?): String = uploader.orEmpty().trim().removeSuffix(" - Topic").trim()
 
     /**
+     * "Artist - Title" (or "Artist– Title", "Artist —Title"): a dash with a
+     * space on at least one side, so "Jay-Z" stays whole. The first such
+     * dash splits.
+     */
+    private val ARTIST_DASH_TITLE = Regex("""(.+?)(?:\s+[-–—]+\s*|\s*[-–—]+\s+)(.+)""")
+
+    /**
+     * What follows the dash when it is the song's version rather than its
+     * title ("Song - Live at Wembley", "Song - 2011 Remaster"): then the
+     * left side is the title, not the artist.
+     */
+    private val VERSION_AFTER_DASH = Regex(
+        """^(?:\d{4}\s+)?(?:live|remaster(?:ed)?|remix|re-?mix|version|edit|radio edit|extended|acoustic|""" +
+            """instrumental|demo|mono|stereo|official|lyrics?|audio|video|hd|hq)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * A bracket holding nothing but upload noise: "(Official Music Video)",
+     * "[HQ]", "(Lyrics)", "(Visualizer)". A bracket naming a remix, an edit or
+     * a version is the song's and stays.
+     */
+    private val UPLOAD_NOISE = Regex(
+        """\s*[(\[]\s*(?:(?:official|music|video|videoclip|clip|audio|lyrics?|visuali[sz]er|hd|hq|4k|mv|m/v)[\s/]*)+[)\]]""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * A plain YouTube video's title and artist as a song's. An auto-generated
+     * "<artist> - Topic" channel's title is already the song's own, and its
+     * channel the artist. Anyone else's upload usually names both in its
+     * title ("East Clubbers- To The Moon And Back"), with the uploader's
+     * channel name meaning nothing; when the title names no artist, the
+     * channel stands in. Upload noise in brackets is dropped either way.
+     */
+    fun titleAndArtistOfVideo(title: String?, uploader: String?): Pair<String, String> {
+        val channel = artistOf(uploader)
+        val raw = title.orEmpty().trim()
+        if (uploader.orEmpty().trim().endsWith(" - Topic")) return raw to channel
+        val clean = UPLOAD_NOISE.replace(raw, "").trim().ifEmpty { raw }
+        val split = ARTIST_DASH_TITLE.matchEntire(clean) ?: return clean to channel
+        val artist = split.groupValues[1].trim()
+        val song = split.groupValues[2].trim()
+        if (artist.isEmpty() || song.isEmpty() || VERSION_AFTER_DASH.containsMatchIn(song)) return clean to channel
+        return song to artist
+    }
+
+    /**
      * The picture to show: the largest square one (YouTube Music's album
      * art), else the largest of any shape. YouTube Music lists its art at 60
      * and 120 px, too small for the player; its image server draws any size
@@ -147,20 +195,31 @@ internal object YoutubeMapping {
     /**
      * A search result as a song. Null for what cannot be played as one: a
      * live stream, a members-only, paid or upcoming video, or a result whose
-     * address names no video.
+     * address names no video, or one longer than [MAX_DURATION_SECONDS]
+     * (a mix or a whole album, which would be refused at play).
+     *
+     * [plainVideo] is for YouTube's own video search, whose uploads name the
+     * artist in the title ([titleAndArtistOfVideo]); YouTube Music's songs
+     * and music videos come with their title and artist apart already.
      */
-    fun toTrack(item: StreamInfoItem): ScxytTrack? {
+    fun toTrack(item: StreamInfoItem, plainVideo: Boolean = false): ScxytTrack? {
         if (item.streamType == StreamType.LIVE_STREAM || item.streamType == StreamType.AUDIO_LIVE_STREAM) return null
         when (item.contentAvailability) {
             ContentAvailability.MEMBERSHIP, ContentAvailability.PAID, ContentAvailability.UPCOMING -> return null
             else -> Unit
         }
+        if (item.duration > MAX_DURATION_SECONDS) return null
         val videoId = videoIdFromLink(item.url.orEmpty()) ?: return null
+        val (title, artist) = if (plainVideo) {
+            titleAndArtistOfVideo(item.name, item.uploaderName)
+        } else {
+            item.name.orEmpty().trim() to artistOf(item.uploaderName)
+        }
         return ScxytTrack(
             id = mediaId(videoId),
             source = ScxytSource.YOUTUBE.wire,
-            title = item.name.orEmpty().trim(),
-            artist = artistOf(item.uploaderName),
+            title = title,
+            artist = artist,
             artistUrl = item.uploaderUrl,
             duration = item.duration.coerceAtLeast(0).toDouble(),
             cover = coverOf(item.thumbnails),
@@ -168,19 +227,41 @@ internal object YoutubeMapping {
         )
     }
 
-    /** The song a pasted link opened, from its full extraction. */
+    /**
+     * The song a pasted link opened, from its full extraction. A link may
+     * name anyone's upload, so its title is read as a plain video's.
+     */
     fun toTrack(info: StreamInfo): ScxytTrack? {
         val videoId = info.id?.takeIf { VIDEO_ID.matches(it) } ?: videoIdFromLink(info.url.orEmpty()) ?: return null
+        val (title, artist) = titleAndArtistOfVideo(info.name, info.uploaderName)
         return ScxytTrack(
             id = mediaId(videoId),
             source = ScxytSource.YOUTUBE.wire,
-            title = info.name.orEmpty().trim(),
-            artist = artistOf(info.uploaderName),
+            title = title,
+            artist = artist,
             artistUrl = info.uploaderUrl,
             duration = info.duration.coerceAtLeast(0).toDouble(),
             cover = coverOf(info.thumbnails),
             url = "https://music.youtube.com/watch?v=$videoId",
         )
+    }
+
+    /**
+     * YouTube Music's [songs] and YouTube's plain [videos] as one list of at
+     * most [limit]: taken in turn, a song first, so neither crowds the other
+     * out, and a video already among the songs only once. The search screen
+     * ranks the list against the query afterwards.
+     */
+    fun mix(songs: List<ScxytTrack>, videos: List<ScxytTrack>, limit: Int): List<ScxytTrack> {
+        val seen = HashSet<String>()
+        val out = ArrayList<ScxytTrack>(limit)
+        val a = songs.iterator()
+        val b = videos.iterator()
+        while (out.size < limit && (a.hasNext() || b.hasNext())) {
+            if (a.hasNext()) a.next().let { if (seen.add(it.id)) out += it }
+            if (out.size < limit && b.hasNext()) b.next().let { if (seen.add(it.id)) out += it }
+        }
+        return out
     }
 
     /**
