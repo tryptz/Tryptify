@@ -178,7 +178,7 @@ class StemMelodyChartTest {
         }
         // Medium reads eighths: it picks up the tune's off-beat eighths.
         assertTrue(gained(StepManiaDifficulty.MEDIUM).any { it % 4 == 2 })
-        // Hard and Challenge already have every eighth; they pick up its sixteenths.
+        // Hard and Challenge pick up its sixteenths too.
         assertTrue(gained(StepManiaDifficulty.HARD).any { it % 2 == 1 })
         assertTrue(gained(StepManiaDifficulty.CHALLENGE).any { it % 2 == 1 })
         // Beginner stays on the beat whatever the tune does.

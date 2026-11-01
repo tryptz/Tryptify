@@ -63,6 +63,10 @@
 #### Race your best in Trypt Mania
 - **Player options › Judge › Race your best** (on by default): your best full run of the chart plays beside you as a score, on the board multiplayer rooms use, scored by the same rules as you and ending on the score its results showed. The best run of each difficulty now keeps its ghost, as the latest run's always did. Not in rooms, Training Ground or auto play.
 
+#### More varied generated charts
+- **Arrows follow how hard the song is going.** Each measure is read for how full it is against the rest of the song, so a verse is sparser than its chorus and a breakdown thins out, instead of one rate from start to end; on Hard and Challenge the fullest parts burst into sixteenths. Jumps land on more strong beats where the song is fullest, any pair but the arrow just stepped on, and Medium gets one on a big downbeat.
+- **Patterns change.** The arrows the tune doesn't lead walk stairs, rolls, zigzags, trills, triangles and candles, mirrored or flipped, and may change pattern every measure, instead of one eight-step loop. Still no jacks and nothing under a held arrow, and a song always charts the same. Charts already made keep their arrows; generate one again to get the new ones.
+
 #### A run's end in Trypt Mania
 - **The song plays to its end** after the last note, instead of cutting to the results; a tap skips the rest. Then black stripes sweep across the screen and it fades to black with the music, and the results come in. A fail on Immediate leaves the same way. Multiplayer rooms skip the song's tail; reduced motion is a plain fade.
 
