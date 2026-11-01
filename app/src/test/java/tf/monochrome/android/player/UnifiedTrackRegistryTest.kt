@@ -178,6 +178,14 @@ class UnifiedTrackRegistryTest {
     }
 
     @Test
+    fun `an id in the YouTube and SoundCloud range is never sent to TIDAL, marked or not`() {
+        val id = tf.monochrome.android.domain.model.scxytLegacyId("yt:dQw4w9WgXcQ")
+        // Synced from another device and not yet read as a like: nothing marked it.
+        assertTrue(registry.isUnresolvedScxyt(id))
+        assertFalse(registry.isUnresolvedScxyt(123_456_789L))
+    }
+
+    @Test
     fun `a small registry is left as it is`() {
         queue.setQueue(put(1L..10L), 0)
         queue.setQueue(put(11L..20L), 0)

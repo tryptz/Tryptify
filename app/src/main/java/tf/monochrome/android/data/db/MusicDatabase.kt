@@ -75,7 +75,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 22,
+    version = 23,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -466,6 +466,30 @@ abstract class MusicDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgTrackPeak` REAL")
                 db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgAlbumPeak` REAL")
             }
+        }
+
+        /**
+         * YouTube and SoundCloud songs' ids move from their plain hash into
+         * their own range (SCXYT_ID_BASE), out of TIDAL's: a synced row with
+         * the plain hash played another song on 1.9.5 and older. The new id is
+         * the base plus the old hash's low 32 bits, so a row saved by an
+         * earlier 1.9.51 build moves without knowing its song. Only rows that
+         * name their service are moved; anything already in the range stays.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(scxytIdMove("favorite_tracks", "id"))
+                db.execSQL(scxytIdMove("playlist_tracks", "trackId"))
+                db.execSQL(scxytIdMove("play_events", "trackId"))
+            }
+        }
+
+        /** The UPDATE that moves [table]'s YouTube and SoundCloud [column] into SCXYT_ID_BASE's range. */
+        internal fun scxytIdMove(table: String, column: String): String {
+            val base = tf.monochrome.android.domain.model.SCXYT_ID_BASE
+            return "UPDATE `$table` SET `$column` = $base + (`$column` & 4294967295) " +
+                "WHERE `source` IN ('youtube', 'soundcloud') AND " +
+                "(`$column` < $base OR `$column` >= ${base + (1L shl 32)})"
         }
     }
 }

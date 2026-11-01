@@ -425,9 +425,22 @@ class ScxytTest {
 
     @Test
     fun `a song keeps one queue id, so likes, history and downloads find it`() {
-        assertEquals("yt:dQw4w9WgXcQ".hashCode().toLong(), song.legacyId)
+        assertEquals(tf.monochrome.android.domain.model.scxytLegacyId("yt:dQw4w9WgXcQ"), song.legacyId)
         assertEquals(song.legacyId, song.copy(title = "Renamed").legacyId)
         assertEquals(song.legacyId, song.toLegacyTrack().id)
+    }
+
+    @Test
+    fun `its id is out of every catalogue's range, so an old build never plays another song by it`() {
+        // 1.9.5 plays a synced like's id from TIDAL whatever its source says.
+        assertTrue(tf.monochrome.android.domain.model.isScxytLegacyId(song.legacyId))
+        assertTrue(song.legacyId > Int.MAX_VALUE.toLong() * 2)
+        // Still exact as a JavaScript number, for the website's player.
+        assertTrue(song.legacyId < (1L shl 53))
+        // The old plain hash maps onto it, as MIGRATION_22_23 moves saved rows.
+        val oldHash = "yt:dQw4w9WgXcQ".hashCode().toLong()
+        assertEquals(song.legacyId, tf.monochrome.android.domain.model.SCXYT_ID_BASE + (oldHash and 0xFFFF_FFFFL))
+        assertFalse(tf.monochrome.android.domain.model.isScxytLegacyId(oldHash))
     }
 
     @Test

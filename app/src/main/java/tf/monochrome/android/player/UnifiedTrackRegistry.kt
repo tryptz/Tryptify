@@ -103,7 +103,8 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
 
     /** A YouTube or SoundCloud song known only by its hash: nothing here can play it. */
     fun isUnresolvedScxyt(trackId: Long): Boolean =
-        trackId in scxytHashes && get(trackId)?.source !is PlaybackSource.Scxyt
+        (trackId in scxytHashes || tf.monochrome.android.domain.model.isScxytLegacyId(trackId)) &&
+            get(trackId)?.source !is PlaybackSource.Scxyt
 
     fun clear() { map.clear() }
 

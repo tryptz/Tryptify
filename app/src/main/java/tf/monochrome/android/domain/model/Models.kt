@@ -481,6 +481,23 @@ sealed class PlaybackSource {
     data class Scxyt(val mediaId: String) : PlaybackSource()
 }
 
+/**
+ * Where a YouTube or SoundCloud song's legacy id lives: from 2^52, above every
+ * catalogue's ids (TIDAL, Qobuz, Deezer and Apple stay far below 2^32) and
+ * still under 2^53, so the website's JavaScript reads it exactly. A liked or
+ * playlisted one syncs by this id, and 1.9.5 and older play a synced row's id
+ * from TIDAL whatever its `source` says: in this range TIDAL has nothing, so
+ * such a build skips the song instead of playing another one under the same
+ * number, as the plain hash did.
+ */
+const val SCXYT_ID_BASE: Long = 1L shl 52
+
+/** A YouTube or SoundCloud song's legacy id, from its unified [id]. */
+fun scxytLegacyId(id: String): Long = SCXYT_ID_BASE + (id.hashCode().toLong() and 0xFFFF_FFFFL)
+
+/** [id] is in the YouTube and SoundCloud range: never one to send to TIDAL. */
+fun isScxytLegacyId(id: Long): Boolean = id >= SCXYT_ID_BASE && id < SCXYT_ID_BASE + (1L shl 32)
+
 @Serializable
 data class CollectionDirectLink(
     val url: String,
@@ -657,6 +674,8 @@ data class UnifiedTrack(
             // Same reasoning as Apple: the downloader and the legacy resolver
             // key on this id, and must see the real Deezer id to route it.
             is PlaybackSource.DeezerPreview -> s.deezerId
+            // Out of every catalogue's range; see SCXYT_ID_BASE.
+            is PlaybackSource.Scxyt -> scxytLegacyId(id)
             else -> id.hashCode().toLong()
         }
 

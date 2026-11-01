@@ -1431,10 +1431,13 @@ brand's mark, and its colour as the accent when chosen. Their pills
 (`SourceType.YOUTUBE`, `SOUNDCLOUD`) are the brands' own vector marks
 (`logo_youtube`, `logo_soundcloud`) in the brands' colours, untinted, like
 Qobuz's and Deezer's. Both chips are always in the row, signed in or not, as
-My server is with no server. The pill's label on a light theme is a shade
-darker than the brand (`#CC0000`, `#B83D00`), as Qobuz's is: the brands'
-`#FF0000` and `#FF5500` read at 4.0:1 and 3.2:1 on white, under AA for an
-11sp label. The marks keep the true colours.
+My server is with no server. The pill's label on a light theme is darker
+than the brand (`#B00000`, `#9C3300`), as Qobuz's is. Measure it where it
+sits: on the pill's own 14% tint of its colour, over the darkest light
+surface (Warm paper's `#F0EAE0`), not on white. There these read 4.75:1 and
+4.9:1, AA for an 11sp label; the brands' own colours read about 2.5:1, and
+the shade before these (`#CC0000`, `#B83D00`), checked only against white,
+3.8:1. The marks keep the true colours.
 
 **Off is quiet.** YouTube is searched from the phone itself
 (NewPipeExtractor) and takes no sign-in, so signed out its songs appear like

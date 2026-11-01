@@ -14,7 +14,7 @@ import tf.monochrome.android.data.cloud.CloudRepository
 
 /**
  * Charting on Tryptify's own server, paid by the minute of music
- * (docs/plans/trypt-mania-paid-charting.md): the listener's minutes, what
+ * (tryptify-servers/docs/plans/trypt-mania-paid-charting.md): the listener's minutes, what
  * they have charted with them, and the packs on sale, as Tryptify Cloud
  * holds them (tryptify-servers/cloud/src/charting.ts). The server is what
  * takes a minute; this is the phone's copy of its answer.
