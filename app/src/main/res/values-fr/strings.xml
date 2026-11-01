@@ -2925,6 +2925,11 @@
     <string name="tm_mp_pick_for_room">Choisir pour le salon</string>
     <string name="tm_mp_room_title">Salon</string>
     <string name="tm_mp_quit_to_room">Retour au salon</string>
+    <string name="tm_opt_auto">Jeu automatique</string>
+    <string name="tm_opt_auto_off">Vous jouez le morceau</string>
+    <string name="tm_opt_auto_on">Le jeu joue à votre place. Non enregistré dans vos scores, et désactivé dans les salons</string>
+    <string name="tm_auto_tag">AUTO</string>
+    <string name="tm_results_auto">Jeu automatique : cette partie n’est pas enregistrée dans vos scores.</string>
     <string name="crt_reset_slider">Réinitialiser %1$s</string>
     <string name="crt_presets">Préréglages</string>
     <string name="crt_presets_hint">Touchez-en un pour l’utiliser. Enregistrer garde le rendu actuel ; Exporter et Importer le partagent sous forme de fichier.</string>

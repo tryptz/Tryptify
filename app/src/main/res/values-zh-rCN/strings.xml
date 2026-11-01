@@ -2789,6 +2789,11 @@
     <string name="tm_mp_pick_for_room">为房间选择</string>
     <string name="tm_mp_room_title">房间</string>
     <string name="tm_mp_quit_to_room">返回房间</string>
+    <string name="tm_opt_auto">自动演奏</string>
+    <string name="tm_opt_auto_off">由你来玩这首歌</string>
+    <string name="tm_opt_auto_on">游戏替你演奏。不计入你的成绩，在房间中关闭</string>
+    <string name="tm_auto_tag">自动</string>
+    <string name="tm_results_auto">自动演奏：此次游玩不计入你的成绩。</string>
     <string name="crt_reset_slider">重置 %1$s</string>
     <string name="crt_presets">预设</string>
     <string name="crt_presets_hint">轻点即可使用。“保存”保留当前效果；“导出”和“导入”以文件形式分享。</string>

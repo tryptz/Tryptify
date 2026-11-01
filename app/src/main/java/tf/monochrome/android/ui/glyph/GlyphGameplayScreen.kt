@@ -420,6 +420,10 @@ private fun GameplayHud(
             // The scroll mode is the first thing a player checks when a chart
             // reads wrong, so it stays on screen rather than two taps away.
             Text(text = gameplay.modifiers.scrollMode.label, style = fonts.label, color = GlyphTheme.Muted)
+            // Said while it plays: otherwise a perfect run looks like the player's.
+            if (gameplay.modifiers.autoplay && !state.inRoomPlay) {
+                Text(text = stringResource(R.string.tm_auto_tag), style = fonts.label, color = GlyphTheme.Warning)
+            }
             // Built when the modifiers change, not on every readout of the run.
             val summary = remember(gameplay.modifiers) { modifierSummary(gameplay.modifiers) }
             if (summary.isNotEmpty()) {

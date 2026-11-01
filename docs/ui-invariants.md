@@ -2696,15 +2696,31 @@ setting makes gutters between lanes, never at the screen's edge. Scroll speed
 already measures the field's height, so a note's time on screen does not
 change with the width. Previews keep their own layout.
 
+**Auto play is said, and never kept.** Player options › Judge › Auto play
+lets `GlyphAutoplay`, the previews' own hands, play the run: touches are
+ignored, the HUD carries an AUTO tag beside the scroll mode, and the results
+say the run is not saved, because nothing is (no score, history, ghost or
+leaderboard). It is off in a multiplayer room, where it would post a perfect
+score to everyone, and it is never saved between sessions, so it cannot stay
+on unnoticed. When the engine is set up again (a run's start, a training loop
+armed) auto play joins it where it is (`GlyphAutoplay.syncTo`), never resets
+it, which would widen a loop's window to the whole song.
+
 **Tap to sync is heard, never seen.** The pad in Settings › Sync does not
 flash, pulse or count with the click track: a player who follows a flash
 measures the screen, and the offset it sets is for the sound. The track plays
 through the game's own transport and each tap goes through `touchNanos` and
 `positionAt`, as a lane press does, so the reading is exactly what a run would
 judge — never a separate timer. At 140 BPM a beat (428 ms) is shorter than
-Bluetooth's lateness can be, so a tap is never matched to its nearest click:
-the first tap anchors on the first click and the rest follow the running
-median (`GlyphTapSync`), which reads up to 500 ms.
+Bluetooth's lateness can be, so a tap is never matched to its nearest click.
+Every tap counts from the first, and the beat's phase is read from all of
+them together; the first tap only says which click they answer (a reaction to
+the first click, up to 450 ms after it, or a tap in time on a later one), and
+the reading leaves it out (`GlyphTapSync`), up to 500 ms. Anchoring everything
+on the first tap is what this prevents: a first tap is a reaction, and one a
+normal 260 ms late threw the second tap away, so the count stood still for the
+first few taps, and could read a whole click off. "Could be one click off" is
+said only when the taps fit two clicks.
 
 **The offset is the output's, and the whole app's.** Trypt Mania's audio
 offset is the Bluetooth sync of the output playing now (`OutputSync`, kept per

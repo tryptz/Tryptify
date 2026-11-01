@@ -202,6 +202,17 @@ class GlyphViewModel @Inject constructor(
     private var armedLoop: GlyphLoopSegment? = null
     private var engineArmed = false
 
+    /** Auto play's hands, and whether they know where the engine was last set up. */
+    private val autoplayer = tf.monochrome.android.glyph.engine.GlyphAutoplay()
+    private var autoplayInSync = false
+
+    /**
+     * Auto play is on for this run: chosen in the options, and not in a
+     * multiplayer room, where it would hand everyone a perfect score.
+     */
+    private val autoplaying: Boolean
+        get() = _ui.value.gameplay.modifiers.autoplay && !_ui.value.inRoomPlay
+
     /**
      * Swap in a new engine and free the old one. The native engine holds
      * memory outside the heap, so dropping the reference is not enough; a
@@ -213,6 +224,7 @@ class GlyphViewModel @Inject constructor(
         engine = next
         engineArmed = false
         armedLoop = null
+        autoplayInSync = false
         previous?.close()
     }
 
@@ -235,6 +247,8 @@ class GlyphViewModel @Inject constructor(
         }
         armedLoop = loop
         engineArmed = true
+        // The engine was set up afresh: auto play picks up from here.
+        autoplayInSync = false
     }
 
     /** A run's sounds from the imported theme and announcer in use; silent with neither. */
@@ -669,6 +683,7 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetDark -> updateModifiers { it.copy(dark = event.dark) }
             is GlyphEvent.SetMini -> updateModifiers { it.copy(mini = event.mini.coerceIn(0f, MAX_MINI)) }
             is GlyphEvent.SetFailType -> updateModifiers { it.copy(failType = event.failType) }
+            is GlyphEvent.SetAutoplay -> updateModifiers { it.copy(autoplay = event.on) }
             is GlyphEvent.SetPlayerName -> setPlayerName(event.name)
             is GlyphEvent.SetGraphics -> updateModifiers { it.copy(graphics = event.graphics) }
 
@@ -1697,11 +1712,21 @@ class GlyphViewModel @Inject constructor(
                     armEngineWindow(position)
                     // Judged at what the player hears, the offset behind
                     // what the player is putting out.
-                    running.advanceTo(position - audioOffsetSeconds)
+                    val judgedAt = position - audioOffsetSeconds
                     // Drained exactly once. Draining again inside publish would
                     // find an empty list and the judgement wordmark would never
-                    // appear, so the events are passed along instead.
-                    val judged = running.drainEvents()
+                    // appear, so the events are passed along instead. Auto
+                    // play presses every note on its time and drains them.
+                    val judged = if (autoplaying) {
+                        if (!autoplayInSync) {
+                            autoplayer.syncTo(running, judgedAt)
+                            autoplayInSync = true
+                        }
+                        autoplayer.advance(running, judgedAt)
+                    } else {
+                        running.advanceTo(judgedAt)
+                        running.drainEvents()
+                    }
                     for (event in judged) {
                         // A tail completing is not a new hit and should not
                         // re-fire the explosion its head already produced.
@@ -1885,6 +1910,8 @@ class GlyphViewModel @Inject constructor(
         // A run stopped by a fail is over: a step under FAILED would still be
         // judged at the stopped music, and the results read the engine's count.
         if (_ui.value.gameplay.failStops) return
+        // Auto play has the lanes: a touch would steal a note from it.
+        if (autoplaying) return
         running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
 
@@ -1892,6 +1919,7 @@ class GlyphViewModel @Inject constructor(
         val running = engine ?: return
         // Nor is a hold let go then: it would be judged dropped after the end.
         if (_ui.value.gameplay.failStops) return
+        if (autoplaying) return
         running.release(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
 
@@ -2904,6 +2932,8 @@ class GlyphViewModel @Inject constructor(
         val modifiers = _ui.value.gameplay.modifiers
         val loop = transport.loop
         val keeper = stepScore
+        // An auto play run is shown and never kept, as StepMania's AutoPlay.
+        val auto = autoplaying
 
         val previousBest = bestOf(attempts.attempts(song.chartId), difficulty)
         val attempt = GlyphAttempt(
@@ -2943,7 +2973,7 @@ class GlyphViewModel @Inject constructor(
         }
         // A room's run of another phone's chart is not a run of this phone's:
         // it goes to the room and is not kept against the local scores.
-        if (!_ui.value.inRoomPlay || roomPlan?.sameChart == true) attempts.save(attempt)
+        if (!auto && (!_ui.value.inRoomPlay || roomPlan?.sameChart == true)) attempts.save(attempt)
         // Read once after the save, for the table and every difficulty's best.
         val history = attempts.attempts(song.chartId)
         val machine = attempts.highScoresIn(history, difficulty)
@@ -2956,8 +2986,9 @@ class GlyphViewModel @Inject constructor(
                 previousBest = previousBest,
                 sections = buildSections(running),
                 machineScores = machine,
+                auto = auto,
             ),
-            training = _ui.value.training.copy(hasGhost = true),
+            training = if (auto) _ui.value.training else _ui.value.training.copy(hasGhost = true),
             bestGrades = bestGradesIn(history),
         )
         announceResult(keeper?.grade)

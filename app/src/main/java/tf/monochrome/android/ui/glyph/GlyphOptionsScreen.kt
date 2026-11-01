@@ -529,6 +529,24 @@ private fun JudgeOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
             textStyle = MaterialTheme.typography.labelMedium,
         )
     }
+    Column {
+        // StepMania's AutoPlay: the field above already shows what it does.
+        val autoLabel = stringResource(R.string.tm_opt_auto)
+        GlyphControlHeader(
+            autoLabel,
+            stringResource(if (modifiers.autoplay) R.string.tm_opt_auto_on else R.string.tm_opt_auto_off),
+        )
+        val off = stringResource(R.string.state_off)
+        val on = stringResource(R.string.state_on)
+        GlyphSegmented(
+            options = listOf(false, true),
+            selected = modifiers.autoplay,
+            label = { if (it) on else off },
+            onSelect = { onEvent(GlyphEvent.SetAutoplay(it)) },
+            description = autoLabel,
+            textStyle = MaterialTheme.typography.labelMedium,
+        )
+    }
 }
 
 private val PREVIEW_HEIGHT = 220.dp

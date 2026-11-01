@@ -92,12 +92,24 @@ fun GlyphResultsScreen(
     Column(modifier = modifier.fillMaxSize().background(scheme.background)) {
         TopAppBar(
             title = {
-                Text(
-                    text = attempt.songTitle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { heading() },
-                )
+                androidx.compose.foundation.layout.Column {
+                    Text(
+                        text = attempt.songTitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    // A run auto play made is shown, never kept: say so, or
+                    // its perfect score reads as the player's own.
+                    if (results.auto) {
+                        Text(
+                            text = stringResource(R.string.tm_results_auto),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = scheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
             },
             navigationIcon = {
                 IconButton(onClick = { onEvent(GlyphEvent.BackToHome) }) {

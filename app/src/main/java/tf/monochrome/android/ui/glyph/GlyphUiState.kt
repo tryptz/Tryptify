@@ -475,6 +475,14 @@ data class GlyphModifiers(
     val graphics: GlyphGraphics = GlyphGraphics(),
     /** The playfield's artwork. Looks only, so not in [altersScoring]. */
     val skin: tf.monochrome.android.glyph.asset.GlyphSkin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT,
+    /**
+     * StepMania's AutoPlay: the game plays the chart itself, through
+     * [tf.monochrome.android.glyph.engine.GlyphAutoplay], and the player's
+     * touches are ignored. Its runs are never kept (no score, history, ghost
+     * or leaderboard), it is off in a multiplayer room, and it is not saved
+     * between sessions, so it never stays on unnoticed.
+     */
+    val autoplay: Boolean = false,
 ) {
     val mirror: Boolean get() = turn == GlyphTurn.MIRROR
     val shuffle: Boolean get() = turn == GlyphTurn.SHUFFLE
@@ -518,6 +526,8 @@ data class GlyphResultsUi(
     /** Accuracy per song section, in order, for the graph. */
     val sections: List<GlyphSectionResult> = emptyList(),
     val selectedSection: Int? = null,
+    /** Played by auto play: shown, never kept. */
+    val auto: Boolean = false,
 )
 
 /**

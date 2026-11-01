@@ -2857,6 +2857,11 @@
     <string name="tm_mp_pick_for_room">Für den Raum wählen</string>
     <string name="tm_mp_room_title">Raum</string>
     <string name="tm_mp_quit_to_room">Zurück in den Raum</string>
+    <string name="tm_opt_auto">Auto-Play</string>
+    <string name="tm_opt_auto_off">Du spielst den Song</string>
+    <string name="tm_opt_auto_on">Das Spiel spielt für dich. Wird nicht in deinen Punkten gespeichert und ist in Räumen aus</string>
+    <string name="tm_auto_tag">AUTO</string>
+    <string name="tm_results_auto">Auto-Play: Dieser Lauf wird nicht in deinen Punkten gespeichert.</string>
     <string name="crt_reset_slider">%1$s zurücksetzen</string>
     <string name="crt_presets">Voreinstellungen</string>
     <string name="crt_presets_hint">Tippe eine an, um sie zu nutzen. Speichern behält den aktuellen Look; Exportieren und Importieren geben ihn als Datei weiter.</string>

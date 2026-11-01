@@ -162,6 +162,8 @@ sealed interface GlyphEvent {
     data class SetDark(val dark: Boolean) : GlyphEvent
     data class SetMini(val mini: Float) : GlyphEvent
     data class SetFailType(val failType: tf.monochrome.android.glyph.engine.GlyphFailType) : GlyphEvent
+    /** Auto play on or off for the next run (never saved between sessions). */
+    data class SetAutoplay(val on: Boolean) : GlyphEvent
     data class SetPlayerName(val name: String) : GlyphEvent
     data class SetPreviews(val on: Boolean) : GlyphEvent
     data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent

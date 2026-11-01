@@ -2857,6 +2857,11 @@
     <string name="tm_mp_pick_for_room">Oda için seç</string>
     <string name="tm_mp_room_title">Oda</string>
     <string name="tm_mp_quit_to_room">Odaya dön</string>
+    <string name="tm_opt_auto">Otomatik oynatma</string>
+    <string name="tm_opt_auto_off">Şarkıyı siz oynarsınız</string>
+    <string name="tm_opt_auto_on">Oyun sizin yerinize oynar. Skorlarınıza kaydedilmez ve odalarda kapalıdır</string>
+    <string name="tm_auto_tag">OTOMATİK</string>
+    <string name="tm_results_auto">Otomatik oynatma: bu oyun skorlarınıza kaydedilmez.</string>
     <string name="crt_reset_slider">%1$s sıfırla</string>
     <string name="crt_presets">Hazır ayarlar</string>
     <string name="crt_presets_hint">Kullanmak için birine dokun. Kaydet ekrandaki görünümü saklar; Dışa aktar ve İçe aktar onu dosya olarak paylaşır.</string>

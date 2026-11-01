@@ -60,6 +60,9 @@
 - **The game plays through the app's DSP engine**: the mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and the parametric EQ, on the DAC and on the phone's output alike, following your settings as you change them. ReplayGain measures a game song as it plays, since its file carries no tags.
 - **Trypt Mania › Settings › Audio** switches AutoEQ, the Oxford Inflator and ReplayGain: the app's own settings, which the player follows too. Turning the Inflator on turns the DSP engine on with it, without which the Oxford stages are silent.
 
+#### Auto play in Trypt Mania
+- **Player options › Judge › Auto play**: the game plays the run itself, as the options' preview does, with an AUTO tag while it plays. Touches are ignored, and the run is never kept: no score, history, ghost or leaderboard. Off in multiplayer rooms, and off again each time the app starts.
+
 #### Motion blur
 - **Notes can leave a short trail, and the lyrics blur as they glide.** Trypt Mania › Graphics › Motion blur and Player Visuals Studio › 3D letter wave › Motion blur, each with a quality slider from Off to Cinematic, off by default. The note stays sharp; nothing extra is drawn while nothing moves fast, and a dense chart gets coarser trails rather than a slower frame. A personal setting a theme never changes or shares (Android 12 and up).
 
@@ -99,6 +102,7 @@
 - **Lyrics timed on a chart server.** The TryptMania Parser no longer times lyrics, so the app stops asking, and the Server lyrics setting is gone. Lyrics a server timed before, and those you time in the lyrics editor, stay; a saved server that listed lyrics loads without them.
 
 ### Fixed
+- **Tap to sync counts every tap, and reads the right click.** It anchored everything on the first tap, which is a reaction to the first click and comes a normal 220-350 ms late: the second tap was thrown away as a repeat, the count stood still for the first few taps, and a slow first reaction could read a whole click off (150 ms headphones as 570 ms, wired ones as 432 ms). The beat is now read from every tap together, the first tap only says which click they answer, and "could be one click off" shows only when the taps fit two.
 - **The Oxford Compressor no longer distorts bass under a fast release.** Its detector reads a rectified wave that falls to nothing at every zero crossing, so with a release shorter than a bass wave (20:1, 0.1 ms attack, 5 ms release) the gain rose and fell inside every cycle: 13-18 % distortion on 30-100 Hz. It now holds each peak until the next crest is due (the gap between the last two, up to 25 ms), so a steady tone sees a steady gain, while treble and transients keep their quick release (2.3 ms against 2.1 ms after a loud 1 kHz burst).
 - **The Compactor no longer clicks** when a music link moves its Attack, and its lookahead is the attack you set even with short audio blocks; a real change of attack crossfades over 2 ms.
 - **Atmos to headphones keeps up with SOFA changes.** Picking two SOFA files in a row while paused left beds and still objects on the first one.

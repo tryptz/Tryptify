@@ -2789,6 +2789,11 @@
     <string name="tm_mp_pick_for_room">ルーム用に選ぶ</string>
     <string name="tm_mp_room_title">ルーム</string>
     <string name="tm_mp_quit_to_room">ルームに戻る</string>
+    <string name="tm_opt_auto">オートプレイ</string>
+    <string name="tm_opt_auto_off">あなたが曲をプレイします</string>
+    <string name="tm_opt_auto_on">ゲームが代わりにプレイします。スコアには保存されず、ルームではオフです</string>
+    <string name="tm_auto_tag">オート</string>
+    <string name="tm_results_auto">オートプレイ：このプレイはスコアに保存されません。</string>
     <string name="crt_reset_slider">%1$s をリセット</string>
     <string name="crt_presets">プリセット</string>
     <string name="crt_presets_hint">タップで適用します。「保存」で今の見た目を残し、「書き出し」と「読み込み」でファイルとして受け渡せます。</string>
