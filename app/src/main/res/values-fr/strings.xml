@@ -2930,6 +2930,11 @@
     <string name="tm_opt_auto_on">Le jeu joue à votre place. Non enregistré dans vos scores, et désactivé dans les salons</string>
     <string name="tm_auto_tag">AUTO</string>
     <string name="tm_results_auto">Jeu automatique : cette partie n’est pas enregistrée dans vos scores.</string>
+    <string name="tm_opt_race">Battre votre record</string>
+    <string name="tm_opt_race_on">Votre meilleure partie sur ce chart joue à côté de vous en score, sur le tableau des salons</string>
+    <string name="tm_opt_race_off">Vous seul</string>
+    <string name="tm_race_you">Vous</string>
+    <string name="tm_race_best">Votre record</string>
     <string name="crt_reset_slider">Réinitialiser %1$s</string>
     <string name="crt_presets">Préréglages</string>
     <string name="crt_presets_hint">Touchez-en un pour l’utiliser. Enregistrer garde le rendu actuel ; Exporter et Importer le partagent sous forme de fichier.</string>

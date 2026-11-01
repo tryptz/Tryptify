@@ -2862,6 +2862,11 @@
     <string name="tm_opt_auto_on">Das Spiel spielt für dich. Wird nicht in deinen Punkten gespeichert und ist in Räumen aus</string>
     <string name="tm_auto_tag">AUTO</string>
     <string name="tm_results_auto">Auto-Play: Dieser Lauf wird nicht in deinen Punkten gespeichert.</string>
+    <string name="tm_opt_race">Gegen deine Bestleistung</string>
+    <string name="tm_opt_race_on">Dein bester Lauf auf diesem Chart spielt als Punktestand neben dir, auf der Tafel der Räume</string>
+    <string name="tm_opt_race_off">Nur du</string>
+    <string name="tm_race_you">Du</string>
+    <string name="tm_race_best">Deine Bestleistung</string>
     <string name="crt_reset_slider">%1$s zurücksetzen</string>
     <string name="crt_presets">Voreinstellungen</string>
     <string name="crt_presets_hint">Tippe eine an, um sie zu nutzen. Speichern behält den aktuellen Look; Exportieren und Importieren geben ihn als Datei weiter.</string>

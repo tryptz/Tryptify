@@ -344,6 +344,29 @@ fun GlyphGameplayScreen(
                             .padding(start = GlyphTheme.Grid)
                             .graphicsLayer { alpha = intro.value },
                     )
+                } else {
+                    // Racing your best: the room's board with two cards, you
+                    // and your best run as it stood at this point of the song.
+                    val race = gameplay.race
+                    if (race != null) {
+                        val you = state.playerName.ifBlank { stringResource(R.string.tm_race_you) }
+                        val bestName = stringResource(R.string.tm_race_best)
+                        val mine = gameplay.score.score.toLong()
+                        val ahead = mine >= race.score
+                        RoomLeaderboard(
+                            rows = listOf(
+                                RoomBoardRow("me", you, if (ahead) 1 else 2, mine, gameplay.score.combo, gameplay.failStops, isMe = true),
+                                RoomBoardRow("best", bestName, if (ahead) 2 else 1, race.score.toLong(), race.combo, failed = false, isMe = false),
+                            ).sortedBy { it.rank },
+                            fonts = fonts,
+                            reducedMotion = reduced,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                                .padding(start = GlyphTheme.Grid)
+                                .graphicsLayer { alpha = intro.value },
+                        )
+                    }
                 }
             }
 

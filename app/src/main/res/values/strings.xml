@@ -2864,6 +2864,11 @@
     <string name="tm_opt_auto_on">The game plays it for you. Not saved to your scores, and off in rooms</string>
     <string name="tm_auto_tag">AUTO</string>
     <string name="tm_results_auto">Auto play: this run isn\'t saved to your scores.</string>
+    <string name="tm_opt_race">Race your best</string>
+    <string name="tm_opt_race_on">Your best run on this chart plays beside you as a score, on the board rooms use</string>
+    <string name="tm_opt_race_off">Just you</string>
+    <string name="tm_race_you">You</string>
+    <string name="tm_race_best">Your best</string>
     <string name="crt_reset_slider">Reset %1$s</string>
     <string name="crt_presets">Presets</string>
     <string name="crt_presets_hint">Tap one to use it. Save keeps the look on screen; Export and Import pass it on as a file.</string>

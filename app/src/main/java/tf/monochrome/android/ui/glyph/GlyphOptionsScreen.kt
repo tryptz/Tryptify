@@ -547,6 +547,24 @@ private fun JudgeOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
             textStyle = MaterialTheme.typography.labelMedium,
         )
     }
+    Column {
+        // Your best run beside you, on the board rooms use.
+        val raceLabel = stringResource(R.string.tm_opt_race)
+        GlyphControlHeader(
+            raceLabel,
+            stringResource(if (modifiers.raceBest) R.string.tm_opt_race_on else R.string.tm_opt_race_off),
+        )
+        val off = stringResource(R.string.state_off)
+        val on = stringResource(R.string.state_on)
+        GlyphSegmented(
+            options = listOf(false, true),
+            selected = modifiers.raceBest,
+            label = { if (it) on else off },
+            onSelect = { onEvent(GlyphEvent.SetRaceBest(it)) },
+            description = raceLabel,
+            textStyle = MaterialTheme.typography.labelMedium,
+        )
+    }
 }
 
 private val PREVIEW_HEIGHT = 220.dp

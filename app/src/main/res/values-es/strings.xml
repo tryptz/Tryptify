@@ -2930,6 +2930,11 @@
     <string name="tm_opt_auto_on">El juego lo toca por ti. No se guarda en tus puntuaciones y se desactiva en las salas</string>
     <string name="tm_auto_tag">AUTO</string>
     <string name="tm_results_auto">Juego automático: esta partida no se guarda en tus puntuaciones.</string>
+    <string name="tm_opt_race">Supera tu mejor marca</string>
+    <string name="tm_opt_race_on">Tu mejor partida en esta coreografía juega a tu lado como puntuación, en el marcador de las salas</string>
+    <string name="tm_opt_race_off">Solo tú</string>
+    <string name="tm_race_you">Tú</string>
+    <string name="tm_race_best">Tu mejor marca</string>
     <string name="crt_reset_slider">Restablecer %1$s</string>
     <string name="crt_presets">Ajustes predefinidos</string>
     <string name="crt_presets_hint">Toca uno para usarlo. Guardar conserva el aspecto actual; Exportar e Importar lo comparten como archivo.</string>

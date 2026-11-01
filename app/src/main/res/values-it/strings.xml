@@ -2930,6 +2930,11 @@
     <string name="tm_opt_auto_on">Il gioco suona al posto tuo. Non viene salvato nei tuoi punteggi ed è disattivato nelle stanze</string>
     <string name="tm_auto_tag">AUTO</string>
     <string name="tm_results_auto">Gioco automatico: questa partita non viene salvata nei tuoi punteggi.</string>
+    <string name="tm_opt_race">Sfida il tuo record</string>
+    <string name="tm_opt_race_on">La tua migliore partita su questo chart gioca accanto a te come punteggio, sulla classifica delle stanze</string>
+    <string name="tm_opt_race_off">Solo tu</string>
+    <string name="tm_race_you">Tu</string>
+    <string name="tm_race_best">Il tuo record</string>
     <string name="crt_reset_slider">Ripristina %1$s</string>
     <string name="crt_presets">Preset</string>
     <string name="crt_presets_hint">Toccane uno per usarlo. Salva conserva il look sullo schermo; Esporta e Importa lo passano come file.</string>

@@ -60,6 +60,9 @@
 - **The game plays through the app's DSP engine**: the mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and the parametric EQ, on the DAC and on the phone's output alike, following your settings as you change them. ReplayGain measures a game song as it plays, since its file carries no tags.
 - **Trypt Mania › Settings › Audio** switches AutoEQ, the Oxford Inflator and ReplayGain: the app's own settings, which the player follows too. Turning the Inflator on turns the DSP engine on with it, without which the Oxford stages are silent.
 
+#### Race your best in Trypt Mania
+- **Player options › Judge › Race your best** (on by default): your best full run of the chart plays beside you as a score, on the board multiplayer rooms use, scored by the same rules as you and ending on the score its results showed. The best run of each difficulty now keeps its ghost, as the latest run's always did. Not in rooms, Training Ground or auto play.
+
 #### Auto play in Trypt Mania
 - **Player options › Judge › Auto play**: the game plays the run itself, as the options' preview does, with an AUTO tag while it plays. Touches are ignored, and the run is never kept: no score, history, ghost or leaderboard. Off in multiplayer rooms, and off again each time the app starts.
 

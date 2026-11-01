@@ -84,7 +84,9 @@ class GlyphAttemptStoreTest {
     fun onlyTheGhostThatCanBePlayedIsKept() = runBlocking {
         store.save(run("a", at = 1L, ghost = ghost(1)))
         store.save(run("b", at = 2L, ghost = ghost(2)))
-        store.save(run("c", at = 3L, ghost = ghost(3)))
+        // The latest is the best too: the one run both the latest ghost and
+        // the race want, so one ghost on disk.
+        store.save(run("c", at = 3L, ghost = ghost(3), percent = 0.9f))
         val history = store.attempts("chart")
         assertEquals(3, history.size)
         assertEquals("one ghost on disk", 1, storedGhosts())
@@ -107,7 +109,7 @@ class GlyphAttemptStoreTest {
     fun aFileFromBeforeKeepsAllItsGhostsUntilItsNextSave() = runBlocking {
         // As the store wrote them before: every run with its ghost.
         dir.mkdirs()
-        val old = listOf(run("a", at = 1L, ghost = ghost(1)), run("b", at = 2L, ghost = ghost(2)))
+        val old = listOf(run("a", at = 1L, ghost = ghost(1)), run("b", at = 2L, ghost = ghost(2), percent = 0.9f))
         val name = "${"chart".hashCode().toUInt().toString(16)}.json"
         File(dir, name).writeText(json.encodeToString(old))
 
@@ -139,7 +141,8 @@ class GlyphAttemptStoreTest {
     fun theGhostKeptIsTheOneAReadFindsFirst() {
         // Two runs at the same moment: a read sorts by time and keeps their
         // order, so the first written is the one it finds.
-        val first = run("first", at = 5L, ghost = ghost(1))
+        // The latest is also the best here, so it is the only ghost kept.
+        val first = run("first", at = 5L, ghost = ghost(1), percent = 0.9f)
         val second = run("second", at = 5L, ghost = ghost(2))
         val older = run("older", at = 1L, ghost = ghost(3))
         val kept = withOneGhost(listOf(first, second, older))
@@ -149,5 +152,18 @@ class GlyphAttemptStoreTest {
         assertEquals(kept.map { it.copy(ghost = null) }, listOf(first, second, older).map { it.copy(ghost = null) })
         assertNotNull(latestGhostOf(kept.sortedByDescending { it.playedAtEpochMs }))
         assertTrue(withOneGhost(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun eachDifficultysBestKeepsItsGhostForTheRace() {
+        val latest = run("latest", at = 9L, ghost = ghost(1), percent = 0.4f)
+        val best = run("best", at = 2L, ghost = ghost(2), percent = 0.95f)
+        val other = run("other", at = 1L, ghost = ghost(3), percent = 0.5f)
+        val easyBest = run("easy", at = 3L, ghost = ghost(4), percent = 0.7f, difficulty = StepManiaDifficulty.EASY)
+        val kept = withOneGhost(listOf(latest, best, other, easyBest)).associateBy { it.id }
+        assertNotNull("the latest, for Training Ground", kept.getValue("latest").ghost)
+        assertNotNull("the hard best, to race", kept.getValue("best").ghost)
+        assertNotNull("the easy best, to race", kept.getValue("easy").ghost)
+        assertNull("nothing else", kept.getValue("other").ghost)
     }
 }

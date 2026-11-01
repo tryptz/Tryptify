@@ -405,6 +405,8 @@ data class GlyphGameplayUi(
     val measure: Int = 0,
     val sectionLabel: String = "",
     val score: GlyphScoreSnapshot = GlyphScoreSnapshot(),
+    /** Your best run's score and combo as it stood at this point of the song; null with no race. */
+    val race: GlyphRaceUi? = null,
     val lastJudgement: GlyphJudgement? = null,
     val lastJudgementAtMs: Long = 0L,
     val heldLanes: Set<GlyphLane> = emptySet(),
@@ -483,6 +485,12 @@ data class GlyphModifiers(
      * between sessions, so it never stays on unnoticed.
      */
     val autoplay: Boolean = false,
+    /**
+     * Race your best: this chart's best full run plays beside you as a
+     * score, on the multiplayer board ([tf.monochrome.android.glyph.engine.GlyphGhostRace]).
+     * Kept between sessions. Not in rooms, Training Ground or auto play.
+     */
+    val raceBest: Boolean = true,
 ) {
     val mirror: Boolean get() = turn == GlyphTurn.MIRROR
     val shuffle: Boolean get() = turn == GlyphTurn.SHUFFLE
@@ -491,6 +499,9 @@ data class GlyphModifiers(
     val altersScoring: Boolean
         get() = speed != 1f || timingWindowScale != 1f
 }
+
+/** The best run raced against, where it stands now. */
+data class GlyphRaceUi(val score: Int = 0, val combo: Int = 0)
 
 /** Training Ground's own state. */
 data class GlyphTrainingUi(

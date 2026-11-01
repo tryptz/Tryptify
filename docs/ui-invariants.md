@@ -2706,6 +2706,16 @@ on unnoticed. When the engine is set up again (a run's start, a training loop
 armed) auto play joins it where it is (`GlyphAutoplay.syncTo`), never resets
 it, which would widen a loop's window to the whole song.
 
+**Racing your best is the room's board, with two cards.** Player options ›
+Judge › Race your best (on by default, kept between sessions) puts the
+multiplayer board (`RoomLeaderboard`) on a solo run: you, and this chart's
+best full run of the difficulty as it stood at this point of the song. That
+run's ghost is replayed through the same `GlyphScore` a run is scored by
+(`GlyphGhostRace`), so the two count alike, and it ends on the score its
+results showed. Only a scored run of the whole song races: never in a room,
+Training Ground, auto play or an editor test. The store keeps the ghost of
+each difficulty's best as well as the latest (`withOneGhost`).
+
 **Tap to sync is heard, never seen.** The pad in Settings › Sync does not
 flash, pulse or count with the click track: a player who follows a flash
 measures the screen, and the offset it sets is for the sound. The track plays

@@ -213,6 +213,30 @@ class GlyphViewModel @Inject constructor(
     private val autoplaying: Boolean
         get() = _ui.value.gameplay.modifiers.autoplay && !_ui.value.inRoomPlay
 
+    /** The best run raced against this run, once its record is read; null without one. */
+    private var race: tf.monochrome.android.glyph.engine.GlyphGhostRace? = null
+    private var raceJob: Job? = null
+
+    /**
+     * Set up the race against this chart's best full run on [difficulty]:
+     * a scored run of the whole song only, never in a room, in Training
+     * Ground, under auto play or in an editor test, and only with the
+     * option on and a best run that kept its ghost.
+     */
+    private fun armRace(chartId: String, difficulty: StepManiaDifficulty, totalJudgements: Int, wholeSong: Boolean) {
+        raceJob?.cancel()
+        race = null
+        val ui = _ui.value
+        if (!wholeSong || ui.inRoomPlay || autoplaying || ui.editor?.testing == true || !ui.gameplay.modifiers.raceBest) return
+        raceJob = viewModelScope.launch {
+            val best = bestOf(attempts.attempts(chartId), difficulty)
+                ?.takeIf { it.segmentStartSeconds == null && !it.failed } ?: return@launch
+            val ghost = best.ghost?.takeIf { it.isConsistent && it.size > 0 } ?: return@launch
+            race = tf.monochrome.android.glyph.engine.GlyphGhostRace(ghost, totalJudgements, best.score)
+            _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(race = GlyphRaceUi()))
+        }
+    }
+
     /**
      * Swap in a new engine and free the old one. The native engine holds
      * memory outside the heap, so dropping the reference is not enough; a
@@ -684,6 +708,7 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetMini -> updateModifiers { it.copy(mini = event.mini.coerceIn(0f, MAX_MINI)) }
             is GlyphEvent.SetFailType -> updateModifiers { it.copy(failType = event.failType) }
             is GlyphEvent.SetAutoplay -> updateModifiers { it.copy(autoplay = event.on) }
+            is GlyphEvent.SetRaceBest -> updateModifiers { it.copy(raceBest = event.on) }
             is GlyphEvent.SetPlayerName -> setPlayerName(event.name)
             is GlyphEvent.SetGraphics -> updateModifiers { it.copy(graphics = event.graphics) }
 
@@ -1559,6 +1584,7 @@ class GlyphViewModel @Inject constructor(
         }
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
+        _ui.value.selectedDifficulty?.let { armRace(song.chartId, it, chart.judgementCount, wholeSong = !training && fromSeconds == null) }
 
         transport.prepare(song.audioUri)
         transport.setSpeed(
@@ -1727,6 +1753,8 @@ class GlyphViewModel @Inject constructor(
                         running.advanceTo(judgedAt)
                         running.drainEvents()
                     }
+                    // The best run, at the same point of the song.
+                    race?.advanceTo(judgedAt)
                     for (event in judged) {
                         // A tail completing is not a new hit and should not
                         // re-fire the explosion its head already produced.
@@ -1884,6 +1912,7 @@ class GlyphViewModel @Inject constructor(
                 measure = measure,
                 sectionLabel = "Measure ${measure + 1}",
                 score = snapshot,
+                race = race?.let { GlyphRaceUi(it.score, it.combo) },
                 lastJudgement = latest?.judgement ?: previous.lastJudgement,
                 lastJudgementAtMs = if (latest != null) {
                     System.currentTimeMillis()
@@ -2002,6 +2031,12 @@ class GlyphViewModel @Inject constructor(
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
         val testFrom = testFromSeconds.takeIf { _ui.value.editor?.testing == true }
+        // The best run starts again with this one.
+        val song = _ui.value.selectedSong
+        val difficulty = _ui.value.selectedDifficulty
+        if (song != null && difficulty != null) {
+            armRace(song.chartId, difficulty, chart.judgementCount, wholeSong = _ui.value.screen != GlyphScreen.TRAINING && testFrom == null)
+        }
         val from = transport.loop?.startSeconds ?: testFrom ?: 0f
         introJob?.cancel()
         armEngineWindow(from)
@@ -2173,6 +2208,7 @@ class GlyphViewModel @Inject constructor(
             mini = prefs.getFloat(PREF_MINI, 0f).coerceIn(0f, MAX_MINI),
             failType = GlyphFailType.fromId(prefs.getString(PREF_FAIL, null)),
             metronome = prefs.getBoolean(PREF_METRONOME, false),
+            raceBest = prefs.getBoolean(PREF_RACE_BEST, true),
             timingWindowScale = prefs.getFloat(PREF_JUDGE, 1f),
             landscapeFieldWidth = prefs.getFloat(PREF_LANDSCAPE_FIELD, DEFAULT_LANDSCAPE_FIELD)
                 .coerceIn(MIN_LANDSCAPE_FIELD, 1f),
@@ -2224,6 +2260,7 @@ class GlyphViewModel @Inject constructor(
             .putFloat(PREF_MINI, modifiers.mini)
             .putString(PREF_FAIL, modifiers.failType.id)
             .putBoolean(PREF_METRONOME, modifiers.metronome)
+            .putBoolean(PREF_RACE_BEST, modifiers.raceBest)
             .putFloat(PREF_JUDGE, modifiers.timingWindowScale)
             .putFloat(PREF_LANDSCAPE_FIELD, modifiers.landscapeFieldWidth)
             .putString(PREF_SKIN, modifiers.skin.id)
@@ -3539,6 +3576,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_MINI = "mini"
         const val PREF_FAIL = "fail"
         const val PREF_METRONOME = "metronome"
+        const val PREF_RACE_BEST = "race_best"
         const val PREF_JUDGE = "judge"
         const val PREF_LANDSCAPE_FIELD = "landscape_field"
         const val PREF_CHART_MODE = "chart_mode"

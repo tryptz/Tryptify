@@ -255,14 +255,21 @@ internal fun bestOf(history: List<GlyphAttempt>, difficulty: StepManiaDifficulty
 
 /**
  * [runs] with a ghost left only on the run [latestGhostOf] would pick once
- * they are read back. Nothing else plays a stored ghost, and a ghost is most
+ * they are read back, and on each difficulty's best ([bestOf]), which a run
+ * races against. Nothing else plays a stored ghost, and a ghost is most
  * of a record's size, so sixty of them made every file several times larger
  * than its scores, and every read of it, the stats' included, parsed them.
  * The pick is made in the order a read returns, newest first with ties in
  * file order, so it is the one the read finds.
  */
 internal fun withOneGhost(runs: List<GlyphAttempt>): List<GlyphAttempt> {
-    val keep = runs.sortedByDescending { it.playedAtEpochMs }
-        .firstOrNull { attempt -> attempt.ghost?.let { it.isConsistent && it.size > 0 } == true }
-    return runs.map { if (it === keep || it.ghost == null) it else it.copy(ghost = null) }
+    fun playable(attempt: GlyphAttempt) = attempt.ghost?.let { it.isConsistent && it.size > 0 } == true
+    val keep = ArrayList<GlyphAttempt>()
+    runs.sortedByDescending { it.playedAtEpochMs }.firstOrNull(::playable)?.let { keep += it }
+    // And each difficulty's best, which a run races against (GlyphGhostRace):
+    // one more ghost a difficulty at most.
+    for (difficulty in runs.map { it.difficulty }.distinct()) {
+        bestOf(runs, difficulty)?.takeIf(::playable)?.let { keep += it }
+    }
+    return runs.map { run -> if (keep.any { kept -> kept === run } || run.ghost == null) run else run.copy(ghost = null) }
 }
