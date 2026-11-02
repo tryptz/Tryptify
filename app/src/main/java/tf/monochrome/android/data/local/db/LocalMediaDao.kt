@@ -247,6 +247,19 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE filePath = :path LIMIT 1")
     suspend fun findByPath(path: String): LocalTrackEntity?
 
+    // The listener's own tag corrections (Edit info), by file path.
+    @Query("SELECT * FROM local_track_edits")
+    suspend fun getAllTrackEdits(): List<LocalTrackEditEntity>
+
+    @Query("SELECT * FROM local_track_edits WHERE filePath = :path LIMIT 1")
+    suspend fun getTrackEdit(path: String): LocalTrackEditEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTrackEdit(edit: LocalTrackEditEntity)
+
+    @Query("DELETE FROM local_track_edits WHERE filePath = :path")
+    suspend fun deleteTrackEdit(path: String)
+
     @Query("SELECT * FROM local_tracks WHERE musicbrainzTrack = :mbId LIMIT 1")
     suspend fun findByMusicBrainzId(mbId: String): LocalTrackEntity?
 

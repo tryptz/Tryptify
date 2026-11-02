@@ -195,7 +195,9 @@ slide and Back by hand, and that is the cheaper half of the trade.
 (a row's ⋮ from every list; a long-press where a row has no preview) draws in the nav host's overlay slot
 at `Alignment.BottomCenter`, where the sheet was, so it blurs the list it was opened
 from. Its Track info turns the same pane into the song's tags and Back returns to
-the actions. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
+the actions; Edit info, for a song with a file, turns it into fields for its
+tags the same way (`TrackEditPane`, `imePadding` so the fields stay above the
+keyboard), and closes the menu once saved. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
 above; outside the nav host it falls back to a plain dialog, never to nothing.
 
 **An overlay pane animates in its own layer, and a bottom one clears the bar.**
@@ -206,8 +208,8 @@ Its transitions start hidden (`MutableTransitionState(false)`); given
 `visible = true` on its first composition `AnimatedVisibility` would just appear,
 and the first menu after launch would pop in. A pane at `Alignment.BottomCenter`
 sits `bottomClearance` (the nav host's `chromeHeightNow`) above the bottom edge,
-on top of the tab bar rather than over its buttons. In the song menu, Track info
-and the actions turn as pages (`AnimatedContent`, the pane's height following),
+on top of the tab bar rather than over its buttons. In the song menu, Track info,
+Edit info and the actions turn as pages (`AnimatedContent`, the pane's height following),
 not a cut.
 
 With low-performance mode these panes keep their fallback: "Disable

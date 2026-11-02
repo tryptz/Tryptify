@@ -2943,6 +2943,17 @@
     <string name="settings_rescan_library_now">今すぐライブラリを再スキャン</string>
     <string name="settings_hide_unmatched">一致しなかった曲を隠す</string>
     <string name="action_find_album_art">アルバムアートを探す</string>
+    <string name="action_edit_info">情報を編集</string>
+    <string name="edit_info_album_artist">アルバムアーティスト</string>
+    <string name="edit_info_genre">ジャンル</string>
+    <string name="edit_info_note">Tryptify に保存され、ファイルは変更されません。Last.fm には次にこの曲を再生したときから送られます。</string>
+    <string name="edit_info_album_artist_help">アルバムのクレジット先（レーベルのコンピなど）。曲は曲自体のアーティスト名で Scrobble されます。</string>
+    <string name="edit_info_in_file">ファイル内：%1$s</string>
+    <string name="edit_info_not_in_file">ファイルにはありません</string>
+    <string name="edit_info_reset">ファイルのタグに戻す</string>
+    <string name="edit_info_saved">情報を保存しました</string>
+    <string name="edit_info_failed">情報を保存できませんでした</string>
+    <string name="edit_info_not_in_library">編集できるのはライブラリ内の曲だけです。</string>
     <string name="art_looking">アルバムアートを探しています…</string>
     <string name="art_found_one">アルバムアートが見つかりました</string>
     <string name="art_none_one">この曲に確かな一致がないため、カバーは追加されませんでした。</string>

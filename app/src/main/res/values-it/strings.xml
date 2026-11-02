@@ -3085,6 +3085,17 @@
     <string name="settings_rescan_library_now">Riscansiona la libreria ora</string>
     <string name="settings_hide_unmatched">Nascondi brani senza corrispondenza</string>
     <string name="action_find_album_art">Trova copertina</string>
+    <string name="action_edit_info">Modifica info</string>
+    <string name="edit_info_album_artist">Artista dell\'album</string>
+    <string name="edit_info_genre">Genere</string>
+    <string name="edit_info_note">Salvato in Tryptify, il file non viene modificato. Last.fm lo riceve dal prossimo ascolto del brano.</string>
+    <string name="edit_info_album_artist_help">A chi è attribuito l\'album, come la compilation di un\'etichetta. I brani vengono registrati con il loro artista.</string>
+    <string name="edit_info_in_file">Nel file: %1$s</string>
+    <string name="edit_info_not_in_file">Non presente nel file</string>
+    <string name="edit_info_reset">Usa i tag del file</string>
+    <string name="edit_info_saved">Info salvate</string>
+    <string name="edit_info_failed">Impossibile salvare le info</string>
+    <string name="edit_info_not_in_library">Si possono modificare solo i brani della tua libreria.</string>
     <string name="art_looking">Ricerca della copertina…</string>
     <string name="art_found_one">Copertina trovata</string>
     <string name="art_none_one">Nessuna corrispondenza sicura per questo brano, quindi non è stata aggiunta alcuna copertina.</string>

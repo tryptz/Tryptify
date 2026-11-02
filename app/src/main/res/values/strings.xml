@@ -3016,6 +3016,17 @@
     <string name="settings_rescan_library_now">Rescan library now</string>
     <string name="settings_hide_unmatched">Hide songs with no match</string>
     <string name="action_find_album_art">Find album art</string>
+    <string name="action_edit_info">Edit info</string>
+    <string name="edit_info_album_artist">Album artist</string>
+    <string name="edit_info_genre">Genre</string>
+    <string name="edit_info_note">Kept in Tryptify, the file isn\'t changed. Last.fm gets it from the song\'s next play.</string>
+    <string name="edit_info_album_artist_help">Who the album is credited to, such as a label\'s compilation. Songs are scrobbled under their own artist.</string>
+    <string name="edit_info_in_file">In the file: %1$s</string>
+    <string name="edit_info_not_in_file">Not in the file</string>
+    <string name="edit_info_reset">Use the file\'s tags</string>
+    <string name="edit_info_saved">Info saved</string>
+    <string name="edit_info_failed">Couldn\'t save the info</string>
+    <string name="edit_info_not_in_library">Only songs in your library can be edited.</string>
     <string name="art_looking">Looking for album art…</string>
     <string name="art_found_one">Album art found</string>
     <string name="art_none_one">No sure match for this song, so no cover was added.</string>

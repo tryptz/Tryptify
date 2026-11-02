@@ -3085,6 +3085,17 @@
     <string name="settings_rescan_library_now">Réanalyser la bibliothèque</string>
     <string name="settings_hide_unmatched">Masquer les titres sans correspondance</string>
     <string name="action_find_album_art">Trouver la pochette</string>
+    <string name="action_edit_info">Modifier les infos</string>
+    <string name="edit_info_album_artist">Artiste de l\'album</string>
+    <string name="edit_info_genre">Genre</string>
+    <string name="edit_info_note">Gardé dans Tryptify, le fichier n\'est pas modifié. Last.fm le reçoit dès la prochaine lecture du titre.</string>
+    <string name="edit_info_album_artist_help">À qui l\'album est attribué, comme la compilation d\'un label. Les titres sont scrobblés sous leur propre artiste.</string>
+    <string name="edit_info_in_file">Dans le fichier : %1$s</string>
+    <string name="edit_info_not_in_file">Absent du fichier</string>
+    <string name="edit_info_reset">Reprendre les tags du fichier</string>
+    <string name="edit_info_saved">Infos enregistrées</string>
+    <string name="edit_info_failed">Impossible d\'enregistrer les infos</string>
+    <string name="edit_info_not_in_library">Seuls les titres de votre bibliothèque peuvent être modifiés.</string>
     <string name="art_looking">Recherche de la pochette…</string>
     <string name="art_found_one">Pochette trouvée</string>
     <string name="art_none_one">Aucune correspondance sûre pour ce titre : aucune pochette ajoutée.</string>

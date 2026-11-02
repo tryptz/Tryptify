@@ -2943,6 +2943,17 @@
     <string name="settings_rescan_library_now">立即重新扫描音乐库</string>
     <string name="settings_hide_unmatched">隐藏没有匹配的歌曲</string>
     <string name="action_find_album_art">查找专辑封面</string>
+    <string name="action_edit_info">编辑信息</string>
+    <string name="edit_info_album_artist">专辑艺人</string>
+    <string name="edit_info_genre">流派</string>
+    <string name="edit_info_note">保存在 Tryptify 中，不会修改文件。Last.fm 会从这首歌下次播放时开始使用。</string>
+    <string name="edit_info_album_artist_help">专辑署名的对象，例如厂牌的合辑。歌曲以其自己的艺人名义记录到 Last.fm。</string>
+    <string name="edit_info_in_file">文件中：%1$s</string>
+    <string name="edit_info_not_in_file">文件中没有</string>
+    <string name="edit_info_reset">使用文件的标签</string>
+    <string name="edit_info_saved">信息已保存</string>
+    <string name="edit_info_failed">无法保存信息</string>
+    <string name="edit_info_not_in_library">只能编辑资料库中的歌曲。</string>
     <string name="art_looking">正在查找专辑封面…</string>
     <string name="art_found_one">已找到专辑封面</string>
     <string name="art_none_one">这首歌曲没有可靠的匹配，因此未添加封面。</string>

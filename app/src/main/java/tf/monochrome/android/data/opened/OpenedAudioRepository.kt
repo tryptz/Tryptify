@@ -315,7 +315,8 @@ class OpenedAudioRepository @Inject constructor(
 
     private fun trackFor(key: String, copy: File, tags: AudioTags): UnifiedTrack {
         val title = tags.title?.takeIf { it.isNotBlank() } ?: OpenedAudio.titleFromName(copy.name)
-        val artist = tags.albumArtist ?: tags.artist
+        // The song's own artist first, as for the library's songs.
+        val artist = tags.artist ?: tags.albumArtist
         return UnifiedTrack(
             id = OpenedAudio.trackId(key),
             title = title,

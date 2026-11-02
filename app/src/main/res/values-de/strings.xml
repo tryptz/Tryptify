@@ -3014,6 +3014,17 @@
     <string name="settings_rescan_library_now">Bibliothek jetzt neu scannen</string>
     <string name="settings_hide_unmatched">Titel ohne Treffer ausblenden</string>
     <string name="action_find_album_art">Albumcover suchen</string>
+    <string name="action_edit_info">Infos bearbeiten</string>
+    <string name="edit_info_album_artist">Albumkünstler</string>
+    <string name="edit_info_genre">Genre</string>
+    <string name="edit_info_note">Wird in Tryptify gespeichert, die Datei bleibt unverändert. Last.fm bekommt es ab dem nächsten Abspielen des Titels.</string>
+    <string name="edit_info_album_artist_help">Wem das Album zugeschrieben ist, etwa der Compilation eines Labels. Titel werden unter ihrem eigenen Künstler gescrobbelt.</string>
+    <string name="edit_info_in_file">In der Datei: %1$s</string>
+    <string name="edit_info_not_in_file">Nicht in der Datei</string>
+    <string name="edit_info_reset">Tags der Datei verwenden</string>
+    <string name="edit_info_saved">Infos gespeichert</string>
+    <string name="edit_info_failed">Infos konnten nicht gespeichert werden</string>
+    <string name="edit_info_not_in_library">Nur Titel aus deiner Bibliothek können bearbeitet werden.</string>
     <string name="art_looking">Albumcover wird gesucht…</string>
     <string name="art_found_one">Albumcover gefunden</string>
     <string name="art_none_one">Kein sicherer Treffer für diesen Titel, daher wurde kein Cover hinzugefügt.</string>

@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -67,6 +69,9 @@ import tf.monochrome.android.ui.theme.reduceMotion
  * returns to the actions. [filePath] is the song's file where the screen knows
  * it (the library's own tracks); otherwise its download or a cached stream is
  * looked for, and without either it shows what the app knows of the song.
+ *
+ * Edit info, for a song with a [filePath], turns it into fields for its tags
+ * ([TrackEditPane]), kept by the app and never written to the file.
  */
 @Composable
 fun TrackContextMenu(
@@ -96,7 +101,7 @@ fun TrackContextMenu(
 ) {
     // Outside the overlay's content, which is composed in the overlay host:
     // state there would not survive the caller's recompositions.
-    var showingInfo by remember(track.id) { mutableStateOf(false) }
+    var page by remember(track.id) { mutableStateOf(MenuPage.ACTIONS) }
     // Read here, where the menu is asked for, for the same reason: the
     // overlay host may sit outside what the app's root provides.
     val playInTryptMania = LocalPlayInTryptMania.current
@@ -107,24 +112,34 @@ fun TrackContextMenu(
     GlassOverlay(onDismiss = onDismiss, alignment = Alignment.BottomCenter) {
         // "Disable animations": the pages swap at once, at their own heights.
         val still = reduceMotion()
-        // Back from Track info returns to the actions rather than closing.
-        BackHandler(enabled = showingInfo) { showingInfo = false }
+        // Back from Track info or Edit info returns to the actions rather than closing.
+        BackHandler(enabled = page != MenuPage.ACTIONS) { page = MenuPage.ACTIONS }
         // Track info slides in from the end and the actions back from the
         // start, as a page pushed and popped; the pane's height follows.
         AnimatedContent(
-            targetState = showingInfo,
+            targetState = page,
             transitionSpec = {
                 if (still) return@AnimatedContent (EnterTransition.None togetherWith ExitTransition.None).using(null)
-                val towards = if (targetState) SlideDirection.Start else SlideDirection.End
+                val towards = if (targetState != MenuPage.ACTIONS) SlideDirection.Start else SlideDirection.End
                 (slideIntoContainer(towards, tween(PAGE_MS)) + fadeIn(tween(PAGE_MS)))
                     .togetherWith(slideOutOfContainer(towards, tween(PAGE_MS)) + fadeOut(tween(PAGE_MS / 2)))
                     .using(SizeTransform(clip = true) { _, _ -> tween(PAGE_MS) })
             },
             label = "trackMenuPage",
-        ) { info ->
-            if (info) {
+        ) { shown ->
+            if (shown == MenuPage.INFO) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    TrackInfoPane(track = track, filePath = filePath, onBack = { showingInfo = false })
+                    TrackInfoPane(track = track, filePath = filePath, onBack = { page = MenuPage.ACTIONS })
+                }
+            } else if (shown == MenuPage.EDIT && filePath != null) {
+                // imePadding: the fields scroll up above the keyboard.
+                Column(modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+                    TrackEditPane(
+                        track = track,
+                        filePath = filePath,
+                        onBack = { page = MenuPage.ACTIONS },
+                        onSaved = onDismiss,
+                    )
                 }
             } else {
                 Column(
@@ -309,11 +324,19 @@ fun TrackContextMenu(
                             onClick = { onGoToArtist(); onDismiss() }
                         )
                     }
+                    // A song in the library: its tags corrected, kept by the app.
+                    if (filePath != null) {
+                        ContextMenuItem(
+                            icon = Icons.Default.Edit,
+                            label = stringResource(R.string.action_edit_info),
+                            onClick = { page = MenuPage.EDIT }
+                        )
+                    }
                     // Opens in this pane; the menu stays open behind it.
                     ContextMenuItem(
                         icon = Icons.Default.Info,
                         label = stringResource(R.string.action_track_info),
-                        onClick = { showingInfo = true }
+                        onClick = { page = MenuPage.INFO }
                     )
                 }
             }
@@ -321,8 +344,11 @@ fun TrackContextMenu(
     }
 }
 
-/** How long the turn between the actions and Track info takes. */
+/** How long the turn between the actions and Track info or Edit info takes. */
 private const val PAGE_MS = 280
+
+/** What the song menu's pane shows. */
+private enum class MenuPage { ACTIONS, INFO, EDIT }
 
 @Composable
 private fun ContextMenuItem(

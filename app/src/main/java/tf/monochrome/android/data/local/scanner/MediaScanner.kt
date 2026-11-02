@@ -11,12 +11,15 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.data.local.db.LocalAlbumEntity
 import tf.monochrome.android.data.local.db.LocalArtistEntity
 import tf.monochrome.android.data.local.db.LocalFolderEntity
 import tf.monochrome.android.data.local.db.LocalGenreEntity
 import tf.monochrome.android.data.local.db.LocalMediaDao
+import tf.monochrome.android.data.local.db.LocalTrackEditEntity
 import tf.monochrome.android.data.local.db.LocalTrackEntity
+import tf.monochrome.android.data.local.db.withEdit
 import tf.monochrome.android.data.local.db.ScanStateEntity
 import tf.monochrome.android.data.local.db.TrackPath
 import tf.monochrome.android.data.local.db.TrackScanInfo
@@ -289,6 +292,8 @@ class MediaScanner @Inject constructor(
         val pending = ArrayList<LocalTrackEntity>(INSERT_BATCH_SIZE)
         var added = 0
         var processed = 0
+        // The listener's corrections, laid over every file read again.
+        val edits = localMediaDao.getAllTrackEdits().associateBy { it.filePath }
 
         for (chunk in files.chunked(progressChunkSize)) {
             val entities = coroutineScope {
@@ -299,6 +304,7 @@ class MediaScanner @Inject constructor(
                             val tags = tagReader.readTags(audioFile.absolutePath, folderArtCache)
                             buildTrackEntity(audioFile, tags, titleFromFileName)
                                 .withPackTags(packTags[audioFile.absolutePath])
+                                .withEdit(edits[audioFile.absolutePath])
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
@@ -452,6 +458,66 @@ class MediaScanner @Inject constructor(
             artworkCacheKey = art ?: artworkCacheKey,
             hasEmbeddedArt = art != null || hasEmbeddedArt,
         )
+    }
+
+    /**
+     * The song at [filePath] as its file and the scan give it, without the
+     * listener's edit: what Edit info shows beside each field and goes back
+     * to. Null when the song is not in the library. The row itself, when its
+     * file cannot be read just now.
+     */
+    suspend fun fileTagsOf(filePath: String): LocalTrackEntity? {
+        val row = localMediaDao.findByPath(filePath) ?: return null
+        return runCatching { readAsScanned(row) }.getOrNull() ?: row
+    }
+
+    /** The listener's edit of the song at [filePath], or null. */
+    suspend fun trackEditOf(filePath: String): LocalTrackEditEntity? = localMediaDao.getTrackEdit(filePath)
+
+    /**
+     * Keep [edit] for the song at [filePath] (null, or nothing in it, drops
+     * any edit) and show it at once: its row takes the file's tags with the
+     * edit over them, keeping its id, and the albums and artists are grouped
+     * again. The file is not written.
+     */
+    suspend fun saveTrackEdit(filePath: String, edit: LocalTrackEditEntity?) {
+        val kept = edit?.copy(filePath = filePath)?.takeUnless { it.isEmpty }
+        if (kept == null) localMediaDao.deleteTrackEdit(filePath) else localMediaDao.upsertTrackEdit(kept)
+        val row = localMediaDao.findByPath(filePath) ?: return
+        val edited = (runCatching { readAsScanned(row) }.getOrNull() ?: row).withEdit(kept)
+        localMediaDao.updateTrack(
+            row.copy(
+                title = edited.title,
+                titleSearchKey = edited.titleSearchKey,
+                artist = edited.artist,
+                albumArtist = edited.albumArtist,
+                album = edited.album,
+                genre = edited.genre,
+                year = edited.year,
+                trackNumber = edited.trackNumber,
+                discNumber = edited.discNumber,
+            ),
+        )
+        rebuildGroupings()
+        localLibraryRevision.bump()
+    }
+
+    /** [row]'s file read as a scan reads it: its tags, a linked pack's, and the title setting. */
+    private suspend fun readAsScanned(row: LocalTrackEntity): LocalTrackEntity = withContext(Dispatchers.IO) {
+        val file = File(row.filePath)
+        require(file.isFile) { "not there" }
+        val tags = tagReader.readTags(row.filePath)
+        val info = AudioFileInfo(
+            absolutePath = row.filePath,
+            displayName = file.name,
+            mimeType = "",
+            sizeBytes = row.fileSizeBytes,
+            dateModified = row.lastModified,
+            duration = 0L,
+            uri = android.net.Uri.EMPTY,
+        )
+        buildTrackEntity(info, tags, preferences.localTitleFromFileName.first())
+            .withPackTags(packTags()[row.filePath])
     }
 
     private suspend fun rebuildGroupings() =
@@ -972,4 +1038,11 @@ class MediaScanner @Inject constructor(
             return "$normalizedAlbum|$normalizedArtist|${year ?: 0}"
         }
     }
+}
+
+/** The scanner, for Edit info in a song's menu, which is drawn outside any view model. */
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+interface TrackEditEntryPoint {
+    fun mediaScanner(): MediaScanner
 }

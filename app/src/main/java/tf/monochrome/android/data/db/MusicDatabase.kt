@@ -61,6 +61,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         PlaybackQueueEntity::class,
         // Local media
         LocalTrackEntity::class,
+        tf.monochrome.android.data.local.db.LocalTrackEditEntity::class,
         LocalAlbumEntity::class,
         LocalArtistEntity::class,
         LocalGenreEntity::class,
@@ -75,7 +76,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -481,6 +482,17 @@ abstract class MusicDatabase : RoomDatabase() {
                 db.execSQL(scxytIdMove("favorite_tracks", "id"))
                 db.execSQL(scxytIdMove("playlist_tracks", "trackId"))
                 db.execSQL(scxytIdMove("play_events", "trackId"))
+            }
+        }
+
+        /** The listener's own corrections to local songs' tags (Edit info), kept apart from the scanned rows. */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `local_track_edits` (`filePath` TEXT NOT NULL, " +
+                        "`title` TEXT, `artist` TEXT, `albumArtist` TEXT, `album` TEXT, `genre` TEXT, " +
+                        "`year` INTEGER, `trackNumber` INTEGER, `discNumber` INTEGER, PRIMARY KEY(`filePath`))",
+                )
             }
         }
 

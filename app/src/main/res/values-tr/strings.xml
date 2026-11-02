@@ -3014,6 +3014,17 @@
     <string name="settings_rescan_library_now">Kitaplığı şimdi yeniden tara</string>
     <string name="settings_hide_unmatched">Eşleşmeyen parçaları gizle</string>
     <string name="action_find_album_art">Albüm kapağı bul</string>
+    <string name="action_edit_info">Bilgileri düzenle</string>
+    <string name="edit_info_album_artist">Albüm sanatçısı</string>
+    <string name="edit_info_genre">Tür</string>
+    <string name="edit_info_note">Tryptify\'da saklanır, dosya değişmez. Last.fm bunu şarkının bir sonraki çalınışından itibaren alır.</string>
+    <string name="edit_info_album_artist_help">Albümün kime ait olduğu, örneğin bir plak şirketinin derlemesi. Şarkılar kendi sanatçılarıyla scrobble edilir.</string>
+    <string name="edit_info_in_file">Dosyada: %1$s</string>
+    <string name="edit_info_not_in_file">Dosyada yok</string>
+    <string name="edit_info_reset">Dosyanın etiketlerini kullan</string>
+    <string name="edit_info_saved">Bilgiler kaydedildi</string>
+    <string name="edit_info_failed">Bilgiler kaydedilemedi</string>
+    <string name="edit_info_not_in_library">Yalnızca kitaplığınızdaki şarkılar düzenlenebilir.</string>
     <string name="art_looking">Albüm kapağı aranıyor…</string>
     <string name="art_found_one">Albüm kapağı bulundu</string>
     <string name="art_none_one">Bu parça için kesin bir eşleşme yok, bu yüzden kapak eklenmedi.</string>
