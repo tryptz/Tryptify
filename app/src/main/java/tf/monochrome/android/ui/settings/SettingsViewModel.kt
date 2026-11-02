@@ -1174,7 +1174,8 @@ class SettingsViewModel @Inject constructor(
             calculateCacheSize()
             // No rescan to follow: cover art used to live here, so clearing
             // the cache cost every local track its artwork and a full reindex
-            // to get it back. It lives in filesDir now, untouched by this.
+            // to get it back. It lives in filesDir now, untouched by this,
+            // as do the covers of Trypt Mania's pack songs (glyph/art).
         }
     }
 

@@ -92,6 +92,7 @@ class GlyphPackLibrary @Inject constructor(
         _songs.value = songs
         _packs.value = packs
         loaded = true
+        dropOldArtCache()
         // After the list is up: covers for the songs that had none in their folder.
         fillEmbeddedArt(songs)
     }
@@ -123,8 +124,20 @@ class GlyphPackLibrary @Inject constructor(
         _songs.value = _songs.value.map { song -> found[song.trackId]?.let { song.copy(artworkUri = it) } ?: song }
     }
 
-    /** Where the covers taken out of pack songs' music are kept. */
-    private val artCache: File get() = File(context.cacheDir, "glyph/art").apply { mkdirs() }
+    /**
+     * Where the covers taken out of pack songs' music are kept: the app's own
+     * files, not its cache. In the cache, Android deleted them when space ran
+     * low (oldest first, and these are written once) and so did Settings ›
+     * Clear cache, while the wheel still pointed at them: the pictures went
+     * blank until the app was started again. A pack's go with it ([remove]).
+     */
+    internal val artCache: File get() = File(context.filesDir, "glyph/art").apply { mkdirs() }
+
+    /** The cache folder the covers were kept in before 1.9.51: emptied once, as nothing reads it now. */
+    private fun dropOldArtCache() {
+        val old = File(context.cacheDir, "glyph/art")
+        if (old.exists()) runCatching { old.deleteRecursively() }
+    }
 
     private fun artKey(trackId: String): String = trackId.hashCode().toUInt().toString(16)
 
@@ -150,12 +163,17 @@ class GlyphPackLibrary @Inject constructor(
         withContext(Dispatchers.IO) {
             val folder = File(root, name)
             if (!folder.canonicalPath.startsWith(root.canonicalPath + File.separator)) return@withContext
-            val source = PackImporter.readIndex(folder)?.source
+            val index = PackImporter.readIndex(folder)
+            val source = index?.source
             folder.deleteRecursively()
+            // The covers taken out of its songs' music.
+            index?.songs?.forEach { song ->
+                val key = artKey("$PREFIX$name/${song.folder}")
+                artCache.listFiles { file -> file.name.substringBefore('.') == key }?.forEach { it.delete() }
+            }
             // The folder's grant goes back once no pack is read from it.
             if (source != null) {
-                val stillUsed = root.listFiles()?.any { PackImporter.readIndex(it)?.source == source } == true
-                if (!stillUsed) {
+                if (!isReadFrom(root, source)) {
                     runCatching {
                         context.contentResolver.releasePersistableUriPermission(
                             Uri.parse(source),
@@ -293,6 +311,10 @@ class GlyphPackLibrary @Inject constructor(
 
     companion object {
         const val PREFIX = "pack:"
+
+        /** Whether any pack under [packsRoot] is read in place from the folder [source] (a tree URI). */
+        fun isReadFrom(packsRoot: File, source: String): Boolean =
+            packsRoot.listFiles()?.any { it.isDirectory && PackImporter.readIndex(it)?.source == source } == true
         private const val NO_ART = ".none"
 
         /** How much of a chart is read for its header's tags: they all come before the notes. */
