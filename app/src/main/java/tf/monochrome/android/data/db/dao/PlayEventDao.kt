@@ -21,6 +21,10 @@ interface PlayEventDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertFromCloud(event: PlayEventEntity): Long
 
+    /** [insertFromCloud] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllFromCloud(events: List<PlayEventEntity>)
+
     @Query("UPDATE play_events SET cloudRowId = :cloudId WHERE rowId = :localId AND cloudRowId IS NULL")
     suspend fun setCloudId(localId: Long, cloudId: Long)
 

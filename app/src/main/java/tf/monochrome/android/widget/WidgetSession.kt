@@ -3,13 +3,11 @@ package tf.monochrome.android.widget
 import android.content.ComponentName
 import android.content.Context
 import android.graphics.Bitmap
-import androidx.compose.ui.graphics.Color
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import androidx.palette.graphics.Palette
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -87,7 +85,7 @@ suspend fun <T> withSessionController(context: Context, block: (MediaController)
  * Decode the cover to a small software bitmap through the app's shared Coil loader
  * (which has the embedded-art fetcher registered, so file:// audio paths resolve).
  * Downscaled to keep well under the RemoteViews per-widget bitmap budget, and
- * allowHardware(false) so Palette can read pixels and RemoteViews can serialize it.
+ * allowHardware(false) so RemoteViews can serialize it.
  */
 suspend fun loadArtwork(context: Context, uri: String): Bitmap? = withContext(Dispatchers.IO) {
     runCatching {
@@ -98,21 +96,6 @@ suspend fun loadArtwork(context: Context, uri: String): Bitmap? = withContext(Di
             .build()
         (SingletonImageLoader.get(context).execute(request) as? SuccessResult)?.image?.toBitmap()
     }.getOrNull()
-}
-
-/**
- * The album accent — the same vibrant-swatch priority the player uses
- * (DynamicColorExtractor) — falling back to the player's blue so a tinted glyph or
- * progress line never vanishes against the dark scrim on a monochrome cover.
- */
-fun accentFrom(bitmap: Bitmap): Color {
-    val palette = Palette.from(bitmap).maximumColorCount(24).generate()
-    val rgb = palette.vibrantSwatch?.rgb
-        ?: palette.lightVibrantSwatch?.rgb
-        ?: palette.darkVibrantSwatch?.rgb
-        ?: palette.dominantSwatch?.rgb
-        ?: return WidgetColors.AccentFallback
-    return Color(rgb)
 }
 
 // ── Transport actions (one-shot connect → command → release → redraw) ──────────

@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.api
 
+import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -86,12 +87,59 @@ object HifiPayload {
      */
     fun entity(json: Json, body: String, key: String): String {
         val root = parse(json, body) ?: return body
+        val payload = entityOf(root, key)
+        return if (payload === root) body else payload.toString()
+    }
+
+    /**
+     * [deserializer]'s value from what [entity] returns, read straight off the
+     * parsed tree.
+     *
+     * [entity] prints the lifted object back into text for a second parse,
+     * which on a 500-track playlist page is the same megabyte or so of JSON
+     * read twice and printed once in between.
+     */
+    fun <T> decodeEntity(json: Json, deserializer: DeserializationStrategy<T>, body: String, key: String): T {
+        val root = parse(json, body) ?: return json.decodeFromString(deserializer, body)
+        val payload = entityOf(root, key)
+        return decodeTree(json, deserializer, payload) { if (payload === root) body else payload.toString() }
+    }
+
+    /**
+     * [deserializer]'s value from an answer's {data}, or from the answer
+     * itself when it has none, read straight off the parsed tree rather than
+     * printed back into text and parsed a second time.
+     */
+    fun <T> decodeData(json: Json, deserializer: DeserializationStrategy<T>, body: String): T {
+        val root = parse(json, body) ?: return json.decodeFromString(deserializer, body)
         val payload = unwrap(root)
-        if (payload !== root) return payload.toString()
-        val obj = root as? JsonObject ?: return body
-        val inner = obj[key] as? JsonObject ?: return body
+        return decodeTree(json, deserializer, payload) { if (payload === root) body else payload.toString() }
+    }
+
+    /**
+     * Decodes [element] as it stands. Should that fail, the text the old path
+     * decoded is decoded instead, so a malformed answer fails with exactly the
+     * error, and the message, it always did.
+     */
+    private inline fun <T> decodeTree(
+        json: Json,
+        deserializer: DeserializationStrategy<T>,
+        element: JsonElement,
+        text: () -> String,
+    ): T = try {
+        json.decodeFromJsonElement(deserializer, element)
+    } catch (_: Exception) {
+        json.decodeFromString(deserializer, text())
+    }
+
+    /** The entity [entity] describes, as a tree; [root] itself when there is nothing to lift. */
+    private fun entityOf(root: JsonElement, key: String): JsonElement {
+        val payload = unwrap(root)
+        if (payload !== root) return payload
+        val obj = root as? JsonObject ?: return root
+        val inner = obj[key] as? JsonObject ?: return root
         val siblings = obj.filterKeys { it != key && it != "version" && it !in inner }
-        return JsonObject(inner + siblings).toString()
+        return JsonObject(inner + siblings)
     }
 
     private fun parse(json: Json, body: String): JsonElement? =

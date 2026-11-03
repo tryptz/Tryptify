@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -69,10 +70,9 @@ fun PlayerTopBar(
     onDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onSendFile: () -> Unit,
+    onShareLink: () -> Unit,
     onOpenLyricsStudio: () -> Unit,
     onOpenSettings: () -> Unit,
-    /** Null when no server under Settings › Connections times lyrics: the item is not shown. */
-    onSyncLyricsOnServer: (() -> Unit)? = null,
     onEditLyrics: (() -> Unit)? = null,
     onGoToArtist: (() -> Unit)? = null,
     onGoToAlbum: (() -> Unit)? = null,
@@ -228,13 +228,11 @@ fun PlayerTopBar(
                         onClick = { onSendFile(); menuExpanded = false },
                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     )
-                    if (onSyncLyricsOnServer != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.lyrics_server_sync)) },
-                            onClick = { onSyncLyricsOnServer(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.Lyrics, contentDescription = null) },
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.share_link)) },
+                        onClick = { onShareLink(); menuExpanded = false },
+                        leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                    )
                     if (onEditLyrics != null) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.action_edit_lyrics)) },

@@ -169,6 +169,7 @@ class DspChain private constructor(
         // These hold native handles of their own, outside the mix engine.
         runCatching { inflator.release() }
         runCatching { compressor.release() }
+        runCatching { replayGain.release() }
         pendingDspState = null
         pendingMixBypassed = null
     }

@@ -37,15 +37,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -64,7 +70,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tf.monochrome.android.R
 import tf.monochrome.android.glyph.asset.GlyphAssetRepository
-import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.glyph.asset.GlyphPalette
 import tf.monochrome.android.glyph.chart.GlyphTiming
 import tf.monochrome.android.glyph.engine.GlyphAppearance
@@ -97,9 +102,11 @@ fun GlyphGameplayScreen(
     modifier: Modifier = Modifier,
     /** The player's colour settings, for the player's background behind the play. */
     backdropLook: GlyphBackdropLook = GlyphBackdropLook(),
-    explosionProvider: () -> Map<GlyphLane, LaneFlash> = { emptyMap() },
+    explosionProvider: () -> LaneFlashes = { NO_FLASHES },
     comboBurstProvider: () -> Long = { 0L },
     comboProvider: () -> Int = { 0 },
+    /** A shared dance by file name, for an imported character dancing behind the field. */
+    sharedDance: (String) -> java.io.File? = { null },
 ) {
     val fontFamily = rememberStepTechFontFamily()
     val typography = GlyphTypography(fontFamily)
@@ -186,11 +193,40 @@ fun GlyphGameplayScreen(
                 // The player's background, under everything and across the
                 // whole screen, the field's column included: seen through the
                 // TV with the rest, and still, so the arrows are what moves.
-                GlyphPlayerBackground(
-                    coverUri = gameplayCoverUri(state.selectedSong),
-                    albumColored = backdropLook.albumColored,
-                    colorTransitionMs = backdropLook.colorTransitionMs,
-                )
+                // An imported StepMania theme's own gameplay background, dimmed as
+                // StepMania dims a song's, so the arrows stay what reads; the
+                // player's album wash otherwise.
+                val themeBackground = rememberStepThemeArt(tf.monochrome.android.glyph.style.StepManiaStyleBaker.BACKGROUND)
+                if (themeBackground != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = themeBackground,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black.copy(alpha = THEME_BACKGROUND_DIM)))
+                } else {
+                    GlyphPlayerBackground(
+                        coverUri = gameplayCoverUri(state.selectedSong),
+                        albumColored = backdropLook.albumColored,
+                        colorTransitionMs = backdropLook.colorTransitionMs,
+                    )
+                }
+
+                // An imported StepMania character dancing behind the field, drawn
+                // off the field's frame (GlyphCharacterRenderer): one picture here.
+                state.themes.characterDir?.let { dir ->
+                    val firstNoteBeat = remember(state.chart) { state.chart?.notes?.minOfOrNull { it.beat } ?: 0f }
+                    GlyphDancer(
+                        characterDir = dir,
+                        sharedDance = sharedDance,
+                        songBeat = { timing.secondsToBeat(positionProvider()) },
+                        firstNoteBeat = firstNoteBeat,
+                        failed = { state.gameplay.failedAtMs > 0L },
+                        paused = gameplay.isPaused,
+                        scale = state.themes.sizes.dancer,
+                    )
+                }
 
                 GlyphPlayfield(
                     engine = engine,
@@ -206,6 +242,9 @@ fun GlyphGameplayScreen(
                     comboBurstProvider = comboBurstProvider,
                     comboProvider = comboProvider,
                     look = GlyphFieldLook.of(gameplay.modifiers),
+                    // Paused, the field stops redrawing once its flashes have
+                    // faded; a room's song plays on under its pause panel.
+                    running = gameplay.isPlaying,
                     // Held sideways, a centred column of the setting's width, its
                     // receptors nearer the bottom: thumbs come from the sides.
                     receptorInset = if (landscape && !gameplay.modifiers.reverse) LANDSCAPE_RECEPTOR_INSET else null,
@@ -246,6 +285,8 @@ fun GlyphGameplayScreen(
                     fullCombo = gameplay.fullCombo,
                     fonts = fonts,
                     reducedMotion = reduced,
+                    judgementScale = state.themes.sizes.judgement,
+                    comboScale = state.themes.sizes.combo,
                     modifier = Modifier.align(Alignment.Center),
                 )
 
@@ -279,8 +320,10 @@ fun GlyphGameplayScreen(
                         typography = typography,
                         fonts = fonts,
                         onEvent = onEvent,
-                        // The bar fills to its start as the run comes in.
-                        lifeShown = gameplay.life * intro.value,
+                        // The bar fills to its start as the run comes in. Read
+                        // by the bar as it draws: read here, it recomposed this
+                        // whole screen on every frame of the intro.
+                        lifeScale = { intro.value },
                         reducedMotion = reduced,
                     )
                 }
@@ -304,6 +347,29 @@ fun GlyphGameplayScreen(
                             .padding(start = GlyphTheme.Grid)
                             .graphicsLayer { alpha = intro.value },
                     )
+                } else {
+                    // Racing your best: the room's board with two cards, you
+                    // and your best run as it stood at this point of the song.
+                    val race = gameplay.race
+                    if (race != null) {
+                        val you = state.playerName.ifBlank { stringResource(R.string.tm_race_you) }
+                        val bestName = stringResource(R.string.tm_race_best)
+                        val mine = gameplay.score.score.toLong()
+                        val ahead = mine >= race.score
+                        RoomLeaderboard(
+                            rows = listOf(
+                                RoomBoardRow("me", you, if (ahead) 1 else 2, mine, gameplay.score.combo, gameplay.failStops, isMe = true),
+                                RoomBoardRow("best", bestName, if (ahead) 2 else 1, race.score.toLong(), race.combo, failed = false, isMe = false),
+                            ).sortedBy { it.rank },
+                            fonts = fonts,
+                            reducedMotion = reduced,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                                .padding(start = GlyphTheme.Grid)
+                                .graphicsLayer { alpha = intro.value },
+                        )
+                    }
                 }
             }
 
@@ -323,6 +389,11 @@ fun GlyphGameplayScreen(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+
+        // Last, over the HUD too: the run's way out to its results.
+        if (gameplay.endingAtMs > 0L) {
+            StripesOut(reducedMotion = reduced, modifier = Modifier.fillMaxSize())
+        }
     }
 }
 
@@ -339,17 +410,11 @@ private fun GameplayHud(
     typography: GlyphTypography,
     fonts: GlyphStepFonts,
     onEvent: (GlyphEvent) -> Unit,
-    /** The life the bar draws: the run's, or less while it fills at the start. */
-    lifeShown: Float = state.gameplay.life,
+    /** How much of the run's life the bar draws: less while it fills at the start. Read while drawing. */
+    lifeScale: () -> Float = { 1f },
     reducedMotion: Boolean = false,
 ) {
     val gameplay = state.gameplay
-    // The percent rolls to each new value rather than jumping to it.
-    val percentShown by animateFloatAsState(
-        targetValue = gameplay.percent,
-        animationSpec = if (reducedMotion) snap() else tween(SCORE_ROLL_MILLIS, easing = FastOutSlowInEasing),
-        label = "score roll",
-    )
 
     Column(modifier = Modifier.padding(horizontal = GlyphTheme.Grid * 2)) {
         // StepMania's top row: the life bar, the percent, and the way out.
@@ -359,16 +424,14 @@ private fun GameplayHud(
             horizontalArrangement = Arrangement.spacedBy(GlyphTheme.Grid * 2),
         ) {
             GlyphLifeBar(
-                life = lifeShown,
+                life = gameplay.life,
+                scale = lifeScale,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = StepManiaScoreKeeper.formatPercent(percentShown),
+            PercentReadout(
+                percent = gameplay.percent,
                 style = fonts.score,
-                color = GlyphTheme.Paper,
-                modifier = Modifier.semantics {
-                    contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(gameplay.percent)}"
-                },
+                reducedMotion = reducedMotion,
             )
             IconButton(onClick = { onEvent(GlyphEvent.TogglePause) }) {
                 Icon(
@@ -388,7 +451,13 @@ private fun GameplayHud(
             // The scroll mode is the first thing a player checks when a chart
             // reads wrong, so it stays on screen rather than two taps away.
             Text(text = gameplay.modifiers.scrollMode.label, style = fonts.label, color = GlyphTheme.Muted)
-            modifierSummary(gameplay.modifiers).takeIf { it.isNotEmpty() }?.let { summary ->
+            // Said while it plays: otherwise a perfect run looks like the player's.
+            if (gameplay.modifiers.autoplay && !state.inRoomPlay) {
+                Text(text = stringResource(R.string.tm_auto_tag), style = fonts.label, color = GlyphTheme.Warning)
+            }
+            // Built when the modifiers change, not on every readout of the run.
+            val summary = remember(gameplay.modifiers) { modifierSummary(gameplay.modifiers) }
+            if (summary.isNotEmpty()) {
                 // A run at another rate or judge says so while it is played.
                 Text(
                     text = summary,
@@ -406,6 +475,32 @@ private fun GameplayHud(
             trackColor = GlyphTheme.InkRaised,
         )
     }
+}
+
+/**
+ * The run's percent, rolling to each new value rather than jumping to it.
+ *
+ * Its own scope, so the roll recomposes the number and nothing else: read in
+ * the HUD, every frame of every roll rebuilt the HUD, which in dense play is
+ * every frame. The text is made only when the hundredths it shows change.
+ * Its spoken label is the real percent, not the rolling one.
+ */
+@Composable
+private fun PercentReadout(percent: Float, style: androidx.compose.ui.text.TextStyle, reducedMotion: Boolean) {
+    val rolled = animateFloatAsState(
+        targetValue = percent,
+        animationSpec = if (reducedMotion) snap() else tween(SCORE_ROLL_MILLIS, easing = FastOutSlowInEasing),
+        label = "score roll",
+    )
+    val shown by remember { derivedStateOf { StepManiaScoreKeeper.formatPercent(rolled.value) } }
+    Text(
+        text = shown,
+        style = style,
+        color = GlyphTheme.Paper,
+        modifier = Modifier.semantics {
+            contentDescription = "Score ${StepManiaScoreKeeper.formatPercent(percent)}"
+        },
+    )
 }
 
 private fun modifierSummary(modifiers: GlyphModifiers): String = buildList {
@@ -433,6 +528,8 @@ private fun JudgementOverlay(
     fonts: GlyphStepFonts,
     modifier: Modifier = Modifier,
     reducedMotion: Boolean = false,
+    judgementScale: Float = 1f,
+    comboScale: Float = 1f,
 ) {
     if (judgement == null) return
     Box(
@@ -454,6 +551,8 @@ private fun JudgementOverlay(
             fullCombo = fullCombo,
             fonts = fonts,
             reducedMotion = reducedMotion,
+            judgementScale = judgementScale,
+            comboScale = comboScale,
         )
     }
 }
@@ -568,6 +667,59 @@ private fun FailedOverlay(fonts: GlyphStepFonts, reducedMotion: Boolean, modifie
 }
 
 private const val VEIL_MILLIS = 450
+
+/**
+ * A run's way out, once the song has played to its end (or a tap skipped
+ * it): black stripes sweep in from alternate sides, each a little after the
+ * one above, over a fade to black, and the music fades with them
+ * ([GLYPH_END_WIPE_MILLIS]). The screen is wholly black when it is
+ * done, and the results cut in from black. Reduced motion is the fade alone.
+ */
+@Composable
+private fun StripesOut(reducedMotion: Boolean, modifier: Modifier = Modifier) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, tween(GLYPH_END_WIPE_MILLIS.toInt(), easing = LinearEasing))
+    }
+    val edge = with(LocalDensity.current) { END_STRIPE_EDGE.toPx() }
+    Canvas(modifier) {
+        val p = progress.value
+        // Under the stripes, so the gaps between them darken too.
+        drawRect(Color.Black, alpha = if (reducedMotion) p else p * p)
+        if (reducedMotion) return@Canvas
+        val band = size.height / END_STRIPES
+        for (i in 0 until END_STRIPES) {
+            val cover = endStripeCover(p, i, END_STRIPES)
+            if (cover <= 0f) continue
+            val width = size.width * cover
+            val fromLeft = i % 2 == 0
+            val left = if (fromLeft) 0f else size.width - width
+            val top = i * band
+            // A hair over the band, so no seam shows between two closed stripes.
+            drawRect(Color.Black, topLeft = Offset(left, top), size = Size(width, band + 1f))
+            // The stripe's leading edge, a light line that fades as it closes.
+            if (cover < 1f) {
+                val x = if (fromLeft) width - edge else size.width - width
+                drawRect(GlyphTheme.Paper.copy(alpha = 0.55f * (1f - cover)), topLeft = Offset(x, top), size = Size(edge, band))
+            }
+        }
+    }
+}
+
+/**
+ * How far stripe [index] of [count] has closed at [progress] (both 0 to 1):
+ * each starts a little after the one above, and every one is shut at 1.
+ */
+internal fun endStripeCover(progress: Float, index: Int, count: Int): Float {
+    val start = if (count <= 1) 0f else index.toFloat() / (count - 1) * END_STRIPE_STAGGER
+    val local = ((progress - start) / (1f - END_STRIPE_STAGGER)).coerceIn(0f, 1f)
+    return if (local >= 1f) 1f else FastOutSlowInEasing.transform(local)
+}
+
+private const val END_STRIPES = 12
+/** The share of the wipe the last stripe waits before it starts. */
+private const val END_STRIPE_STAGGER = 0.35f
+private val END_STRIPE_EDGE = 2.dp
 
 /**
  * The count-in.
@@ -709,3 +861,82 @@ private fun PauseOverlay(
 /** Room board cards: all of a room's first places upright would sit on the lanes. */
 private const val BOARD_ROWS_PORTRAIT = 5
 private const val BOARD_ROWS_LANDSCAPE = 8
+
+/** How far an imported theme's gameplay background is darkened under the field. */
+private const val THEME_BACKGROUND_DIM = 0.45f
+
+/**
+ * The character behind the field: its renderer's latest picture, drawn once
+ * a frame, scaled up smooth, in the lower middle of the screen as StepMania's
+ * dancers stand. The renderer runs while this is on screen and stops with it.
+ * The song's beat is read here, on the main thread with the field, once a
+ * frame, and handed to the renderer's thread. Paused, neither ticks: the
+ * frame loop ends and the renderer sleeps until the run goes on, as the
+ * field's own clock stops ([rememberFrameTick]).
+ */
+@Composable
+private fun GlyphDancer(
+    characterDir: java.io.File,
+    sharedDance: (String) -> java.io.File?,
+    songBeat: () -> Float,
+    firstNoteBeat: Float,
+    failed: () -> Boolean,
+    paused: Boolean,
+    /** Themes › Sizes: from its feet, which stay where they stand. */
+    scale: Float = 1f,
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val beatNow = remember { java.util.concurrent.atomic.AtomicReference(0f) }
+    val pausedNow = remember { kotlinx.coroutines.flow.MutableStateFlow(paused) }
+    val currentSongBeat by androidx.compose.runtime.rememberUpdatedState(songBeat)
+    val currentFirstNote by androidx.compose.runtime.rememberUpdatedState(firstNoteBeat)
+    val currentFailed by androidx.compose.runtime.rememberUpdatedState(failed)
+    androidx.compose.runtime.LaunchedEffect(paused) {
+        // Read before the renderer is let go, so its first pose after a pause
+        // is on the song's beat now (a restart from the pause menu starts the
+        // song over), and a first picture drawn while paused has a beat too.
+        beatNow.set(currentSongBeat())
+        pausedNow.value = paused
+        if (paused) return@LaunchedEffect
+        while (true) {
+            androidx.compose.runtime.withFrameNanos { }
+            beatNow.set(currentSongBeat())
+        }
+    }
+    val renderer = remember(characterDir) {
+        tf.monochrome.android.glyph.style.GlyphCharacterRenderer(
+            characterDir = characterDir,
+            sharedDance = sharedDance,
+            scope = scope,
+            beat = { beatNow.get() },
+            firstNoteBeat = { currentFirstNote },
+            failed = { currentFailed() },
+            paused = pausedNow,
+        )
+    }
+    androidx.compose.runtime.DisposableEffect(renderer) {
+        renderer.start()
+        onDispose { renderer.stop() }
+    }
+    // Read in the draw, not here: a new picture 30 times a second redraws
+    // the canvas without recomposing this.
+    val frame = renderer.frame.collectAsState()
+    androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+        val picture = frame.value ?: return@Canvas
+        val feet = size.height * (DANCER_TOP_SHARE + DANCER_HEIGHT_SHARE)
+        val height = size.height * DANCER_HEIGHT_SHARE * scale
+        val width = height * picture.width / picture.height
+        drawImage(
+            image = picture.asImageBitmap(),
+            dstOffset = androidx.compose.ui.unit.IntOffset(((size.width - width) / 2).toInt(), (feet - height).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(width.toInt(), height.toInt()),
+            alpha = DANCER_ALPHA,
+            filterQuality = androidx.compose.ui.graphics.FilterQuality.Low,
+        )
+    }
+}
+
+/** How much of the screen's height the dancer stands, from where, and how strongly it shows under the notes. */
+private const val DANCER_HEIGHT_SHARE = 0.62f
+private const val DANCER_TOP_SHARE = 0.3f
+private const val DANCER_ALPHA = 0.85f

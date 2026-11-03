@@ -63,6 +63,18 @@ fun SourceType.brand(): SourceBrand = when (this) {
     SourceType.LIVE_RADIO -> SourceBrand("Live", labelRes = R.string.source_live, light = null, dark = null, icon = Icons.Default.Radio)
     // Navidrome, Gonic, Airsonic… all the same to the listener: their own server.
     SourceType.SUBSONIC -> SourceBrand("My server", labelRes = R.string.source_subsonic, light = null, dark = null, icon = Icons.Default.Dns)
+    // YouTube is fetched on the phone, SoundCloud through the built-in
+    // trypt-hifi-scxyt server. The marks are vectors in the brands' own
+    // colours: YouTube's red play button, SoundCloud's orange cloud
+    // simplified to read at pill size. The light-theme text is darker than
+    // the brand, as Qobuz's is: the label sits on the pill's own 14% tint of
+    // its colour, over any light surface, Warm paper's #F0EAE0 the darkest.
+    // There the brands' #FF0000 and #FF5500 read about 2.5:1, and even
+    // #CC0000 and #B83D00 only 3.8:1; these read 4.75:1 and 4.9:1 at worst,
+    // AA for the small label on every light theme. The marks keep the true
+    // colours.
+    SourceType.YOUTUBE -> SourceBrand("YouTube", Color(0xFFB00000), Color(0xFFFF5C5C), logo = R.drawable.logo_youtube)
+    SourceType.SOUNDCLOUD -> SourceBrand("SoundCloud", Color(0xFF9C3300), Color(0xFFFF8A4C), logo = R.drawable.logo_soundcloud)
 }
 
 /** The brand colour for the current theme, or the theme's own when the brand has none. */

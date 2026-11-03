@@ -5,10 +5,27 @@
 #include <algorithm>
 
 // Fractional delay line with cubic interpolation.
+//
+// Positions wrap with a compare rather than %: an integer divide is a library
+// call on 32-bit ARM, and a reverb makes over a hundred of these accesses per
+// frame. Each read keeps the shape it had, a loop adding the length while the
+// index is below the line, with one subtraction above it where the % was.
+// The library builds with -ffast-math, which lets the compiler regroup the
+// effects' sums by how the code around them is laid out; in this shape the
+// 32-bit ARM build still rounds exactly as it did with the %. (The 64-bit one
+// regroups a few sums anyway, a last-bit change; so did every shape tried.)
+//
+// A delay is meant to lie within the line: -2 to getMaxDelay() + 3, which for
+// the interpolating reads (their taps reach one either side) is 0 to
+// getMaxDelay() + 2. Every effect's prepare() sizes its lines for that. One
+// that read further would wrap round into the newest audio, so the host tests
+// build with DSP_CHECK_DELAY_RANGE, which counts such reads.
 class DelayLine {
 public:
     void prepare(int maxDelaySamples) {
-        buffer_.resize(maxDelaySamples + 4, 0.0f);
+        // assign, not resize: after a rate change the line starts silent
+        // rather than playing the old rate's audio back out of its tail.
+        buffer_.assign(static_cast<size_t>(maxDelaySamples + 4), 0.0f);
         maxDelay_ = maxDelaySamples;
         writePos_ = 0;
     }
@@ -20,15 +37,17 @@ public:
 
     void write(float sample) {
         buffer_[writePos_] = sample;
-        writePos_ = (writePos_ + 1) % static_cast<int>(buffer_.size());
+        if (++writePos_ == static_cast<int>(buffer_.size())) writePos_ = 0;
     }
 
     // Read at integer delay
     float read(int delaySamples) const {
         int idx = writePos_ - 1 - delaySamples;
         int sz = static_cast<int>(buffer_.size());
+        countOverrun(delaySamples, sz);
         while (idx < 0) idx += sz;
-        return buffer_[idx % sz];
+        if (idx >= sz) idx -= sz;
+        return buffer_[idx];
     }
 
     // Read backwards from most-recent write (0 = latest, 1 = one before, ...)
@@ -42,8 +61,10 @@ public:
 
         auto at = [&](int d) -> float {
             int idx = writePos_ - 1 - d;
+            countOverrun(d, sz);
             while (idx < 0) idx += sz;
-            return buffer_[idx % sz];
+            if (idx >= sz) idx -= sz;
+            return buffer_[idx];
         };
 
         float y0 = at(intDelay + 1);
@@ -68,15 +89,31 @@ public:
 
         int idx1 = writePos_ - 1 - intDelay;
         int idx2 = idx1 - 1;
+        countOverrun(intDelay + 1, sz);
         while (idx1 < 0) idx1 += sz;
         while (idx2 < 0) idx2 += sz;
+        if (idx1 >= sz) idx1 -= sz;
+        if (idx2 >= sz) idx2 -= sz;
 
-        return buffer_[idx1 % sz] * (1.0f - frac) + buffer_[idx2 % sz] * frac;
+        return buffer_[idx1] * (1.0f - frac) + buffer_[idx2] * frac;
     }
 
     int getMaxDelay() const { return maxDelay_; }
 
+#ifdef DSP_CHECK_DELAY_RANGE
+    // Reads asked for further back than the line holds, across every line.
+    static inline long overruns = 0;
+#endif
+
 private:
+#ifdef DSP_CHECK_DELAY_RANGE
+    static void countOverrun(int delay, int size) {
+        if (delay < -2 || delay > size - 1) overruns++;
+    }
+#else
+    static void countOverrun(int, int) {}
+#endif
+
     std::vector<float> buffer_;
     int writePos_ = 0;
     int maxDelay_ = 0;

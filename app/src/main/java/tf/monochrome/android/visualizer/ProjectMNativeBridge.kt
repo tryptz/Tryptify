@@ -59,9 +59,13 @@ class ProjectMNativeBridge {
         }
     }
 
-    fun pushPcm(samples: FloatArray, channelCount: Int, sampleRate: Int) {
-        if (nativeHandle != 0L && !paused.get()) {
-            nativePushPcm(nativeHandle, samples, channelCount, sampleRate)
+    fun pushPcm(samples: FloatArray, channelCount: Int, sampleRate: Int) =
+        pushPcm(samples, samples.size, channelCount, sampleRate)
+
+    /** The first [count] samples of [samples]: the audio bus hands over a reused array. */
+    fun pushPcm(samples: FloatArray, count: Int, channelCount: Int, sampleRate: Int) {
+        if (nativeHandle != 0L && !paused.get() && count > 0) {
+            nativePushPcm(nativeHandle, samples, count.coerceAtMost(samples.size), channelCount, sampleRate)
         }
     }
 
@@ -211,7 +215,7 @@ class ProjectMNativeBridge {
 
     private external fun nativeResize(handle: Long, width: Int, height: Int)
     private external fun nativeRenderFrame(handle: Long, frameTimeNanos: Long)
-    private external fun nativePushPcm(handle: Long, samples: FloatArray, channelCount: Int, sampleRate: Int)
+    private external fun nativePushPcm(handle: Long, samples: FloatArray, count: Int, channelCount: Int, sampleRate: Int)
     private external fun nativeSetPreset(handle: Long, presetPath: String): Boolean
     private external fun nativeNextPreset(handle: Long): String?
     private external fun nativeSetPresetShuffleEnabled(handle: Long, enabled: Boolean)

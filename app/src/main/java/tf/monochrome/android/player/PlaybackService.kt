@@ -36,6 +36,8 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import tf.monochrome.android.audio.dsp.seed
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -64,6 +66,7 @@ import javax.inject.Inject
 class PlaybackService : MediaSessionService() {
 
     @Inject lateinit var queueManager: QueueManager
+    @Inject lateinit var listContinuation: ListContinuation
     @Inject lateinit var streamResolver: StreamResolver
     @Inject lateinit var serverAccess: tf.monochrome.android.data.api.ApiServerAccess
     @Inject lateinit var preferences: PreferencesManager
@@ -76,6 +79,8 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor
     @Inject lateinit var downmixProcessor: tf.monochrome.android.audio.dsp.DownmixProcessor
     @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
+    /** Trypt Mania's players run copies of the chain, kept in step by [publishGameSeed]. */
+    @Inject lateinit var gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
     @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
@@ -85,6 +90,7 @@ class PlaybackService : MediaSessionService() {
     // the library galaxy: the tap at the head of the chain, and what keeps it.
     @Inject lateinit var dynamicRangeTap: tf.monochrome.android.audio.meter.DynamicRangeTapProcessor
     @Inject lateinit var replayGainProcessor: tf.monochrome.android.audio.replaygain.ReplayGainProcessor
+    @Inject lateinit var replayGainNow: tf.monochrome.android.audio.replaygain.ReplayGainNow
     @Inject lateinit var dynamicRangeRecorder: DynamicRangeRecorder
     // A library track's own BPM tag, over the estimate from its audio.
     @Inject lateinit var taggedTempo: TaggedTempo
@@ -100,6 +106,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var parametricEqProcessor: ParametricEqProcessor
     @Inject lateinit var spectrumAnalyzerTap: SpectrumAnalyzerTap
     @Inject lateinit var unifiedTrackRegistry: UnifiedTrackRegistry
+    @Inject lateinit var preparingPlay: PreparingPlay
     @Inject lateinit var playbackState: PlaybackStateRepository
     @Inject lateinit var playbackSignals: PlaybackSignals
     // The Audio Pipeline panel's window into the decoder. Nothing else in
@@ -214,6 +221,16 @@ class PlaybackService : MediaSessionService() {
         // it comes straight off time-to-first-sound. The post-underrun
         // threshold stays at 5 s, so a genuinely struggling connection still
         // refills properly instead of churning.
+        //
+        // The buffer is held in the Java heap, so its size in bytes is capped
+        // too, and the cap wins over the 30 s minimum. With time first, the
+        // 30 s were kept whatever they weighed: about 21 MB for 24-bit/192 kHz
+        // FLAC and 84 MB for DSD256, a third of the heap Android gives the
+        // app. At BUFFER_BYTES lossy and CD-quality streams still get their
+        // full two minutes; only the hi-res formats hold less time (about
+        // 23 s of 24/192, 6 s of DSD256, read from a local file anyway), and
+        // with the cap reached playback starts or resumes on what there is
+        // rather than waiting for the minimum.
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 /* minBufferMs */ 30_000,
@@ -221,8 +238,8 @@ class PlaybackService : MediaSessionService() {
                 /* bufferForPlaybackMs */ 750,
                 /* bufferForPlaybackAfterRebufferMs */ 5_000,
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .setTargetBufferBytes(C.LENGTH_UNSET)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setTargetBufferBytes(BUFFER_BYTES)
             .build()
 
         player = ExoPlayer.Builder(this, buildRenderersFactory())
@@ -457,7 +474,7 @@ class PlaybackService : MediaSessionService() {
                     // volume is re-asserted here — it's the only hook the
                     // hand-off gives us.
                     applyVolume()
-                    serviceScope.launch { preloadNextTracks() }
+                    preloadNextTracks()
                 }
                 // The window advanced, so the memo below is about the track
                 // that just played. A repeat-one queue would otherwise keep the
@@ -510,23 +527,45 @@ class PlaybackService : MediaSessionService() {
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
             .build()
-        // The session hears when the DAC is claimed or let go, or a stream
-        // goes to Android's output despite it, and when its level moves, so
-        // the system volume panel follows it. On the main thread, where the
-        // session listens.
+        // The session hears when the DAC is claimed or let go, a stream
+        // goes to Android's output despite it, or Trypt Mania plays its own
+        // there, and when its level moves, so the system volume panel
+        // follows it. On the main thread, where the session listens.
         serviceScope.launch {
-            combine(libusbDriver.isOpen, bypassVolumeController.dacCarriesStream) { open, carries -> open && carries }
+            combine(
+                libusbDriver.isOpen,
+                bypassVolumeController.dacCarriesStream,
+                bypassVolumeController.androidStreamAudible,
+            ) { open, carries, audible -> open && carries && !audible }
                 .distinctUntilChanged()
                 .collect { forwardingPlayer.onExclusiveChanged() }
         }
         serviceScope.launch {
             bypassVolumeController.levelDb.collect { forwardingPlayer.onDeviceVolumeChanged() }
         }
+        // The DAC has one stream. Trypt Mania taking it (a run's song, a
+        // preview) pauses the player, as any other sound taking the output
+        // would; nothing resumes it, and its next play takes the stream back
+        // (LibusbAudioSink, StreamLease).
+        serviceScope.launch {
+            libusbDriver.streamHolder.collect { holder ->
+                if (holder == tf.monochrome.android.audio.usb.StreamClaimant.GAME && player.playWhenReady) {
+                    player.pause()
+                }
+            }
+        }
 
         // Scrobbles by time heard, checked every couple of seconds: see
-        // ScrobbleTracker for why not on the track's end.
+        // ScrobbleTracker for why not on the track's end. Only while playing,
+        // parked on [playingSignal] otherwise like the position watcher: a
+        // paused tick hears nothing, so it can never make a play due, and the
+        // pause itself is counted up to its moment by onIsPlayingChanged.
         serviceScope.launch {
             while (true) {
+                if (!playingSignal.value) {
+                    playingSignal.first { it }
+                    continue
+                }
                 kotlinx.coroutines.delay(2_000)
                 tickScrobble()
             }
@@ -651,8 +690,20 @@ class PlaybackService : MediaSessionService() {
                 applyReplayGain()
             }
         }
-        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it } }
-        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it } }
+        serviceScope.launch { preferences.dspBlockSize.collect { dspBlockSize = it; publishGameSeed() } }
+        serviceScope.launch { preferences.dspEnabled.collect { dspEnabled = it; publishGameSeed() } }
+        // The rest of what a game chain follows: the Oxford stages and the
+        // Crossfeed, set from their screens straight onto the singletons, and
+        // the engine's own state. Debounced: a knob being dragged is many
+        // changes, and each seed reads the engine's state back.
+        serviceScope.launch {
+            kotlinx.coroutines.flow.merge(
+                inflatorEffect.state.map { },
+                compressorEffect.state.map { },
+                crossfeedEffect.state.map { },
+                dspManager.stateChanges,
+            ).debounce(120L).collect { publishGameSeed() }
+        }
         serviceScope.launch { preferences.hiResHalOutputEnabled.collect { hiResHalEnabled = it } }
 
         // "Play alongside other apps" (issue #131). With focus handling off the
@@ -1317,6 +1368,9 @@ class PlaybackService : MediaSessionService() {
         }
         crossfade.release()
         playbackSignals.detach()
+        // While the engine still answers: a change no game player has asked
+        // for yet is read now, and the singleton lets go of this service.
+        if (::gameAudio.isInitialized) gameAudio.retireSeed()
         mediaSession?.run {
             player.release()
             release()
@@ -1354,16 +1408,26 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     fun playQueue() {
         val currentTrack = queueManager.currentTrack.value ?: return
+        // Unified tracks (local files, encrypted collections) go through a
+        // different resolver — they aren't HiFi API streams and the legacy
+        // resolver can't handle them. Consult the shared registry first so
+        // notification / lock-screen next / previous taps route correctly
+        // for mixed queues.
+        val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
+        // A track end or a skip from the notification waits for a YouTube or
+        // SoundCloud song to be made ready just as a tap does, and the play
+        // button's spinner says so (PreparingPlay).
+        val turn = preparingPlay.begin(
+            prepares = unifiedTrack?.source is tf.monochrome.android.domain.model.PlaybackSource.Scxyt,
+        )
         serviceScope.launch {
             try {
-                // Unified tracks (local files, encrypted collections) go through a
-                // different resolver — they aren't HiFi API streams and the legacy
-                // resolver can't handle them. Consult the shared registry first so
-                // notification / lock-screen next / previous taps route correctly
-                // for mixed queues.
-                val unifiedTrack = unifiedTrackRegistry[currentTrack.id]
                 if (unifiedTrack != null) {
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
+                    // A newer play started while this one was made ready, and
+                    // the player is that one's now: a fetch that ends late
+                    // must not play over it, nor skip it by failing.
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (!resolved.isPlayable) {
                         onTrackEnded()
                         return@launch
@@ -1372,10 +1436,16 @@ class PlaybackService : MediaSessionService() {
                     player.prepare()
                     startPlayback()
                     // Recorded by the track change this causes (notePlay).
+
+                    // Warmed as the catalogue path below is. Without it a
+                    // track end, a blend or a notification skip left the next
+                    // song cold, which for a YouTube song is a whole fetch.
+                    preloadNextTracks()
                     return@launch
                 }
 
                 val (mediaItem, trackStream) = streamResolver.resolveMediaItem(currentTrack)
+                if (!preparingPlay.isLatest(turn)) return@launch
 
                 if (mediaItem == null) {
                     onTrackEnded()
@@ -1422,9 +1492,11 @@ class PlaybackService : MediaSessionService() {
                 // window for the track we just started.
                 syncGaplessNext()
             } catch (e: Exception) {
-                onTrackEnded()
+                if (preparingPlay.isLatest(turn)) onTrackEnded()
             }
-        }
+            // On completion rather than in a finally: a play cancelled before
+            // it started (the service going) runs no finally.
+        }.invokeOnCompletion { preparingPlay.end(turn) }
     }
 
     @OptIn(UnstableApi::class)
@@ -1439,7 +1511,14 @@ class PlaybackService : MediaSessionService() {
         if (nextTrack != null) {
             playQueue()
         } else {
-            player.stop()
+            // The last song: on into the next list, if one is coming.
+            serviceScope.launch {
+                when (listContinuation.next()) {
+                    ListContinuation.Outcome.MOVED -> playQueue()
+                    ListContinuation.Outcome.NOTHING -> player.stop()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
         }
     }
 
@@ -1452,6 +1531,18 @@ class PlaybackService : MediaSessionService() {
         }
         crossfade.cancel()
         dropGaplessNext()
+        if (queueManager.currentQueueIndex == 0) {
+            // The first song: back to the last song of the list before, if
+            // there is one; otherwise it restarts, as it always has.
+            serviceScope.launch {
+                when (listContinuation.stepBack()) {
+                    ListContinuation.Outcome.MOVED -> playQueue()
+                    ListContinuation.Outcome.NOTHING -> if (queueManager.previous() != null) playQueue()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
+            return
+        }
         val prevTrack = queueManager.previous()
         if (prevTrack != null) {
             playQueue()
@@ -1474,6 +1565,12 @@ class PlaybackService : MediaSessionService() {
         val nextTrack = queueManager.next()
         if (nextTrack != null) {
             playQueue()
+        } else {
+            // Normally the next list is in the queue by now; a short last
+            // song can end before it has loaded.
+            serviceScope.launch {
+                if (listContinuation.next() == ListContinuation.Outcome.MOVED) playQueue()
+            }
         }
     }
 
@@ -1582,9 +1679,10 @@ class PlaybackService : MediaSessionService() {
     /**
      * Sets ReplayGain's stage to [mediaItem]'s gain (see ReplayGain): on every
      * change of track and of the setting. Its tags are the playing
-     * UnifiedTrack's: a library file's, an opened file's or a collection's;
-     * any other song has none and plays as it is. An album, for the Smart
-     * mode, is the song between songs of its own album in the queue.
+     * UnifiedTrack's: a library file's, an opened file's or a collection's.
+     * Any other song (a stream, an untagged file) has none, and is measured
+     * as it plays instead (ReplayGainProcessor.follow). An album, for the
+     * Smart mode, is the song between songs of its own album in the queue.
      *
      * On a gapless hand-off the stage has already run ahead into the next
      * track, so its gain glides in a moment into it; a skip or a seek starts
@@ -1594,6 +1692,7 @@ class PlaybackService : MediaSessionService() {
         val settings = replayGainSettings
         if (settings.mode == tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF || mediaItem == null) {
             replayGainProcessor.setGain(1f)
+            replayGainNow.set(null)
             return
         }
         val queue = queueManager.currentQueue
@@ -1610,7 +1709,21 @@ class PlaybackService : MediaSessionService() {
             nextAlbumId = queue.getOrNull(index + 1)?.album?.id,
         )
         val tags = tf.monochrome.android.audio.replaygain.ReplayGain.of(track?.let { unifiedTrackRegistry[it.id] })
-        replayGainProcessor.setGain(tf.monochrome.android.audio.replaygain.ReplayGain.linear(tags, settings, inAlbum))
+        if (tags.isEmpty) {
+            // No tags (a stream, an untagged file): measured as it plays, and
+            // turned down to the target as the reading builds.
+            replayGainProcessor.follow(settings.targetLufs, key = mediaItem.mediaId)
+            replayGainNow.set(tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading(tagged = false, gainDb = 0f))
+            return
+        }
+        val linear = tf.monochrome.android.audio.replaygain.ReplayGain.linear(tags, settings, inAlbum)
+        replayGainProcessor.setGain(linear)
+        replayGainNow.set(
+            tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading(
+                tagged = true,
+                gainDb = 20f * kotlin.math.log10(linear),
+            ),
+        )
     }
 
     private fun applyVolume() {
@@ -1702,21 +1815,21 @@ class PlaybackService : MediaSessionService() {
      * DSP graph and EQ curves as the track that is already playing. Released
      * with the blend, which destroys its native engine — see [DspChain].
      */
+    /**
+     * The chain's settings as they stand, for a copy to follow (the blend's
+     * tail once, the game's players as they change). Reads the engine's
+     * state back, so not for every frame.
+     */
     @OptIn(UnstableApi::class)
-    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
-        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
-        // Built while the outgoing track still plays on the main chain (see
-        // CrossfadeController.start), so this is that track's gain, and its
-        // tail keeps it while the main chain moves to the next track's.
-        chain.replayGain.setGain(replayGainProcessor.gain)
+    private fun currentDspSeed(): tf.monochrome.android.audio.dsp.DspSeed {
         val autoEq = lastAutoEq
         val paramEq = lastParametricEq
-        chain.seedFrom(
-            // Without the upmix switch: the tail runs its own chain, which
+        return tf.monochrome.android.audio.dsp.DspSeed(
+            // Without the upmix switch: a copy runs its own chain, which
             // has no upmix stage, and the engine needs only the buses.
             dspStateJson = runCatching {
                 // Without the knob links too: they are handed over apart from
-                // the state, and the tail plays out at the knobs' own values.
+                // the state, and a copy plays at the knobs' own values.
                 tf.monochrome.android.audio.dsp.model.KnobLinkCodec.strip(
                     tf.monochrome.android.audio.dsp.model.MixUpmix.strip(dspManager.getStateJson()),
                 )
@@ -1729,13 +1842,38 @@ class PlaybackService : MediaSessionService() {
             parametricPreamp = paramEq.preamp,
             parametricEnabled = paramEq.enabled,
             // Straight off the live singletons — whatever is playing right now.
-            inflatorState = inflatorEffect.state.value,
-            compressorState = compressorEffect.state.value,
-            crossfeedState = crossfeedEffect.state.value,
+            inflator = inflatorEffect.state.value,
+            compressor = compressorEffect.state.value,
+            crossfeed = crossfeedEffect.state.value,
             blockSize = dspBlockSize,
             dspEnabled = dspEnabled,
-            autoEqPitchRatio = lastPitchRatio * 2f.pow(lastSemitones / 12f),
         )
+    }
+
+    /**
+     * Hands the settings as they stand to Trypt Mania's chains; called wherever
+     * one lands on the singletons. Read only while a game player is alive
+     * (or when the next one comes), not on every knob turn for nobody.
+     */
+    @OptIn(UnstableApi::class)
+    private fun publishGameSeed() {
+        if (!::gameAudio.isInitialized) return
+        gameAudio.publishSeed(::currentDspSeed)
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun buildSeededDspChain(): tf.monochrome.android.audio.dsp.DspChain {
+        val chain = tf.monochrome.android.audio.dsp.DspChain.createCopy(spatialPlacement)
+        // Built while the outgoing track still plays on the main chain (see
+        // CrossfadeController.start), so this is that track's gain, and its
+        // tail keeps it while the main chain moves to the next track's.
+        // The level it is at, which for a measured song is not the gain set.
+        // And the tail starts there: started by the mode, a raised song would
+        // drop to unity and glide back up just as the blend begins.
+        val level = replayGainProcessor.appliedGain
+        chain.replayGain.setGain(level)
+        chain.replayGain.seedLevel(level)
+        chain.seed(currentDspSeed(), lastPitchRatio * 2f.pow(lastSemitones / 12f))
         // The copy's native engine only exists once ExoPlayer configures it
         // with a format, which is after the blend has started.
         chain.observeEngine(serviceScope)
@@ -1751,7 +1889,12 @@ class PlaybackService : MediaSessionService() {
             dspChainFactory = ::buildSeededDspChain,
             // While the DAC is exclusively ours, the tail is mixed into the
             // main stream instead of playing through Android.
-            usbMix = { usbCrossfadeMix.takeIf { libusbDriver.isStreaming.value } },
+            usbMix = {
+                usbCrossfadeMix.takeIf {
+                    libusbDriver.isStreaming.value &&
+                        libusbDriver.holdsStream(tf.monochrome.android.audio.usb.StreamClaimant.PLAYER)
+                }
+            },
         ) { gain ->
             crossfadeGain = gain
             pushVolume()
@@ -2033,6 +2176,12 @@ class PlaybackService : MediaSessionService() {
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
 
         /**
+         * The most the player's buffer holds, bytes: two minutes of CD-quality
+         * FLAC, and the ceiling for everything denser (see onCreate).
+         */
+        const val BUFFER_BYTES = 16 * 1024 * 1024
+
+        /**
          * How long an EQ preference change settles before the filter chain is
          * rebuilt. Short enough to read as instant on a slider release, long
          * enough that a drag can never rebuild every biquad frame by frame.
@@ -2234,17 +2383,21 @@ class PlaybackService : MediaSessionService() {
         return item.takeIf { GaplessEligibility.isStableUri(uri) }
     }
 
-    private suspend fun preloadNextTracks() {
+    private fun preloadNextTracks() {
         // Warm the next 2 tracks so a skip doesn't start cold. Only durable
         // work is done — see StreamResolver.warmUpcoming; a full resolve here
         // fetched short-lived stream URLs and discarded them, which cost a
         // request at the worst possible moment and bought nothing.
+        //
+        // Each on its own: a YouTube song next is a whole fetch, and the one
+        // after it, or the gapless window built after this, must not wait
+        // for that.
         val queue = queueManager.currentQueue
         val currentIdx = queueManager.currentQueueIndex
         for (i in 1..2) {
             val nextIdx = currentIdx + i
             if (nextIdx < queue.size) {
-                streamResolver.warmUpcoming(queue[nextIdx])
+                serviceScope.launch { streamResolver.warmUpcoming(queue[nextIdx], stepsAhead = i) }
             }
         }
     }
@@ -2338,10 +2491,17 @@ class PlaybackService : MediaSessionService() {
      * player's Audio panel moves it without the EQ screen open.
      */
     private fun applyEqSettings(cfg: EqApply) {
+        // What was last applied, applied again: every STATE_READY (a track
+        // starting, a seek, a rebuffer) re-reads the settings, and with nothing
+        // changed there is nothing to decode and three AutoEQ designs to skip.
+        // Main thread only, like both callers, so a plain field.
+        if (cfg == lastEqInput) return
         try {
             if (cfg.systemWide) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
+                publishGameSeed()
+                lastEqInput = cfg
                 return
             }
             fun decode(bandsJson: String?): List<EqBand> =
@@ -2370,10 +2530,18 @@ class PlaybackService : MediaSessionService() {
             val active = bandsL.any { it.enabled } || bandsR.any { it.enabled } || preamp != 0f
             autoEqProcessor.applyBands(bandsL, bandsR, preamp, active)
             lastAutoEq = AppliedEq(bandsL, bandsR, preamp, active)
+            lastEqInput = cfg
+            publishGameSeed()
         } catch (e: Exception) {
             // Gracefully handle EQ application errors
         }
     }
+
+    /** The settings [applyEqSettings] last applied in full; null before the first. */
+    private var lastEqInput: EqApply? = null
+
+    /** The same for [applyParametricEqSettings]. */
+    private var lastParametricEqInput: Triple<Boolean, String?, Double>? = null
 
     /**
      * Apply current Parametric EQ settings from preferences
@@ -2393,6 +2561,12 @@ class PlaybackService : MediaSessionService() {
      * Apply Parametric EQ settings to the standalone ParametricEqProcessor
      */
     private fun applyParametricEqSettings(enabled: Boolean, bandsJson: String?, preamp: Double) {
+        // Unchanged since the last apply: skip the decode, and leave the
+        // filters running. A new snapshot of the same curve used to rebuild
+        // every one of them from silence, which after a mid-song rebuffer
+        // could be heard as a click.
+        val input = Triple(enabled, bandsJson, preamp)
+        if (input == lastParametricEqInput) return
         try {
             val bands = if (!bandsJson.isNullOrEmpty()) {
                 eqJson.decodeFromString<List<EqBand>>(bandsJson)
@@ -2401,6 +2575,8 @@ class PlaybackService : MediaSessionService() {
             }
             parametricEqProcessor.applyBands(bands, preamp.toFloat(), enabled)
             lastParametricEq = AppliedEq(bands, bands, preamp.toFloat(), enabled)
+            publishGameSeed()
+            lastParametricEqInput = input
         } catch (_: Exception) { }
     }
 

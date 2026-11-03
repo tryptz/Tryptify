@@ -79,7 +79,10 @@ fun FrequencyResponseGraph(
     preamp: Float = 0f,
     sampleRate: Float = 48000f,
     onBandDragged: ((bandId: Int, newFreq: Float, newGain: Float) -> Unit)? = null,
-    spectrumBins: FloatArray = FloatArray(0),
+    // The live spectrum, read where it is drawn. A provider rather than the
+    // array: it changes on every analyser frame, and as a value it recomposed
+    // the graph and redrew its grid, labels and curves 60–120 times a second.
+    spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color? = null,
     centerOnZero: Boolean = false,
     showLegend: Boolean = true,
@@ -253,10 +256,59 @@ fun FrequencyResponseGraph(
             .clip(RoundedCornerShape(12.dp))
             .background(graphBackground)
     ) {
+        // Three layers, in the order they were always painted: the grid and
+        // its labels, the live spectrum, then the curves and the dots. Each
+        // spectrum frame redraws only its own layer; the grid only redraws
+        // when its range does, and the curves only when the bands move.
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+
+            // Grid
+            drawGrid(w, h, minGain, maxGain, zeroOffset)
+
+            // dB labels on right — relative to the centre line
+            drawDbLabels(w, h, minGain, maxGain, zeroOffset)
+
+            // Frequency labels at bottom
+            drawFreqLabels(w, h)
+        }
+
+        // FFT spectrum behind curves — uses the active theme's primary color,
+        // modulated per-bin by the EQ response (bright on boost, shadow on cut).
+        if (spectrumBins != null && spectrumColor != null) {
+            val spectrum = remember { SpectrumScratch() }
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                    .graphicsLayer {}
+            ) {
+                val bins = spectrumBins()
+                if (bins.isNotEmpty()) {
+                    drawSpectrum(
+                        bins = bins,
+                        color = spectrumColor,
+                        width = size.width,
+                        height = size.height,
+                        minGain = minGain,
+                        maxGain = maxGain,
+                        zeroOffset = zeroOffset,
+                        scratch = spectrum,
+                    )
+                }
+            }
+        }
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                .graphicsLayer {}
                 .pointerInput(Unit) {
                     if (onBandDragged == null) return@pointerInput
                     detectTapGestures { offset ->
@@ -317,29 +369,6 @@ fun FrequencyResponseGraph(
         ) {
             val w = size.width
             val h = size.height
-
-            // Grid
-            drawGrid(w, h, minGain, maxGain, zeroOffset)
-
-            // dB labels on right — relative to the centre line
-            drawDbLabels(w, h, minGain, maxGain, zeroOffset)
-
-            // Frequency labels at bottom
-            drawFreqLabels(w, h)
-
-            // FFT spectrum behind curves — uses the active theme's primary color,
-            // modulated per-bin by the EQ response (bright on boost, shadow on cut).
-            if (spectrumBins.isNotEmpty() && spectrumColor != null) {
-                drawSpectrum(
-                    bins = spectrumBins,
-                    color = spectrumColor,
-                    width = w,
-                    height = h,
-                    minGain = minGain,
-                    maxGain = maxGain,
-                    zeroOffset = zeroOffset
-                )
-            }
 
             // Correction-gap shading: the region between the measurement and
             // the target IS the problem the EQ exists to fix. Shading it makes
@@ -1034,6 +1063,20 @@ private fun DrawScope.drawDashedCurve(
 }
 
 /**
+ * What [drawSpectrum] keeps between frames: the bins' x positions, which depend
+ * only on how many bins there are and how wide the graph is (256 `pow` calls a
+ * frame otherwise), and the two paths, drawn into again rather than allocated.
+ */
+private class SpectrumScratch {
+    var count = -1
+    var width = Float.NaN
+    var xs = FloatArray(0)
+    var ys = FloatArray(0)
+    val envelope = Path()
+    val fill = Path()
+}
+
+/**
  * Render FFT spectrum bins as a smooth Catmull-Rom envelope with vertical
  * gradient fill (FabFilter Pro-Q style). Bins span MIN_FREQ..MAX_FREQ on a
  * log axis; magnitudes are dB relative to 0 dB center.
@@ -1045,7 +1088,8 @@ private fun DrawScope.drawSpectrum(
     height: Float,
     minGain: Float,
     maxGain: Float,
-    zeroOffset: Float
+    zeroOffset: Float,
+    scratch: SpectrumScratch,
 ) {
     if (bins.isEmpty()) return
     val n = bins.size
@@ -1054,20 +1098,27 @@ private fun DrawScope.drawSpectrum(
     val topY = GRAPH_PADDING_TOP
     val bottomY = height - GRAPH_PADDING_BOTTOM
 
-    // Precompute bin x/y in screen space
-    val xs = FloatArray(n)
-    val ys = FloatArray(n)
+    // Bin x positions in screen space, kept while the bin count and the width hold.
+    if (scratch.count != n || scratch.width != width) {
+        scratch.count = n
+        scratch.width = width
+        scratch.xs = FloatArray(n) { i ->
+            val t = i.toFloat() / (n - 1).toFloat()
+            freqToX(10f.pow(logMin + t * (logMax - logMin)), width)
+        }
+        scratch.ys = FloatArray(n)
+    }
+    val xs = scratch.xs
+    val ys = scratch.ys
     for (i in 0 until n) {
-        val t = i.toFloat() / (n - 1).toFloat()
-        val freq = 10f.pow(logMin + t * (logMax - logMin))
-        xs[i] = freqToX(freq, width)
         val binGain = (zeroOffset + bins[i]).coerceIn(minGain, maxGain)
         ys[i] = gainToY(binGain, height, minGain, maxGain).coerceIn(topY, bottomY)
     }
 
     // Build a smooth envelope path using Catmull-Rom -> cubic Bézier interpolation.
     // This gives the flowing, continuously-curved look of FabFilter Pro-Q.
-    val envelope = Path().apply {
+    val envelope = scratch.envelope.apply {
+        rewind()
         moveTo(xs[0], ys[0])
         for (i in 0 until n - 1) {
             val p0x = xs[(i - 1).coerceAtLeast(0)]; val p0y = ys[(i - 1).coerceAtLeast(0)]
@@ -1083,7 +1134,8 @@ private fun DrawScope.drawSpectrum(
     }
 
     // Filled body — vertical gradient from envelope top down to graph bottom.
-    val fill = Path().apply {
+    val fill = scratch.fill.apply {
+        rewind()
         addPath(envelope)
         lineTo(xs[n - 1], bottomY)
         lineTo(xs[0], bottomY)

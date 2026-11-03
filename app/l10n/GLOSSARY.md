@@ -28,6 +28,7 @@ not Spain-only), Turkish, German, Italian (it).
 | Discover (tab) | 发现 | 見つける | Découvrir | Descubrir | Keşfet | Entdecken | Scopri |
 | Radio (tab) | 电台 | ラジオ | Radio | Radio | Radyo | Radio | Radio |
 | Library (tab) | 音乐库 | ライブラリ | Bibliothèque | Biblioteca | Kitaplık | Bibliothek | Libreria |
+| Account page (where you sign in to Tryptify; "Sign in on the Account page to …") | 账户页面 | アカウントページ | page Compte | página Cuenta | Hesap sayfası | Kontoseite | pagina Account |
 | Search (tab) | 搜索 | 検索 | Rechercher | Buscar | Ara | Suche | Cerca |
 | Settings | 设置 | 設定 | Paramètres | Ajustes | Ayarlar | Einstellungen | Impostazioni |
 | Settings › System | 设置 › 系统 | 設定 › システム | Paramètres › Système | Ajustes › Sistema | Ayarlar › Sistem | Einstellungen › System | Impostazioni › Sistema |
@@ -81,7 +82,7 @@ Name a menu as the person's own device shows it in their language.
 ## Never translated
 
 Brand and format names: Tryptify, Spotify, Apple Music, YouTube Music,
-TuneMyMusic, exportify.net and Exportify, THX (but “Spatial Audio” after it
+YouTube, SoundCloud, TuneMyMusic, exportify.net and Exportify, THX (but “Spatial Audio” after it
 is), AutoEQ, CSV, JSPF, XSPF, XML, FLAC, projectM, MilkDrop, Wave Candy,
 Oxford, Nothing Ear, Nothing X.
 
@@ -99,5 +100,6 @@ preset names (`FxPresets.kt`, WARMTH, PUNCH, DRUM BUS…), EQ filter types
 (PEAK, LOW-S, HIGH-S) and the channel strip's short labels (M, fx, -inf, MIX,
 OS, IN/OUT, LFE). Help text that names them uses them as they appear.
 
-Also kept English on purpose: What's New, the debug log, and data the app
+Also kept English on purpose: What's New for releases before 1.9.51 (from
+1.9.51 on it is translated, `WhatsNewTest`), the debug log, and data the app
 stores (an imported preset's description, a bus's name).

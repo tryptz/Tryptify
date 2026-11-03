@@ -85,6 +85,23 @@ class GlyphAutoplay {
     }
 
     /**
+     * Play on from [position] on an engine that was just set up there (a
+     * run's start, or a training loop armed), without resetting it again:
+     * the engine already holds the window it should, and a reset would
+     * widen a loop's back to the whole song. Notes before [position] are
+     * the engine's to set aside, not this one's to press.
+     */
+    fun syncTo(engine: GlyphGameplayEngine, position: Float) {
+        for (index in 0 until LANES) {
+            holdEnds[index] = NONE
+            rollTaps[index] = NONE
+        }
+        val notes = engine.chart.notes
+        next = notes.indexOfFirst { it.timeSeconds >= position }.let { if (it < 0) notes.size else it }
+        last = position
+    }
+
+    /**
      * Start again at [position]: the engine forgets every judgement and sets
      * aside what is behind [position], so the notes just passed are not drawn
      * a second time as misses.

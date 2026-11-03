@@ -27,7 +27,7 @@ public:
         envL_.setMode(DetectionMode::Peak);
         envR_.setMode(DetectionMode::Peak);
 
-        updateLookahead();
+        updateLookahead(/* fresh = */ true);
 
         gainL_ = 1.0f;
         gainR_ = 1.0f;
@@ -91,8 +91,8 @@ public:
     void setParameter(int index, float value) override {
         switch (index) {
             case ATTACK:
-                attackMs_ = std::max(0.0f, std::min(50.0f, value));
-                updateLookahead();
+                attackMs_ = std::max(0.0f, std::min(kMaxAttackMs, value));
+                updateLookahead(/* fresh = */ false);
                 break;
             case HOLD:    holdMs_ = std::max(0.0f, std::min(500.0f, value)); break;
             case RELEASE:
@@ -131,11 +131,36 @@ public:
     SnapinType getType() const override { return SnapinType::COMPACTOR; }
 
 private:
-    void updateLookahead() {
-        int samples = static_cast<int>(attackMs_ * 0.001f * static_cast<float>(sampleRate_));
-        if (samples < 1) samples = 1;
-        lookaheadL_.prepare(samples);
-        lookaheadR_.prepare(samples);
+    static constexpr float kMaxAttackMs = 50.0f;
+    // How long a new attack crossfades the lookahead's read from the old
+    // delay to the new one, rather than jumping it.
+    static constexpr float kLookaheadFadeMs = 2.0f;
+
+    // Samples of lookahead an attack of [ms] gives at the current rate.
+    int lookaheadSamples(float ms) const {
+        const int samples = static_cast<int>(ms * 0.001f * static_cast<float>(sampleRate_));
+        return samples < 1 ? 1 : samples;
+    }
+
+    // The attack is the lookahead. [fresh] for a new rate, which starts the
+    // buffers silent and makes them as long as the longest attack, so a
+    // later turn of the knob, or a music link moving it from the audio
+    // thread, never allocates; a turn of the knob keeps what they hold and
+    // crossfades to the new delay.
+    void updateLookahead(bool fresh) {
+        const int samples = lookaheadSamples(attackMs_);
+        if (fresh) {
+            const int longest = lookaheadSamples(kMaxAttackMs);
+            const int fade = lookaheadSamples(kLookaheadFadeMs);
+            lookaheadL_.prepare(samples, longest, fade);
+            lookaheadR_.prepare(samples, longest, fade);
+        } else {
+            // A music link sets the attack once per mix piece, mostly to the
+            // same number of samples, and that changes nothing.
+            if (samples == lookaheadL_.getDelay()) return;
+            lookaheadL_.setDelay(samples);
+            lookaheadR_.setDelay(samples);
+        }
     }
 
     float computeGain(float envVal, float threshLin, float rangeFactor) const {

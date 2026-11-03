@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.detail
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.ui.navigation.openTrackArtist
 import tf.monochrome.android.ui.navigation.trackAlbumAction
 import tf.monochrome.android.ui.navigation.popBackStackSafe
@@ -164,6 +166,7 @@ fun ArtistDetailScreen(
             onAddToPlaylist = { showAddToPlaylistForTrack = track },
             onDownloadTrack = { playerViewModel.downloadTrack(track) },
             onShareFile = { playerViewModel.shareTrack(track) },
+            onShareLink = { playerViewModel.shareLink(track) },
             onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
             onGoToArtist = null, // Already here
             onSelect = { selection.toggle(track.id) }
@@ -390,6 +393,8 @@ fun ArtistDetailScreen(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
+                                            // One row for "the next album": albums, then EPs and singles, as the page reads.
+                                            ListTrail.opened(album, detail.albums + detail.eps + detail.singles) { ListRef.Album(it.id) }
                                             navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id))
                                         }
                                     )
@@ -410,6 +415,7 @@ fun ArtistDetailScreen(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
+                                            ListTrail.opened(album, detail.albums + epSingles) { ListRef.Album(it.id) }
                                             navController.navigateSafe(Screen.AlbumDetail.createRoute(album.id))
                                         }
                                     )

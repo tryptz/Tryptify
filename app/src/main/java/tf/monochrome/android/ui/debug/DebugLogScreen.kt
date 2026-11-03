@@ -1,8 +1,6 @@
 package tf.monochrome.android.ui.debug
 
 import tf.monochrome.android.ui.navigation.popBackStackSafe
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -115,12 +113,24 @@ fun DebugLogScreen(
     // Auto-scroll to the newest entry only when the user is already at (or
     // near) the bottom — otherwise a new log line every ~250ms yanked them
     // back down and made scrolling up to read an earlier entry impossible.
-    LaunchedEffect(entries.size) {
+    //
+    // Keyed on the newest line rather than the count: once the buffer is full
+    // the count stops changing, and with keyed rows the list holds on to the
+    // rows it shows instead of sliding newer ones under them. "At the bottom"
+    // is then whether the line that was newest last time is still in view.
+    val newestKey = if (entries.isEmpty()) -1L else entries.keyAt(entries.lastIndex)
+    var followedKey by remember { mutableLongStateOf(-1L) }
+    LaunchedEffect(newestKey) {
         if (entries.isEmpty()) return@LaunchedEffect
-        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-        if (lastVisible >= entries.lastIndex - 1) {
-            listState.scrollToItem(entries.lastIndex)
+        val previous = followedKey
+        followedKey = newestKey
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val atBottom = if (previous < 0L) {
+            (visible.lastOrNull()?.index ?: -1) >= entries.lastIndex - 1
+        } else {
+            visible.any { (it.key as? Long ?: -1L) >= previous - 1 }
         }
+        if (atBottom) listState.scrollToItem(entries.lastIndex)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -142,9 +152,18 @@ fun DebugLogScreen(
             },
             actions = {
                 IconButton(onClick = {
-                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    cm.setPrimaryClip(ClipData.newPlainText("monotrypt-debug-log", viewModel.exportText()))
-                    Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                    // The newest lines that fit: the whole buffer is past what the
+                    // clipboard takes in one go and crashed the app (1.3 MB, on
+                    // device). Export to file keeps all of it.
+                    val all = viewModel.exportText()
+                    val copied = tf.monochrome.android.util.SafeClipboard.newestLinesThatFit(all)
+                    val ok = tf.monochrome.android.util.SafeClipboard.copy(context, "monotrypt-debug-log", copied)
+                    val message = when {
+                        !ok -> "The log could not be copied. Use Export to file."
+                        copied.length < all.length -> "Copied the newest ${copied.lines().size} lines. Export to file for all of it."
+                        else -> "Log copied to clipboard"
+                    }
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                 }) {
                     Icon(Icons.Default.ContentCopy, contentDescription = "Copy all")
                 }
@@ -194,8 +213,8 @@ fun DebugLogScreen(
                 .padding(horizontal = 12.dp),
             contentPadding = PaddingValues(top = searchTopInset, bottom = 80.dp + LocalBottomChromeInset.current),
         ) {
-            items(items = entries) { entry ->
-                LogRow(entry = entry)
+            items(count = entries.size, key = { entries.keyAt(it) }) { index ->
+                LogRow(entry = entries[index])
             }
         }
         }

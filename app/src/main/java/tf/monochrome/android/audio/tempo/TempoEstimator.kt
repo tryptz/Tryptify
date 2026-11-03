@@ -55,7 +55,11 @@ import kotlin.math.tan
  * Cheap enough for the playback thread: three biquads and four smoothed
  * energies a sample, and one estimate a second of ~300k multiply-adds.
  */
-class TempoEstimator(sampleRate: Int) {
+class TempoEstimator(
+    sampleRate: Int,
+    /** Steps kept: [WINDOW_FRAMES] (ten seconds) live, a whole song's for [SongTempo]. */
+    private val windowFrames: Int = WINDOW_FRAMES,
+) {
 
     private val hop = max(1, (sampleRate / ENVELOPE_HZ.toFloat()).roundToInt())
     private val envelopeHz = sampleRate.toFloat() / hop
@@ -70,7 +74,7 @@ class TempoEstimator(sampleRate: Int) {
     private val previousLog = FloatArray(BANDS)
     private var primed = false
 
-    private val envelope = FloatArray(WINDOW_FRAMES)
+    private val envelope = FloatArray(windowFrames)
 
     /**
      * The kick and body bands' onsets: the kick and the snare, which say
@@ -79,13 +83,15 @@ class TempoEstimator(sampleRate: Int) {
      * tempo. Not the whole signal's band either, which hears the hats too:
      * loud ones made a boom-bap groove's eighth notes all beats.
      */
-    private val beatEnvelope = FloatArray(WINDOW_FRAMES)
+    private val beatEnvelope = FloatArray(windowFrames)
 
     /** The kick band's onsets alone. */
-    private val kickEnvelope = FloatArray(WINDOW_FRAMES)
+    private val kickEnvelope = FloatArray(windowFrames)
     private var written = 0L
 
     // An estimate's working space, made once: it runs on the playback thread.
+    // Ten seconds at a time, however much the history holds: a whole song
+    // is read as readings of ten seconds each ([wholeSongEstimate]).
     private val work = FloatArray(WINDOW_FRAMES)
     private val workBeats = FloatArray(WINDOW_FRAMES)
     private val workKicks = FloatArray(WINDOW_FRAMES)
@@ -132,7 +138,7 @@ class TempoEstimator(sampleRate: Int) {
             previousLog[b] = log
         }
         primed = true
-        val at = (written % WINDOW_FRAMES).toInt()
+        val at = (written % windowFrames).toInt()
         envelope[at] = flux
         beatEnvelope[at] = beatFlux
         kickEnvelope[at] = kickFlux
@@ -140,7 +146,7 @@ class TempoEstimator(sampleRate: Int) {
     }
 
     /** Seconds of envelope collected, up to the window. */
-    val seconds: Float get() = minOf(written, WINDOW_FRAMES.toLong()) / envelopeHz
+    val seconds: Float get() = minOf(written, windowFrames.toLong()) / envelopeHz
 
     /** A discontinuity (a seek): the next step must not read as one big onset. */
     fun discontinuity() {
@@ -166,19 +172,24 @@ class TempoEstimator(sampleRate: Int) {
      * enough audio or a clear pulse.
      */
     fun estimate(): Float? {
-        val n = minOf(written, WINDOW_FRAMES.toLong()).toInt()
+        val n = minOf(written, WINDOW_FRAMES.toLong(), windowFrames.toLong()).toInt()
+        return estimateOf(written - n, n)
+    }
+
+    /** [estimate] of the [n] steps from step [first] (counted from the start, still held). */
+    private fun estimateOf(first: Long, n: Int): Float? {
         if (n < envelopeHz * MIN_SECONDS) return null
         // Oldest first, without the mean: autocorrelation of a positive
         // envelope is otherwise dominated by its own DC.
-        val start = if (written > WINDOW_FRAMES) (written % WINDOW_FRAMES).toInt() else 0
+        val start = (first % windowFrames).toInt()
         val e = work
         val beats = workBeats
         val kicks = workKicks
         var mean = 0f
         for (i in 0 until n) {
-            e[i] = envelope[(start + i) % WINDOW_FRAMES]
-            beats[i] = beatEnvelope[(start + i) % WINDOW_FRAMES]
-            kicks[i] = kickEnvelope[(start + i) % WINDOW_FRAMES]
+            e[i] = envelope[(start + i) % windowFrames]
+            beats[i] = beatEnvelope[(start + i) % windowFrames]
+            kicks[i] = kickEnvelope[(start + i) % windowFrames]
             mean += e[i]
         }
         mean /= n
@@ -249,6 +260,86 @@ class TempoEstimator(sampleRate: Int) {
         return 60f * envelopeHz / octave(beats, kicks, n, period)
     }
 
+
+    /**
+     * The whole history's tempo, for a song measured end to end ([SongTempo]).
+     *
+     * Ten seconds at a time first, every five, and their median, as the
+     * live tap takes five readings' (a breakdown that reads half does not
+     * move it): the estimate's octave and grid tests hold only over a short
+     * window, where a period a fraction of a step off stays on the beat.
+     * Across a whole song that fraction adds up to a beat, the right grid
+     * fell off its kicks, and house at 128 read 64.
+     *
+     * Then the tempo between the steps: every tempo within half a step of
+     * the median's, coarsely and then finely, each at its best phase,
+     * scored by the kicks' and snares' onset on its beats over the whole
+     * song. Hundreds of beats place it to a hundredth of a BPM.
+     */
+    fun wholeSongEstimate(): Float? {
+        val kept = minOf(written, windowFrames.toLong()).toInt()
+        val first = written - kept
+        val readings = ArrayList<Float>()
+        var at = first
+        while (at + WINDOW_FRAMES <= written) {
+            estimateOf(at, WINDOW_FRAMES)?.let(readings::add)
+            at += WINDOW_FRAMES / 2
+        }
+        // Shorter than one window: the one reading there is.
+        if (readings.isEmpty()) estimateOf(first, kept)?.let(readings::add)
+        if (readings.isEmpty()) return null
+        readings.sort()
+        val bpm = readings[readings.size / 2]
+
+        val beats = FloatArray(kept) { beatEnvelope[((first + it) % windowFrames).toInt()] }
+        val period = 60f * envelopeHz / bpm
+        val slowest = 60f * envelopeHz / (period + 0.5f)
+        val fastest = 60f * envelopeHz / (period - 0.5f)
+        var best = bpm
+        var bestScore = Float.NEGATIVE_INFINITY
+        val coarseSteps = ((fastest - slowest) / COARSE_BPM_STEP).toInt()
+        for (step in 0..coarseSteps) {
+            val candidate = slowest + step * COARSE_BPM_STEP
+            val score = onBeats(beats, kept, 60f * envelopeHz / candidate)
+            if (score > bestScore) { bestScore = score; best = candidate }
+        }
+        val centre = best
+        val fineSteps = (COARSE_BPM_STEP / FINE_BPM_STEP).roundToInt()
+        for (step in -fineSteps..fineSteps) {
+            val candidate = centre + step * FINE_BPM_STEP
+            if (candidate < slowest || candidate > fastest) continue
+            val score = onBeats(beats, kept, 60f * envelopeHz / candidate)
+            if (score > bestScore) { bestScore = score; best = candidate }
+        }
+        return best
+    }
+
+    /**
+     * The mean onset on a grid of [period] steps at its best phase, half a
+     * step at a time, each beat read between steps from the pairs
+     * [onsetNear] reads (an onset split across two steps counts whole).
+     */
+    private fun onBeats(beats: FloatArray, n: Int, period: Float): Float {
+        var best = 0f
+        var phase = 0f
+        while (phase < period) {
+            var sum = 0f
+            var count = 0
+            var at = phase
+            while (at < n - 2) {
+                val i = at.toInt()
+                val f = at - i
+                val here = beats[i] + beats[i + 1]
+                val next = beats[i + 1] + beats[i + 2]
+                sum += here * (1f - f) + next * f
+                count++
+                at += period
+            }
+            if (count > 0 && sum / count > best) best = sum / count
+            phase += 0.5f
+        }
+        return best
+    }
 
     /** The grid score of the candidate with [period], of the first [count]. */
     private fun scoreOf(period: Float, count: Int): Float {
@@ -546,6 +637,10 @@ class TempoEstimator(sampleRate: Int) {
 
         /** About ten seconds of envelope. */
         const val WINDOW_FRAMES = 2048
+
+        /** [wholeSongEstimate]'s search: across half a step either side, then around the best. */
+        private const val COARSE_BPM_STEP = 0.05f
+        private const val FINE_BPM_STEP = 0.005f
 
         const val MIN_BPM = 60f
 

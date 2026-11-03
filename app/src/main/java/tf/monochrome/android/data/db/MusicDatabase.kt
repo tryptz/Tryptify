@@ -61,6 +61,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         PlaybackQueueEntity::class,
         // Local media
         LocalTrackEntity::class,
+        tf.monochrome.android.data.local.db.LocalTrackEditEntity::class,
         LocalAlbumEntity::class,
         LocalArtistEntity::class,
         LocalGenreEntity::class,
@@ -75,7 +76,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 21,
+    version = 24,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -452,6 +453,55 @@ abstract class MusicDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `favorite_tracks` ADD COLUMN `source` TEXT")
                 db.execSQL("ALTER TABLE `playlist_tracks` ADD COLUMN `source` TEXT")
             }
+        }
+
+        /**
+         * ReplayGain's peaks for scanned local tracks, so ReplayGain can raise
+         * a quiet song as far as its peak allows. Nullable REAL with no
+         * default, as MIGRATION_15_16's `bpm` is: how Room checks a `Float?`.
+         * Existing rows start empty and are read from their tags once, after
+         * the upgrade (ScanCoordinator's MUSICAL_TAGS_VERSION 2).
+         */
+        val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgTrackPeak` REAL")
+                db.execSQL("ALTER TABLE `local_tracks` ADD COLUMN `rgAlbumPeak` REAL")
+            }
+        }
+
+        /**
+         * YouTube and SoundCloud songs' ids move from their plain hash into
+         * their own range (SCXYT_ID_BASE), out of TIDAL's: a synced row with
+         * the plain hash played another song on 1.9.5 and older. The new id is
+         * the base plus the old hash's low 32 bits, so a row saved by an
+         * earlier 1.9.51 build moves without knowing its song. Only rows that
+         * name their service are moved; anything already in the range stays.
+         */
+        val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(scxytIdMove("favorite_tracks", "id"))
+                db.execSQL(scxytIdMove("playlist_tracks", "trackId"))
+                db.execSQL(scxytIdMove("play_events", "trackId"))
+            }
+        }
+
+        /** The listener's own corrections to local songs' tags (Edit info), kept apart from the scanned rows. */
+        val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `local_track_edits` (`filePath` TEXT NOT NULL, " +
+                        "`title` TEXT, `artist` TEXT, `albumArtist` TEXT, `album` TEXT, `genre` TEXT, " +
+                        "`year` INTEGER, `trackNumber` INTEGER, `discNumber` INTEGER, PRIMARY KEY(`filePath`))",
+                )
+            }
+        }
+
+        /** The UPDATE that moves [table]'s YouTube and SoundCloud [column] into SCXYT_ID_BASE's range. */
+        internal fun scxytIdMove(table: String, column: String): String {
+            val base = tf.monochrome.android.domain.model.SCXYT_ID_BASE
+            return "UPDATE `$table` SET `$column` = $base + (`$column` & 4294967295) " +
+                "WHERE `source` IN ('youtube', 'soundcloud') AND " +
+                "(`$column` < $base OR `$column` >= ${base + (1L shl 32)})"
         }
     }
 }

@@ -51,6 +51,20 @@ class LibusbUacDriver @Inject constructor(
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
     /**
+     * Whose the one stream is: the main player's or Trypt Mania's
+     * ([StreamLease]). Every call that moves the stream says who asks, and
+     * only the holder's park, resume, flush, write and stop do anything;
+     * [start] always does, and makes the caller the holder.
+     */
+    private val lease = StreamLease()
+    val streamHolder: StateFlow<StreamClaimant?> get() = lease.holder
+
+    fun holdsStream(who: StreamClaimant): Boolean = lease.holds(who)
+
+    /** Another player holds the stream (see [StreamLease.heldByAnother]). */
+    fun streamHeldByAnother(who: StreamClaimant): Boolean = lease.heldByAnother(who)
+
+    /**
      * Reason the most recent [start] failed, or null if it
      * succeeded / hasn't been attempted. Carries both the categorised
      * code and the native-side detail line so the UI can render
@@ -153,6 +167,13 @@ class LibusbUacDriver @Inject constructor(
             Log.w(TAG, "open() called without permission for $device")
             return false
         }
+        // Open already. The same device is left as it is, stream and all; a
+        // different one is let go first, so its connection (and the file
+        // descriptor libusb wrapped) is closed rather than overwritten.
+        if (connection != null) {
+            if (_device.value == device) return true
+            close()
+        }
         val conn = usbManager.openDevice(device) ?: run {
             Log.e(TAG, "UsbManager.openDevice returned null for $device")
             return false
@@ -180,6 +201,7 @@ class LibusbUacDriver @Inject constructor(
         nativeClose()
         connection?.close()
         connection = null
+        lease.clear()
         _device.value = null
         _dacInfo.value = null
         _isOpen.value = false
@@ -209,8 +231,62 @@ class LibusbUacDriver @Inject constructor(
      *    bit-perfect output for now; chain re-integration is a
      *    follow-up commit.
      */
-    fun start(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
-        val ok = nativeStart(sampleRate, bitsPerSample, channels)
+    fun start(who: StreamClaimant, sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
+        val ok = lease.take(who) { nativeStart(sampleRate, bitsPerSample, channels) }
+        publishStart(ok)
+        return ok
+    }
+
+    /**
+     * [who] takes the running stream over as it is, for a format it already
+     * has: what was queued by the last holder is dropped, nothing stops or
+     * starts (a DAC may click at an alt change). False if no stream runs,
+     * and then nobody holds one; [start] is the way up.
+     */
+    fun takeOverStream(who: StreamClaimant): Boolean = lease.take(who) {
+        if (!_isStreaming.value) return@take false
+        nativeFlushRing()
+        true
+    }
+
+    /**
+     * [who] lets go of the stream for the next player: parked ([parkPump]),
+     * never stopped, so the interfaces stay claimed, and held by nobody. A
+     * player that does not hold it changes nothing.
+     */
+    fun yieldStream(who: StreamClaimant) {
+        lease.release(who) { nativeParkPump() }
+    }
+
+    /**
+     * Parks the running stream: the iso transfers are cancelled and the
+     * streaming interface goes to alt 0, so a long pause costs the phone no
+     * wakeups and the DAC no streaming, while both interfaces stay claimed
+     * (letting go is what hands the DAC back to Android's kernel driver; see
+     * [flushRing]). [isStreaming] stays true: it is the same stream, and
+     * [resumePump] brings it back. False if nothing was running to park.
+     * Blocks for as long as the transfers take to come back, a few ms.
+     */
+    fun parkPump(who: StreamClaimant): Boolean = lease.asHolder(who) { nativeParkPump() } ?: false
+
+    /** Whether [parkPump] has parked the stream and nothing has resumed or stopped it. */
+    fun isPumpParked(): Boolean = nativeIsPumpParked()
+
+    /**
+     * Brings a parked stream back the way [start] brings up its format: alt
+     * setting, rate and hardware volume again, a fresh pump, and played and
+     * written frames from zero. True if it streams (and when it was never
+     * parked). False if the DAC refused: the stream is then down, exactly as
+     * after a failed [start], and [isStreaming] says so.
+     */
+    fun resumePump(who: StreamClaimant): Boolean = lease.asHolder(who) {
+        if (!nativeIsPumpParked()) return@asHolder true
+        val ok = nativeResumePump()
+        publishStart(ok)
+        ok
+    } ?: false
+
+    private fun publishStart(ok: Boolean) {
         _isStreaming.value = ok
         // Always pull the rate inventory: native populates it during
         // start whether we succeeded or not (failure path's GET_RANGE
@@ -230,14 +306,16 @@ class LibusbUacDriver @Inject constructor(
             val detail = nativeLastErrorDetail().orEmpty()
             _lastStartError.value = StartFailure(code, detail)
         }
-        return ok
     }
 
-    fun stop() {
-        nativeStop()
-        _isStreaming.value = false
-        _diagnostics.value = null
-        _lastStartError.value = null
+    /** Ends the stream: for its holder, or when nobody holds it; nothing while another player does. */
+    fun stop(who: StreamClaimant) {
+        lease.end(who) {
+            nativeStop()
+            _isStreaming.value = false
+            _diagnostics.value = null
+            _lastStartError.value = null
+        }
     }
 
     /**
@@ -246,7 +324,9 @@ class LibusbUacDriver @Inject constructor(
      * the Android kernel briefly re-grab it, after which the next
      * [start] gets `LIBUSB_ERROR_BUSY` and the user has to re-plug.
      */
-    fun flushRing() = nativeFlushRing()
+    fun flushRing(who: StreamClaimant) {
+        lease.asHolder(who) { nativeFlushRing() }
+    }
 
     /**
      * True when the iso pump is already running a stream matching
@@ -257,16 +337,20 @@ class LibusbUacDriver @Inject constructor(
     fun isStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean =
         nativeIsStreamingFormat(sampleRate, bitsPerSample, channels)
 
-    /** Cumulative frames the iso pump has dispatched to the DAC since [start].
+    /** Frames written since [start] or the last [flushRing] that the DAC has
+     *  been sent: those in iso transfers that have completed. Audio still
+     *  queued in transfers in flight (16-32 ms) is not counted yet, nor is the
+     *  silence that fills an underrun.
      *  Used by [LibusbAudioSink.getCurrentPositionUs] for accurate playhead
      *  reporting — `framesWritten` (which the renderer sees as "consumed")
      *  runs ahead of realtime because the renderer fills the ring much faster
      *  than the DAC drains it. */
     fun playedFrames(): Long = nativePlayedFrames()
 
-    /** Frames currently sitting in the ring waiting for the DAC to consume.
-     *  Used by [LibusbAudioSink.hasPendingData] / [isEnded] so Media3 knows
-     *  when the sink has actually finished playback vs. just queued it. */
+    /** Frames written and not yet sent to the DAC, in the ring or in
+     *  transfers in flight. Used by [LibusbAudioSink.hasPendingData] /
+     *  [isEnded] so Media3 knows when the sink has actually finished
+     *  playback vs. just queued it. */
     fun pendingFrames(): Long = nativePendingFrames()
 
     /** Pushes [frames] frames from [buffer] (direct, native-byte-order),
@@ -275,12 +359,14 @@ class LibusbUacDriver @Inject constructor(
      *  unconsumed tail sits at a non-zero position, and the native side
      *  reads relative to that offset — resending from the buffer's start
      *  would duplicate PCM and scramble the stream. */
-    fun write(buffer: ByteBuffer, frames: Int): Int {
+    fun write(who: StreamClaimant, buffer: ByteBuffer, frames: Int): Int {
         if (!buffer.isDirect) {
             Log.w(TAG, "write: non-direct ByteBuffer — caller must copy to a direct buffer first")
             return 0
         }
-        return nativeWrite(buffer, buffer.position(), frames)
+        // Refused, not waited for, when another player holds the stream or
+        // is taking it this instant: this is the audio thread.
+        return lease.tryAsHolder(who) { nativeWrite(buffer, buffer.position(), frames) } ?: 0
     }
 
     private external fun nativeInit(): Boolean
@@ -289,6 +375,9 @@ class LibusbUacDriver @Inject constructor(
     private external fun nativeIsOpen(): Boolean
     private external fun nativeStart(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeStop()
+    private external fun nativeParkPump(): Boolean
+    private external fun nativeResumePump(): Boolean
+    private external fun nativeIsPumpParked(): Boolean
     private external fun nativeFlushRing()
     private external fun nativeIsStreamingFormat(sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean
     private external fun nativeWrite(buffer: ByteBuffer, byteOffset: Int, frames: Int): Int

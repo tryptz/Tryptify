@@ -6,7 +6,10 @@ import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -21,26 +24,32 @@ import kotlin.math.sin
  * the median of those distances is the offset to set — not a correction to the
  * current one.
  *
- * Which click a tap belongs to: at [GlyphSyncTrack.BPM] the clicks are closer
- * together than Bluetooth can be late, so "the nearest click" would read a
- * 350 ms lateness as 80 ms early for the next one. Instead the first tap
- * anchors it. The track opens on silence, so the first tap answers the first
- * click: its distance from it, up to [LATEST_MS], is the first reading. Every
- * tap after belongs to the click nearest where the reading so far says it
- * should land — any lateness at all, so long as the taps keep within half a
- * beat of each other. The first [WARMUP] taps anchor but are not counted; a
- * second tap on one click is ignored.
+ * Every tap counts from the first. The beat's phase is read from all of them
+ * at once (their circular mean, then the median around it), so no single tap
+ * decides it. That leaves which click the taps answer: at [GlyphSyncTrack.BPM]
+ * the clicks are closer together than Bluetooth can be late, so a phase fits
+ * several offsets a beat apart. The first tap settles it. The track opens on
+ * silence, so the first tap is either a reaction to the first click (at most
+ * [REACTION_MS] after it, or a little ahead) or a tap in time on a later one;
+ * of the offsets within reach of the setting, the latest one that leaves the
+ * first tap like that is taken, and [couldBeAClickOff] says when two did.
+ *
+ * It used to anchor everything on the first tap: a first tap is a reaction,
+ * a normal 220-350 ms late, which threw the second tap away as a repeat (the
+ * count did not move for the first few taps) and could read a whole click
+ * off (150 ms headphones read as 570 ms). The first tap now only picks the
+ * click; the reading leaves it out. Two taps closer than [DOUBLE_TAP_MS] are
+ * one tap.
  */
 class GlyphTapSync(
     private val firstBeatSeconds: Float = GlyphSyncTrack.FIRST_BEAT_SECONDS,
     private val beatSeconds: Float = GlyphSyncTrack.BEAT_SECONDS,
 ) {
-    private val deltasMs = ArrayList<Float>()
-    private val allMs = ArrayList<Float>()
-    private var lastBeat = Int.MIN_VALUE
+    /** Each counted tap, in seconds from the first click, before any offset. */
+    private val sinces = ArrayList<Float>()
 
-    /** Taps counted so far, the warm-up left out. */
-    val taps: Int get() = deltasMs.size
+    /** Taps counted so far. */
+    val taps: Int get() = sinces.size
 
     val done: Boolean get() = taps >= NEEDED
 
@@ -52,49 +61,96 @@ class GlyphTapSync(
         if (done) return false
         val since = songSeconds - firstBeatSeconds
         if (since * 1000f < -EARLIEST_MS) return false
-        val beat = if (allMs.isEmpty()) {
-            // The first tap answers the first click it can: the first click
-            // unless it is later than any headphones are.
-            var k = 0
-            while ((since - k * beatSeconds) * 1000f > LATEST_MS) k += 1
-            k
-        } else {
-            ((since - median(allMs) / 1000f) / beatSeconds).roundToInt()
-        }
-        if (beat <= lastBeat) return false
-        lastBeat = beat
-        val delta = (since - beat * beatSeconds) * 1000f
-        allMs += delta
-        if (allMs.size <= WARMUP) return false
-        deltasMs += delta
+        if (sinces.isNotEmpty() && (since - sinces.last()) * 1000f < DOUBLE_TAP_MS) return false
+        sinces += since
+        reading = null
         return true
+    }
+
+    private class Reading(val offsetMs: Float, val deltasMs: List<Float>, val ambiguous: Boolean)
+
+    private var reading: Reading? = null
+
+    /** The taps read together; null until [MIN_TAPS] have counted. */
+    private fun read(): Reading? {
+        if (taps < MIN_TAPS) return null
+        reading?.let { return it }
+        val rest = sinces.subList(1, sinces.size)
+        // The beat's phase: the circular mean of where the taps fall in it,
+        // then the median of each tap's distance from that, against strays.
+        var sinSum = 0.0
+        var cosSum = 0.0
+        for (s in rest) {
+            val angle = 2.0 * PI * (s / beatSeconds)
+            sinSum += sin(angle)
+            cosSum += cos(angle)
+        }
+        val mean = (atan2(sinSum, cosSum) / (2.0 * PI) * beatSeconds).toFloat()
+        val phase = mean + median(rest.map { wrap(it - mean) })
+        // Every offset a whole beat from the phase that the setting can hold.
+        val candidates = (-3..3).map { phase + it * beatSeconds }
+            .filter { it * 1000f >= -EARLIEST_MS && it * 1000f <= LATEST_MS }
+        val firstTap = sinces[0]
+        val plausible = candidates.filter { plausibleFirstTap(firstTap - it) }
+        val offset = plausible.maxOrNull()
+            ?: candidates.minByOrNull { abs((firstTap - it) * 1000f - TYPICAL_REACTION_MS) }
+            ?: phase
+        val deltas = rest.map { (offset + wrap(it - offset)) * 1000f }
+        return Reading(median(deltas), deltas, plausible.size > 1).also { reading = it }
+    }
+
+    /**
+     * The first tap [secondsAfter] the offset's first click: a reaction to
+     * it, or a tap in time on a later click.
+     */
+    private fun plausibleFirstTap(secondsAfter: Float): Boolean {
+        val ms = secondsAfter * 1000f
+        if (ms >= -EARLIEST_MS && ms <= REACTION_MS) return true
+        val clicks = (secondsAfter / beatSeconds).roundToInt()
+        return clicks >= 1 && abs(ms - clicks * beatSeconds * 1000f) <= IN_TIME_MS
+    }
+
+    /** [seconds] folded into half a beat either side of zero. */
+    private fun wrap(seconds: Float): Float {
+        val folded = ((seconds / beatSeconds) + 0.5f).let { it - floor(it) } - 0.5f
+        return folded * beatSeconds
     }
 
     /** The offset the taps say, in whole milliseconds; null until [MIN_TAPS] have counted. */
     val offsetMs: Int?
-        get() = if (taps < MIN_TAPS) null else median(deltasMs).roundToInt()
+        get() = read()?.offsetMs?.roundToInt()
 
     /**
-     * How evenly the taps fell, as a standard deviation from the median
-     * absolute deviation (so one stray tap does not swing it); null with
-     * too few.
+     * How evenly the taps fell, as a standard deviation from the spread of
+     * the middle half of them (so a stray tap or two does not swing it); null
+     * with too few. Not the median absolute deviation: with taps that land
+     * either side of the beat by turns, an odd count put the median on one
+     * side and read the spread as nothing.
      */
     val spreadMs: Int?
         get() {
-            if (taps < MIN_TAPS) return null
-            val centre = median(deltasMs)
-            return (median(deltasMs.map { abs(it - centre) }) * MAD_TO_SD).roundToInt()
+            val reading = read() ?: return null
+            val sorted = reading.deltasMs.sorted()
+            return ((quantile(sorted, 0.75f) - quantile(sorted, 0.25f)) / IQR_TO_SD).roundToInt()
         }
+
+    /** The [q] quantile of [sorted], read between its two nearest values. */
+    private fun quantile(sorted: List<Float>, q: Float): Float {
+        val position = q * (sorted.size - 1)
+        val below = floor(position).toInt()
+        val above = minOf(below + 1, sorted.size - 1)
+        return sorted[below] + (sorted[above] - sorted[below]) * (position - below)
+    }
 
     /** Taps that wander more than this read as an uncertain offset. */
     val steady: Boolean get() = (spreadMs ?: Int.MAX_VALUE) <= STEADY_MS
 
     /**
-     * A reading this late could also be a player who sat out the first click
-     * and came in on the second: the one case the anchor cannot tell apart.
+     * The taps fit a click later too: a player who sat out the first click
+     * and came in on the second reads one click less than this.
      */
     val couldBeAClickOff: Boolean
-        get() = (offsetMs ?: 0) > beatSeconds * 1000f - EARLIEST_MS
+        get() = read()?.ambiguous ?: false
 
     private fun median(values: List<Float>): Float {
         val sorted = values.sorted()
@@ -105,13 +161,21 @@ class GlyphTapSync(
     companion object {
         const val NEEDED = 16
         const val MIN_TAPS = 8
-        const val WARMUP = 2
         /** Nobody taps further ahead of a click they are waiting for. */
         const val EARLIEST_MS = 100
         /** No headphones are later than this; the offset's own limit. */
         const val LATEST_MS = GlyphCalibration.MAX_OFFSET_MS
         const val STEADY_MS = 35
-        private const val MAD_TO_SD = 1.4826f
+        /** The slowest first reaction to the first click after the silence. */
+        const val REACTION_MS = 450
+        /** A first tap's usual reaction, when nothing else settles the click. */
+        const val TYPICAL_REACTION_MS = 220
+        /** How close a first tap in time on a later click comes to it. */
+        const val IN_TIME_MS = 80
+        /** Closer than this, two taps are one finger landing twice. */
+        const val DOUBLE_TAP_MS = 80
+        /** A normal spread's interquartile range in standard deviations. */
+        private const val IQR_TO_SD = 1.349f
     }
 }
 

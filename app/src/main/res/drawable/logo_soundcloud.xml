@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- SoundCloud's mark, simplified to read at pill size: the waveform
+         bars rising into the cloud. -->
+    <path
+        android:fillColor="#FF5500"
+        android:pathData="M0.5 17h1v-3.2h-1zM2.4 17h1v-4.6h-1zM4.3 17h1v-5.8h-1zM6.2 17h1v-6.6h-1zM8.1 17h1v-7.6h-1zM10 17V7.6a5.6 5.6 0 0 1 9.1 3.1A3.2 3.2 0 0 1 20.3 17z" />
+</vector>

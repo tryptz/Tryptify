@@ -265,9 +265,15 @@ class StretchAudioProcessor @Inject constructor() : AudioProcessor {
         inputEnded = false
         wasEngaged = false
         if (pendingFormat != AudioFormat.NOT_SET) {
+            // Built for a rate and a channel count, so a new format needs a
+            // new engine. The same format again (every track of an album, and
+            // Media3 configures once per track) keeps this one: it is reset
+            // below instead, which clears its history just as a new one would
+            // start without any, and saves building a phase vocoder's FFTs and
+            // megabytes of buffers on the playback thread for every song.
+            if (pendingFormat != inputFormat) releaseEngine()
             inputFormat = pendingFormat
             pendingFormat = AudioFormat.NOT_SET
-            releaseEngine()
         }
         if (StretchNative.isAvailable && inputFormat != AudioFormat.NOT_SET && handle == 0L) {
             handle = StretchNative.nativeCreate(

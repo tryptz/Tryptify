@@ -923,24 +923,24 @@ class SupabaseSyncRepository @Inject constructor(
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteTrack>()
             val gone = deleted(SyncKind.FAVORITE_TRACK)
-            tracks.filterNot { it.id.toString() in gone }.forEach { t ->
-                favoritesDao.insertTrackIfNotExists(
-                    FavoriteTrackEntity(
-                        id = t.id,
-                        title = t.title,
-                        duration = t.duration,
-                        artistId = t.artist_id,
-                        artistName = t.artist_name,
-                        albumId = t.album_id,
-                        albumTitle = t.album_title,
-                        albumCover = t.album_cover,
-                        audioQuality = t.audio_quality,
-                        explicit = t.explicit,
-                        trackNumber = t.track_number,
-                        source = t.source,
-                    )
+            // One transaction for the section, not one per row: this runs on
+            // every signed-in launch. IGNORE keeps every row already here.
+            favoritesDao.insertTracksIfNotExist(tracks.filterNot { it.id.toString() in gone }.map { t ->
+                FavoriteTrackEntity(
+                    id = t.id,
+                    title = t.title,
+                    duration = t.duration,
+                    artistId = t.artist_id,
+                    artistName = t.artist_name,
+                    albumId = t.album_id,
+                    albumTitle = t.album_title,
+                    albumCover = t.album_cover,
+                    audioQuality = t.audio_quality,
+                    explicit = t.explicit,
+                    trackNumber = t.track_number,
+                    source = t.source,
                 )
-            }
+            })
         }.onFailure { failed += "favorite_tracks"; Log.e(TAG, "pull favorite_tracks: ${it.message}") }
 
         runCatching {
@@ -948,20 +948,18 @@ class SupabaseSyncRepository @Inject constructor(
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteAlbum>()
             val gone = deleted(SyncKind.FAVORITE_ALBUM)
-            albums.filterNot { it.id.toString() in gone }.forEach { a ->
-                favoritesDao.insertAlbumIfNotExists(
-                    FavoriteAlbumEntity(
-                        id = a.id,
-                        title = a.title,
-                        artistId = a.artist_id,
-                        artistName = a.artist_name,
-                        cover = a.cover,
-                        numberOfTracks = a.number_of_tracks,
-                        releaseDate = a.release_date,
-                        type = a.type
-                    )
+            favoritesDao.insertAlbumsIfNotExist(albums.filterNot { it.id.toString() in gone }.map { a ->
+                FavoriteAlbumEntity(
+                    id = a.id,
+                    title = a.title,
+                    artistId = a.artist_id,
+                    artistName = a.artist_name,
+                    cover = a.cover,
+                    numberOfTracks = a.number_of_tracks,
+                    releaseDate = a.release_date,
+                    type = a.type
                 )
-            }
+            })
         }.onFailure { failed += "favorite_albums"; Log.e(TAG, "pull favorite_albums: ${it.message}") }
 
         runCatching {
@@ -969,11 +967,9 @@ class SupabaseSyncRepository @Inject constructor(
                 .select { filter { eq("user_id", uid) } }
                 .decodeList<SbFavoriteArtist>()
             val gone = deleted(SyncKind.FAVORITE_ARTIST)
-            artists.filterNot { it.id.toString() in gone }.forEach { a ->
-                favoritesDao.insertArtistIfNotExists(
-                    FavoriteArtistEntity(id = a.id, name = a.name, picture = a.picture)
-                )
-            }
+            favoritesDao.insertArtistsIfNotExist(artists.filterNot { it.id.toString() in gone }.map { a ->
+                FavoriteArtistEntity(id = a.id, name = a.name, picture = a.picture)
+            })
         }.onFailure { failed += "favorite_artists"; Log.e(TAG, "pull favorite_artists: ${it.message}") }
 
         // EQ presets, AutoEQ and parametric alike. These are the reason the
@@ -1019,36 +1015,33 @@ class SupabaseSyncRepository @Inject constructor(
                 .decodeList<SbPlaylist>()
             val gonePlaylists = deleted(SyncKind.PLAYLIST)
             val kept = playlists.filterNot { it.id in gonePlaylists }
-            kept.forEach { p ->
-                playlistDao.insertPlaylistIfNotExists(
-                    UserPlaylistEntity(
-                        id = p.id,
-                        name = p.name,
-                        description = p.description,
-                        isPublic = p.is_public
-                    )
+            playlistDao.insertPlaylistsIfNotExist(kept.map { p ->
+                UserPlaylistEntity(
+                    id = p.id,
+                    name = p.name,
+                    description = p.description,
+                    isPublic = p.is_public
                 )
-            }
+            })
             // Every playlist's tracks together, not one request per playlist:
             // this runs on every launch, and ten playlists were ten round trips.
             val tracks = fetchPlaylistTracks(kept.map { it.id })
             val goneTracks = deleted(SyncKind.PLAYLIST_TRACK)
-            tracks.filterNot { playlistTrackKey(it.playlist_id, it.track_id) in goneTracks }.forEach { t ->
-                playlistDao.insertTrackIfNotExists(
-                    PlaylistTrackEntity(
-                        playlistId = t.playlist_id,
-                        trackId = t.track_id,
-                        title = t.title,
-                        duration = t.duration,
-                        artistName = t.artist_name,
-                        albumId = t.album_id,
-                        albumTitle = t.album_title,
-                        albumCover = t.album_cover,
-                        position = t.position,
-                        source = t.source,
-                    )
+            val wanted = tracks.filterNot { playlistTrackKey(it.playlist_id, it.track_id) in goneTracks }
+            playlistDao.insertTracksIfNotExist(wanted.map { t ->
+                PlaylistTrackEntity(
+                    playlistId = t.playlist_id,
+                    trackId = t.track_id,
+                    title = t.title,
+                    duration = t.duration,
+                    artistName = t.artist_name,
+                    albumId = t.album_id,
+                    albumTitle = t.album_title,
+                    albumCover = t.album_cover,
+                    position = t.position,
+                    source = t.source,
                 )
-            }
+            })
         }.onFailure { failed += "playlists"; Log.e(TAG, "pull playlists: ${it.message}") }
 
         // Play events — pull the most recent 1000 and merge into Room so stats
@@ -1062,27 +1055,25 @@ class SupabaseSyncRepository @Inject constructor(
                     limit(1000)
                 }
                 .decodeList<SbPlayEvent>()
-            events.forEach { e ->
-                // insertFromCloud is @Insert(onConflict = IGNORE) on the unique
-                // cloudRowId index — so re-pulling never duplicates local stats.
-                // Carrying cloudRowId is also what lets pushAll skip these rows.
-                playEventDao.insertFromCloud(
-                    PlayEventEntity(
-                        trackId = e.track_id,
-                        title = e.title,
-                        duration = e.duration,
-                        artistId = e.artist_id,
-                        artistName = e.artist_name,
-                        albumId = e.album_id,
-                        albumTitle = e.album_title,
-                        albumCover = e.album_cover,
-                        audioQuality = e.audio_quality,
-                        source = e.source,
-                        playedAt = e.played_at_ms,
-                        cloudRowId = e.id,
-                    )
+            // insertAllFromCloud is @Insert(onConflict = IGNORE) on the unique
+            // cloudRowId index — so re-pulling never duplicates local stats.
+            // Carrying cloudRowId is also what lets pushAll skip these rows.
+            playEventDao.insertAllFromCloud(events.map { e ->
+                PlayEventEntity(
+                    trackId = e.track_id,
+                    title = e.title,
+                    duration = e.duration,
+                    artistId = e.artist_id,
+                    artistName = e.artist_name,
+                    albumId = e.album_id,
+                    albumTitle = e.album_title,
+                    albumCover = e.album_cover,
+                    audioQuality = e.audio_quality,
+                    source = e.source,
+                    playedAt = e.played_at_ms,
+                    cloudRowId = e.id,
                 )
-            }
+            })
         }.onFailure { failed += "play_events"; Log.e(TAG, "pull play_events: ${it.message}") }
 
         Log.d(TAG, "Cloud pull complete (${failed.size} failed sections)")

@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,9 +62,15 @@ fun GlyphJudgementFx(
     modifier: Modifier = Modifier,
     /** Still: no pop, no fall. */
     reducedMotion: Boolean = false,
+    /** Themes › Sizes: the judgement's and the combo's own scale, about their middles. */
+    judgementScale: Float = 1f,
+    comboScale: Float = 1f,
 ) {
     if (judgement == null) return
     val sprite = rememberStepArt(GlyphStepArt.judgement(judgement, early))
+    // An imported theme's own combo digits and label, when it has them.
+    val digits = rememberStepComboDigits()
+    val comboLabel = rememberStepThemeArt(tf.monochrome.android.glyph.style.StepManiaStyleBaker.COMBO_LABEL)
 
     // The combo pops on every step it gains, harder at every fifty, and a
     // broken combo drops away in red rather than blinking out.
@@ -82,13 +92,41 @@ fun GlyphJudgementFx(
         }
     }
 
-    // Shown at once, held, then faded: StepMania's sleep then fade, without
-    // its zoom.
+    // Each judgement lands with a pop, larger than it rests and springing
+    // back (harder for a Marvelous), is held, then fades; a miss drops and
+    // tips away instead. Read in the layer: the animation redraws, it never
+    // recomposes. Still with reduced motion: StepMania's sleep then fade.
     val alpha = remember { Animatable(1f) }
+    val land = remember { Animatable(1f) }
+    val sink = remember { Animatable(0f) }
+    val isMiss = judgement == GlyphJudgement.MISS
     LaunchedEffect(shownAtMs) {
         alpha.snapTo(1f)
+        sink.snapTo(0f)
+        if (!reducedMotion) {
+            launch {
+                land.snapTo(
+                    when (judgement) {
+                        GlyphJudgement.MARVELOUS -> LAND_W1
+                        GlyphJudgement.PERFECT, GlyphJudgement.GREAT -> LAND_HIT
+                        else -> LAND_SOFT
+                    },
+                )
+                land.animateTo(1f, spring(dampingRatio = LAND_DAMPING, stiffness = LAND_STIFFNESS))
+            }
+            if (isMiss) launch { sink.animateTo(1f, tween(MISS_SINK_MILLIS, easing = FastOutSlowInEasing)) }
+        } else {
+            land.snapTo(1f)
+        }
         delay(if (judgement == GlyphJudgement.MARVELOUS) HOLD_W1_MILLIS else HOLD_MILLIS)
         alpha.animateTo(0f, tween(FADE_MILLIS, easing = LinearEasing))
+    }
+    val landing = Modifier.graphicsLayer {
+        this.alpha = alpha.value
+        scaleX = land.value
+        scaleY = land.value
+        translationY = sink.value * MISS_SINK.toPx()
+        rotationZ = sink.value * MISS_TILT_DEGREES
     }
 
     Column(
@@ -102,18 +140,24 @@ fun GlyphJudgementFx(
                 bitmap = sprite,
                 contentDescription = name,
                 contentScale = ContentScale.Fit,
+                // Small pixel art (an older theme's) is enlarged square-edged,
+                // not smeared, as StepMania draws it.
+                filterQuality = if (sprite.height < PIXEL_ART_HEIGHT) FilterQuality.None else FilterQuality.Low,
                 modifier = Modifier
+                    .fillMaxWidth(JUDGEMENT_WIDTH_SHARE)
                     .height(JUDGEMENT_HEIGHT)
-                    .graphicsLayer { this.alpha = alpha.value },
+                    .graphicsLayer { scaleX = judgementScale; scaleY = judgementScale }
+                    .then(landing),
             )
         } else {
             Text(
                 text = name.uppercase(),
-                style = fonts.screenTitle,
+                style = fonts.screenTitle.copy(fontSize = fonts.screenTitle.fontSize * JUDGEMENT_TEXT_SCALE),
                 color = stepJudgementColour(judgement),
                 modifier = Modifier
                     .semantics { contentDescription = name }
-                    .graphicsLayer { this.alpha = alpha.value },
+                    .graphicsLayer { scaleX = judgementScale; scaleY = judgementScale }
+                    .then(landing),
             )
         }
         // StepMania shows the combo from two.
@@ -122,18 +166,12 @@ fun GlyphJudgementFx(
                 verticalAlignment = Alignment.Bottom,
                 // Read in the layer: the pop redraws, it never recomposes.
                 modifier = Modifier.graphicsLayer {
-                    scaleX = pop.value
-                    scaleY = pop.value
+                    scaleX = pop.value * comboScale
+                    scaleY = pop.value * comboScale
                     transformOrigin = TransformOrigin(0.5f, 0.8f)
                 },
             ) {
-                Text(text = combo.toString(), style = fonts.combo, color = comboColour(fullCombo))
-                Text(
-                    text = " COMBO",
-                    style = fonts.rowTitle,
-                    color = comboColour(fullCombo).copy(alpha = 0.85f),
-                    modifier = Modifier.graphicsLayer { translationY = -8f },
-                )
+                ComboLine(combo, comboColour(fullCombo), fonts, digits, comboLabel)
             }
         } else if (broken >= SHOW_COMBO_AT && fall.isRunning) {
             // The combo that was, falling and fading.
@@ -141,18 +179,14 @@ fun GlyphJudgementFx(
                 verticalAlignment = Alignment.Bottom,
                 modifier = Modifier.graphicsLayer {
                     val f = fall.value
+                    scaleX = comboScale
+                    scaleY = comboScale
                     translationY = f * BREAK_DROP.toPx()
                     rotationZ = f * BREAK_TILT_DEGREES
                     this.alpha = 1f - f
                 },
             ) {
-                Text(text = broken.toString(), style = fonts.combo, color = BROKEN)
-                Text(
-                    text = " COMBO",
-                    style = fonts.rowTitle,
-                    color = BROKEN.copy(alpha = 0.85f),
-                    modifier = Modifier.graphicsLayer { translationY = -8f },
-                )
+                ComboLine(broken, BROKEN, fonts, digits, comboLabel)
             }
         }
     }
@@ -183,4 +217,75 @@ private val BROKEN = Color(0xFFFF5F6D)
 private const val HOLD_MILLIS = 500L
 private const val HOLD_W1_MILLIS = 800L
 private const val FADE_MILLIS = 100
-private val JUDGEMENT_HEIGHT = 56.dp
+/** The judgement's height on the field, and how much of the field's width it may take. */
+private val JUDGEMENT_HEIGHT = 84.dp
+private const val JUDGEMENT_WIDTH_SHARE = 0.86f
+private const val JUDGEMENT_TEXT_SCALE = 1.4f
+/** Below this many pixels tall, a judgement sprite is pixel art. */
+private const val PIXEL_ART_HEIGHT = 64
+/** How much larger a judgement lands than it rests, by how good it is, and its spring back. */
+private const val LAND_W1 = 1.45f
+private const val LAND_HIT = 1.3f
+private const val LAND_SOFT = 1.12f
+private const val LAND_DAMPING = 0.5f
+private const val LAND_STIFFNESS = 650f
+/** A miss: how long it sinks, how far, how far it tips. */
+private const val MISS_SINK_MILLIS = 420
+private val MISS_SINK = 18.dp
+private const val MISS_TILT_DEGREES = -6f
+
+/**
+ * The combo and its word: the theme's own digits and label when an imported
+ * theme has them (drawn in their own colours, as StepMania draws a bitmap
+ * font), else the number in the theme's typeface and " COMBO".
+ */
+@Composable
+private fun ComboLine(
+    value: Int,
+    colour: Color,
+    fonts: GlyphStepFonts,
+    digits: StepComboDigits?,
+    label: androidx.compose.ui.graphics.ImageBitmap?,
+) {
+    val text = value.toString()
+    if (digits != null && text.all { it in digits.cells }) {
+        val height = with(androidx.compose.ui.platform.LocalDensity.current) { fonts.combo.fontSize.toDp() }
+        val width = height * (digits.cellWidth.toFloat() / digits.cellHeight.coerceAtLeast(1)) * text.length
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .size(width = width, height = height)
+                .semantics { contentDescription = "$value combo" },
+        ) {
+            val cellW = size.width / text.length
+            text.forEachIndexed { i, ch ->
+                val cell = digits.cells[ch] ?: return@forEachIndexed
+                drawImage(
+                    image = digits.page,
+                    srcOffset = androidx.compose.ui.unit.IntOffset((cell % digits.cols) * digits.cellWidth, (cell / digits.cols) * digits.cellHeight),
+                    srcSize = androidx.compose.ui.unit.IntSize(digits.cellWidth, digits.cellHeight),
+                    dstOffset = androidx.compose.ui.unit.IntOffset((i * cellW).toInt(), 0),
+                    dstSize = androidx.compose.ui.unit.IntSize(cellW.toInt(), size.height.toInt()),
+                )
+            }
+        }
+    } else {
+        Text(text = text, style = fonts.combo, color = colour)
+    }
+    if (label != null) {
+        Image(
+            bitmap = label,
+            contentDescription = null,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.height(COMBO_LABEL_HEIGHT).graphicsLayer { translationY = -8f },
+        )
+    } else {
+        Text(
+            text = " COMBO",
+            style = fonts.rowTitle,
+            color = colour.copy(alpha = 0.85f),
+            modifier = Modifier.graphicsLayer { translationY = -8f },
+        )
+    }
+}
+
+private val COMBO_LABEL_HEIGHT = 22.dp

@@ -76,8 +76,6 @@ class StemLayerEnvelopes(
  */
 internal object StemFeatureExtractor {
 
-    private const val ENVELOPE_HZ = StemRhythmAnalyzer.ENVELOPE_HZ
-
     /** How much an instrument's note counts against a sung one: the voice usually carries the tune. */
     private const val INSTRUMENT_WEIGHT = 0.8f
 
@@ -95,7 +93,9 @@ internal object StemFeatureExtractor {
         if (tracks.isEmpty()) return null
 
         val ticks = rhythm.gridStrengths.size
-        val hopsPerTick = rhythm.subdivisionSeconds * ENVELOPE_HZ
+        // The layers' hops, at the drums' rate: one separator made them all.
+        val hz = layers.values.first().hopsPerSecond.toFloat()
+        val hopsPerTick = rhythm.subdivisionSeconds * hz
         val vocals = tracks[StemLayer.VOCALS]
         val melody = tracks[StemLayer.MELODY]
         val bass = tracks[StemLayer.BASS]
@@ -106,7 +106,7 @@ internal object StemFeatureExtractor {
         val contour = FloatArray(ticks)
 
         for (tick in 0 until ticks) {
-            val frame = ((rhythm.offsetSeconds + tick * rhythm.subdivisionSeconds) * ENVELOPE_HZ).roundToInt()
+            val frame = ((rhythm.offsetSeconds + tick * rhythm.subdivisionSeconds) * hz).roundToInt()
             val sung = vocals?.onsetAt(frame) ?: 0f
             val played = (melody?.onsetAt(frame) ?: 0f) * INSTRUMENT_WEIGHT
             melodyOnsets[tick] = max(sung, played)
@@ -115,7 +115,7 @@ internal object StemFeatureExtractor {
             contour[tick] = (if (sung >= played) vocals else melody)?.pitchAt(frame) ?: 0f
             bassOnsets[tick] = bass?.onsetAt(frame) ?: 0f
             if (vocals != null && sung >= HOLD_ONSET) {
-                val hops = vocals.heldHops(frame, (MAX_HOLD_SECONDS * ENVELOPE_HZ).toInt())
+                val hops = vocals.heldHops(frame, (MAX_HOLD_SECONDS * hz).toInt())
                 sustainTicks[tick] = (hops / hopsPerTick).toInt()
             }
         }

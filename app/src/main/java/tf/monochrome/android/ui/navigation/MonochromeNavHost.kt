@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.navigation
 
+import tf.monochrome.android.player.ListRef
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
@@ -209,6 +210,7 @@ sealed class Screen(val route: String) {
     data object ThemePublish : Screen("theme_publish")
     data object LyricsEditor : Screen("lyrics_editor")
     data object AtmosRenderer : Screen("atmos_renderer")
+    data object WidgetSettings : Screen("widget_settings")
     data object HrtfDatabase : Screen("hrtf_database")
 
     /** StepMania Glyph: generated charts, gameplay and Training Ground. */
@@ -736,6 +738,21 @@ fun MonochromeNavHost(initialRoute: String? = null) {
         LaunchedEffect(invite) {
             if (invite != null) navController.navigate(Screen.ListeningParty.route) { launchSingleTop = true }
         }
+        // A song or album shared from TrypT-hifi plays at once, through the
+        // album it is on, a YouTube or SoundCloud song on its own
+        // (PlayerViewModel.playSharedLink). Taken first, so it plays once.
+        val sharedLinks = remember(appContext) {
+            dagger.hilt.android.EntryPointAccessors.fromApplication(
+                appContext,
+                tf.monochrome.android.share.SharedLinksEntryPoint::class.java,
+            ).sharedLinks()
+        }
+        val sharedLink by sharedLinks.link.collectAsStateWithLifecycle()
+        LaunchedEffect(sharedLink) {
+            val link = sharedLink ?: return@LaunchedEffect
+            sharedLinks.clear()
+            playerViewModel.playSharedLink(link)
+        }
         val addToParty: ((tf.monochrome.android.domain.model.Track, String?) -> Unit)? =
             if (partyOn) remember(party) { { track, file -> party.add(track, file) } } else null
         val partyAdder: tf.monochrome.android.ui.party.PartyAdder? = if (partyOn) {
@@ -1067,6 +1084,9 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.HrtfDatabase.route) {
                     tf.monochrome.android.ui.settings.HrtfDatabaseScreen(navController = navController)
                 }
+                composable(Screen.WidgetSettings.route) {
+                    tf.monochrome.android.ui.settings.WidgetSettingsScreen(navController = navController)
+                }
                 composable(
                     route = Screen.Oxford.route,
                     arguments = listOf(navArgument("tab") {
@@ -1153,10 +1173,7 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             folderPath = folderPath,
                             navController = navController,
                             onPlayTrack = { track, queue ->
-                                playerViewModel.playUnifiedTrack(track, queue)
-                            },
-                            onPlayAll = { tracks ->
-                                playerViewModel.playAllUnified(tracks)
+                                playerViewModel.playUnifiedTrack(track, queue, ListRef.Folder(folderPath))
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))
@@ -1168,18 +1185,19 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(
                     route = Screen.LocalAlbumDetail.route,
                     arguments = listOf(navArgument("albumId") { type = NavType.LongType })
-                ) {
+                ) { backStackEntry ->
+                    val album = backStackEntry.arguments?.getLong("albumId")?.let(ListRef::LocalAlbum)
                     tf.monochrome.android.devedit.DevEditScreen("local_album_detail") {
                         LocalAlbumDetailScreen(
                             navController = navController,
                             onPlayTrack = { track, queue ->
-                                playerViewModel.playUnifiedTrack(track, queue)
+                                playerViewModel.playUnifiedTrack(track, queue, album)
                             },
                             onPlayAll = { tracks ->
-                                playerViewModel.playAllUnified(tracks)
+                                playerViewModel.playAllUnified(tracks, album)
                             },
                             onShuffleAll = { tracks ->
-                                playerViewModel.shufflePlayUnified(tracks)
+                                playerViewModel.shufflePlayUnified(tracks, album)
                             },
                             onAddToQueue = { track ->
                                 playerViewModel.addUnifiedToQueue(listOf(track))

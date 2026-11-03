@@ -168,6 +168,15 @@ class UsbExclusiveController @Inject constructor(
             _status.value = Status.NoDevice
             return
         }
+        // Already ours: this runs on every USB attach or detach anywhere and
+        // every preference tick, and opening again while the DAC streams
+        // handed the driver a second connection on top of the first, which
+        // leaked the first one's file descriptor and had the native side
+        // close a handle the iso pump was still using.
+        if (driver.isOpen.value && driver.device.value == device) {
+            _status.value = if (driver.isStreaming.value) Status.Streaming else Status.DeviceOpen
+            return
+        }
         if (!usbManager.hasPermission(device)) {
             _status.value = Status.AwaitingPermission
             val granted = driver.requestPermission(device)

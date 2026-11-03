@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.search
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.ui.components.materialSurface
 import tf.monochrome.android.ui.navigation.trackArtistAction
 import tf.monochrome.android.ui.navigation.trackAlbumAction
@@ -53,6 +55,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -211,6 +216,12 @@ fun SearchResultsContent(
     // Catalog of each album / artist result, for the pill under its card.
     albumSources: Map<Long, SourceType> = emptyMap(),
     artistSources: Map<Long, SourceType> = emptyMap(),
+    // Why the chosen source gave nothing, when it is off (YouTube or
+    // SoundCloud signed out, or turned away): one line under the chips.
+    sourceNote: SearchViewModel.SourceNote? = null,
+    // YouTube or SoundCloud is still out under results already up: the
+    // footer spinner, and no "No results found" until it has answered.
+    isSearchingMore: Boolean = false,
 ) {
     val downloadedTrackIds by playerViewModel.downloadedTrackIds.collectAsStateWithLifecycle()
     var showContextMenuForTrack by remember { mutableStateOf<Track?>(null) }
@@ -236,6 +247,7 @@ fun SearchResultsContent(
             onDownloadTrack = if (playerViewModel.isLocalTrack(track)) null
             else ({ playerViewModel.downloadTrack(track) }),
             onShareFile = { playerViewModel.shareTrack(track) },
+            onShareLink = { playerViewModel.shareLink(track) },
             onGoToAlbum = navController.trackAlbumAction(track, playerViewModel.unifiedFor(track)),
             onGoToArtist = navController.trackArtistAction(track, playerViewModel.unifiedFor(track)),
             onSelect = menuSelectId?.let { id -> { selection.toggle(id) } },
@@ -284,10 +296,10 @@ fun SearchResultsContent(
             playlists = libraryPlaylists,
             onDismiss = { showAddToPlaylistForSelection = false },
             onPlaylistSelected = { playlist ->
-                playerViewModel.addTracksToPlaylist(
-                    playlist.id,
-                    tracks.filter { it.id in selection.selectedIds }.map { it.toLegacyTrack() },
-                )
+                val picked = tracks.filter { it.id in selection.selectedIds }
+                // So a YouTube or SoundCloud song is filed as one (PlayerViewModel.registerUnified).
+                playerViewModel.registerUnified(picked)
+                playerViewModel.addTracksToPlaylist(playlist.id, picked.map { it.toLegacyTrack() })
                 showAddToPlaylistForSelection = false
                 selection.clear()
             },
@@ -310,7 +322,8 @@ fun SearchResultsContent(
                 onTypeSelected = onTypeSelected,
                 selectedSource = selectedSource,
                 onSourceSelected = onSourceSelected,
-                showSourceFilter = showSourceFilter
+                showSourceFilter = showSourceFilter,
+                sourceNote = sourceNote,
             )
             LoadingScreen()
         }
@@ -399,7 +412,8 @@ fun SearchResultsContent(
                         onTypeSelected = onTypeSelected,
                         selectedSource = selectedSource,
                         onSourceSelected = onSourceSelected,
-                        showSourceFilter = showSourceFilter
+                        showSourceFilter = showSourceFilter,
+                        sourceNote = sourceNote,
                     )
                 }
 
@@ -443,6 +457,7 @@ fun SearchResultsContent(
                                     AlbumItem(
                                         album = album,
                                         onClick = {
+                                            ListTrail.opened(album, albums) { ListRef.Album(it.id) }
                                             navController.navigateSafe(
                                                 Screen.AlbumDetail.createRoute(album.id)
                                             )
@@ -465,6 +480,7 @@ fun SearchResultsContent(
                         PlaylistSearchItem(
                             playlist = playlist,
                             onClick = {
+                                ListTrail.opened(playlist, playlistResults) { ListRef.Playlist(it.uuid) }
                                 navController.navigateSafe(
                                     Screen.PlaylistDetail.createRoute(playlist.uuid)
                                 )
@@ -510,8 +526,9 @@ fun SearchResultsContent(
 
                 // Footer spinner while another page is in-flight.
                 // Disappears once every type has hit endReached so the
-                // list terminates cleanly.
-                if (isLoadingMore && !endReached) {
+                // list terminates cleanly. The same spinner stands while
+                // YouTube or SoundCloud is still out.
+                if ((isLoadingMore && !endReached) || isSearchingMore) {
                     item(key = "loadingMore", contentType = "footer") {
                         Row(
                             modifier = Modifier
@@ -547,7 +564,11 @@ fun SearchResultsContent(
                                 )
                                 TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
                             }
-                        } else {
+                        } else if (sourceNote == null && !isSearchingMore) {
+                            // A chosen source with a note (signed out, turned away)
+                            // searched nothing: its line under the chips says why.
+                            // One still out may yet find something: the spinner
+                            // above stands until it has answered.
                             Text(
                                 text = stringResource(R.string.no_results),
                                 style = MaterialTheme.typography.bodyLarge,
@@ -606,7 +627,8 @@ private fun SearchFilterRow(
     onTypeSelected: (SearchViewModel.SearchTypeFilter) -> Unit,
     selectedSource: SearchViewModel.SearchSourceFilter,
     onSourceSelected: (SearchViewModel.SearchSourceFilter) -> Unit,
-    showSourceFilter: Boolean
+    showSourceFilter: Boolean,
+    sourceNote: SearchViewModel.SourceNote? = null,
 ) {
     Column(
         modifier = Modifier
@@ -645,6 +667,19 @@ private fun SearchFilterRow(
                         leadingContent = brand?.let { { SourceBrandMark(it, size = 16.dp) } },
                     )
                 }
+            }
+            // Plain text in the filters' own item, so it scrolls under the
+            // search glass with the chips: no panel, no error row.
+            if (sourceNote != null) {
+                Text(
+                    text = stringResource(sourceNote.text, sourceNote.service),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // It appears after a search: TalkBack reads it out when it does.
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .semantics { liveRegion = LiveRegionMode.Polite },
+                )
             }
         }
     }

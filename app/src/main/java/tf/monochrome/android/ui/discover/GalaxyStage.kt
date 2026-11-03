@@ -739,7 +739,9 @@ internal fun GalaxyStage(
                     familyColors = familyColors,
                     hazeState = mapHaze,
                     reserveTopPx = if (fullScreen) 0f else topChromePx.toFloat(),
-                    reserveBottomPx = reserveBottom,
+                    // Read by the view where it frames and draws, so the
+                    // panel's easing never recomposes this stage.
+                    reserveBottomPx = { reserveBottom },
                     travelBlurPx = { travelBlur },
                     spin = { spin },
                     rays = !lowPower && visuals.godRays,

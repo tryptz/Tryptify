@@ -1,5 +1,6 @@
 #include <jni.h>
 
+#include <algorithm>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -113,6 +114,7 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativePushPcm(
         jobject /*thiz*/,
         jlong handle,
         jfloatArray samples,
+        jint count,
         jint channel_count,
         jint sample_rate) {
     auto* bridge = FromHandle(handle);
@@ -120,15 +122,22 @@ Java_tf_monochrome_android_visualizer_ProjectMNativeBridge_nativePushPcm(
         return;
     }
 
-    const jsize length = env->GetArrayLength(samples);
+    // The first [count] samples: the array is the audio bus's reused scratch,
+    // usually longer than the frame in it.
+    const jsize length = std::min(env->GetArrayLength(samples), count);
     if (length <= 0) {
         return;
     }
 
-    jboolean is_copy = JNI_FALSE;
-    auto* sample_ptr = env->GetFloatArrayElements(samples, &is_copy);
+    // Pinned rather than copied, which GetFloatArrayElements may do for the
+    // whole array. Held only for the copy into the ring, which takes the
+    // bridge's own lock on the render thread that is the only one using it.
+    auto* sample_ptr = static_cast<float*>(env->GetPrimitiveArrayCritical(samples, nullptr));
+    if (sample_ptr == nullptr) {
+        return;
+    }
     bridge->PushPcm(sample_ptr, static_cast<size_t>(length), channel_count, sample_rate);
-    env->ReleaseFloatArrayElements(samples, sample_ptr, JNI_ABORT);
+    env->ReleasePrimitiveArrayCritical(samples, sample_ptr, JNI_ABORT);
 }
 
 extern "C"

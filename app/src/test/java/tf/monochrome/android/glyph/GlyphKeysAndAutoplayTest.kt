@@ -115,6 +115,33 @@ class GlyphKeysAndAutoplayTest {
     }
 
     @Test
+    fun autoPlayPicksUpAnArmedLoopWithoutWideningIt() {
+        // A run's auto play joins an engine the view model already armed on a
+        // training loop: every note in the loop is played, and nothing after
+        // the loop's end is judged, which a reset to the whole song would do.
+        val chart = GlyphDemoChart.chart
+        val start = GlyphDemoChart.loopStartSeconds
+        val end = start + GlyphDemoChart.loopSeconds
+        GlyphGameplayEngine(chart = chart, timing = GlyphDemoChart.timing, preferNative = false).use { engine ->
+            engine.reset(start, end)
+            val autoplay = GlyphAutoplay()
+            autoplay.syncTo(engine, start)
+            val judged = ArrayList<GlyphJudgement>()
+            val times = ArrayList<Float>()
+            var position = start
+            while (position < chart.lastNoteSeconds + 1f) {
+                autoplay.advance(engine, position).forEach { judged += it.judgement; times += it.songSeconds }
+                position += 1f / 60f
+            }
+            assertTrue(judged.isNotEmpty())
+            assertTrue(judged.all { it == GlyphJudgement.MARVELOUS })
+            // Within the loop: a hold's tail may land just past its end, never a new note.
+            val firstAfter = chart.notes.filter { it.timeSeconds >= end }.minOfOrNull { it.timeSeconds } ?: Float.MAX_VALUE
+            assertTrue(times.none { it >= firstAfter })
+        }
+    }
+
+    @Test
     fun theDemoChartRepeatsExactlyAcrossItsLoop() {
         val chart = GlyphDemoChart.chart
         val start = GlyphDemoChart.loopStartSeconds

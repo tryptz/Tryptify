@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import tf.monochrome.android.domain.model.UnifiedTrack
@@ -69,12 +71,29 @@ class DiscoveryCache @Inject constructor(
          * them, but a chart row is a pair of strings and there is no end to
          * those. Four thousand is a few megabytes and many sessions of feed.
          */
-        private const val MAX_TRACK_ENTRIES = 4_000
+        const val MAX_TRACK_ENTRIES = 4_000
+
+        /**
+         * Ceiling on the tracks in all the remembered artists' top tracks
+         * together, oldest lists dropped first.
+         *
+         * [MAX_TRACK_ENTRIES] counts lists here, and a list is ten or twenty
+         * tracks, so on its own it let this one bucket reach tens of megabytes,
+         * all of it read at launch and written again with every burst. Ten
+         * thousand tracks is still several hundred artists.
+         */
+        const val MAX_TOP_TRACKS = 10_000
     }
 
     /** A remembered answer and when it was learned. */
     @Serializable
-    data class Stamped<T>(val value: T, val at: Long = System.currentTimeMillis())
+    @OptIn(ExperimentalSerializationApi::class)
+    data class Stamped<T>(
+        val value: T,
+        // Always written. Its default is the clock, not a constant, so an
+        // omitted stamp would read back as "learned just now".
+        @EncodeDefault val at: Long = System.currentTimeMillis(),
+    )
 
     @Serializable
     data class Snapshot(
@@ -91,9 +110,14 @@ class DiscoveryCache @Inject constructor(
         val artistTopTracks: Map<String, Stamped<List<UnifiedTrack>>> = emptyMap(),
     )
 
+    // Defaults are left out of the file. A track is mostly nulls and falses,
+    // and writing each one out by name came to over a kilobyte a track. Every
+    // default in what this stores is a constant, except [Stamped.at], which is
+    // written regardless, so leaving them out reads back the same value. A
+    // file written with them still reads as it did.
     private val json = Json {
         ignoreUnknownKeys = true
-        encodeDefaults = true
+        encodeDefaults = false
     }
 
     private val file: File by lazy { File(context.cacheDir, FILE_NAME) }
@@ -135,6 +159,8 @@ class DiscoveryCache @Inject constructor(
             artistTags.putAll(fromDisk.artistTags)
             resolved.putAll(fromDisk.resolved)
             artistTopTracks.putAll(fromDisk.artistTopTracks)
+            // A file written before [MAX_TOP_TRACKS] existed can hold far more.
+            artistTopTracks.trimTracksTo(MAX_TOP_TRACKS, adding = 0)
             loaded = true
         }
         snapshotLocked()
@@ -153,7 +179,12 @@ class DiscoveryCache @Inject constructor(
         put { resolved.trimTo(MAX_TRACK_ENTRIES)[matchKey] = Stamped(track, at) }
 
     suspend fun putArtistTopTracks(artistKey: String, tracks: List<UnifiedTrack>, at: Long) =
-        put { artistTopTracks.trimTo(MAX_TRACK_ENTRIES)[artistKey] = Stamped(tracks, at) }
+        put {
+            // Out first, so the list being replaced is not counted against the budget.
+            artistTopTracks.remove(artistKey)
+            artistTopTracks.trimTo(MAX_TRACK_ENTRIES)
+                .trimTracksTo(MAX_TOP_TRACKS, adding = tracks.size)[artistKey] = Stamped(tracks, at)
+        }
 
     /** Forget everything, on disk and in memory, so a refresh really refetches. */
     suspend fun clear() {
@@ -232,6 +263,24 @@ class DiscoveryCache @Inject constructor(
         entries.sortedBy { it.value.at }
             .take(size - max + 1)
             .forEach { remove(it.key) }
+        return this
+    }
+
+    /**
+     * Drop the oldest lists until [adding] more tracks fit within [max], for
+     * the reason [trimTo] gives for going by age.
+     */
+    private fun LinkedHashMap<String, Stamped<List<UnifiedTrack>>>.trimTracksTo(
+        max: Int,
+        adding: Int,
+    ): LinkedHashMap<String, Stamped<List<UnifiedTrack>>> {
+        var total = values.sumOf { it.value.size }
+        if (total + adding <= max) return this
+        for (oldest in entries.sortedBy { it.value.at }) {
+            if (total + adding <= max) break
+            total -= oldest.value.value.size
+            remove(oldest.key)
+        }
         return this
     }
 }

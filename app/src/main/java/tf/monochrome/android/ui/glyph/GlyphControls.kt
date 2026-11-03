@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.ui.components.GlassPill
+import tf.monochrome.android.ui.components.holdToRepeat
 import tf.monochrome.android.ui.components.LocalGlassBackdrop
 import tf.monochrome.android.ui.components.glassSwitchColors
 import tf.monochrome.android.ui.components.materialSurface
@@ -162,7 +163,8 @@ fun GlyphControlHeader(label: String, caption: String?, modifier: Modifier = Mod
 
 /**
  * A value between two round glass buttons, less and more: the speed, the
- * rate, the offset. The value is announced as it changes.
+ * rate, the offset. The value is announced as it changes. A button held
+ * down keeps stepping ([holdToRepeat]).
  */
 @Composable
 fun GlyphStepper(
@@ -187,6 +189,7 @@ fun GlyphStepper(
             size = buttonSize,
             label = lessLabel,
             enabled = lessEnabled,
+            modifier = Modifier.holdToRepeat(lessEnabled, onLess),
         ) { Icon(Icons.Default.Remove, contentDescription = null, tint = it) }
         Text(
             text = value,
@@ -204,6 +207,7 @@ fun GlyphStepper(
             size = buttonSize,
             label = moreLabel,
             enabled = moreEnabled,
+            modifier = Modifier.holdToRepeat(moreEnabled, onMore),
         ) { Icon(Icons.Default.Add, contentDescription = null, tint = it) }
     }
 }

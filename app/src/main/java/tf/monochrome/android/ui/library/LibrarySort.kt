@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.data.db.entity.UserPlaylistEntity
 import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedArtist
 import tf.monochrome.android.domain.model.UnifiedTrack
@@ -17,6 +18,8 @@ enum class LibrarySortKey(@androidx.annotation.StringRes val label: Int) {
     TIME(R.string.sort_time),
     TRACKS(R.string.filter_tracks),
     ALBUMS(R.string.filter_albums),
+    EDITED(R.string.sort_last_edited),
+    CREATED(R.string.sort_date_created),
 }
 
 /** A sort selection: which [key] and the direction. */
@@ -34,6 +37,36 @@ val ALBUM_SORT_KEYS = listOf(
 val ARTIST_SORT_KEYS = listOf(
     LibrarySortKey.NAME, LibrarySortKey.TRACKS, LibrarySortKey.ALBUMS,
 )
+val PLAYLIST_SORT_KEYS = listOf(
+    LibrarySortKey.EDITED, LibrarySortKey.NAME, LibrarySortKey.CREATED,
+)
+
+/**
+ * How the Library lists the listener's playlists, which is also the order
+ * "Continue into the next list" walks them in. Saved, unlike a playlist's own
+ * song sort, because that order would otherwise change under the listener.
+ */
+object PlaylistSort {
+    /** Last edited first: how the Library has always listed them. */
+    val DEFAULT = LibrarySort(LibrarySortKey.EDITED, ascending = false)
+
+    fun encode(sort: LibrarySort): String = "${sort.key.name}:${if (sort.ascending) "asc" else "desc"}"
+
+    fun decode(raw: String?): LibrarySort {
+        val parts = raw?.split(':') ?: return DEFAULT
+        val key = PLAYLIST_SORT_KEYS.firstOrNull { it.name == parts.getOrNull(0) } ?: return DEFAULT
+        return LibrarySort(key, ascending = parts.getOrNull(1) != "desc")
+    }
+
+    fun apply(playlists: List<UserPlaylistEntity>, sort: LibrarySort): List<UserPlaylistEntity> {
+        val sorted = when (sort.key) {
+            LibrarySortKey.NAME -> playlists.sortedByText(first = { it.name.lowercase() })
+            LibrarySortKey.CREATED -> playlists.sortedWith(compareBy { it.createdAt })
+            else -> playlists.sortedWith(compareBy { it.updatedAt })
+        }
+        return if (sort.ascending) sorted else sorted.reversed()
+    }
+}
 
 /**
  * One element decorated with the text keys it sorts by, computed once.

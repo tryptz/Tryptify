@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,7 +59,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -195,6 +195,7 @@ internal fun GlyphSongInfoCard(
                         reducedMotion = reducedMotion,
                         timing = simfile?.timing,
                         previewPosition = if (loaded) previewPosition else NO_POSITION,
+                        previewPlaying = loaded && state.previewPlaying,
                     )
                     GlyphStars(
                         difficulty = chart?.difficulty,
@@ -303,12 +304,22 @@ internal fun GlyphGrooveRadar(
     val ink = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val measurer = rememberTextMeasurer()
-    val labelStyle = TextStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, color = muted)
+    // The card's own label voice (SPEED, DENSITY): the theme's face at a
+    // small size, spaced as small capitals. A bare TextStyle here fell back
+    // to the system's sans, the one text on the card in another face.
+    val labelStyle = MaterialTheme.typography.labelSmall.copy(
+        fontSize = 8.5.sp,
+        lineHeight = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.1.sp,
+        color = muted,
+    )
+    val dark = overDark()
     val description = GlyphChartStats.AXES.zip(values).joinToString(", ") { (axis, v) -> "${axis.lowercase()} ${(v * 100).toInt()}" }
 
     Canvas(modifier.semantics { contentDescription = "Groove radar: $description" }) {
         val centre = Offset(size.width / 2f, size.height / 2f)
-        val radius = size.minDimension / 2f - 16.dp.toPx()
+        val radius = size.minDimension / 2f - 18.dp.toPx()
         fun point(axis: Int, value: Float): Offset {
             val angle = Math.toRadians((-90.0 + axis * 72.0))
             return Offset(centre.x + (cos(angle) * radius * value).toFloat(), centre.y + (sin(angle) * radius * value).toFloat())
@@ -344,12 +355,33 @@ internal fun GlyphGrooveRadar(
         drawPath(shape, colour.copy(alpha = 0.3f), style = Stroke(4.5.dp.toPx(), join = StrokeJoin.Round))
         drawPath(shape, colour, style = Stroke(2.2.dp.toPx(), join = StrokeJoin.Round))
 
+        val gap = 3.dp.toPx()
+        val pad = 3.dp.toPx()
         GlyphChartStats.AXES.forEachIndexed { axis, label ->
             val layout = measurer.measure(label, labelStyle)
-            val at = point(axis, 1.18f)
-            // Inside the canvas whatever the font scale, never under the card's rim.
-            val x = (at.x - layout.size.width / 2f).coerceIn(0f, (size.width - layout.size.width).coerceAtLeast(0f))
-            val y = (at.y - layout.size.height / 2f).coerceIn(0f, (size.height - layout.size.height).coerceAtLeast(0f))
+            val w = layout.size.width.toFloat()
+            val h = layout.size.height.toFloat()
+            val angle = Math.toRadians(-90.0 + axis * 72.0)
+            val tip = point(axis, 1f)
+            // Each name sits past its axis's tip with its near edge at the
+            // tip: above STREAM, beside VOLTAGE and CHAOS, below AIR and
+            // FREEZE. Centred on a point further out, as before, the long
+            // names at the sides straddled the web.
+            var x = tip.x - w / 2f + (cos(angle) * (w / 2f + gap)).toFloat()
+            var y = tip.y - h / 2f + (sin(angle) * (h / 2f + gap)).toFloat()
+            // Inside the well whatever the font scale, never under the card's rim.
+            x = x.coerceIn(pad, (size.width - w - pad).coerceAtLeast(0f))
+            y = y.coerceIn(pad, (size.height - h - pad).coerceAtLeast(0f))
+            // Where the well is too tight for that (the side names in a 140 dp
+            // well), the name is pushed over the web: a patch of the well's
+            // own floor under it, so the lines and the shape run under the
+            // name rather than through its letters.
+            drawRoundRect(
+                color = Color.Black.copy(alpha = if (dark) 0.34f else 0.07f),
+                topLeft = Offset(x - 3.dp.toPx(), y - 1.dp.toPx()),
+                size = Size(w + 6.dp.toPx(), h + 2.dp.toPx()),
+                cornerRadius = CornerRadius(4.dp.toPx()),
+            )
             drawText(layout, topLeft = Offset(x, y))
         }
     }
@@ -369,6 +401,7 @@ private fun GlyphBpmMeter(
     reducedMotion: Boolean,
     timing: GlyphTiming?,
     previewPosition: () -> Float?,
+    previewPlaying: Boolean,
 ) {
     val scheme = MaterialTheme.colorScheme
     val shown by animated(bpm, reducedMotion, "bpm")
@@ -397,7 +430,13 @@ private fun GlyphBpmMeter(
             Spacer(Modifier.width(4.dp))
             Text("BPM", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
-            BeatLight(timing = timing, previewPosition = previewPosition, colour = colour, reducedMotion = reducedMotion)
+            BeatLight(
+                timing = timing,
+                previewPosition = previewPosition,
+                previewPlaying = previewPlaying,
+                colour = colour,
+                reducedMotion = reducedMotion,
+            )
         }
         Box(
             Modifier
@@ -419,14 +458,30 @@ private fun GlyphBpmMeter(
  * motion.
  */
 @Composable
-private fun BeatLight(timing: GlyphTiming?, previewPosition: () -> Float?, colour: Color, reducedMotion: Boolean) {
+private fun BeatLight(
+    timing: GlyphTiming?,
+    previewPosition: () -> Float?,
+    /** A preview has been started and not stopped ([GlyphUiState.previewPlaying]). */
+    previewPlaying: Boolean,
+    colour: Color,
+    reducedMotion: Boolean,
+) {
     if (reducedMotion || timing == null) {
         Box(Modifier.size(9.dp).clip(CircleShape).background(colour.copy(alpha = 0.5f)))
         return
     }
     // A frame clock read in the layer: each frame redraws the light and
-    // recomposes nothing.
-    val frame = produceState(0L) { while (true) withFrameNanos { value = it } }
+    // recomposes nothing. It runs while a preview plays, and on until its
+    // sound has stopped (a stopped preview fades out first), so its last
+    // frame is the still light; with nothing playing it runs no frames at
+    // all, where it used to run every frame the wheel was open.
+    val position by rememberUpdatedState(previewPosition)
+    val frame = produceState(0L, previewPlaying) {
+        while (true) {
+            withFrameNanos { value = it }
+            if (!previewPlaying && position() == null) break
+        }
+    }
     Box(
         Modifier
             .size(9.dp)

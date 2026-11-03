@@ -70,7 +70,15 @@ class ChannelDetectorProcessor @Inject constructor() : AudioProcessor {
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
     // Linear running peaks, one slot per input channel. Written on the audio
@@ -208,16 +216,23 @@ class ChannelDetectorProcessor @Inject constructor() : AudioProcessor {
 
         // Pass through unmodified (same narrowed-limit bulk copy as
         // SpectrumAnalyzerTap — no duplicate() wrapper allocation).
-        if (outputBuffer.capacity() < byteCount) {
-            outputBuffer = ByteBuffer.allocateDirect(byteCount).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
-        }
+        val out = ensureOutput(byteCount)
         val savedLimit = inputBuffer.limit()
         inputBuffer.limit(startPos + byteCount)
-        outputBuffer.put(inputBuffer)
+        out.put(inputBuffer)
         inputBuffer.limit(savedLimit)
-        outputBuffer.flip()
+        out.flip()
+    }
+
+    /** [buffer], at least [bytes] long and cleared, as the pending output. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            buffer.clear()
+        }
+        outputBuffer = buffer
+        return buffer
     }
 
     override fun getOutput(): ByteBuffer {
@@ -250,6 +265,7 @@ class ChannelDetectorProcessor @Inject constructor() : AudioProcessor {
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
         peaks = FloatArray(0)
         _state.value = null
     }

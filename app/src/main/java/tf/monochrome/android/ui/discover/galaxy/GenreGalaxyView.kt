@@ -111,7 +111,8 @@ internal fun GenreGalaxyView(
     familyColors: Map<String, Color>,
     hazeState: HazeState,
     reserveTopPx: Float,
-    reserveBottomPx: Float,
+    /** The strip at the bottom the panels cover; eased as they open, so read where it is used. */
+    reserveBottomPx: () -> Float,
     travelBlurPx: () -> Float,
     spin: () -> Float,
     rays: Boolean,
@@ -197,7 +198,7 @@ internal fun GenreGalaxyView(
 
     fun centerYFor(size: Size): Float {
         val top = liveTop.value.coerceIn(0f, size.height / 2f)
-        val bottom = liveBottom.value.coerceIn(0f, size.height / 2f)
+        val bottom = liveBottom.value().coerceIn(0f, size.height / 2f)
         return top + (size.height - top - bottom) / 2f
     }
 
@@ -520,7 +521,7 @@ internal fun GenreGalaxyView(
             drawMarks(art, scene, f, m, here, selected, dp)
             drawLabels(
                 art, bodies, if (shown) sys else null, scene, f, m, here, selected, dp, measurer, labelStyle, moonStyle,
-                yearStyle, hereLabel, liveTop.value, size.height - liveBottom.value,
+                yearStyle, hereLabel, liveTop.value, size.height - liveBottom.value(),
             )
         }
     }

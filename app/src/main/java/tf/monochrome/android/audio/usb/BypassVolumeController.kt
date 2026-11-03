@@ -73,8 +73,27 @@ class BypassVolumeController @Inject constructor() {
         _dacCarriesStream.value = carries
     }
 
-    /** Whether the DAC level is the volume heard: a DAC is claimed ([dacClaimed]) and the stream is on it. */
-    fun steersOutput(dacClaimed: Boolean): Boolean = dacClaimed && _dacCarriesStream.value
+    private val _androidStreamAudible = MutableStateFlow(false)
+    /**
+     * True while the app plays a stream of its own on Android's output beside
+     * the claimed DAC: Trypt Mania's song or a preview, which never go through
+     * the DAC. The DAC level steers nothing heard then either, so the keys
+     * and the system panel go to Android's volume, where that stream is. Set
+     * by GlyphViewModel; kept apart from [dacCarriesStream], which the sink
+     * overwrites at every stream start.
+     */
+    val androidStreamAudible: StateFlow<Boolean> = _androidStreamAudible.asStateFlow()
+
+    fun setAndroidStreamAudible(audible: Boolean) {
+        _androidStreamAudible.value = audible
+    }
+
+    /**
+     * Whether the DAC level is the volume heard: a DAC is claimed
+     * ([dacClaimed]), the stream is on it, and nothing of the app's own
+     * sounds on Android's output instead.
+     */
+    fun steersOutput(dacClaimed: Boolean): Boolean = dacClaimed && _dacCarriesStream.value && !_androidStreamAudible.value
 
     private val _keyPresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** A volume key changed the level: the cue for the glass pop-up to show. */

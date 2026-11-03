@@ -126,11 +126,12 @@ class MixerViewModel @Inject constructor(
      * One meter + FX-tap poll (cheap native reads). Called by the mixer UI
      * once per display frame, so meters and visuals run at the panel's native
      * refresh rate — 120 Hz where the device permits — and polling stops
-     * entirely while the mixer is off screen.
+     * entirely while the mixer is off screen. The FX tap only while
+     * [fxShown]: the FX chain page is the one thing that draws it.
      */
-    fun pollTick() {
+    fun pollTick(fxShown: Boolean) {
         dspManager.pollLevels()
-        dspManager.pollFxTap(_selectedBusIndex.value)
+        if (fxShown) dspManager.pollFxTap(_selectedBusIndex.value)
         knobLinks.poll()
     }
 
@@ -339,7 +340,7 @@ class MixerViewModel @Inject constructor(
         // allocation, and running it inline from a tap blocked the UI for the
         // duration -- long enough to drop frames on a full five-bus preset.
         viewModelScope.launch(Dispatchers.Default) {
-            dspManager.loadStateJson(preset.stateJson)
+            dspManager.loadChosenMix(preset.stateJson)
             keepSelectionValid()
         }
         _currentPresetName.value = preset.name
@@ -397,7 +398,7 @@ class MixerViewModel @Inject constructor(
             presetRepository.savePreset(
                 MixPreset(name = name, stateJson = stateJson, isCustom = true)
             )
-            dspManager.loadStateJson(stateJson)
+            dspManager.loadChosenMix(stateJson)
             keepSelectionValid()
             _currentPresetName.value = name
             onResult(true)

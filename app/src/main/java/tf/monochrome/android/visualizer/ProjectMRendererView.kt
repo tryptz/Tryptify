@@ -48,6 +48,29 @@ class ProjectMRendererView @JvmOverloads constructor(
         })
     }
 
+    /**
+     * The surface is going: the screen turned off, or the app went to the
+     * background with the visualizer showing. Treated as a detach, so the
+     * engine lets go of the audio feed (which otherwise converted every buffer
+     * for a picture nobody could see) and of its GPU memory. A new surface
+     * attaches again through onSurfaceChanged.
+     *
+     * An override rather than the observer above, for the order: GLSurfaceView
+     * is the holder's first callback, and by the time a second one hears of
+     * this it has already torn down the EGL surface and nothing is current on
+     * its thread, so projectM's glDelete calls would do nothing and leave its
+     * textures in the preserved context. Queued before super instead, the
+     * detach runs ahead of that teardown (the GL thread takes queued events
+     * first), with the context still current, and super waits for it.
+     */
+    override fun surfaceDestroyed(holder: SurfaceHolder) {
+        // The view stays, so the picture should come back as it was: the
+        // preset showing now, not the preferred one a fresh visualizer opens
+        // on. Closing the visualizer queues its own detach first, which wins.
+        queueEvent { visualizerRenderer.onDetach(resumeWhereLeft = true) }
+        super.surfaceDestroyed(holder)
+    }
+
     fun updatePlayback(isPlaying: Boolean) {
         repository.setPlaybackPaused(!isPlaying)
         renderMode = if (isPlaying) RENDERMODE_CONTINUOUSLY else RENDERMODE_WHEN_DIRTY
@@ -174,7 +197,7 @@ class ProjectMRendererView @JvmOverloads constructor(
 
         override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
             if (!attached) {
-                repository.onSurfaceAttached(width, height)
+                repository.onSurfaceAttached(this, width, height)
                 attached = true
             } else {
                 repository.onSurfaceResized(width, height)
@@ -202,10 +225,10 @@ class ProjectMRendererView @JvmOverloads constructor(
             }
         }
 
-        fun onDetach() {
+        fun onDetach(resumeWhereLeft: Boolean = false) {
             if (attached) {
                 attached = false
-                repository.onSurfaceDetached()
+                repository.onSurfaceDetached(this, resumeWhereLeft)
             }
         }
     }

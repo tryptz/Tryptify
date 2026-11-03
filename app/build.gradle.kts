@@ -55,8 +55,8 @@ android {
         applicationId = "tf.monotrypt.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 195
-        versionName = "1.9.5"
+        versionCode = 196
+        versionName = "1.9.51"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -76,6 +76,15 @@ android {
             "String",
             "TRYPTIFY_CLOUD_URL",
             "\"${localProperties.getProperty("tryptifyCloud.url") ?: "https://cloud.tryptify.com"}\"",
+        )
+
+        // The YouTube and SoundCloud source (trypt-hifi-scxyt, on Railway): it
+        // searches and fetches through yt-dlp on the server. Like the Theme Store
+        // it holds no secret; calls carry the listener's Supabase session.
+        buildConfigField(
+            "String",
+            "SCXYT_URL",
+            "\"${localProperties.getProperty("scxyt.url") ?: "https://trypt-hifi-scxyt-production.up.railway.app"}\"",
         )
 
         // Last.fm application key, shared by every install — CHARTS ONLY.
@@ -194,6 +203,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // NewPipeExtractor calls Java APIs Android only has from 13 on
+        // (URLEncoder/URLDecoder with a Charset, Collectors.
+        // toUnmodifiableList), in every search and extraction; without this,
+        // YouTube would crash on Android 8 to 12. D8 backports the rest.
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -340,6 +354,7 @@ dependencies {
     // Lifecycle
     implementation(libs.lifecycle.runtime)
     implementation(libs.lifecycle.viewmodel)
+    implementation(libs.lifecycle.process)
 
     // Navigation
     implementation(libs.navigation.compose)
@@ -448,6 +463,15 @@ dependencies {
     implementation(libs.androidx.paging.compose)
     implementation(libs.room.paging)
     implementation(libs.profileinstaller)
+    // Trypt Mania's StepMania styles (noteskins, themes, announcers) packed as 7z.
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+    // YouTube on the phone (data/youtube): YouTube turns data-centre
+    // addresses away, so the search and the audio are fetched from the
+    // listener's own network. Brings jsoup, Rhino, protobuf-lite and
+    // nanojson, none of which the app had already.
+    implementation(libs.newpipe.extractor)
+    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     // Where the generated profile comes from. profileinstaller above is the
     // runtime half — it installs a profile at first launch — and until this
     // existed the only profiles it had to install were the ones the AndroidX

@@ -197,10 +197,49 @@ class GlyphAssetCatalogTest {
             )
         }
         assertTrue("hold bodies must be warm", "hold_body" in ids && "roll_body" in ids)
-        for (art in GlyphJudgementArt.entries) {
-            assertTrue("${art.assetName} must be warm", art.assetName in ids)
+        for (roll in listOf(false, true)) for (active in listOf(false, true)) {
+            assertTrue(GlyphAssetCatalog.holdBody(roll, active).name in ids)
+            assertTrue(GlyphAssetCatalog.holdTail(roll, active).name in ids)
+        }
+        for (lane in GlyphLane.entries) {
+            assertTrue(GlyphAssetCatalog.tap(lane, GlyphBeatDivision.QUARTER).name in ids)
+            assertTrue(GlyphAssetCatalog.holdHead(lane, roll = false).name in ids)
+            assertTrue(GlyphAssetCatalog.holdHead(lane, roll = true).name in ids)
+        }
+        for (note in listOf(GlyphSpecialNote.MINE, GlyphSpecialNote.LIFT, GlyphSpecialNote.FAKE)) {
+            assertTrue("${note.assetName} must be warm", note.assetName in ids)
         }
         // A Beginner chart has no 48ths, so prewarming them would be waste.
         assertTrue("tap_left_48th" !in ids)
+        // Nor is anything warmed that the field never draws at a note's size:
+        // the uncoloured tap, a shock arrow, the judgement wordmarks (the
+        // HUD's are the StepMania theme's) and the effects, drawn at twice it.
+        for (lane in GlyphLane.entries) assertTrue(GlyphAssetCatalog.tapDefault(lane).name !in ids)
+        assertTrue(GlyphAssetCatalog.special(GlyphSpecialNote.SHOCK).name !in ids)
+        for (art in GlyphJudgementArt.entries) assertTrue("${art.assetName} is not drawn", art.assetName !in ids)
+        for (art in GlyphEffectArt.entries) assertTrue(GlyphAssetCatalog.effect(art).name !in ids)
+    }
+
+    @Test
+    fun playfieldEffectsAreTheOnesTheFieldDraws() {
+        val ids = GlyphAssetCatalog.playfieldEffects().map { it.name }
+        val drawn = buildSet {
+            for (lane in GlyphLane.entries) {
+                add(GlyphAssetCatalog.effect(GlyphEffectArt.TAP_EXPLOSION, lane).name)
+                add(GlyphAssetCatalog.effect(GlyphEffectArt.HOLD_GLOW, lane).name)
+            }
+            add(GlyphAssetCatalog.effect(GlyphEffectArt.MISS_CRACK).name)
+            add(GlyphAssetCatalog.effect(GlyphEffectArt.COMBO_BURST).name)
+        }
+        assertEquals(drawn, ids.toSet())
+        assertEquals("each once", ids.size, ids.toSet().size)
+        // The lane-less art is what a pack without lane art falls back to,
+        // loaded under its own name then, and never asked for itself.
+        for (lane in GlyphLane.entries) {
+            assertEquals(
+                GlyphAssetCatalog.effect(GlyphEffectArt.TAP_EXPLOSION),
+                GlyphAssetCatalog.fallback(GlyphAssetCatalog.effect(GlyphEffectArt.TAP_EXPLOSION, lane)),
+            )
+        }
     }
 }

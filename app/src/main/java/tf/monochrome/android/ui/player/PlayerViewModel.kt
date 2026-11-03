@@ -2,6 +2,8 @@ package tf.monochrome.android.ui.player
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
@@ -18,11 +20,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import tf.monochrome.android.data.repository.LyricsRace
-import tf.monochrome.android.data.repository.ServerLyricsStatus
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -49,6 +51,10 @@ import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.domain.model.VisualizerEngineStatus
 import tf.monochrome.android.domain.model.VisualizerPreset
+import tf.monochrome.android.player.ListContext
+import tf.monochrome.android.player.ListContinuation
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import tf.monochrome.android.player.PlaybackService
 import tf.monochrome.android.player.QueueManager
 import tf.monochrome.android.player.StreamResolver
@@ -75,6 +81,7 @@ class PlayerViewModel @Inject constructor(
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val trackShareHelper: tf.monochrome.android.share.TrackShareHelper,
     private val radioQueueManager: RadioQueueManager,
+    private val listContinuation: ListContinuation,
     val spectrumAnalyzer: SpectrumAnalyzerTap,
     private val bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController,
     private val libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver,
@@ -82,13 +89,16 @@ class PlayerViewModel @Inject constructor(
     private val compressorEffect: tf.monochrome.android.audio.dsp.oxford.CompressorEffect,
     private val crossfeedEffect: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
     private val nowPlayingLyrics: tf.monochrome.android.player.NowPlayingLyricsHolder,
-    private val serverLyrics: tf.monochrome.android.data.repository.ServerLyricsEngine,
+    private val timedLyrics: tf.monochrome.android.data.repository.TimedLyricsStore,
     private val playbackState: tf.monochrome.android.player.PlaybackStateRepository,
     private val bpmTap: tf.monochrome.android.audio.tempo.BpmTapProcessor,
     private val sourceConsent: tf.monochrome.android.player.SourceConsent,
     private val audioPipelineMonitor: tf.monochrome.android.audio.pipeline.AudioPipelineMonitor,
     private val playbackPositions: tf.monochrome.android.player.PlaybackPositionSource,
     private val openedAudio: tf.monochrome.android.data.opened.OpenedAudioRepository,
+    private val sharedLinkResolver: tf.monochrome.android.share.SharedLinkResolver,
+    private val shareLinks: tf.monochrome.android.share.ShareLinks,
+    private val preparingPlay: tf.monochrome.android.player.PreparingPlay,
 ) : ViewModel() {
 
     /**
@@ -162,6 +172,13 @@ class PlayerViewModel @Inject constructor(
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
+    /**
+     * The app's own lifecycle, started while any of its screens is. The
+     * position poll stops while it is not. Declared above the init block that
+     * starts the poll, for the reason given at [_activeDownloads].
+     */
+    private val appLifecycle: Lifecycle = ProcessLifecycleOwner.get().lifecycle
+
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
@@ -173,7 +190,15 @@ class PlayerViewModel @Inject constructor(
     // per access.
 
     private val _isBuffering = MutableStateFlow(false)
-    val isBuffering: StateFlow<Boolean> = _isBuffering.asStateFlow()
+
+    /**
+     * The player loading, or the song asked for still being made ready before
+     * the player can have it (a YouTube or SoundCloud song, PreparingPlay):
+     * either way the tap was taken and the play button's spinner shows it.
+     */
+    val isBuffering: StateFlow<Boolean> = combine(_isBuffering, preparingPlay.waiting) { loading, preparing ->
+        loading || preparing
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // Surfaced to the player UI when a track can't be resolved/streamed. Also
     // used to break the resolve→fail→skip→resolve loop that otherwise ran
@@ -194,15 +219,6 @@ class PlayerViewModel @Inject constructor(
 
     private val _isLyricsLoading = MutableStateFlow(false)
     val isLyricsLoading: StateFlow<Boolean> = _isLyricsLoading.asStateFlow()
-
-    /** Where the current song's server timing stands (ServerLyricsEngine); null while there is nothing to say. */
-    val serverLyricsStatus: StateFlow<ServerLyricsStatus?> =
-        kotlinx.coroutines.flow.combine(currentTrack, serverLyrics.status) { track, all -> track?.let { all[it.id] } }
-            .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), null)
-
-    /** Whether a server under Settings › Connections times lyrics: the action is offered only then. */
-    val hasLyricsServer: StateFlow<Boolean> = serverLyrics.hasServer
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000), false)
 
     /**
      * The audio being decoded is E-AC-3, the codec that carries a Dolby Atmos
@@ -427,6 +443,25 @@ class PlayerViewModel @Inject constructor(
 
     fun setInflatorEnabled(on: Boolean) = inflatorEffect.setEffectIn(on)
 
+    /** ReplayGain in any mode, for the quick audio panel's switch. */
+    val replayGainEnabled: StateFlow<Boolean> = preferences.replayGainSettings
+        .map { it.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * On is the smart mode, as Settings › Audio's own switch sets it (each
+     * song's gain, an album's own in an album); its other modes and the
+     * target stay there.
+     */
+    fun setReplayGainEnabled(on: Boolean) {
+        viewModelScope.launch {
+            preferences.setReplayGainMode(
+                if (on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+                else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+            )
+        }
+    }
+
     // --- Crossfeed (headphone speaker simulation) ---
     val crossfeedEnabled: StateFlow<Boolean> = crossfeedEffect.state
         .map { it.enabled }
@@ -485,8 +520,14 @@ class PlayerViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1.0f)
 
     // --- The USB DAC's own volume (exclusive output) ---
-    /** Whether a DAC is claimed for exclusive output, which is when its volume bar shows. */
-    val dacExclusive: StateFlow<Boolean> = libusbDriver.isOpen
+    /**
+     * Whether the DAC's level is the volume heard, which is when its volume
+     * bar shows: a DAC is claimed, and Trypt Mania is not playing a stream of
+     * its own on Android's output (BypassVolumeController.androidStreamAudible).
+     */
+    val dacExclusive: StateFlow<Boolean> =
+        combine(libusbDriver.isOpen, bypassVolumeController.androidStreamAudible) { open, audible -> open && !audible }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     /** The DAC level in dB, MIN_DB (muted) to 0; see BypassVolumeController. */
     val dacLevelDb: StateFlow<Float> = bypassVolumeController.levelDb
@@ -547,6 +588,15 @@ class PlayerViewModel @Inject constructor(
     init {
         connectToService()
         startPositionPolling()
+        // Back from the background, read the position once. The poll was
+        // stopped, and a pause or a seek from the notification moved it without
+        // anyone here hearing of it: the bar would come back where it was left.
+        viewModelScope.launch {
+            appLifecycle.currentStateFlow
+                .map { appScreensStopped(it) }
+                .distinctUntilChanged()
+                .collect { stopped -> if (!stopped) syncState() }
+        }
         observeCurrentTrackMeta()
         // Before anything is loaded, so the mini player comes back with the
         // scrubber where the user left it. Duration comes from the snapshot:
@@ -562,10 +612,9 @@ class PlayerViewModel @Inject constructor(
         // Mirror the now-playing lyrics + position into the app-scoped holder so
         // other screens (the Player Visuals Studio preview) can show the real lyrics.
         viewModelScope.launch { _currentLyrics.collect { nowPlayingLyrics.setLyrics(it) } }
-        // A server's timing lands when it lands, minutes after the race:
-        // shown if the song is still on, kept for it either way.
+        // Lyrics saved in the editor replace the song's at once, if it is still on.
         viewModelScope.launch {
-            serverLyrics.results.collect { (trackId, lyrics) ->
+            timedLyrics.results.collect { (trackId, lyrics) ->
                 if (currentTrack.value?.id == trackId) _currentLyrics.value = lyrics
             }
         }
@@ -573,6 +622,11 @@ class PlayerViewModel @Inject constructor(
         // The sampler records where in a track a capture came from, and cannot
         // reach a MediaController from its own view model.
         viewModelScope.launch { _positionMs.collect { playbackPositions.update(it) } }
+        // One watcher for the whole queue. A song leaves the map when it leaves
+        // the queue, so a download needs no watcher of its own: one per song,
+        // never stopped, woke on every progress tick of every download and
+        // copied the map each time, and "Download all" on an album left
+        // hundreds of them running.
         viewModelScope.launch {
             downloadManager.observeAllActiveDownloads().collectLatest { active ->
                 _activeDownloads.value = active
@@ -647,20 +701,6 @@ class PlayerViewModel @Inject constructor(
                                 ).getOrNull()
                                 _currentLyrics.value = found
                                 _isLyricsLoading.value = false
-                                // No word timing from any catalogue: the
-                                // server hears the song itself, by itself,
-                                // when the setting allows and the song has
-                                // a file. Its answer arrives through
-                                // serverLyrics.results, above.
-                                if (LyricsRace.tier(found) < 3 && preferences.serverLyrics.first()) {
-                                    // Only once the song has been listened to for
-                                    // a while: a song skipped past would otherwise
-                                    // be downloaded and timed for nobody. This
-                                    // coroutine dies with the track, so skipping
-                                    // cancels the wait.
-                                    delay(SERVER_LYRICS_AFTER_MS)
-                                    requestServerLyrics(track, unified, found)
-                                }
                             }
                             // Observe liked status
                             launch {
@@ -677,29 +717,6 @@ class PlayerViewModel @Inject constructor(
                 }
         }
     }
-
-    /** Sends the current song to a lyrics server by hand, whatever lyrics it has. */
-    fun syncLyricsOnServer() {
-        val track = currentTrack.value ?: return
-        if (isLiveStreamTrack(track)) return
-        viewModelScope.launch { requestServerLyrics(track, unifiedTrackRegistry[track.id], _currentLyrics.value) }
-    }
-
-    private suspend fun requestServerLyrics(track: Track, unified: UnifiedTrack?, found: Lyrics?) {
-        serverLyrics.request(
-            tf.monochrome.android.data.repository.LyricsJob(
-                track = track,
-                unified = unified,
-                query = repository.lyricsQueryFor(LyricsLookup.trackFor(track, unified)),
-                // The words the race found, timed or not, for the server to keep.
-                plain = found?.lines?.joinToString("\n") { it.text }?.takeIf { it.isNotBlank() },
-                convertToRomaji = preferences.romajiLyrics.first(),
-            ),
-        )
-    }
-
-    /** Empties the lyrics line and stops its worker. */
-    fun cancelServerLyrics() = serverLyrics.cancelAll()
 
     fun toggleLikeCurrentTrack() {
         val track = currentTrack.value ?: return
@@ -824,6 +841,16 @@ class PlayerViewModel @Inject constructor(
                     _isPlaying.first { it }
                     continue
                 }
+                if (appScreensStopped(appLifecycle.currentState)) {
+                    // Every reader of this position is a screen: the player,
+                    // the mini player, the Studio's preview through
+                    // NowPlayingLyricsHolder. The widget, Discord and
+                    // scrobbling read the service's own player. With the
+                    // screen off the poll still woke the main thread four
+                    // times a second, and at every lyric word, for nobody.
+                    appLifecycle.currentStateFlow.first { !appScreensStopped(it) }
+                    continue
+                }
                 val position = mc.currentPosition.coerceAtLeast(0)
                 _positionMs.value = position
                 _durationMs.value = mc.duration.coerceAtLeast(0)
@@ -850,24 +877,28 @@ class PlayerViewModel @Inject constructor(
         resolveAndPlay()
     }
 
-    /** Play a track within a list (sets the full list as queue). */
-    fun playTrack(track: Track, trackList: List<Track>) {
-        queueManager.playTrackInQueue(track, trackList)
+    /**
+     * Play a track within a list (sets the full list as queue). [from] is the
+     * playlist, album or folder it is, so playback can carry on into the one
+     * beside it ([ListContinuation]).
+     */
+    fun playTrack(track: Track, trackList: List<Track>, from: ListRef? = null) {
+        queueManager.playTrackInQueue(track, trackList, listsFor(from))
         resolveAndPlay()
     }
 
     /** Play all tracks starting from index 0. */
-    fun playAll(tracks: List<Track>) {
+    fun playAll(tracks: List<Track>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
-        queueManager.setQueue(tracks, 0)
+        queueManager.setQueue(tracks, 0, listsFor(from))
         resolveAndPlay()
     }
 
     /** Shuffle-play all tracks. */
-    fun shufflePlay(tracks: List<Track>) {
+    fun shufflePlay(tracks: List<Track>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         try {
-            queueManager.setQueue(tracks, 0)
+            queueManager.setQueue(tracks, 0, listsFor(from))
             queueManager.toggleShuffle()
             resolveAndPlay()
         } catch (t: Throwable) {
@@ -877,18 +908,27 @@ class PlayerViewModel @Inject constructor(
 
     // --- Unified Track playback (local files, collections) ---
 
-    /** Play a UnifiedTrack within a list — the correct path for local/collection files. */
-    fun playUnifiedTrack(track: UnifiedTrack, trackList: List<UnifiedTrack>) {
+    /**
+     * Play a UnifiedTrack within a list — the correct path for local/collection
+     * files. [from] as for [playTrack]; [cut] when [trackList] leaves out the
+     * start of that list, so Previous on its first song stays in it.
+     */
+    fun playUnifiedTrack(
+        track: UnifiedTrack,
+        trackList: List<UnifiedTrack>,
+        from: ListRef? = null,
+        cut: Boolean = false,
+    ) {
         val legacyTracks = trackList.map { it.toLegacyTrack() }
         // Store source mappings so resolveAndPlay can find the right playback source
-        trackList.forEach { ut ->
-            val legacyId = ut.toLegacyTrack().id
-            unifiedTrackRegistry.put(legacyId, ut)
-        }
+        trackList.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
         val legacyTrack = track.toLegacyTrack()
-        queueManager.playTrackInQueue(legacyTrack, legacyTracks)
+        queueManager.playTrackInQueue(legacyTrack, legacyTracks, listsFor(from)?.copy(headCut = cut))
         resolveAndPlay()
     }
+
+    /** The lists [from] is played among, as the screen it was opened from shows them. */
+    private fun listsFor(from: ListRef?): ListContext? = from?.let(ListTrail::contextFor)
 
     /**
      * Play a song another app opened with Tryptify, as a queue of one. Song
@@ -909,6 +949,54 @@ class PlayerViewModel @Inject constructor(
     fun takeOpenedFile(item: tf.monochrome.android.data.opened.OpenedAudioRepository.Opened) {
         openedAudio.taken(item)
         if (item is tf.monochrome.android.data.opened.OpenedAudioRepository.Opened.Ready) playOpenedFile(item.track)
+    }
+
+    /**
+     * Plays a song or album shared from TrypT-hifi, or a YouTube or SoundCloud
+     * song shared from this app (a tryptify.com/listen link), from whichever
+     * service this phone has (SharedLinkResolver: the one it was shared from,
+     * else the same song elsewhere), as tapping that song on its album's page
+     * does, so playback carries on through the album. An
+     * album link starts at its first song. A YouTube or SoundCloud song, or a
+     * song found on YouTube instead, plays on its own, as an opened file does.
+     * Song radio is stopped first, as for an opened file. A toast says when
+     * the song plays from YouTube instead, and when nothing here has it.
+     */
+    fun playSharedLink(link: tf.monochrome.android.share.SharedLink) {
+        viewModelScope.launch {
+            val words = tf.monochrome.android.locale.AppLanguage.wrap(context)
+            fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
+            when (val found = sharedLinkResolver.resolve(link)) {
+                null -> say(
+                    when (link.source) {
+                        // Only signed out, with nothing on YouTube by its name either.
+                        tf.monochrome.android.share.SharedLink.Source.SOUNDCLOUD ->
+                            words.getString(R.string.shared_link_soundcloud_none, link.source.label)
+                        // Never for a link that parsed: its id is always one to play.
+                        tf.monochrome.android.share.SharedLink.Source.YOUTUBE ->
+                            words.getString(R.string.scxyt_error_failed, link.source.label)
+                        else -> words.getString(R.string.shared_link_failed, link.source.label)
+                    },
+                )
+                is tf.monochrome.android.share.SharedLinkResolver.Resolved.Album -> {
+                    radioQueueManager.stopRadio()
+                    playTrack(found.start, found.album.tracks, ListRef.Album(found.album.album.id))
+                }
+                is tf.monochrome.android.share.SharedLinkResolver.Resolved.Song -> {
+                    if (found.substitute) {
+                        say(
+                            if (link.source == tf.monochrome.android.share.SharedLink.Source.SOUNDCLOUD) {
+                                words.getString(R.string.shared_link_youtube_signed_out, link.source.label)
+                            } else {
+                                words.getString(R.string.shared_link_youtube_instead)
+                            },
+                        )
+                    }
+                    radioQueueManager.stopRadio()
+                    playUnifiedTrack(found.track, listOf(found.track))
+                }
+            }
+        }
     }
 
     /** True when [track] plays from a file another app opened, not from the library. */
@@ -975,25 +1063,21 @@ class PlayerViewModel @Inject constructor(
             unifiedTrackRegistry[track.id]?.source is PlaybackSource.RadioStream
 
     /** Play all unified tracks starting from index 0. */
-    fun playAllUnified(tracks: List<UnifiedTrack>) {
+    fun playAllUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
-        tracks.forEach { ut ->
-            unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
-        }
         val legacyTracks = tracks.map { it.toLegacyTrack() }
-        queueManager.setQueue(legacyTracks, 0)
+        tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
+        queueManager.setQueue(legacyTracks, 0, listsFor(from))
         resolveAndPlay()
     }
 
     /** Shuffle-play all unified tracks. */
-    fun shufflePlayUnified(tracks: List<UnifiedTrack>) {
+    fun shufflePlayUnified(tracks: List<UnifiedTrack>, from: ListRef? = null) {
         if (tracks.isEmpty()) return
         try {
-            tracks.forEach { ut ->
-                unifiedTrackRegistry.put(ut.toLegacyTrack().id, ut)
-            }
             val legacyTracks = tracks.map { it.toLegacyTrack() }
-            queueManager.setQueue(legacyTracks, 0)
+            tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
+            queueManager.setQueue(legacyTracks, 0, listsFor(from))
             queueManager.toggleShuffle()
             resolveAndPlay()
         } catch (t: Throwable) {
@@ -1013,8 +1097,9 @@ class PlayerViewModel @Inject constructor(
      */
     fun addUnifiedToQueue(tracks: List<UnifiedTrack>) {
         if (tracks.isEmpty()) return
-        tracks.forEach { unifiedTrackRegistry.put(it.toLegacyTrack().id, it) }
-        queueManager.addToQueue(tracks.map { it.toLegacyTrack() })
+        val legacyTracks = tracks.map { it.toLegacyTrack() }
+        tracks.forEachIndexed { i, ut -> unifiedTrackRegistry.put(legacyTracks[i].id, ut) }
+        queueManager.addToQueue(legacyTracks)
     }
 
     /** Bulk add from multi-select. */
@@ -1137,7 +1222,14 @@ class PlayerViewModel @Inject constructor(
         if (next != null) {
             resolveAndPlay()
         } else {
-            mediaController?.stop()
+            // The last song: on into the next list, if one is coming.
+            viewModelScope.launch {
+                when (listContinuation.next()) {
+                    ListContinuation.Outcome.MOVED -> resolveAndPlay()
+                    ListContinuation.Outcome.NOTHING -> mediaController?.stop()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
         }
     }
 
@@ -1145,6 +1237,18 @@ class PlayerViewModel @Inject constructor(
         val position = mediaController?.currentPosition ?: 0
         if (position > 3000) {
             mediaController?.seekTo(0)
+            return
+        }
+        if (queueManager.currentQueueIndex == 0) {
+            // The first song: back to the last song of the list before, if
+            // there is one; otherwise it restarts, as it always has.
+            viewModelScope.launch {
+                when (listContinuation.stepBack()) {
+                    ListContinuation.Outcome.MOVED -> resolveAndPlay()
+                    ListContinuation.Outcome.NOTHING -> if (queueManager.previous() != null) resolveAndPlay()
+                    ListContinuation.Outcome.OVERTAKEN -> Unit
+                }
+            }
             return
         }
         val prev = queueManager.previous()
@@ -1280,6 +1384,14 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch { preferences.setPlaybackSpeed(speed) }
     }
 
+    /**
+     * The plays still being resolved, and the queue entry they are for: more
+     * than one when the same song was tapped again, all stopped together by
+     * a tap on another.
+     */
+    private val resolveJobs = ArrayList<Job>()
+    private var resolvingTrackId: Long? = null
+
     private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
         // Consumed on first use and keyed on the track, so replaying it later
@@ -1294,21 +1406,36 @@ class PlayerViewModel @Inject constructor(
         // song ended" and pick a matching transition length. Bumped before the
         // resolve so it is already recorded when the track change lands.
         _userTrackChanges.value++
-        viewModelScope.launch {
+        // Resolution priority:
+        //   1. unifiedTrackRegistry — local files / collections / Qobuz
+        //      tracks already promoted to UnifiedTrack at queue time.
+        //   2. qobuzIdRegistry — synthesize a QobuzCached UnifiedTrack
+        //      for tracks whose ids came in via getQobuzAlbum /
+        //      getQobuzArtist / searchQobuz but were enqueued as
+        //      legacy Track (e.g. an album-detail screen tap). Without
+        //      this step the legacy path below would call TIDAL
+        //      /track/?id=<qobuzId> which either 404s or returns the
+        //      wrong track because the numeric id doesn't match.
+        //   3. Legacy TIDAL path.
+        val unifiedTrack = unifiedTrackRegistry[track.id]
+            ?: synthesizeQobuzUnifiedTrack(track)
+        // A YouTube or SoundCloud song is made ready before the player gets
+        // it, for seconds; the play button's spinner shows that wait
+        // (PreparingPlay). This play is the newest from here on: one still
+        // being made ready comes back to find it is not, and does nothing.
+        val turn = preparingPlay.begin(prepares = unifiedTrack?.source is PlaybackSource.Scxyt)
+        // A tap on another song stops the one before it, whose fetch nobody
+        // waits for any more (YoutubeAudioCache drops it, unless the queue is
+        // warming that song). A second tap on the same song leaves the first
+        // fetching, for the newer play to join.
+        if (resolvingTrackId != track.id) {
+            resolveJobs.forEach { it.cancel() }
+            resolveJobs.clear()
+        }
+        resolveJobs.removeAll { it.isCompleted }
+        resolvingTrackId = track.id
+        resolveJobs += viewModelScope.launch {
             try {
-                // Resolution priority:
-                //   1. unifiedTrackRegistry — local files / collections / Qobuz
-                //      tracks already promoted to UnifiedTrack at queue time.
-                //   2. qobuzIdRegistry — synthesize a QobuzCached UnifiedTrack
-                //      for tracks whose ids came in via getQobuzAlbum /
-                //      getQobuzArtist / searchQobuz but were enqueued as
-                //      legacy Track (e.g. an album-detail screen tap). Without
-                //      this step the legacy path below would call TIDAL
-                //      /track/?id=<qobuzId> which either 404s or returns the
-                //      wrong track because the numeric id doesn't match.
-                //   3. Legacy TIDAL path.
-                val unifiedTrack = unifiedTrackRegistry[track.id]
-                    ?: synthesizeQobuzUnifiedTrack(track)
                 if (unifiedTrack != null) {
                     // Make sure the synthesized UnifiedTrack lands in the
                     // registry so PlaybackService.onMediaItemTransition can
@@ -1317,11 +1444,17 @@ class PlayerViewModel @Inject constructor(
                     // death.
                     unifiedTrackRegistry.put(track.id, unifiedTrack)
                     val resolved = streamResolver.resolveUnifiedTrack(unifiedTrack)
+                    // Superseded meanwhile (a newer tap, a notification skip):
+                    // neither played over the newer song nor counted as a
+                    // failure, which would skip it.
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (!resolved.isPlayable) {
+                        resolved.failureReason?.let(::tellResolveFailure)
                         handleResolveFailure()
                         return@launch
                     }
                     val mc = awaitMediaController()
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mc == null) {
                         handleResolveFailure()
                         return@launch
@@ -1334,11 +1467,13 @@ class PlayerViewModel @Inject constructor(
                 } else {
                     // Legacy API path
                     val (mediaItem, _) = streamResolver.resolveMediaItem(track)
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mediaItem == null) {
                         handleResolveFailure()
                         return@launch
                     }
                     val mc = awaitMediaController()
+                    if (!preparingPlay.isLatest(turn)) return@launch
                     if (mc == null) {
                         handleResolveFailure()
                         return@launch
@@ -1349,9 +1484,17 @@ class PlayerViewModel @Inject constructor(
                     onResolveSucceeded()
                     warmUpcoming()
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Stopped by a newer tap: that one plays, and this is no failure.
+                throw e
             } catch (_: Exception) {
-                handleResolveFailure()
+                if (preparingPlay.isLatest(turn)) handleResolveFailure()
             }
+        }.also { job ->
+            // On completion rather than in a finally: a job that never starts
+            // (its scope already cancelled) runs no finally, and would leave
+            // the spinner on.
+            job.invokeOnCompletion { preparingPlay.end(turn) }
         }
     }
 
@@ -1384,22 +1527,39 @@ class PlayerViewModel @Inject constructor(
      * Warm the next couple of queue entries once playback is under way, so a
      * skip doesn't start from cold. Only the service used to do this, which
      * left every UI-initiated play unwarmed. Detached — it must never hold up
-     * the track that's already playing.
+     * the track that's already playing — and each on its own, since a YouTube
+     * song next is a whole fetch the one after it must not wait for.
      */
     private fun warmUpcoming() {
-        viewModelScope.launch {
-            val queue = queueManager.currentQueue
-            val currentIdx = queueManager.currentQueueIndex
-            for (i in 1..2) {
-                val nextIdx = currentIdx + i
-                if (nextIdx < queue.size) streamResolver.warmUpcoming(queue[nextIdx])
+        val queue = queueManager.currentQueue
+        val currentIdx = queueManager.currentQueueIndex
+        for (i in 1..2) {
+            val nextIdx = currentIdx + i
+            if (nextIdx < queue.size) {
+                viewModelScope.launch { streamResolver.warmUpcoming(queue[nextIdx], stepsAhead = i) }
             }
         }
     }
 
     private fun onResolveSucceeded() {
         consecutiveResolveFailures = 0
+        lastResolveFailureReason = null
         _playbackError.value = null
+    }
+
+    /** The reason last told, so a run of songs failing for one reason tells it once. */
+    private var lastResolveFailureReason: String? = null
+
+    /**
+     * Says why a song could not be played, when its source said why (YouTube
+     * turning the server away, an age check). The skip goes on as for any
+     * failure; a queue of YouTube songs while YouTube refuses the server says
+     * so once, not once a song.
+     */
+    private fun tellResolveFailure(reason: String) {
+        if (reason == lastResolveFailureReason) return
+        lastResolveFailureReason = reason
+        android.widget.Toast.makeText(context, reason, android.widget.Toast.LENGTH_LONG).show()
     }
 
     /**
@@ -1528,13 +1688,32 @@ class PlayerViewModel @Inject constructor(
         // download behind a song on the listener's own server.
         if (isLocalTrack(track) || isLiveStreamTrack(track) || isOwnServerTrack(track)) return
         downloadManager.downloadTrack(track)
-        observeTrackDownload(track.id)
+    }
+
+    /**
+     * Registers [tracks] as playing them would, before an action on them from
+     * a list (adding them to a playlist): a YouTube or SoundCloud song is then
+     * filed and played as one, not by its hashed id alone.
+     */
+    fun registerUnified(tracks: List<UnifiedTrack>) {
+        tracks.forEach { unifiedTrackRegistry.put(it.legacyId, it) }
+    }
+
+    /**
+     * Downloads [track] from a list, where it may not have been played or
+     * queued yet. Registered first, as playing it would, so the download knows
+     * where it comes from: a YouTube or SoundCloud song is fetched through its
+     * server by its own id, which its hashed Track id does not carry.
+     */
+    fun downloadUnified(track: UnifiedTrack) {
+        val legacy = track.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, track)
+        downloadTrack(legacy)
     }
 
     fun downloadAllTracks(tracks: List<Track>) {
         val remote = tracks.filterNot { isLocalTrack(it) || isOwnServerTrack(it) }
         downloadManager.downloadTracks(remote)
-        remote.forEach { observeTrackDownload(it.id) }
     }
 
     /**
@@ -1564,9 +1743,41 @@ class PlayerViewModel @Inject constructor(
         }
         // The share helper would fetch the file from Qobuz by this hashed id.
         if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.Subsonic) return
+        // So it would for a YouTube or SoundCloud song: only its download is shared.
+        if (unified?.source is tf.monochrome.android.domain.model.PlaybackSource.Scxyt) {
+            viewModelScope.launch {
+                val download = libraryRepository.getDownloadedTrack(track.id)
+                if (download != null) {
+                    trackShareHelper.shareDownloadedTrack(download)
+                } else {
+                    // Not downloaded: say how to get a file, and that the link needs none.
+                    val text = tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.share_no_file_download_first)
+                    android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
         viewModelScope.launch {
             trackShareHelper.shareTrack(track)
         }
+    }
+
+    /**
+     * Share [track] as a tryptify.com link that opens and plays it in Tryptify,
+     * on whichever service the person it's sent to has (ShareLinks).
+     */
+    fun shareLink(track: Track) {
+        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track)) }
+    }
+
+    /** Share a YouTube or SoundCloud song from a list as a tryptify.com link (ShareLinks). */
+    fun shareUnifiedLink(track: UnifiedTrack) {
+        viewModelScope.launch { shareLinks.shareTrack(track.toLegacyTrack(), track) }
+    }
+
+    /** Share an album page's album as a tryptify.com link (ShareLinks). */
+    fun shareAlbumLink(albumId: Long, detail: tf.monochrome.android.domain.model.AlbumDetail) {
+        viewModelScope.launch { shareLinks.shareAlbum(albumId, detail) }
     }
 
     fun shareDownloadedTrack(entity: tf.monochrome.android.data.db.entity.DownloadedTrackEntity) {
@@ -1583,26 +1794,16 @@ class PlayerViewModel @Inject constructor(
             trackShareHelper.shareLocalPath(local.filePath, track.title)
             return
         }
-        shareTrack(track.toLegacyTrack())
+        // Registered first, as a like or a download from a list is, so
+        // shareTrack knows a YouTube or SoundCloud song it has not seen played.
+        val legacy = track.toLegacyTrack()
+        unifiedTrackRegistry.put(legacy.id, track)
+        shareTrack(legacy)
     }
 
     /** True when this UnifiedTrack is a file already on disk. */
     fun isLocalUnified(track: UnifiedTrack): Boolean =
         track.source is tf.monochrome.android.domain.model.PlaybackSource.LocalFile
-
-    private fun observeTrackDownload(trackId: Long) {
-        viewModelScope.launch {
-            downloadManager.observeDownloadState(trackId).collectLatest { state ->
-                _activeDownloads.value = _activeDownloads.value.toMutableMap().apply {
-                    if (state.status == tf.monochrome.android.data.downloads.DownloadStatus.IDLE) {
-                        remove(trackId)
-                    } else {
-                        put(trackId, state)
-                    }
-                }
-            }
-        }
-    }
 
     fun addTrackToPlaylist(playlistId: String, track: Track) {
         viewModelScope.launch {
@@ -1644,8 +1845,14 @@ class PlayerViewModel @Inject constructor(
         // service that never comes up surfaces as a playback error rather than
         // a coroutine parked forever.
         const val CONTROLLER_CONNECT_TIMEOUT_MS = 5_000L
-
-        /** How long a song plays before it is sent to be timed by itself: long enough to mean it is being listened to. */
-        const val SERVER_LYRICS_AFTER_MS = 15_000L
     }
 }
+
+/**
+ * Whether none of the app's screens is started, as the position poll reads
+ * [ProcessLifecycleOwner]: CREATED while the app is in the background or the
+ * screen is off. INITIALIZED means androidx.startup never set it up (the
+ * manifest already switches one of its initialisers off), and the poll must
+ * not then wait for a start that will never come.
+ */
+internal fun appScreensStopped(state: Lifecycle.State): Boolean = state == Lifecycle.State.CREATED

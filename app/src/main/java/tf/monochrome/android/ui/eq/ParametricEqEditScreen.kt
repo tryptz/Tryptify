@@ -177,7 +177,9 @@ fun ParametricEqEditScreen(
                 preamp = currentPreamp,
                 centerOnZero = true,
                 showLegend = false,
-                spectrumBins = spectrumBins,
+                // Read by the graph's spectrum layer as it draws, so a new
+                // analyser frame repaints that layer and recomposes nothing here.
+                spectrumBins = { spectrumBins },
                 spectrumColor = spectrumColor,
                 maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
                 onBandDragged = { id, f, g -> viewModel.updateBandByDrag(id, f, g) }

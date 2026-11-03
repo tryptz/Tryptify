@@ -42,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -814,6 +815,22 @@ fun followsText(shape: LinkShape, paused: Boolean): String =
     } else {
         stringResource(R.string.music_link_follows, bandLabel(shape.band))
     }
+
+/**
+ * The spectrum a link editor draws, with its own stake in the analyser while
+ * the editor is open. The links listen to a spectrum of their own
+ * (`SpectrumAnalyzerTap.linkPower`), which does not run the display's; an
+ * editor that only read [SpectrumAnalyzerTap.spectrumBins] got zeros, drew
+ * full bars and hid its meter behind "Play a song" with a song playing.
+ */
+@Composable
+fun rememberEditorSpectrum(tap: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap): State<FloatArray> {
+    androidx.lifecycle.compose.LifecycleStartEffect(tap) {
+        tap.acquire()
+        onStopOrDispose { tap.release() }
+    }
+    return tap.spectrumBins.collectAsState()
+}
 
 /** A strength reading for a band the editor is not driving: its level now against a fixed floor. */
 fun roughStrength(bins: FloatArray, shape: LinkShape): Float {

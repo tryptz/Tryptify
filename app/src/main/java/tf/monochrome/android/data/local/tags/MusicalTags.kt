@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.local.tags
 
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /**
@@ -23,6 +24,10 @@ data class MusicalTags(
     val r128TrackGain: Int? = null,
     /** EBU R128 album gain, Q7.8 dB, relative to -23 LUFS. */
     val r128AlbumGain: Int? = null,
+    /** ReplayGain track peak, a fraction of full scale (1.0 = 0 dBFS). */
+    val rgTrackPeak: Float? = null,
+    /** ReplayGain album peak, a fraction of full scale. */
+    val rgAlbumPeak: Float? = null,
 ) {
     companion object {
         const val MIN_BPM = 30f
@@ -40,6 +45,8 @@ data class MusicalTags(
             rgAlbumGain = parseGain(fields["REPLAYGAIN_ALBUM_GAIN"]),
             r128TrackGain = parseQ78(fields["R128_TRACK_GAIN"]),
             r128AlbumGain = parseQ78(fields["R128_ALBUM_GAIN"]),
+            rgTrackPeak = parsePeak(fields["REPLAYGAIN_TRACK_PEAK"]),
+            rgAlbumPeak = parsePeak(fields["REPLAYGAIN_ALBUM_PEAK"]),
         )
 
         /**
@@ -59,6 +66,18 @@ data class MusicalTags(
             return value.takeIf { it in -MAX_GAIN_DB..MAX_GAIN_DB }
         }
 
+        /**
+         * "0.988525", "1,0232": a ReplayGain peak, as a fraction of full scale.
+         * Above 1.0 is a real reading (a lossy file decodes past full scale);
+         * zero, negative or past [MAX_PEAK] is junk. The odd tagger writes it
+         * in dB ("-0.10 dB"), which is turned into the fraction it means.
+         */
+        fun parsePeak(raw: String?): Float? {
+            val value = leadingNumber(raw) ?: return null
+            val linear = if (raw!!.contains("db", ignoreCase = true)) 10f.pow(value / 20f) else value
+            return linear.takeIf { it > 0f && it <= MAX_PEAK }
+        }
+
         /** "-2304": an R128 gain in 1/256 dB steps, a signed 16-bit integer. */
         fun parseQ78(raw: String?): Int? {
             val text = raw?.trim()?.replace('−', '-') ?: return null
@@ -71,6 +90,9 @@ data class MusicalTags(
         }
 
         private const val MAX_GAIN_DB = 60f
+
+        /** +20 dBFS: no decoded file peaks past this, so a tag that says so is junk. */
+        private const val MAX_PEAK = 10f
         private val NUMBER = Regex("""^[+-]?\d+(\.\d+)?""")
 
         // ID3 writes TBPM, Vorbis and MP4 BPM; FBPM is the fractional one some

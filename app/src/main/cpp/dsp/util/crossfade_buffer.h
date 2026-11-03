@@ -12,7 +12,10 @@ class CrossfadeBuffer {
 public:
     void prepare(int maxSegmentSamples) {
         maxSegment_ = maxSegmentSamples;
-        buffer_.resize(maxSegmentSamples * 2, 0.0f);
+        // assign, not resize: after a rate change the buffer starts silent
+        // rather than playing the old rate's audio back.
+        buffer_.assign(static_cast<size_t>(maxSegmentSamples * 2), 0.0f);
+        size_ = static_cast<int>(buffer_.size());
         writePos_ = 0;
     }
 
@@ -23,15 +26,16 @@ public:
 
     void write(float sample) {
         buffer_[writePos_] = sample;
-        writePos_ = (writePos_ + 1) % static_cast<int>(buffer_.size());
+        if (++writePos_ == size_) writePos_ = 0;
     }
 
-    // Read backwards from current position
+    // Read backwards from current position. [offset] is under the buffer's
+    // length (the reverser's segment is at most half of it), so one wrap
+    // brings it back in, without the % that is a library call on 32-bit ARM.
     float readReverse(int offset) const {
-        int sz = static_cast<int>(buffer_.size());
         int idx = writePos_ - 1 - offset;
-        while (idx < 0) idx += sz;
-        return buffer_[idx % sz];
+        if (idx < 0) idx += size_;
+        return buffer_[idx];
     }
 
     // Hann window for crossfading
@@ -43,6 +47,7 @@ public:
 
 private:
     std::vector<float> buffer_;
+    int size_ = 0;
     int writePos_ = 0;
     int maxSegment_ = 0;
 };

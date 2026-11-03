@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.R
 import tf.monochrome.android.audio.sampler.PcmDecoder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
@@ -37,8 +38,12 @@ import tf.monochrome.android.audio.stepmania.ChartJob
 import tf.monochrome.android.audio.stepmania.ChartMode
 import tf.monochrome.android.audio.stepmania.ChartPace
 import tf.monochrome.android.audio.stepmania.ChartQueue
+import tf.monochrome.android.audio.stepmania.ChartingAccountStore
+import tf.monochrome.android.audio.usb.BypassVolumeController
+import tf.monochrome.android.data.cloud.CloudError
 import tf.monochrome.android.audio.stepmania.RemoteStemAnalysis
 import tf.monochrome.android.audio.stepmania.StepManiaGenerationWorker
+import tf.monochrome.android.motion.MotionBlurQuality
 import tf.monochrome.android.glyph.pack.GlyphPackLibrary
 import tf.monochrome.android.glyph.data.GlyphWheel
 import tf.monochrome.android.glyph.pack.OwnPackStore
@@ -68,6 +73,8 @@ import tf.monochrome.android.glyph.data.GlyphAttemptStore
 import tf.monochrome.android.glyph.data.GlyphCalibration
 import tf.monochrome.android.glyph.data.GlyphSyncTrack
 import tf.monochrome.android.glyph.data.GlyphTapSync
+import tf.monochrome.android.glyph.data.bestOf
+import tf.monochrome.android.glyph.data.latestGhostOf
 import tf.monochrome.android.glyph.data.GlyphGhost
 import tf.monochrome.android.glyph.data.GlyphGhostRecorder
 import tf.monochrome.android.glyph.data.GlyphChartState
@@ -127,6 +134,11 @@ class GlyphViewModel @Inject constructor(
     private val attempts: GlyphAttemptStore,
     private val chartQueue: ChartQueue,
     private val chartPace: ChartPace,
+    private val chartingAccount: ChartingAccountStore,
+    private val bypassVolume: BypassVolumeController,
+    private val gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio,
+    /** Imported StepMania noteskins, themes and announcers; read before the saved skin is. */
+    private val styleLibrary: tf.monochrome.android.glyph.style.GlyphStyleLibrary,
     private val remoteStems: RemoteStemAnalysis,
     private val trackLocator: tf.monochrome.android.player.LocalTrackLocator,
     private val packLibrary: GlyphPackLibrary,
@@ -135,8 +147,10 @@ class GlyphViewModel @Inject constructor(
     /** Makes a song too big for the rooms server into a smaller copy before it is shared. */
     private val shareShrinker: tf.monochrome.android.audio.share.ShareShrinker,
     private val supabaseAuth: SupabaseAuthManager,
-    /** Read only, for the player's own look behind the play ([backdropLook]). */
-    preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    /** The player's own look behind the play ([backdropLook]), and the audio settings the Settings' Audio tab switches. */
+    private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
+    /** The Oxford Inflator's switch, which lives on its singleton, not in the preferences. */
+    private val inflatorEffect: tf.monochrome.android.audio.dsp.oxford.InflatorEffect,
     /**
      * How late the output playing now plays: the game's audio offset is that
      * output's, and the Sync tab measures and saves it for the whole app.
@@ -188,6 +202,41 @@ class GlyphViewModel @Inject constructor(
     private var armedLoop: GlyphLoopSegment? = null
     private var engineArmed = false
 
+    /** Auto play's hands, and whether they know where the engine was last set up. */
+    private val autoplayer = tf.monochrome.android.glyph.engine.GlyphAutoplay()
+    private var autoplayInSync = false
+
+    /**
+     * Auto play is on for this run: chosen in the options, and not in a
+     * multiplayer room, where it would hand everyone a perfect score.
+     */
+    private val autoplaying: Boolean
+        get() = _ui.value.gameplay.modifiers.autoplay && !_ui.value.inRoomPlay
+
+    /** The best run raced against this run, once its record is read; null without one. */
+    private var race: tf.monochrome.android.glyph.engine.GlyphGhostRace? = null
+    private var raceJob: Job? = null
+
+    /**
+     * Set up the race against this chart's best full run on [difficulty]:
+     * a scored run of the whole song only, never in a room, in Training
+     * Ground, under auto play or in an editor test, and only with the
+     * option on and a best run that kept its ghost.
+     */
+    private fun armRace(chartId: String, difficulty: StepManiaDifficulty, totalJudgements: Int, wholeSong: Boolean) {
+        raceJob?.cancel()
+        race = null
+        val ui = _ui.value
+        if (!wholeSong || ui.inRoomPlay || autoplaying || ui.editor?.testing == true || !ui.gameplay.modifiers.raceBest) return
+        raceJob = viewModelScope.launch {
+            val best = bestOf(attempts.attempts(chartId), difficulty)
+                ?.takeIf { it.segmentStartSeconds == null && !it.failed } ?: return@launch
+            val ghost = best.ghost?.takeIf { it.isConsistent && it.size > 0 } ?: return@launch
+            race = tf.monochrome.android.glyph.engine.GlyphGhostRace(ghost, totalJudgements, best.score)
+            _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(race = GlyphRaceUi()))
+        }
+    }
+
     /**
      * Swap in a new engine and free the old one. The native engine holds
      * memory outside the heap, so dropping the reference is not enough; a
@@ -199,6 +248,7 @@ class GlyphViewModel @Inject constructor(
         engine = next
         engineArmed = false
         armedLoop = null
+        autoplayInSync = false
         previous?.close()
     }
 
@@ -221,9 +271,49 @@ class GlyphViewModel @Inject constructor(
         }
         armedLoop = loop
         engineArmed = true
+        // The engine was set up afresh: auto play picks up from here.
+        autoplayInSync = false
     }
 
-    val transport = GlyphAudioTransport(context)
+    /** A run's sounds from the imported theme and announcer in use; silent with neither. */
+    private val styleSounds = tf.monochrome.android.glyph.style.GlyphStyleSounds(context)
+
+    /** The run's sink and DSP chain (UsbGameAudio); released with the view model. */
+    private val transportAudio = gameAudio.player(context)
+    val transport = GlyphAudioTransport(context, transportAudio.renderers).also { t ->
+        t.onPlayingChanged = { playing -> transportAudible = playing; publishAudible() }
+        t.onPrepared = { uri -> transportAudio.songStarts(uri.toString()) }
+        t.onPitchRatio = transportAudio::setPitchRatio
+    }
+
+    // With a DAC claimed the mode plays through it (UsbGameAudio), and the
+    // volume keys move the DAC level as for the main player. Only while its
+    // song or a preview sounds on Android's output instead (no stream on the
+    // DAC for it) must the keys move Android's volume, where that sound is
+    // (BypassVolumeController.androidStreamAudible).
+    private var transportAudible = false
+    private var previewAudible = false
+    private fun publishAudible() =
+        bypassVolume.setAndroidStreamAudible((transportAudible || previewAudible) && !gameAudio.gameOnDac())
+
+    /**
+     * The DAC's one stream changes hands. The main player took it back (play
+     * from the notification under a run): the run pauses and a preview stops,
+     * as their sound stopped with it; and the keys' target follows either way.
+     */
+    private fun watchDacStream() {
+        viewModelScope.launch {
+            gameAudio.holder.collect { holder ->
+                publishAudible()
+                if (holder != tf.monochrome.android.audio.usb.StreamClaimant.PLAYER) return@collect
+                stopPreview()
+                val gameplay = _ui.value.gameplay
+                val screen = _ui.value.screen
+                val inRun = screen == GlyphScreen.GAMEPLAY || screen == GlyphScreen.TRAINING
+                if (inRun && !gameplay.isPaused && !gameplay.failStops) togglePause()
+            }
+        }
+    }
 
     private val ghostRecorder = GlyphGhostRecorder()
     private val metronome = GlyphMetronome()
@@ -241,13 +331,13 @@ class GlyphViewModel @Inject constructor(
     /**
      * The latest judgement per lane, for the receptor explosion.
      *
-     * A plain mutable map read inside the playfield's draw scope rather than
-     * state pushed through recomposition: it changes several times a second
-     * during a stream and none of it is worth a recomposition.
+     * Plain slots read inside the playfield's draw scope rather than state
+     * pushed through recomposition: they change several times a second during
+     * a stream and none of it is worth a recomposition.
      */
-    private val laneFlashes = java.util.EnumMap<GlyphLane, LaneFlash>(GlyphLane::class.java)
+    private val laneFlashes = LaneFlashes()
 
-    fun flashes(): Map<GlyphLane, LaneFlash> = laneFlashes
+    fun flashes(): LaneFlashes = laneFlashes
 
     /**
      * When the combo last crossed a milestone, for the burst.
@@ -271,12 +361,28 @@ class GlyphViewModel @Inject constructor(
     /** A failed run's hold under FAILED before its results; cancelled by leaving or restarting. */
     private var failJob: Job? = null
 
+    /** The preview's sink and DSP chain, built with the preview. */
+    private val previewAudioLazy = lazy { gameAudio.player(context) }
+    private val previewAudio by previewAudioLazy
+
     /** The song list's preview from the drop; built on first use. */
-    private val preview by lazy { GlyphPreviewPlayer(context, viewModelScope) }
+    private val previewLazy = lazy {
+        GlyphPreviewPlayer(context, viewModelScope, previewAudio.renderers).also { p ->
+            p.onPlayingChanged = { playing -> previewAudible = playing; publishAudible() }
+            p.onPrepared = { uri -> previewAudio.songStarts(uri.toString()) }
+        }
+    }
+    private val preview by previewLazy
     private var previewJob: Job? = null
 
     private var tickJob: Job? = null
     private var waveformJob: Job? = null
+
+    /** Recent songs' bars and loudness, so coming back to one does not decode it again. */
+    private val waveforms = tf.monochrome.android.glyph.training.GlyphWaveformCache()
+
+    /** The file whose bars the state holds, or [waveformJob] is decoding. */
+    private var waveformPath: String? = null
     private var selectionJob: Job? = null
     private var lastPublishNanos = 0L
     private var countInEndsAtSeconds: Float? = null
@@ -294,14 +400,28 @@ class GlyphViewModel @Inject constructor(
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
+        // A song fetched for a room is the room's: one left by a process that
+        // died in a room, or by a view model cleared before it could clear it,
+        // goes now. Never while a room is on, whose song it may be.
+        if (rooms.session.value.room == null) {
+            viewModelScope.launch(Dispatchers.IO) { clearRoomSongs(keep = null) }
+        }
         loadOptions()
         watchOutputSync()
+        watchDacStream()
+        watchAudioSettings()
+        watchStyles()
         watchCharts()
         watchChartServers()
         watchPlayRequests()
         watchSyncRequests()
         watchPacks()
         watchRooms()
+        viewModelScope.launch {
+            chartingAccount.account.collect { account ->
+                _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(account = account))
+            }
+        }
         viewModelScope.launch {
             songs.songs()
                 .catch { failure ->
@@ -326,8 +446,9 @@ class GlyphViewModel @Inject constructor(
                 _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, songListMode = event.mode)
             }
             GlyphEvent.BackToMenu -> {
+                // The preview loops on through the menus; it stops for a run,
+                // the editor, or leaving the mode (onBackground).
                 wheelFocusJob?.cancel()
-                stopPreview()
                 // The song list opened from a room goes back to the room.
                 val back = if (_ui.value.songListMode == GlyphSongListMode.ROOM) GlyphScreen.MULTIPLAYER else GlyphScreen.MENU
                 _ui.value = _ui.value.copy(screen = back)
@@ -389,9 +510,26 @@ class GlyphViewModel @Inject constructor(
             }
             GlyphEvent.OpenLeaderboard -> {
                 wheelFocusJob?.cancel()
-                stopPreview()
                 leaderboardFrom = _ui.value.screen
                 openLeaderboard()
+            }
+            // The app's settings, as Settings › Audio and the player's panel set them.
+            is GlyphEvent.SetAutoEq -> viewModelScope.launch {
+                preferences.setEqEnabled(event.on)
+                // The app's own correction, not the system's, either way.
+                preferences.setSystemWideAutoEqEnabled(false)
+            }
+            is GlyphEvent.SetInflator -> {
+                inflatorEffect.setEffectIn(event.on)
+                // The Oxford stages run inside the DSP engine, which is off by
+                // default: an Inflator switched on with the engine off is silent.
+                if (event.on) viewModelScope.launch { preferences.setDspEnabled(true) }
+            }
+            is GlyphEvent.SetReplayGain -> viewModelScope.launch {
+                preferences.setReplayGainMode(
+                    if (event.on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+                    else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+                )
             }
             is GlyphEvent.SetPreviews -> {
                 prefs.edit().putBoolean(PREF_PREVIEWS, event.on).apply()
@@ -436,11 +574,74 @@ class GlyphViewModel @Inject constructor(
 
             GlyphEvent.OpenPacks -> {
                 wheelFocusJob?.cancel()
-                stopPreview()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.PACKS)
                 refreshOwnCount()
             }
             GlyphEvent.ClosePacks -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            GlyphEvent.OpenThemes -> {
+                wheelFocusJob?.cancel()
+                _ui.value = _ui.value.copy(screen = GlyphScreen.THEMES)
+            }
+            GlyphEvent.CloseThemes -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.ImportStyle -> importStyle { styleLibrary.import(event.uri) }
+            is GlyphEvent.ImportStyleUrl -> importStyle { styleLibrary.importUrl(event.url, event.name) }
+            is GlyphEvent.SetStyleSizes -> {
+                val sizes = event.sizes.clamped()
+                prefs.edit()
+                    .putFloat(PREF_SIZE_JUDGEMENT, sizes.judgement)
+                    .putFloat(PREF_SIZE_COMBO, sizes.combo)
+                    .putFloat(PREF_SIZE_DANCER, sizes.dancer)
+                    .apply()
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(sizes = sizes))
+            }
+            GlyphEvent.ImportDances -> {
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
+                viewModelScope.launch {
+                    val message = importDances()
+                    _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = false, message = message))
+                }
+            }
+            is GlyphEvent.UseCharacter -> useCharacter(event.id)
+            is GlyphEvent.UseTheme -> useTheme(event.id)
+            is GlyphEvent.UseAnnouncer -> useAnnouncer(event.id)
+            is GlyphEvent.RemoveStyle -> viewModelScope.launch {
+                styleLibrary.remove(event.style)
+                val themes = _ui.value.themes
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME && themes.themeId == event.style.id) useTheme(null)
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER && themes.announcerId == event.style.id) useAnnouncer(null)
+                if (event.style.kind == tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.CHARACTER && themes.characterId == event.style.id) useCharacter(null)
+                // A removed noteskin in use: the default, as for any skin the phone no longer has.
+                val skin = _ui.value.gameplay.modifiers.skin
+                if (skin.isFile && skin !in tf.monochrome.android.glyph.asset.GlyphSkin.all()) {
+                    updateModifiers { it.copy(skin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT) }
+                }
+            }
+            GlyphEvent.DismissThemesMessage -> _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(message = null))
+
+            GlyphEvent.OpenCharting -> {
+                wheelFocusJob?.cancel()
+                _ui.value = _ui.value.copy(screen = GlyphScreen.CHARTING)
+                viewModelScope.launch { chartingAccount.refresh() }
+            }
+            GlyphEvent.CloseCharting -> _ui.value = _ui.value.copy(screen = GlyphScreen.MENU)
+            is GlyphEvent.OpenChartedSong -> openChartedSong(event.title)
+            GlyphEvent.RefreshCharting -> viewModelScope.launch { chartingAccount.refresh() }
+            is GlyphEvent.BuyMinutes -> viewModelScope.launch {
+                val pack = _ui.value.charting.account.packs.firstOrNull { it.id == event.packId } ?: return@launch
+                chartingAccount.buy(pack)
+                    .onSuccess { url -> _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(checkoutUrl = url)) }
+                    .onFailure { failure ->
+                        val notice = when (failure) {
+                            is CloudError.SignedOut -> R.string.tm_charting_sign_in
+                            is CloudError.NotSetUp -> R.string.tm_charting_not_on_sale
+                            else -> R.string.tm_charting_unreachable
+                        }
+                        _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = notice))
+                    }
+            }
+            GlyphEvent.ChartingUrlOpened -> _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(checkoutUrl = null))
+            GlyphEvent.DismissChartingNotice ->
+                _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = null))
 
             GlyphEvent.OpenMultiplayer -> openMultiplayer()
             GlyphEvent.CloseMultiplayer -> closeMultiplayer()
@@ -450,8 +651,14 @@ class GlyphViewModel @Inject constructor(
                 connectRooms()
             }
             GlyphEvent.RefreshRooms -> rooms.refreshRooms()
-            is GlyphEvent.CreateRoom -> rooms.createRoom(event.name)
-            is GlyphEvent.JoinRoom -> rooms.joinRoom(event.code)
+            is GlyphEvent.CreateRoom -> {
+                roomAskedAt = android.os.SystemClock.elapsedRealtime()
+                rooms.createRoom(event.name)
+            }
+            is GlyphEvent.JoinRoom -> {
+                roomAskedAt = android.os.SystemClock.elapsedRealtime()
+                rooms.joinRoom(event.code)
+            }
             GlyphEvent.LeaveRoom -> rooms.leaveRoom()
             GlyphEvent.PickForRoom -> pickForRoom()
             is GlyphEvent.SetRoomReady -> rooms.ready(event.ready)
@@ -464,7 +671,17 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.FetchRoomSong -> fetchRoomSong()
             is GlyphEvent.ImportPackUrl -> PackImportWorker.enqueueDownload(context, event.url, event.name)
             is GlyphEvent.ImportPackFile -> PackImportWorker.enqueueFile(context, event.uri)
-            is GlyphEvent.ImportPackFolder -> PackImportWorker.enqueueFolder(context, event.tree)
+            is GlyphEvent.ImportPackFolder -> {
+                // Not the folder the player's own charts are saved in: the
+                // two are kept apart.
+                if (ownPack.folder.value?.toString() == event.tree.toString()) {
+                    refusePackFolder(
+                        "That's the folder your own charts are saved in. Link packs from a different folder.",
+                    )
+                } else {
+                    PackImportWorker.enqueueFolder(context, event.tree)
+                }
+            }
             GlyphEvent.CancelPackImports -> PackImportWorker.cancelAll(context)
             is GlyphEvent.RemovePack -> viewModelScope.launch {
                 packLibrary.remove(event.name)
@@ -500,6 +717,8 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.SetDark -> updateModifiers { it.copy(dark = event.dark) }
             is GlyphEvent.SetMini -> updateModifiers { it.copy(mini = event.mini.coerceIn(0f, MAX_MINI)) }
             is GlyphEvent.SetFailType -> updateModifiers { it.copy(failType = event.failType) }
+            is GlyphEvent.SetAutoplay -> updateModifiers { it.copy(autoplay = event.on) }
+            is GlyphEvent.SetRaceBest -> updateModifiers { it.copy(raceBest = event.on) }
             is GlyphEvent.SetPlayerName -> setPlayerName(event.name)
             is GlyphEvent.SetGraphics -> updateModifiers { it.copy(graphics = event.graphics) }
 
@@ -555,7 +774,7 @@ class GlyphViewModel @Inject constructor(
             is GlyphEvent.PractiseSection -> practiseSection(event.index)
             GlyphEvent.BackToHome -> {
                 stopTick()
-                transport.pause()
+                transport.stop()
                 _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, results = null)
             }
         }
@@ -573,6 +792,36 @@ class GlyphViewModel @Inject constructor(
      * quickly, and the conversion ran against the song you had selected before.
      * That is the whole reason this is split in two.
      */
+    /**
+     * A history row tapped: the song list, on that song, picked as a tap on
+     * the wheel would pick it. History knows a song only by the title it was
+     * charted under, so the library's song of that title is taken, a charted
+     * one first; a song no longer on the phone says so and stays here.
+     */
+    private fun openChartedSong(title: String) {
+        val wanted = title.trim()
+        val song = _ui.value.songs
+            .filter { it.title.trim().equals(wanted, ignoreCase = true) }
+            .sortedWith(compareBy({ !it.hasChart }, { it.pack != null }))
+            .firstOrNull()
+        if (song == null) {
+            _ui.value = _ui.value.copy(charting = _ui.value.charting.copy(notice = R.string.tm_charting_song_gone))
+            return
+        }
+        if (_ui.value.previews) preview.warm()
+        // Out of any search, which could hide it from the wheel.
+        _ui.value = _ui.value.copy(
+            screen = GlyphScreen.HOME,
+            songListMode = GlyphSongListMode.PLAY,
+            songQuery = "",
+            charting = _ui.value.charting.copy(notice = null),
+        )
+        wheelFocusJob?.cancel()
+        focusWheel(GlyphWheel.songKey(song.trackId))
+        wheelFocusJob?.cancel()
+        selectSong(song.trackId)
+    }
+
     private fun selectSong(trackId: String) {
         val song = _ui.value.songs.firstOrNull { it.trackId == trackId } ?: return
         _ui.value = _ui.value.copy(
@@ -593,7 +842,7 @@ class GlyphViewModel @Inject constructor(
      *
      * Where the drop is, quickest first: the chart's own #SAMPLESTART; the
      * drop found on an earlier visit, remembered; or found now from the
-     * loudness bars the page decodes for the selection anyway, and remembered
+     * song's loudness bars, decoded for it ([ensureWaveform]) and remembered
      * for next time. Those bars take reading the whole song, so a song with
      * none of these waits [DROP_WAIT_MILLIS] for them and then starts a third
      * of the way in; its drop, found after, is the next visit's start.
@@ -603,6 +852,7 @@ class GlyphViewModel @Inject constructor(
         previewStopped = false
         if (!_ui.value.previews || song.filePath.isBlank()) {
             preview.stop()
+            setPreviewPlaying(false)
             // No sound for the picture to follow: it changes as the song is chosen.
             showBackdrop(song)
             return
@@ -617,7 +867,9 @@ class GlyphViewModel @Inject constructor(
                     // reading the whole song. Waited for in full, a song's first
                     // preview came seconds late; now it waits a moment, then
                     // starts a third of the way in and remembers the drop for
-                    // the next visit.
+                    // the next visit. Only this needs the song decoded on a
+                    // pick: one with a known drop starts without it.
+                    if (_ui.value.selectedSong?.trackId == song.trackId) ensureWaveform(song)
                     val drop = async { dropFromWaveform(song) }
                     withTimeoutOrNull(DROP_WAIT_MILLIS) { drop.await() }
                         ?.also { prefs.edit().putFloat(PREF_DROP_PREFIX + song.trackId, it).apply() }
@@ -633,9 +885,15 @@ class GlyphViewModel @Inject constructor(
             // gone to the background in the meantime.
             if (!foreground) return@launch
             preview.play(song.audioUri, start, length)
+            setPreviewPlaying(true)
             // The picture behind the list changes with the music, not before it.
             showBackdrop(song)
         }
+    }
+
+    /** Whether a preview has been started and not stopped, for the card's beat light. */
+    private fun setPreviewPlaying(playing: Boolean) {
+        if (_ui.value.previewPlaying != playing) _ui.value = _ui.value.copy(previewPlaying = playing)
     }
 
     /** [song]'s picture behind the song list; null takes it away. */
@@ -665,6 +923,7 @@ class GlyphViewModel @Inject constructor(
     private fun stopPreview() {
         previewJob?.cancel()
         preview.stop()
+        setPreviewPlaying(false)
         previewStopped = true
         // The picture goes as the music does.
         showBackdrop(null)
@@ -685,9 +944,46 @@ class GlyphViewModel @Inject constructor(
         foreground = true
     }
 
+    /** The rooms socket was closed for the app going out of sight; it opens again on return. */
+    private var roomsHidden = false
+
+    /**
+     * When a room was last asked for (created or joined), on the elapsed
+     * clock. Until the server answers there is no room yet, but closing the
+     * socket would lose the answer, and a room just created would be left
+     * without its host.
+     */
+    private var roomAskedAt = 0L
+
+    /**
+     * The app is out of sight. Outside a room the rooms socket is only the
+     * list of rooms and the clock, and its ping woke the radio every two
+     * seconds behind the app for a list nobody could see: it closes, and
+     * [onShown] opens it again. In a room it stays open, ping and all: the
+     * server forgets a dropped phone's seat.
+     */
+    fun onHidden() {
+        val session = rooms.session.value
+        val open = session.status == tf.monochrome.android.glyph.multiplayer.RoomStatus.CONNECTING ||
+            session.status == tf.monochrome.android.glyph.multiplayer.RoomStatus.CONNECTED
+        if (!open || session.room != null) return
+        if (android.os.SystemClock.elapsedRealtime() - roomAskedAt < ROOM_ANSWER_WAIT_MS) return
+        rooms.disconnect()
+        roomsHidden = true
+    }
+
+    /** The app is in sight again: a rooms socket [onHidden] closed opens again. */
+    fun onShown() {
+        if (!roomsHidden) return
+        roomsHidden = false
+        refreshRoomIdentity()
+        connectRooms()
+    }
+
     /** The app left the foreground: a preview, or the editor's song, must not play on behind it. */
     fun onBackground() {
         foreground = false
+        styleSounds.stopVoice()
         // A song the wheel was about to choose would start its preview behind
         // the app once its delay ran out.
         wheelFocusJob?.cancel()
@@ -700,10 +996,15 @@ class GlyphViewModel @Inject constructor(
     /** Fill in what has to be read from disk, and refresh the chart state. */
     private fun loadSelection(song: GlyphSong) {
         selectionJob?.cancel()
+        showWaveform(song)
         selectionJob = viewModelScope.launch {
             val (refreshed, simfile) = songs.withCurrentChart(song)
             // A later selection may have landed while this was reading; its
             // result must not be overwritten by this one arriving late.
+            if (_ui.value.selectedSong?.trackId != song.trackId) return@launch
+            // The chart's history once, for both the ghost and the grades:
+            // asked for each, the same file was parsed six times a pick.
+            val history = attempts.attempts(refreshed.chartId)
             if (_ui.value.selectedSong?.trackId != song.trackId) return@launch
 
             _ui.value = _ui.value.copy(
@@ -721,16 +1022,38 @@ class GlyphViewModel @Inject constructor(
                     available.getOrNull(available.size / 2) ?: available.firstOrNull()
                 },
                 training = _ui.value.training.copy(
-                    hasGhost = attempts.latestGhost(refreshed.chartId) != null,
+                    hasGhost = latestGhostOf(history) != null,
                 ),
-                bestGrades = bestGradesFor(refreshed),
+                bestGrades = bestGradesIn(history),
             )
-            loadWaveform(refreshed)
         }
     }
 
     /**
-     * Decode a coarse envelope for the segment picker.
+     * The selection's bars into the state: the cached ones, or none until
+     * something asks for them ([ensureWaveform]). A pick no longer decodes the
+     * whole song on its own account; a song whose drop is known, picked only
+     * to be played, is never decoded at all.
+     */
+    private fun showWaveform(song: GlyphSong) {
+        // The same song again keeps its bars, or the decode on its way.
+        if (song.filePath.isNotBlank() && song.filePath == waveformPath) return
+        waveformJob?.cancel()
+        waveformPath = song.filePath
+        val cached = waveforms.get(song.filePath)
+        _ui.value = _ui.value.copy(
+            training = _ui.value.training.copy(
+                waveform = cached?.bars.orEmpty(),
+                loudness = cached?.loudness.orEmpty(),
+                isWaveformLoading = false,
+            ),
+        )
+    }
+
+    /**
+     * Decode a coarse envelope of [song], unless it is here or on its way:
+     * the preview's drop is found in it, Training Ground's segment picker and
+     * the editor draw it.
      *
      * Deliberately coarse: the picker exists so a passage can be found by eye,
      * and two hundred bars does that as well as ten thousand. The song is
@@ -738,10 +1061,13 @@ class GlyphViewModel @Inject constructor(
      * [GlyphWaveformBuilder]), and the decode stops between blocks once the
      * player moves on, so picking song after song no longer stacks up decodes.
      */
-    private fun loadWaveform(song: GlyphSong) {
-        waveformJob?.cancel()
+    private fun ensureWaveform(song: GlyphSong) {
         if (song.filePath.isBlank()) return
+        showWaveform(song)
+        val training = _ui.value.training
+        if (training.isWaveformLoading || training.waveform.isNotEmpty()) return
 
+        val path = song.filePath
         waveformJob = viewModelScope.launch {
             _ui.value = _ui.value.copy(
                 training = _ui.value.training.copy(isWaveformLoading = true, waveform = emptyList(), loudness = emptyList()),
@@ -761,6 +1087,9 @@ class GlyphViewModel @Inject constructor(
                     Log.w(TAG, "waveform for ${song.title} failed: ${it.message}")
                 }.getOrDefault(emptyList<Float>() to emptyList())
             }
+            // A decode cut short by the next pick never gets here: withContext
+            // throws on its way back once this job is cancelled.
+            waveforms.put(path, tf.monochrome.android.glyph.training.GlyphWaveformBars(bars, loudness))
             _ui.value = _ui.value.copy(
                 training = _ui.value.training.copy(
                     waveform = bars,
@@ -817,7 +1146,6 @@ class GlyphViewModel @Inject constructor(
      * song, unchanged.
      */
     private fun generate(source: Uri, displayName: String, song: GlyphSong?) {
-        stopPreview()
         // A picked file is only readable while the picker's grant lasts; the
         // job may outlive this process, so it keeps the grant until it is done.
         if (source.scheme == "content") {
@@ -942,7 +1270,6 @@ class GlyphViewModel @Inject constructor(
                 mode = offer.mode,
             )
         }
-        stopPreview()
         queueCharts(jobs)
     }
 
@@ -1008,9 +1335,23 @@ class GlyphViewModel @Inject constructor(
     }
 
     private fun answerPackFolder(tree: Uri?) {
+        // Not a folder imported packs are linked from: the own pack and the
+        // imported ones are kept apart. The question stays open for another.
+        if (tree != null && _ui.value.packs.imported.any { it.source == tree.toString() }) {
+            refusePackFolder(
+                "Your imported packs are linked from that folder. Choose a different folder for your own charts.",
+            )
+            return
+        }
         if (tree != null) ownPack.choose(tree) else ownPack.declined = true
         _ui.value = _ui.value.copy(askPackFolder = false)
         pendingGeneration?.also { pendingGeneration = null }?.invoke()
+    }
+
+    /** A folder turned down for the own pack or for linking: said on the Packs screen and as a toast. */
+    private fun refusePackFolder(reason: String) {
+        updatePacks { it.copy(message = reason) }
+        android.widget.Toast.makeText(context, reason, android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** The charts the app made: library songs with a chart of the app's own. */
@@ -1059,6 +1400,12 @@ class GlyphViewModel @Inject constructor(
         }
         viewModelScope.launch {
             ownPack.folder.collect { tree -> updatePacks { it.copy(folderName = tree?.let(TreePackSink::displayName)) } }
+        }
+        // A setup from before they were kept apart: flagged until it is changed.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(packLibrary.packs, ownPack.folder) { list, tree ->
+                tree != null && list.any { it.source == tree.toString() }
+            }.collect { shared -> updatePacks { it.copy(folderShared = shared) } }
         }
         viewModelScope.launch {
             WorkManager.getInstance(context)
@@ -1119,6 +1466,7 @@ class GlyphViewModel @Inject constructor(
                     generation = generationOf(queue),
                     queuedTracks = queue.waiting.mapTo(HashSet()) { it.trackId } +
                         queue.running.map { it.job.trackId },
+                    charting = _ui.value.charting.copy(queue = queue),
                 )
             }
         }
@@ -1244,6 +1592,8 @@ class GlyphViewModel @Inject constructor(
             _ui.value = _ui.value.copy(error = "That song's file could not be located.")
             return
         }
+        // Training Ground's segment picker draws the song's bars.
+        if (training) ensureWaveform(song)
 
         // A run of this phone's own (Play again, a section to practise) after
         // a room's is no longer the room's.
@@ -1264,6 +1614,7 @@ class GlyphViewModel @Inject constructor(
         }
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
+        _ui.value.selectedDifficulty?.let { armRace(song.chartId, it, chart.judgementCount, wholeSong = !training && fromSeconds == null) }
 
         transport.prepare(song.audioUri)
         transport.setSpeed(
@@ -1303,14 +1654,18 @@ class GlyphViewModel @Inject constructor(
                 introStartedAtMs = if (intro) System.currentTimeMillis() else 0L,
                 failedAtMs = 0L,
                 failStops = false,
+                outroStartedAtMs = 0L,
+                endingAtMs = 0L,
             ),
             results = null,
         )
         introJob?.cancel()
         failJob?.cancel()
         if (intro) {
+            styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.READY)
             introJob = viewModelScope.launch {
                 delay(playAtMs?.let { (it - System.currentTimeMillis()).coerceAtLeast(0L) } ?: INTRO_MILLIS)
+                styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.GO)
                 transport.play()
                 startTick()
                 _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(introStartedAtMs = 0L))
@@ -1357,6 +1712,14 @@ class GlyphViewModel @Inject constructor(
     private fun rebuildEngine() {
         val chart = _ui.value.chart ?: return
         if (engine == null) return
+        // Only a run on screen is rebuilt. The last run's engine stays after
+        // it ends, and a modifier changed from the menus restarted it there:
+        // its tick ran behind the menus, and the next song's READY played.
+        // The next run is built with the new modifiers anyway.
+        val screen = _ui.value.screen
+        val inRun = screen == GlyphScreen.GAMEPLAY || screen == GlyphScreen.TRAINING ||
+            _ui.value.editor?.testing == true
+        if (!inRun) return
         replaceEngine(buildEngine(chart))
         // A modifier change invalidates the run in progress, so it restarts
         // rather than continuing with a score half-earned under other rules.
@@ -1407,19 +1770,30 @@ class GlyphViewModel @Inject constructor(
                     armEngineWindow(position)
                     // Judged at what the player hears, the offset behind
                     // what the player is putting out.
-                    running.advanceTo(position - audioOffsetSeconds)
+                    val judgedAt = position - audioOffsetSeconds
                     // Drained exactly once. Draining again inside publish would
                     // find an empty list and the judgement wordmark would never
-                    // appear, so the events are passed along instead.
-                    val judged = running.drainEvents()
+                    // appear, so the events are passed along instead. Auto
+                    // play presses every note on its time and drains them.
+                    val judged = if (autoplaying) {
+                        if (!autoplayInSync) {
+                            autoplayer.syncTo(running, judgedAt)
+                            autoplayInSync = true
+                        }
+                        autoplayer.advance(running, judgedAt)
+                    } else {
+                        running.advanceTo(judgedAt)
+                        running.drainEvents()
+                    }
+                    // The best run, at the same point of the song.
+                    race?.advanceTo(judgedAt)
                     for (event in judged) {
                         // A tail completing is not a new hit and should not
                         // re-fire the explosion its head already produced.
                         if (!event.isTail) {
-                            laneFlashes[event.lane] = LaneFlash(
-                                atNanos = System.nanoTime(),
-                                isHit = event.judgement.isHit,
-                            )
+                            laneFlashes.set(event.lane, atNanos = System.nanoTime(), isHit = event.judgement.isHit)
+                            // The imported theme's hit or miss; nothing with the app's own.
+                            styleSounds.judged(event.judgement.isHit)
                         }
                         ghostRecorder.record(
                             songSeconds = event.songSeconds,
@@ -1433,6 +1807,12 @@ class GlyphViewModel @Inject constructor(
                     // The combo alone: a full snapshot here would be built
                     // 125 times a second to read one number.
                     val combo = running.combo
+                    // The announcer: every hundred, and a long combo broken.
+                    if (combo / ANNOUNCE_COMBO_EVERY > liveCombo / ANNOUNCE_COMBO_EVERY && combo >= ANNOUNCE_COMBO_EVERY) {
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.COMBO)
+                    } else if (combo < liveCombo && liveCombo >= ANNOUNCE_BROKEN_FROM) {
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.COMBO_STOPPED)
+                    }
                     liveCombo = combo
                     val milestone = combo / COMBO_MILESTONE
                     if (milestone > lastComboMilestone) {
@@ -1455,8 +1835,9 @@ class GlyphViewModel @Inject constructor(
                         publish(position, running, judged)
                     }
                     if (running.isFinished && transport.loop == null) {
-                        finish()
-                        return@launch
+                        if (playOut(position)) return@launch
+                        delay(TICK_MILLIS)
+                        continue
                     }
                     // The bar has emptied. The screen shakes; on StepMania's
                     // Immediate the run also stops where it is, holds under
@@ -1468,6 +1849,7 @@ class GlyphViewModel @Inject constructor(
                     ) {
                         publish(position, running, judged)
                         val at = System.currentTimeMillis()
+                        styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.FAILED)
                         _ui.value = _ui.value.copy(
                             gameplay = _ui.value.gameplay.copy(failedAtMs = at, failStops = keeper.stopsRun),
                         )
@@ -1476,7 +1858,7 @@ class GlyphViewModel @Inject constructor(
                             failJob = viewModelScope.launch {
                                 delay(FAIL_HOLD_MILLIS)
                                 // Still this run, still on its screen: not left or restarted meanwhile.
-                                if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.failedAtMs == at) finish()
+                                if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.failedAtMs == at) endRun()
                             }
                             return@launch
                         }
@@ -1492,16 +1874,75 @@ class GlyphViewModel @Inject constructor(
         tickJob = null
     }
 
-    /** Beats left before play begins, for the on-screen count. */
+    /**
+     * After the last note: the song plays on to its end, then [endRun].
+     * Called by the tick; true when the tick should stop. A test play goes
+     * straight back to the editor, and a room's run does not keep the room
+     * waiting on the song's tail.
+     */
+    private fun playOut(position: Float): Boolean {
+        val gameplay = _ui.value.gameplay
+        if (gameplay.endingAtMs > 0L) return true
+        if (_ui.value.editor?.testing == true) {
+            finish()
+            return true
+        }
+        if (_ui.value.inRoomPlay) {
+            endRun()
+            return true
+        }
+        if (gameplay.outroStartedAtMs == 0L) {
+            _ui.value = _ui.value.copy(gameplay = gameplay.copy(outroStartedAtMs = System.currentTimeMillis()))
+        }
+        val duration = transport.durationSeconds
+        if (transport.hasEnded || (duration > 0f && position >= duration - SONG_END_SLACK_SECONDS)) {
+            endRun()
+            return true
+        }
+        return false
+    }
+
+    /**
+     * The way out to the results: the stripes close over the field and the
+     * music fades with them ([GLYPH_END_WIPE_MILLIS]), then [finish].
+     * Restart and Quit cancel it, as they cancel the fail's hold.
+     */
+    private fun endRun() {
+        if (_ui.value.gameplay.endingAtMs > 0L) return
+        val at = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(gameplay = _ui.value.gameplay.copy(endingAtMs = at))
+        failJob?.cancel()
+        failJob = viewModelScope.launch {
+            val from = transport.volume
+            for (step in 1..END_FADE_STEPS) {
+                delay(GLYPH_END_WIPE_MILLIS / END_FADE_STEPS)
+                transport.volume = from * (1f - step.toFloat() / END_FADE_STEPS)
+            }
+            delay(END_BLACK_HOLD_MILLIS)
+            // Still this run, still on its screen: not left or restarted meanwhile.
+            if (_ui.value.screen == GlyphScreen.GAMEPLAY && _ui.value.gameplay.endingAtMs == at) finish()
+        }
+    }
+
+    /**
+     * Beats left before play begins, for the on-screen count.
+     *
+     * Written when the number changes, and otherwise at the readouts' own
+     * rate for the playhead Training Ground's picker draws from the position:
+     * written on every tick, it was 125 new states a second for one digit.
+     */
     private fun publishCountIn(position: Float, endsAt: Float) {
         val bpm = _ui.value.simfile?.timing?.startBpm ?: return
         if (bpm <= 0f) return
-        val remaining = ((endsAt - position) / (60f / bpm)).toInt() + 1
+        val remaining = (((endsAt - position) / (60f / bpm)).toInt() + 1).coerceAtLeast(0)
         tickMetronome(position)
+        val now = System.nanoTime()
+        if (remaining == _ui.value.gameplay.countInBeatsRemaining && now - lastPublishNanos < PUBLISH_INTERVAL_NANOS) return
+        lastPublishNanos = now
         _ui.value = _ui.value.copy(
             gameplay = _ui.value.gameplay.copy(
                 positionSeconds = position,
-                countInBeatsRemaining = remaining.coerceAtLeast(0),
+                countInBeatsRemaining = remaining,
             ),
         )
     }
@@ -1554,6 +1995,7 @@ class GlyphViewModel @Inject constructor(
                 measure = measure,
                 sectionLabel = "Measure ${measure + 1}",
                 score = snapshot,
+                race = race?.let { GlyphRaceUi(it.score, it.combo) },
                 lastJudgement = latest?.judgement ?: previous.lastJudgement,
                 lastJudgementAtMs = if (latest != null) {
                     System.currentTimeMillis()
@@ -1577,9 +2019,18 @@ class GlyphViewModel @Inject constructor(
     private fun pressLane(lane: GlyphLane, atUptimeMillis: Long) {
         val running = engine ?: return
         if (!_ui.value.gameplay.isPlaying || _ui.value.gameplay.isPaused) return
+        // The song playing out after the last note: a tap skips to the
+        // results, once the steps still landing from the last notes are past.
+        val outro = _ui.value.gameplay.outroStartedAtMs
+        if (outro > 0L) {
+            if (System.currentTimeMillis() - outro >= SKIP_OUTRO_AFTER_MILLIS) endRun()
+            return
+        }
         // A run stopped by a fail is over: a step under FAILED would still be
         // judged at the stopped music, and the results read the engine's count.
         if (_ui.value.gameplay.failStops) return
+        // Auto play has the lanes: a touch would steal a note from it.
+        if (autoplaying) return
         running.press(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
 
@@ -1587,6 +2038,7 @@ class GlyphViewModel @Inject constructor(
         val running = engine ?: return
         // Nor is a hold let go then: it would be judged dropped after the end.
         if (_ui.value.gameplay.failStops) return
+        if (autoplaying) return
         running.release(lane, transport.positionAt(touchNanos(atUptimeMillis)) - audioOffsetSeconds)
     }
 
@@ -1624,6 +2076,8 @@ class GlyphViewModel @Inject constructor(
     }
 
     private fun togglePause() {
+        // On the way to the results: nothing is left to pause.
+        if (_ui.value.gameplay.endingAtMs > 0L) return
         // A failed run has stopped for good: Resume would only start its music
         // again under FAILED.
         if (_ui.value.gameplay.failStops) return
@@ -1669,6 +2123,12 @@ class GlyphViewModel @Inject constructor(
         replaceEngine(buildEngine(chart))
         runStartedAtMs = System.currentTimeMillis()
         val testFrom = testFromSeconds.takeIf { _ui.value.editor?.testing == true }
+        // The best run starts again with this one.
+        val song = _ui.value.selectedSong
+        val difficulty = _ui.value.selectedDifficulty
+        if (song != null && difficulty != null) {
+            armRace(song.chartId, difficulty, chart.judgementCount, wholeSong = _ui.value.screen != GlyphScreen.TRAINING && testFrom == null)
+        }
         val from = transport.loop?.startSeconds ?: testFrom ?: 0f
         introJob?.cancel()
         armEngineWindow(from)
@@ -1690,6 +2150,8 @@ class GlyphViewModel @Inject constructor(
                 introStartedAtMs = 0L,
                 failedAtMs = 0L,
                 failStops = false,
+                outroStartedAtMs = 0L,
+                endingAtMs = 0L,
             ),
         )
         failJob?.cancel()
@@ -1734,6 +2196,8 @@ class GlyphViewModel @Inject constructor(
             backToEditor(null)
             return
         }
+        // Back to the songs: the next run prepares its own.
+        transport.stop()
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.HOME,
             gameplay = _ui.value.gameplay.copy(isPlaying = false, isPaused = false, introStartedAtMs = 0L),
@@ -1838,6 +2302,7 @@ class GlyphViewModel @Inject constructor(
             mini = prefs.getFloat(PREF_MINI, 0f).coerceIn(0f, MAX_MINI),
             failType = GlyphFailType.fromId(prefs.getString(PREF_FAIL, null)),
             metronome = prefs.getBoolean(PREF_METRONOME, false),
+            raceBest = prefs.getBoolean(PREF_RACE_BEST, true),
             timingWindowScale = prefs.getFloat(PREF_JUDGE, 1f),
             landscapeFieldWidth = prefs.getFloat(PREF_LANDSCAPE_FIELD, DEFAULT_LANDSCAPE_FIELD)
                 .coerceIn(MIN_LANDSCAPE_FIELD, 1f),
@@ -1849,6 +2314,7 @@ class GlyphViewModel @Inject constructor(
                 explosions = prefs.getBoolean(PREF_GFX_EXPLOSIONS, true),
                 beatFlash = prefs.getBoolean(PREF_GFX_BEAT_FLASH, true),
                 comboBurst = prefs.getBoolean(PREF_GFX_COMBO_BURST, true),
+                motionBlur = MotionBlurQuality.coerce(prefs.getInt(PREF_GFX_MOTION_BLUR, MotionBlurQuality.OFF)),
                 tvShader = GlyphTvShader.fromId(prefs.getString(PREF_GFX_TV_SHADER, null)),
                 tv = loadTvTuning(),
             ),
@@ -1888,6 +2354,7 @@ class GlyphViewModel @Inject constructor(
             .putFloat(PREF_MINI, modifiers.mini)
             .putString(PREF_FAIL, modifiers.failType.id)
             .putBoolean(PREF_METRONOME, modifiers.metronome)
+            .putBoolean(PREF_RACE_BEST, modifiers.raceBest)
             .putFloat(PREF_JUDGE, modifiers.timingWindowScale)
             .putFloat(PREF_LANDSCAPE_FIELD, modifiers.landscapeFieldWidth)
             .putString(PREF_SKIN, modifiers.skin.id)
@@ -1897,6 +2364,7 @@ class GlyphViewModel @Inject constructor(
             .putBoolean(PREF_GFX_EXPLOSIONS, modifiers.graphics.explosions)
             .putBoolean(PREF_GFX_BEAT_FLASH, modifiers.graphics.beatFlash)
             .putBoolean(PREF_GFX_COMBO_BURST, modifiers.graphics.comboBurst)
+            .putInt(PREF_GFX_MOTION_BLUR, modifiers.graphics.motionBlur)
             .putString(PREF_GFX_TV_SHADER, modifiers.graphics.tvShader.id)
             .also { saveTvTuning(it, modifiers.graphics.tv) }
             .apply()
@@ -1975,15 +2443,15 @@ class GlyphViewModel @Inject constructor(
         }
     }
 
-    private suspend fun bestGradesFor(song: GlyphSong): Map<StepManiaDifficulty, GlyphAttempt> =
+    /** Each difficulty's best run in a chart's [history], for the card's grade. */
+    private fun bestGradesIn(history: List<GlyphAttempt>): Map<StepManiaDifficulty, GlyphAttempt> =
         StepManiaDifficulty.entries.mapNotNull { difficulty ->
-            attempts.bestAttempt(song.chartId, difficulty)?.let { difficulty to it }
+            bestOf(history, difficulty)?.let { difficulty to it }
         }.toMap()
 
     // ── settings ────────────────────────────────────────────────────────
 
     private fun openSettings() {
-        stopPreview()
         _ui.value = _ui.value.copy(screen = GlyphScreen.SETTINGS)
         viewModelScope.launch {
             val late = GlyphCalibration.lateByMs(attempts.recentRuns())
@@ -2088,6 +2556,134 @@ class GlyphViewModel @Inject constructor(
         _ui.value = _ui.value.copy(audioOffsetMs = clamped)
     }
 
+    /**
+     * The Audio tab's three switches show the app's own settings, which the
+     * main player follows too; the game's chains follow them through
+     * PlaybackService's seed.
+     */
+    // ── themes ───────────────────────────────────────────────────────────
+
+    /** What was imported, and the saved theme and announcer put back in use. */
+    private fun watchStyles() {
+        val themeId = prefs.getString(PREF_THEME, null)
+        val announcerId = prefs.getString(PREF_ANNOUNCER, null)
+        applyTheme(themeId)
+        applyAnnouncer(announcerId)
+        applyCharacter(prefs.getString(PREF_CHARACTER, null))
+        val sizes = GlyphStyleSizes(
+            judgement = prefs.getFloat(PREF_SIZE_JUDGEMENT, 1f),
+            combo = prefs.getFloat(PREF_SIZE_COMBO, 1f),
+            dancer = prefs.getFloat(PREF_SIZE_DANCER, 1f),
+        ).clamped()
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(sizes = sizes))
+        viewModelScope.launch {
+            styleLibrary.styles.collect { styles ->
+                _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(styles = styles))
+            }
+        }
+    }
+
+    private fun useTheme(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_THEME) else putString(PREF_THEME, id) }.apply()
+        applyTheme(id)
+        // A theme that shipped its own noteskin, voice or dancer brings them with
+        // it when picked; each can be changed again after.
+        val bundle = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME, id)?.bundle ?: return
+        bundle.noteskins.firstOrNull()?.let { noteskin ->
+            val skin = tf.monochrome.android.glyph.asset.GlyphSkin.fromId(tf.monochrome.android.glyph.asset.GlyphSkin.importedId(noteskin))
+            if (skin.isFile) updateModifiers { it.copy(skin = skin) }
+        }
+        bundle.announcer?.let { useAnnouncer(it) }
+        bundle.character?.let { useCharacter(it) }
+    }
+
+    private fun useAnnouncer(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_ANNOUNCER) else putString(PREF_ANNOUNCER, id) }.apply()
+        applyAnnouncer(id)
+    }
+
+    private fun applyTheme(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.THEME, id)
+        GlyphStepArt.useTheme(style?.dir)
+        styleSounds.useTheme(style?.dir)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(themeId = style?.id))
+    }
+
+    private fun useCharacter(id: String?) {
+        prefs.edit().apply { if (id == null) remove(PREF_CHARACTER) else putString(PREF_CHARACTER, id) }.apply()
+        applyCharacter(id)
+    }
+
+    private fun applyCharacter(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.CHARACTER, id)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(characterId = style?.id, characterDir = style?.dir))
+    }
+
+    /** A shared dance by file name, among the imported dances: for the dancer behind the field. */
+    fun sharedDance(fileName: String): java.io.File? = styleLibrary.sharedDance(fileName)
+
+    private fun applyAnnouncer(id: String?) {
+        val style = styleLibrary.find(tf.monochrome.android.glyph.style.StepManiaStyleScan.Kind.ANNOUNCER, id)
+        styleSounds.useAnnouncer(style?.dir)
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(announcerId = style?.id))
+    }
+
+    /** The StepMania Archive's shared dances, imported; what happened, in a sentence. */
+    private suspend fun importDances(): String = try {
+        val dances = styleLibrary.importUrl(tf.monochrome.android.glyph.style.GlyphStyleLibrary.DANCE_PACK_URL, DANCE_PACK_NAME)
+        if (dances.dances > 0) "The dances characters share came with it." else "The shared dances could not be found in the archive's download."
+    } catch (failure: kotlinx.coroutines.CancellationException) {
+        throw failure
+    } catch (failure: Exception) {
+        "The shared dances could not be downloaded (" + (failure.message ?: "no reason given") + ")."
+    }
+
+    private fun importStyle(run: suspend () -> tf.monochrome.android.glyph.style.GlyphStyleLibrary.ImportResult) {
+        _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = true, message = null))
+        viewModelScope.launch {
+            val message = try {
+                val result = run()
+                fun count(n: Int, one: String, many: String) = if (n > 0) "$n ${if (n == 1) one else many}" else null
+                val got = listOfNotNull(
+                    count(result.noteskins, "noteskin", "noteskins"),
+                    count(result.themes, "theme", "themes"),
+                    count(result.announcers, "announcer", "announcers"),
+                    count(result.characters, "character", "characters"),
+                    count(result.dances, "set of dances", "sets of dances"),
+                )
+                val said = when {
+                    got.isEmpty() -> "Nothing in that file could be used: " + result.skipped.joinToString().ifEmpty { "no arrows, judgements, voices or dancers were found" } + "."
+                    result.skipped.isEmpty() -> "Imported " + got.joinToString(" and ") + "."
+                    else -> "Imported " + got.joinToString(" and ") + ". Left out: " + result.skipped.joinToString() + "."
+                }
+                // A character dances the moves the archive shares: fetched with it when the phone has none.
+                if (result.characters > 0 && styleLibrary.styles.value.dances.isEmpty()) "$said " + importDances() else said
+            } catch (failure: kotlinx.coroutines.CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                failure.message ?: "That file could not be imported."
+            }
+            _ui.value = _ui.value.copy(themes = _ui.value.themes.copy(importing = false, message = message))
+        }
+    }
+
+    private fun watchAudioSettings() {
+        viewModelScope.launch {
+            combine(
+                preferences.eqEnabled,
+                preferences.systemWideAutoEqEnabled,
+                inflatorEffect.state,
+                preferences.replayGainSettings,
+            ) { eq, systemWide, inflator, replayGain ->
+                GlyphAudioUi(
+                    autoEq = eq && !systemWide,
+                    inflator = inflator.effectIn,
+                    replayGain = replayGain.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+                )
+            }.collect { audio -> _ui.value = _ui.value.copy(audio = audio) }
+        }
+    }
+
     /** The offset follows the output: other headphones, another delay. */
     private fun watchOutputSync() {
         viewModelScope.launch {
@@ -2124,6 +2720,8 @@ class GlyphViewModel @Inject constructor(
             return
         }
         stopPreview()
+        // The grid's gutter draws the song's bars.
+        ensureWaveform(song)
         viewModelScope.launch {
             val simfile = if (song.hasChart) songs.simfile(song.trackId) else null
             val timing = simfile?.timing ?: GlyphTiming.constant(song.bpm ?: GlyphTiming.DEFAULT_BPM)
@@ -2150,6 +2748,7 @@ class GlyphViewModel @Inject constructor(
 
     private fun closeEditor() {
         stopEditorPlayback()
+        transport.stop()
         editorHistory.clear()
         _ui.value = _ui.value.copy(screen = GlyphScreen.HOME, editor = null)
         _ui.value.selectedSong?.let { loadSelection(it) }
@@ -2464,8 +3063,10 @@ class GlyphViewModel @Inject constructor(
         val modifiers = _ui.value.gameplay.modifiers
         val loop = transport.loop
         val keeper = stepScore
+        // An auto play run is shown and never kept, as StepMania's AutoPlay.
+        val auto = autoplaying
 
-        val previousBest = attempts.bestAttempt(song.chartId, difficulty)
+        val previousBest = bestOf(attempts.attempts(song.chartId), difficulty)
         val attempt = GlyphAttempt(
             id = UUID.randomUUID().toString(),
             chartId = song.chartId,
@@ -2503,8 +3104,10 @@ class GlyphViewModel @Inject constructor(
         }
         // A room's run of another phone's chart is not a run of this phone's:
         // it goes to the room and is not kept against the local scores.
-        if (!_ui.value.inRoomPlay || roomPlan?.sameChart == true) attempts.save(attempt)
-        val machine = attempts.highScores(song.chartId, difficulty)
+        if (!auto && (!_ui.value.inRoomPlay || roomPlan?.sameChart == true)) attempts.save(attempt)
+        // Read once after the save, for the table and every difficulty's best.
+        val history = attempts.attempts(song.chartId)
+        val machine = attempts.highScoresIn(history, difficulty)
 
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.RESULTS,
@@ -2514,10 +3117,42 @@ class GlyphViewModel @Inject constructor(
                 previousBest = previousBest,
                 sections = buildSections(running),
                 machineScores = machine,
+                auto = auto,
             ),
-            training = _ui.value.training.copy(hasGhost = true),
-            bestGrades = bestGradesFor(song),
+            training = if (auto) _ui.value.training else _ui.value.training.copy(hasGhost = true),
+            bestGrades = bestGradesIn(history),
         )
+        announceResult(keeper?.grade)
+    }
+
+    /** The announcer at a run's end: cleared (a fail was announced as it happened), then the grade. */
+    private fun announceResult(grade: tf.monochrome.android.glyph.engine.GlyphStepGrade?) {
+        grade ?: return
+        if (grade != tf.monochrome.android.glyph.engine.GlyphStepGrade.FAILED) styleSounds.announce(tf.monochrome.android.glyph.style.AnnouncerEvent.CLEARED)
+        val event = when (grade) {
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER01 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AAAA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER02 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AAA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER03,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER04,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER05 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_AA
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER06,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER07,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER08 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_A
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER09,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER10,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER11 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_B
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER12,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER13,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER14 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_C
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER15,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER16,
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.TIER17 -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_D
+            tf.monochrome.android.glyph.engine.GlyphStepGrade.FAILED -> tf.monochrome.android.glyph.style.AnnouncerEvent.GRADE_E
+        }
+        viewModelScope.launch {
+            delay(ANNOUNCE_GRADE_AFTER_MILLIS)
+            if (_ui.value.screen == GlyphScreen.RESULTS) styleSounds.announce(event)
+        }
     }
 
     /**
@@ -2621,6 +3256,7 @@ class GlyphViewModel @Inject constructor(
 
     /** Off the rooms screen: the socket closes, and with it any room this phone was in. */
     private fun closeMultiplayer() {
+        roomsHidden = false
         roomStartJob?.cancel()
         roomTransferJob?.cancel()
         clearRoomSongs(keep = null)
@@ -2940,6 +3576,13 @@ class GlyphViewModel @Inject constructor(
     private fun leaveRoomRun(failed: Boolean) {
         stopRoomFrames()
         roomStartJob?.cancel()
+        // Left by the room too (a kick, the room gone), not only by Quit: the
+        // song, its tick and a READY still counting down all end here, or
+        // the music started or ran on behind the rooms screen.
+        stopTick()
+        introJob?.cancel()
+        failJob?.cancel()
+        transport.stop()
         if (failed) rooms.finish(roomResult(failed = true))
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.MULTIPLAYER,
@@ -2953,7 +3596,7 @@ class GlyphViewModel @Inject constructor(
     /** From a room's results back to the room, where the ranking is. */
     private fun backToRoom() {
         stopTick()
-        transport.pause()
+        transport.stop()
         stopRoomFrames()
         _ui.value = _ui.value.copy(
             screen = GlyphScreen.MULTIPLAYER,
@@ -2964,18 +3607,28 @@ class GlyphViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        bypassVolume.setAndroidStreamAudible(false)
         previewJob?.cancel()
-        preview.release()
+        if (previewLazy.isInitialized()) preview.release()
+        if (previewAudioLazy.isInitialized()) previewAudio.release()
         stopRoomFrames()
         rooms.disconnect()
+        // The socket is closed, so any room with it: its song goes too, as
+        // leaving the rooms screen clears it.
+        clearRoomSongs(keep = null)
         stopTick()
         replaceEngine(null)
         metronome.release()
+        styleSounds.release()
         transport.release()
+        transportAudio.release()
         super.onCleared()
     }
 
     private companion object {
+        /** How long a room asked for keeps the rooms socket open behind the app, waiting for the answer. */
+        const val ROOM_ANSWER_WAIT_MS = 30_000L
+
         /**
          * How long the wheel rests before a song is chosen: StepMania's
          * `SampleMusicDelay` was 250 ms, which with the fade read as a preview
@@ -2994,6 +3647,13 @@ class GlyphViewModel @Inject constructor(
 
         const val PREFS_NAME = "trypt_mania"
         const val PREF_SKIN = "skin"
+        const val PREF_THEME = "style_theme"
+        const val PREF_ANNOUNCER = "style_announcer"
+        const val PREF_CHARACTER = "style_character"
+        const val PREF_SIZE_JUDGEMENT = "style_size_judgement"
+        const val PREF_SIZE_COMBO = "style_size_combo"
+        const val PREF_SIZE_DANCER = "style_size_dancer"
+        private const val DANCE_PACK_NAME = "Animation + Helper Bones"
         const val PREF_SCROLL_FAMILY = "scroll_family"
         const val PREF_SCROLL_VALUE = "scroll_value"
         const val PREF_TURN = "turn"
@@ -3010,6 +3670,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_MINI = "mini"
         const val PREF_FAIL = "fail"
         const val PREF_METRONOME = "metronome"
+        const val PREF_RACE_BEST = "race_best"
         const val PREF_JUDGE = "judge"
         const val PREF_LANDSCAPE_FIELD = "landscape_field"
         const val PREF_CHART_MODE = "chart_mode"
@@ -3033,6 +3694,7 @@ class GlyphViewModel @Inject constructor(
         const val PREF_SORT_ASCENDING = "song_sort_ascending"
         const val PREF_GFX_RAYS = "gfx_hit_rays"
         const val PREF_GFX_RAY_QUALITY = "gfx_ray_quality"
+        const val PREF_GFX_MOTION_BLUR = "gfx_motion_blur"
         const val PREF_GFX_LIGHTING = "gfx_note_lighting"
         const val PREF_GFX_EXPLOSIONS = "gfx_explosions"
         const val PREF_GFX_BEAT_FLASH = "gfx_beat_flash"
@@ -3067,6 +3729,14 @@ class GlyphViewModel @Inject constructor(
         /** A failed run's stop: the shake, FAILED landing, and a beat to read it, before the results. */
         const val FAIL_HOLD_MILLIS = 2_200L
 
+        /** Black, held a moment before the results. */
+        const val END_BLACK_HOLD_MILLIS = 150L
+        private const val END_FADE_STEPS = 18
+        /** After the last note, a tap skips the song's tail from this long on. */
+        private const val SKIP_OUTRO_AFTER_MILLIS = 1_000L
+        /** The song counts as over this close to its end: the player's last reading can fall just short. */
+        private const val SONG_END_SLACK_SECONDS = 0.05f
+
         /** Older than this, a touch stamp is not trusted (see touchNanos). */
         const val MAX_TOUCH_AGE_NANOS = 250_000_000L
 
@@ -3079,6 +3749,11 @@ class GlyphViewModel @Inject constructor(
          */
         /** Every this many combo, the playfield marks it. */
         const val COMBO_MILESTONE = 50
+        /** The announcer's combo calls: every hundred, and a combo of fifty or more broken. */
+        const val ANNOUNCE_COMBO_EVERY = 100
+        const val ANNOUNCE_BROKEN_FROM = 50
+        /** The grade is read after the cleared call has had its moment. */
+        const val ANNOUNCE_GRADE_AFTER_MILLIS = 1_800L
 
         const val TICK_MILLIS = 8L
 
@@ -3119,3 +3794,6 @@ private data class RoomPlan(
     val hash: String,
     val sameChart: Boolean,
 )
+
+/** The stripes closing over the field at a run's end, and the music fading with them. */
+internal const val GLYPH_END_WIPE_MILLIS = 900L

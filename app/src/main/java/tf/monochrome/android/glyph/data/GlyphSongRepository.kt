@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
@@ -59,6 +60,12 @@ class GlyphSongRepository @Inject constructor(
      * A flow because the library scanner writes into the same database and a
      * newly imported song should appear without the player leaving the screen;
      * an imported pack appears the same way.
+     *
+     * Built off the main thread, with one listing of the chart folder for the
+     * whole list rather than a file check per song, and each chart read only
+     * when its file has changed ([ChartSummaries]): the scanner writes in
+     * batches, and every batch used to parse every chart in full again on the
+     * main thread, for a tempo and a list of difficulties.
      */
     fun songs(): Flow<List<GlyphSong>> = combine(
         localMedia.getAllTracks(),
@@ -67,17 +74,31 @@ class GlyphSongRepository @Inject constructor(
         packs.songs.onStart { packs.ensureLoaded() }
             .map { listed -> listed to listed.mapNotNullTo(HashSet()) { packs.musicPath(it) } },
     ) { tracks, (packSongs, packMusic) ->
-        tracks.filter { it.isConvertible && (packMusic.isEmpty() || it.localPath() !in packMusic) }.map { it.toGlyphSong() } +
-            packSongs.map { it.withEditedChart() }
-    }
+        val root = chartRoot
+        val charted = root.list()?.toHashSet().orEmpty()
+        tracks.filter { it.isConvertible && (packMusic.isEmpty() || it.localPath() !in packMusic) }
+            .map { it.toGlyphSong(root, charted) } +
+            packSongs.map { it.withEditedChart(root, charted) }
+    }.flowOn(Dispatchers.IO)
 
     private fun UnifiedTrack.localPath(): String? = (source as? PlaybackSource.LocalFile)?.filePath?.removePrefix("file://")
 
-    /** A pack song whose chart was edited here: what the list says comes from the edit. */
-    private suspend fun GlyphSong.withEditedChart(): GlyphSong {
-        if (!simfileFile(trackId).exists()) return this
-        val edited = simfile(trackId) ?: return this
-        return copy(bpm = edited.listedBpm, difficulties = edited.availableDifficulties)
+    /**
+     * A pack song whose chart was edited here: what the list says comes from
+     * the edit. [charted] is the chart folder's listing.
+     */
+    private fun GlyphSong.withEditedChart(root: File, charted: Set<String>): GlyphSong {
+        val name = chartFileName(trackId)
+        if (name !in charted) return this
+        val edited = summaries.of(File(root, name)) ?: return this
+        return copy(bpm = edited.bpm, difficulties = edited.difficulties)
+    }
+
+    /** What the list shows of each chart, read again only when its file changes. */
+    private val summaries = ChartSummaries { file ->
+        runCatching { SscParser.parse(file.readText()) }
+            .onFailure { Log.w(TAG, "chart ${file.name} is unreadable: ${it.message}") }
+            .getOrNull()
     }
 
     suspend fun song(trackId: String): GlyphSong? =
@@ -111,7 +132,9 @@ class GlyphSongRepository @Inject constructor(
      * exists yet: a generated chart, or an edit. A pack song's edit goes here
      * too, so the pack's own file is never written to.
      */
-    fun simfileFile(trackId: String): File = File(chartRoot, "${chartId(trackId)}.ssc")
+    fun simfileFile(trackId: String): File = File(chartRoot, chartFileName(trackId))
+
+    private fun chartFileName(trackId: String): String = "${chartId(trackId)}.ssc"
 
     /**
      * The chart [trackId] plays from: the app's own when there is one, else a
@@ -157,10 +180,12 @@ class GlyphSongRepository @Inject constructor(
         get() = sourceType == tf.monochrome.android.domain.model.SourceType.LOCAL &&
             (codec == AudioCodec.MP3 || codec == AudioCodec.FLAC)
 
-    private suspend fun UnifiedTrack.toGlyphSong(): GlyphSong {
+    /** A library track as a song of the list; [charted] is the chart folder's listing. */
+    private fun UnifiedTrack.toGlyphSong(root: File, charted: Set<String>): GlyphSong {
         val path = (source as? PlaybackSource.LocalFile)?.filePath.orEmpty()
-        val chartFile = simfileFile(id)
-        val simfile = if (chartFile.exists()) simfile(id) else null
+        val chartName = chartFileName(id)
+        val exists = chartName in charted
+        val chart = if (exists) summaries.of(File(root, chartName)) else null
         return GlyphSong(
             trackId = id,
             chartId = chartId(id),
@@ -172,11 +197,11 @@ class GlyphSongRepository @Inject constructor(
             codec = codec ?: AudioCodec.UNKNOWN,
             // BPM is only known once a chart exists — it comes out of the stem
             // analysis, not out of the file's tags.
-            bpm = simfile?.listedBpm,
-            difficulties = simfile?.availableDifficulties.orEmpty(),
+            bpm = chart?.bpm,
+            difficulties = chart?.difficulties.orEmpty(),
             chartState = when {
-                simfile != null -> GlyphChartState.READY
-                chartFile.exists() -> GlyphChartState.UNREADABLE
+                chart != null -> GlyphChartState.READY
+                exists -> GlyphChartState.UNREADABLE
                 else -> GlyphChartState.NOT_GENERATED
             },
         )
@@ -185,6 +210,33 @@ class GlyphSongRepository @Inject constructor(
     private companion object {
         const val TAG = "GlyphSongs"
         const val CHART_DIRECTORY = "glyph/charts"
+    }
+}
+
+/**
+ * What the song list shows of a chart — its listed tempo and its difficulties
+ * — by the file's path, kept while the file's modified time and length stay as
+ * they were. [parse] reads the whole chart, as the list did for every chart on
+ * every library change; a header alone cannot say which difficulties parse.
+ * One entry a chart file, a few dozen bytes each. Any thread.
+ */
+internal class ChartSummaries(private val parse: (File) -> GlyphSimfile?) {
+
+    data class Summary(val bpm: Float, val difficulties: List<StepManiaDifficulty>)
+
+    /** Null [summary]: the file was there and did not parse. */
+    private class Entry(val modified: Long, val length: Long, val summary: Summary?)
+
+    private val entries = java.util.concurrent.ConcurrentHashMap<String, Entry>()
+
+    /** [file]'s summary, or null when it does not parse; read only when it has changed. */
+    fun of(file: File): Summary? {
+        val modified = file.lastModified()
+        val length = file.length()
+        entries[file.path]?.let { if (it.modified == modified && it.length == length) return it.summary }
+        val summary = parse(file)?.let { Summary(it.listedBpm, it.availableDifficulties) }
+        entries[file.path] = Entry(modified, length, summary)
+        return summary
     }
 }
 

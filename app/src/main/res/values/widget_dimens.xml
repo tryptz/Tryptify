@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The widget's corner. From Android 12 the launcher's own (values-v31),
+         so the glass and its rim follow the home screen's other widgets. -->
+    <dimen name="widget_glass_radius">24dp</dimen>
+    <dimen name="widget_glass_inner_radius">14dp</dimen>
+</resources>

@@ -6,15 +6,151 @@
 // input signal (up to a fixed delay and gain). We drive a broadband multi-sine
 // through forward→inverse per 64-sample timeslot and check the output is a
 // delayed, scaled copy — normalized cross-correlation ≈ 1 at the best lag.
+//
+// The modulation runs through an FFT; Cavern computes it with dense 64 x 128
+// rotation matrices. Both directions are also held, timeslot by timeslot, to
+// that dense transform: in double precision with exact phases (the FFT must
+// match it to float rounding), and in float with Cavern's own tables, whose
+// phases were rounded in float (the FFT replaced those; this bounds what the
+// change did to the output).
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "cavern/quadrature_mirror_filterbank.h"
 
+namespace {
+
+using tf::atmos::cavern::QuadratureMirrorFilterBank;
+constexpr int kSub = QuadratureMirrorFilterBank::kSubbands;     // 64
+constexpr int kLen = QuadratureMirrorFilterBank::kCoeffLen;      // 640
+
+// Cavern's QMF as it was ported first: memmoved delay lines and the dense
+// modulation, in T. In float the rotation tables are built the way Cavern
+// builds them (the phase in float); in double, with exact phases.
+template <typename T>
+struct DenseQmf {
+  T fwd_re[kSub][2 * kSub], fwd_im[kSub][2 * kSub];
+  T inv_re[kSub][2 * kSub], inv_im[kSub][2 * kSub];
+  T stream_f[kLen] = {}, stream_i[2 * kLen] = {};
+  T out_re[kSub], out_im[kSub];
+  DenseQmf() {
+    for (int sb = 0; sb < kSub; ++sb) {
+      for (int j = 0; j < 2 * kSub; ++j) {
+        if (sizeof(T) == sizeof(float)) {
+          const float pi = 3.14159265358979323846f, div = 1.0f / kSub;
+          float e = pi * (sb + 0.5f) * (j - 0.5f) * div;
+          fwd_re[sb][j] = std::cos(e);
+          fwd_im[sb][j] = std::sin(e);
+          e = pi * (sb + 0.5f) * (j - 2 * kSub + 0.5f) * div;
+          inv_re[sb][j] = std::cos(e) * div;
+          inv_im[sb][j] = std::sin(e) * div;
+        } else {
+          const double pi = 3.14159265358979323846;
+          double e = pi * (sb + 0.5) * (j - 0.5) / kSub;
+          fwd_re[sb][j] = static_cast<T>(std::cos(e));
+          fwd_im[sb][j] = static_cast<T>(std::sin(e));
+          e = pi * (sb + 0.5) * (j - 2 * kSub + 0.5) / kSub;
+          inv_re[sb][j] = static_cast<T>(std::cos(e) / kSub);
+          inv_im[sb][j] = static_cast<T>(std::sin(e) / kSub);
+        }
+      }
+    }
+  }
+  void forward(const float* in) {
+    std::memmove(stream_f + kSub, stream_f, (kLen - kSub) * sizeof(T));
+    for (int i = 0; i < kSub; ++i) stream_f[i] = in[kSub - 1 - i];
+    T g[2 * kSub];
+    for (int j = 0; j < 2 * kSub; ++j) {
+      g[j] = stream_f[j] * T(QuadratureMirrorFilterBank::kCoeffs[j]);
+      for (int s = 2 * kSub; s < kLen; s += 2 * kSub) {
+        g[j] += stream_f[s + j] * T(QuadratureMirrorFilterBank::kCoeffs[s + j]);
+      }
+    }
+    for (int sb = 0; sb < kSub; ++sb) {
+      T r = 0, q = 0;
+      for (int j = 0; j < 2 * kSub; ++j) { r += fwd_re[sb][j] * g[j]; q += fwd_im[sb][j] * g[j]; }
+      out_re[sb] = r;
+      out_im[sb] = q;
+    }
+  }
+  void inverse(const float* re, const float* im, T* out) {
+    std::memmove(stream_i + 2 * kSub, stream_i, (2 * kLen - 2 * kSub) * sizeof(T));
+    for (int j = 0; j < 2 * kSub; ++j) {
+      T v = 0;
+      for (int sb = 0; sb < kSub; ++sb) v += inv_re[sb][j] * T(re[sb]) - inv_im[sb][j] * T(im[sb]);
+      stream_i[j] = v;
+    }
+    const float* c = QuadratureMirrorFilterBank::kCoeffs;
+    for (int t = 0; t < kSub; ++t) {
+      T o = 0;
+      for (int j = 0; j < kLen / (2 * kSub); ++j) {
+        o += stream_i[4 * kSub * j + t] * T(c[2 * kSub * j + t]) +
+             stream_i[4 * kSub * j + 3 * kSub + t] * T(c[2 * kSub * j + kSub + t]);
+      }
+      out[t] = o;
+    }
+  }
+};
+
+struct Diff {
+  double max = 0.0, peak = 0.0;
+  void add(double ref, double got) {
+    max = std::fmax(max, std::fabs(ref - got));
+    peak = std::fmax(peak, std::fabs(ref));
+  }
+  double rel() const { return peak > 0.0 ? max / peak : 0.0; }
+};
+
+// Feeds random timeslots to the filterbank and the two dense references;
+// returns false if any direction strays past its bound.
+bool against_dense() {
+  QuadratureMirrorFilterBank qmf_f, qmf_i;
+  static DenseQmf<double> exact_f, exact_i;
+  static DenseQmf<float> cavern_f, cavern_i;
+  Diff fe, fc, ie, ic;  // forward/inverse against exact/Cavern
+  uint32_t seed = 1;
+  auto rnd = [&seed]() {
+    seed = seed * 1664525u + 1013904223u;
+    return static_cast<float>((seed >> 8) & 0xFFFF) / 32768.0f - 1.0f;
+  };
+  float in[kSub], re[kSub], im[kSub], out[kSub];
+  double out_e[kSub];
+  float out_c[kSub];
+  for (int ts = 0; ts < 1500; ++ts) {
+    for (int i = 0; i < kSub; ++i) in[i] = 0.5f * rnd();
+    qmf_f.process_forward(in);
+    exact_f.forward(in);
+    cavern_f.forward(in);
+    for (int sb = 0; sb < kSub; ++sb) {
+      fe.add(exact_f.out_re[sb], qmf_f.out_real()[sb]);
+      fe.add(exact_f.out_im[sb], qmf_f.out_imaginary()[sb]);
+      fc.add(cavern_f.out_re[sb], qmf_f.out_real()[sb]);
+      fc.add(cavern_f.out_im[sb], qmf_f.out_imaginary()[sb]);
+    }
+    for (int sb = 0; sb < kSub; ++sb) { re[sb] = rnd(); im[sb] = rnd(); }
+    qmf_i.process_inverse(re, im, out);
+    exact_i.inverse(re, im, out_e);
+    cavern_i.inverse(re, im, out_c);
+    for (int t = 0; t < kSub; ++t) {
+      ie.add(out_e[t], out[t]);
+      ic.add(out_c[t], out[t]);
+    }
+  }
+  std::printf("forward vs exact dense: max %.3g of peak; vs Cavern's float tables: %.3g\n", fe.rel(), fc.rel());
+  std::printf("inverse vs exact dense: max %.3g of peak; vs Cavern's float tables: %.3g\n", ie.rel(), ic.rel());
+  // Float rounding is ~2e-7 of peak here (measured). Cavern's tables are
+  // off by up to 2.4e-5 rad in phase, which is what the FFT's output differs
+  // from them by (measured 1.2e-5 forward, 6e-6 inverse; 1.7e-5 forward in
+  // the full upmix bench).
+  return fe.rel() < 1e-6 && ie.rel() < 1e-6 && fc.rel() < 5e-5 && ic.rel() < 5e-5;
+}
+
+}  // namespace
+
 int main() {
-  using tf::atmos::cavern::QuadratureMirrorFilterBank;
-  constexpr int kSub = QuadratureMirrorFilterBank::kSubbands;  // 64
 
   const int frames = 900;
   const int n = frames * kSub;
@@ -68,7 +204,8 @@ int main() {
   // The lag is pinned: AtmosPipeline::kQmfLatency delays the fallback downmix
   // by exactly this measured round-trip so both output paths stay aligned. If
   // the filterbank ever changes, this failing says "update kQmfLatency too".
-  const bool pass = allFinite && std::fabs(bestCorr) > 0.99f && bestLag == 577;
+  const bool dense = against_dense();
+  const bool pass = allFinite && std::fabs(bestCorr) > 0.99f && bestLag == 577 && dense;
   std::printf("=== %s ===\n", pass ? "PASS" : "FAIL");
   return pass ? 0 : 1;
 }

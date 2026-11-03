@@ -30,7 +30,12 @@ class MixBusProcessor @Inject constructor(
     @Volatile private var enginePtr: Long = 0L
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    // The block handed out by getOutput(), which empties this field again...
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+    // ...and the storage behind it, kept from block to block. Sizing
+    // outputBuffer itself never found room, as getOutput() had just emptied
+    // it, so every block allocated a new direct buffer.
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
     private val _engineReady = MutableStateFlow(false)
     val engineReady: StateFlow<Boolean> = _engineReady.asStateFlow()
@@ -104,15 +109,18 @@ class MixBusProcessor @Inject constructor(
     private external fun nativeConfigureLanes(enginePtr: Long, first: IntArray, second: IntArray)
     private external fun nativeSetSpreadChannels(enginePtr: Long, spread: Boolean)
     // Planar direct float buffer, channel c at c * stride, processed in place.
+    // Both return whether the mixer handed the block back unchanged: no
+    // effect running or delaying, every fader and route it took at unity and
+    // settled. Only ever true when that is so, bit for bit.
     private external fun nativeProcessPlanar(
         enginePtr: Long, planar: ByteBuffer, numChannels: Int, stride: Int, numFrames: Int,
-    )
+    ): Boolean
     private external fun nativeProcess(
         enginePtr: Long,
         inputL: FloatArray, inputR: FloatArray,
         outputL: FloatArray, outputR: FloatArray,
         numFrames: Int
-    )
+    ): Boolean
 
     external fun nativeSetBusGain(enginePtr: Long, busIndex: Int, gainDb: Float)
     external fun nativeSetBusPan(enginePtr: Long, busIndex: Int, pan: Float)
@@ -269,8 +277,8 @@ class MixBusProcessor @Inject constructor(
             val size = inputBuffer.remaining()
             // Nothing to forward — leave outputBuffer as-is so getOutput
             // returns whatever it returned last time (or EMPTY_BUFFER on
-            // cold start). Without this guard, when both inputBuffer and
-            // outputBuffer happen to be the AudioProcessor.EMPTY_BUFFER
+            // cold start). Without this guard, when inputBuffer and the
+            // buffer written into happen to be the AudioProcessor.EMPTY_BUFFER
             // singleton (the pipeline-wide shared zero-capacity buffer
             // used during init, end-of-stream, or when an upstream
             // processor produced nothing), the put(self) call below
@@ -282,14 +290,11 @@ class MixBusProcessor @Inject constructor(
             // user-reported "audio skipping" bug; the libusb resubmit
             // errors that show up in the same logs were a red herring
             // (those are just the iso pump tearing down on USB unplug).
-            if (size == 0 || inputBuffer === outputBuffer) return
-            if (outputBuffer.capacity() < size) {
-                outputBuffer = ByteBuffer.allocateDirect(size).order(ByteOrder.nativeOrder())
-            } else {
-                outputBuffer.clear()
-            }
-            outputBuffer.put(inputBuffer)
-            outputBuffer.flip()
+            if (size == 0 || inputBuffer === buffer) return
+            val out = ensureOutput(size)
+            out.put(inputBuffer)
+            out.flip()
+            outputBuffer = out
             return
         }
 
@@ -370,13 +375,17 @@ class MixBusProcessor @Inject constructor(
             chunkScratchOutR = FloatArray(chunk)
         }
 
+        // Whether the mixer left every chunk as it came.
+        var unchanged = true
         var processed = 0
         while (processed < numFrames) {
             val n = minOf(chunk, numFrames - processed)
             if (needChunkScratch) {
                 System.arraycopy(scratchInL, processed, chunkScratchInL, 0, n)
                 System.arraycopy(scratchInR, processed, chunkScratchInR, 0, n)
-                nativeProcess(enginePtr, chunkScratchInL, chunkScratchInR, chunkScratchOutL, chunkScratchOutR, n)
+                unchanged = nativeProcess(
+                    enginePtr, chunkScratchInL, chunkScratchInR, chunkScratchOutL, chunkScratchOutR, n,
+                ) && unchanged
                 inflator.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 compressor.processArrays(chunkScratchOutL, chunkScratchOutR, n)
                 crossfeed.processArrays(chunkScratchOutL, chunkScratchOutR, n)
@@ -384,7 +393,7 @@ class MixBusProcessor @Inject constructor(
                 System.arraycopy(chunkScratchOutR, 0, scratchOutR, processed, n)
             } else {
                 // Single-shot fast path: ExoPlayer's buffer fits in one chunk.
-                nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, n)
+                unchanged = nativeProcess(enginePtr, scratchInL, scratchInR, scratchOutL, scratchOutR, n) && unchanged
                 inflator.processArrays(scratchOutL, scratchOutR, n)
                 compressor.processArrays(scratchOutL, scratchOutR, n)
                 crossfeed.processArrays(scratchOutL, scratchOutR, n)
@@ -398,19 +407,31 @@ class MixBusProcessor @Inject constructor(
         // Interleave output back to ByteBuffer (always stereo output)
         val outFrameSize = bytesPerSample * 2  // stereo
         val outBytes = numFrames * outFrameSize
-        if (outputBuffer.capacity() < outBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
-        }
+        val out = ensureOutput(outBytes)
 
         // Interleave via positional put* — no asFloatBuffer / asShortBuffer view
         // allocations on the hot path.
         if (encoding == C.ENCODING_PCM_FLOAT) {
             for (i in 0 until numFrames) {
                 val off = i * 8
-                outputBuffer.putFloat(off, useL[i])
-                outputBuffer.putFloat(off + 4, useR[i])
+                out.putFloat(off, useL[i])
+                out.putFloat(off + 4, useR[i])
+            }
+        } else if (unchanged && sameSamples(scratchInL, useL, numFrames) && sameSamples(scratchInR, useR, numFrames)) {
+            // Nothing here touched the block: the mixer says it left it, and
+            // the Oxford stages and crossfeed, which say nothing, left every
+            // sample equal too (checked, not assumed: crossfeed glides out
+            // after it is switched off). The source's own samples go out,
+            // rather than dithered and cut back to 16 bits, which put about
+            // half of them a step off with the mix flat.
+            if (inputChannels == 2) {
+                copyInput(inputBuffer, startPos, numFrames * frameSize, out)
+            } else {
+                for (i in 0 until numFrames) {
+                    val s = inputBuffer.getShort(startPos + i * 2)
+                    out.putShort(i * 4, s)
+                    out.putShort(i * 4 + 2, s)
+                }
             }
         } else {
             // PCM16 output with TPDF dithering (triangular 1-LSB noise)
@@ -419,12 +440,13 @@ class MixBusProcessor @Inject constructor(
                 val d2 = nextDitherSample()
                 val dither = d1 + d2 // TPDF: sum of two uniform = triangular
                 val off = i * 4
-                outputBuffer.putShort(off, ((useL[i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort())
-                outputBuffer.putShort(off + 2, ((useR[i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort())
+                out.putShort(off, ((useL[i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort())
+                out.putShort(off + 2, ((useR[i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort())
             }
         }
-        outputBuffer.position(0)
-        outputBuffer.limit(outBytes)
+        out.position(0)
+        out.limit(outBytes)
+        outputBuffer = out
     }
 
     /**
@@ -435,9 +457,14 @@ class MixBusProcessor @Inject constructor(
      * or to DownmixProcessor, which runs the crossfeed once it has folded it.
      */
     private fun queueWide(inputBuffer: ByteBuffer, channels: Int, encoding: Int) {
+        val startPos = inputBuffer.position()
         val numFrames = wideBlock.read(inputBuffer, channels, encoding)
         if (numFrames <= 0) return
         val data = wideBlock.channels
+        // As in the stereo path: whether the block went through untouched,
+        // for the 16-bit output. Only worth checking while the mixer says so.
+        val pcm16 = encoding != C.ENCODING_PCM_FLOAT
+        var unchanged = pcm16
 
         val chunk = blockSize
         val need = minOf(chunk, numFrames) * channels * 4
@@ -454,26 +481,34 @@ class MixBusProcessor @Inject constructor(
                 val base = c * n * 4
                 for (i in 0 until n) planar.putFloat(base + i * 4, src[processed + i])
             }
-            nativeProcessPlanar(enginePtr, planar, channels, n, n)
+            unchanged = nativeProcessPlanar(enginePtr, planar, channels, n, n) && unchanged
             inflator.process(planar, n, channels)
             compressor.process(planar, n, channels)
             for (c in 0 until channels) {
                 val dst = data[c]
                 val base = c * n * 4
-                for (i in 0 until n) dst[processed + i] = planar.getFloat(base + i * 4)
+                if (unchanged) {
+                    // The Oxford stages say nothing, so their part is checked.
+                    for (i in 0 until n) {
+                        val v = planar.getFloat(base + i * 4)
+                        if (v != dst[processed + i]) unchanged = false
+                        dst[processed + i] = v
+                    }
+                } else {
+                    for (i in 0 until n) dst[processed + i] = planar.getFloat(base + i * 4)
+                }
             }
             processed += n
         }
 
         val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
         val outBytes = numFrames * channels * bytesPerSample
-        if (outputBuffer.capacity() < outBytes) {
-            outputBuffer = ByteBuffer.allocateDirect(outBytes).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
-        }
+        val out = ensureOutput(outBytes)
         if (encoding == C.ENCODING_PCM_FLOAT) {
-            wideBlock.write(outputBuffer, numFrames, encoding)
+            wideBlock.write(out, numFrames, encoding)
+        } else if (unchanged) {
+            // Untouched: the source's own samples, not a dithered copy.
+            copyInput(inputBuffer, startPos, outBytes, out)
         } else {
             // PCM16 with the same TPDF dither as the stereo path: one draw
             // per frame, shared by every channel.
@@ -482,15 +517,45 @@ class MixBusProcessor @Inject constructor(
                 val dither = nextDitherSample() + nextDitherSample()
                 val off = i * frameBytes
                 for (c in 0 until channels) {
-                    outputBuffer.putShort(
+                    out.putShort(
                         off + c * 2,
                         ((data[c][i] * 32768f) + dither).toInt().coerceIn(-32768, 32767).toShort(),
                     )
                 }
             }
         }
-        outputBuffer.position(0)
-        outputBuffer.limit(outBytes)
+        out.position(0)
+        out.limit(outBytes)
+        outputBuffer = out
+    }
+
+    /** Position 0, limit at capacity; the caller sets the limit it filled to. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            buffer.clear()
+        }
+        return buffer
+    }
+
+    /** Whether the first [n] samples of [a] and [b] are equal. */
+    private fun sameSamples(a: FloatArray, b: FloatArray, n: Int): Boolean {
+        for (i in 0 until n) if (a[i] != b[i]) return false
+        return true
+    }
+
+    /**
+     * Copies [bytes] of [input] from [start] into [out] from its position 0,
+     * as they are. [input] was already read past them; its position ends
+     * where it was, and its limit is put back.
+     */
+    private fun copyInput(input: ByteBuffer, start: Int, bytes: Int, out: ByteBuffer) {
+        val limit = input.limit()
+        input.limit(start + bytes)
+        input.position(start)
+        out.put(input)
+        input.limit(limit)
     }
 
     override fun getOutput(): ByteBuffer {
@@ -600,6 +665,7 @@ class MixBusProcessor @Inject constructor(
         }
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
     }
 
     // LCG PRNG for TPDF dither — returns uniform value in [-0.5, 0.5) LSB range

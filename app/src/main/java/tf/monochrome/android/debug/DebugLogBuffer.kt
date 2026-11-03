@@ -33,7 +33,17 @@ class DebugLogBuffer @Inject constructor() {
 
     fun append(entry: DebugLogEntry) {
         // Sign-ins never reach the buffer, so the viewer, the export and crash files never see them.
-        val clean = entry.copy(message = LogRedactor.redact(entry.message), raw = LogRedactor.redact(entry.raw))
+        val message = LogRedactor.redact(entry.message)
+        val line = LogRedactor.redact(entry.raw)
+        // The line is kept as what comes before its message, the message being
+        // kept anyway. A redaction that ran across the two would make the line
+        // no longer end with the message; then it is kept whole, so the export
+        // is always exactly the redacted line.
+        val clean = if (line.endsWith(message)) {
+            entry.copy(message = message, prefix = line.substring(0, line.length - message.length), line = null)
+        } else {
+            entry.copy(message = message, prefix = "", line = line)
+        }
         synchronized(lock) {
             entries.addLast(clean)
             while (entries.size > MAX_ENTRIES) entries.removeFirst()

@@ -180,6 +180,9 @@ fun GlyphOptionsScreen(
                     loop = loop,
                     receptorInset = PREVIEW_RECEPTOR_INSET,
                     noteScale = PREVIEW_NOTE_SCALE,
+                    // The speed picked here, as a run shows it: C600 crosses
+                    // as fast as it will in the game, at the arrows' scale.
+                    gameScale = true,
                     reducedMotion = modifiers.reducedMotion,
                     musicPosition = previewPosition,
                     modifier = Modifier.fillMaxSize(),
@@ -455,13 +458,25 @@ private fun NoteOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
     }
     Column {
         GlyphControlHeader("Noteskin", null)
-        GlyphSegmented(
-            options = GlyphSkin.entries.toList(),
-            selected = modifiers.skin,
-            label = { it.label },
-            onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
-            description = "Noteskin",
-        )
+        val skins = GlyphSkin.all()
+        // The app's three are a choice of a few; with imported StepMania
+        // noteskins beside them, the list scrolls, as the pause panel's does.
+        if (skins.size <= GlyphSkin.entries.size) {
+            GlyphSegmented(
+                options = skins,
+                selected = modifiers.skin,
+                label = { it.label },
+                onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
+                description = "Noteskin",
+            )
+        } else {
+            GlyphChipRow(
+                options = skins,
+                selected = modifiers.skin,
+                label = { it.label },
+                onSelect = { onEvent(GlyphEvent.SetSkin(it)) },
+            )
+        }
     }
 }
 
@@ -511,6 +526,42 @@ private fun JudgeOptions(state: GlyphUiState, onEvent: (GlyphEvent) -> Unit) {
             },
             onSelect = { onEvent(GlyphEvent.SetFailType(it)) },
             description = "Fail",
+            textStyle = MaterialTheme.typography.labelMedium,
+        )
+    }
+    Column {
+        // StepMania's AutoPlay: the field above already shows what it does.
+        val autoLabel = stringResource(R.string.tm_opt_auto)
+        GlyphControlHeader(
+            autoLabel,
+            stringResource(if (modifiers.autoplay) R.string.tm_opt_auto_on else R.string.tm_opt_auto_off),
+        )
+        val off = stringResource(R.string.state_off)
+        val on = stringResource(R.string.state_on)
+        GlyphSegmented(
+            options = listOf(false, true),
+            selected = modifiers.autoplay,
+            label = { if (it) on else off },
+            onSelect = { onEvent(GlyphEvent.SetAutoplay(it)) },
+            description = autoLabel,
+            textStyle = MaterialTheme.typography.labelMedium,
+        )
+    }
+    Column {
+        // Your best run beside you, on the board rooms use.
+        val raceLabel = stringResource(R.string.tm_opt_race)
+        GlyphControlHeader(
+            raceLabel,
+            stringResource(if (modifiers.raceBest) R.string.tm_opt_race_on else R.string.tm_opt_race_off),
+        )
+        val off = stringResource(R.string.state_off)
+        val on = stringResource(R.string.state_on)
+        GlyphSegmented(
+            options = listOf(false, true),
+            selected = modifiers.raceBest,
+            label = { if (it) on else off },
+            onSelect = { onEvent(GlyphEvent.SetRaceBest(it)) },
+            description = raceLabel,
             textStyle = MaterialTheme.typography.labelMedium,
         )
     }

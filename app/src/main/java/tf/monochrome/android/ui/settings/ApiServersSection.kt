@@ -60,7 +60,6 @@ private fun ApiService.sourceType(): SourceType? = when (this) {
     ApiService.APPLE -> SourceType.APPLE
     ApiService.DEEZER -> SourceType.DEEZER
     ApiService.STEMS -> null
-    ApiService.LYRICS -> null
     ApiService.MULTIPLAYER -> null
 }
 

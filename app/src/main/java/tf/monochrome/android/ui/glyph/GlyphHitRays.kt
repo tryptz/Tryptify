@@ -26,9 +26,8 @@ import androidx.compose.ui.unit.IntSize
 import kotlin.math.min
 import kotlin.math.roundToInt
 import tf.monochrome.android.domain.model.LyricsFxSettings
-import tf.monochrome.android.glyph.asset.GlyphAssetCatalog
-import tf.monochrome.android.glyph.asset.GlyphAssetRepository
 import tf.monochrome.android.glyph.asset.GlyphBeatDivision
+import tf.monochrome.android.glyph.asset.GlyphFieldArt
 import tf.monochrome.android.glyph.asset.GlyphLane
 import tf.monochrome.android.performance.LocalLowPerformance
 import tf.monochrome.android.ui.player.LocalLyricsFx
@@ -57,12 +56,13 @@ import tf.monochrome.android.ui.player.setGodRayUniforms
  */
 @Composable
 internal fun GlyphHitRays(
-    assets: GlyphAssetRepository,
+    /** The field's warm art, whose quarter-note arrows flash; nothing is drawn without it. */
+    art: GlyphFieldArt?,
     laneWidthPx: Int,
     noteSizePx: Int,
     /** Where the receptors sit, in this layer's pixels. */
     receptorYPx: Float,
-    explosionProvider: () -> Map<GlyphLane, LaneFlash>,
+    explosionProvider: () -> LaneFlashes,
     frameTick: State<Long>,
     enabled: Boolean,
     /** The live combo, which picks the rays' colour (see [GlyphComboRays]). */
@@ -71,20 +71,20 @@ internal fun GlyphHitRays(
     /** Samples per shaft, 1 to 4: the graphics settings' ray quality. */
     quality: Int = 1,
 ) {
-    if (!enabled) return
+    if (!enabled || art == null) return
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
     if (LocalLowPerformance.current.disableLiquidGlass) return
-    HitRaysLayer(assets, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, comboProvider, quality, modifier)
+    HitRaysLayer(art, laneWidthPx, noteSizePx, receptorYPx, explosionProvider, frameTick, comboProvider, quality, modifier)
 }
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 private fun HitRaysLayer(
-    assets: GlyphAssetRepository,
+    art: GlyphFieldArt,
     laneWidthPx: Int,
     noteSizePx: Int,
     receptorYPx: Float,
-    explosionProvider: () -> Map<GlyphLane, LaneFlash>,
+    explosionProvider: () -> LaneFlashes,
     frameTick: State<Long>,
     comboProvider: () -> Int,
     quality: Int,
@@ -130,8 +130,9 @@ private fun HitRaysLayer(
         )
     }
     // The flash's colour this frame, written by the layer and read by the
-    // sprites below it in the same pass.
-    val tint = remember { arrayOf(Color.White) }
+    // sprites below it in the same pass, with its filter made once per colour
+    // rather than once per lit arrow per frame.
+    val tint = remember { TintFilter() }
 
     // Only the strip around the receptors, not the playfield: the shader runs
     // over every pixel of its layer, and the shafts never reach further.
@@ -148,18 +149,25 @@ private fun HitRaysLayer(
                 // Read every frame, so the effect follows the flashes.
                 @Suppress("UNUSED_EXPRESSION") frameTick.value
                 val now = System.nanoTime()
-                var box: Rect? = null
+                val flashes = explosionProvider()
+                // The lit arrows' bounds, one rectangle at the end rather than
+                // two for every lit lane.
+                var left = Float.POSITIVE_INFINITY
+                var right = Float.NEGATIVE_INFINITY
                 var strongest = 0f
-                for ((lane, flash) in explosionProvider()) {
-                    val life = flashLife(now, flash.atNanos)
+                for (lane in 0 until LANE_COUNT) {
+                    if (!flashes.has(lane)) continue
+                    val life = flashLife(now, flashes.atNanos(lane))
                     if (life <= 0f) continue
                     strongest = maxOf(strongest, life)
-                    val cx = lane.ordinal * laneWidthPx + laneWidthPx / 2f
-                    val note = Rect(
-                        cx - noteSizePx / 2f, localReceptorY - noteSizePx / 2f,
-                        cx + noteSizePx / 2f, localReceptorY + noteSizePx / 2f,
-                    )
-                    box = box?.let { Rect(min(it.left, note.left), min(it.top, note.top), maxOf(it.right, note.right), maxOf(it.bottom, note.bottom)) } ?: note
+                    val cx = lane * laneWidthPx + laneWidthPx / 2f
+                    left = min(left, cx - noteSizePx / 2f)
+                    right = maxOf(right, cx + noteSizePx / 2f)
+                }
+                val box = if (strongest > 0f) {
+                    Rect(left, localReceptorY - noteSizePx / 2f, right, localReceptorY + noteSizePx / 2f)
+                } else {
+                    null
                 }
                 litBox[0] = box
                 val frame = if (box != null) light.frameFor(Offset.Zero) else null
@@ -172,7 +180,7 @@ private fun HitRaysLayer(
                     // shafts climb white, yellow, orange, red, rainbow as the
                     // combo passes each fifty.
                     val colour = GlyphComboRays.colour(comboProvider(), now)
-                    tint[0] = colour
+                    tint.colour(colour)
                     shader.setFloatUniform("uSunColor", colour.red, colour.green, colour.blue)
                     android.graphics.RenderEffect
                         .createRuntimeShaderEffect(shader, "content")
@@ -183,29 +191,25 @@ private fun HitRaysLayer(
         Canvas(Modifier.fillMaxSize()) {
             @Suppress("UNUSED_EXPRESSION") frameTick.value
             val now = System.nanoTime()
-            for ((lane, flash) in explosionProvider()) {
-                val life = flashLife(now, flash.atNanos)
+            val flashes = explosionProvider()
+            for (lane in 0 until LANE_COUNT) {
+                if (!flashes.has(lane)) continue
+                val life = flashLife(now, flashes.atNanos(lane))
                 if (life <= 0f) continue
-                val image = assets.image(
-                    GlyphAssetCatalog.tap(lane, GlyphBeatDivision.QUARTER), noteSizePx, noteSizePx,
-                ) ?: continue
+                val image = art.tap(lane, GlyphBeatDivision.QUARTER) ?: continue
                 // The struck arrow, white-hot or in the combo's colour, held
                 // still at its own size: a flash, not a swell. A missed one
                 // flashes red. The shafts take each arrow's own colour (the
                 // shader marches the layer's pixels), so a miss beside a hit
                 // streams red while the hit keeps the combo's.
                 val size = noteSizePx
-                val x = lane.ordinal * laneWidthPx + (laneWidthPx - size) / 2f
+                val x = lane * laneWidthPx + (laneWidthPx - size) / 2f
                 drawImage(
                     image = image,
                     dstOffset = IntOffset(x.roundToInt(), (localReceptorY - size / 2f).roundToInt()),
                     dstSize = IntSize(size, size),
                     alpha = life,
-                    colorFilter = if (flash.isHit) {
-                        ColorFilter.tint(tint[0], BlendMode.SrcIn)
-                    } else {
-                        MISS_FILTER
-                    },
+                    colorFilter = if (flashes.isHit(lane)) tint.filter else MISS_FILTER,
                 )
             }
         }
@@ -214,6 +218,19 @@ private fun HitRaysLayer(
 
 /** A missed arrow's flash: the colour its rays stream in. */
 private val MISS_FILTER = ColorFilter.tint(GlyphComboRays.MISS, BlendMode.SrcIn)
+
+/** A struck arrow's flash in the combo's colour, its filter remade only when the colour changes. */
+private class TintFilter {
+    private var current = Color.White
+    var filter: ColorFilter = ColorFilter.tint(Color.White, BlendMode.SrcIn)
+        private set
+
+    fun colour(next: Color) {
+        if (next == current) return
+        current = next
+        filter = ColorFilter.tint(next, BlendMode.SrcIn)
+    }
+}
 
 /** 1 at the hit, falling to 0 over [FLASH_SECONDS]; 0 outside it. */
 private fun flashLife(nowNanos: Long, atNanos: Long): Float {
@@ -284,21 +301,21 @@ internal class GlyphHitLight {
 
     fun update(
         nowNanos: Long,
-        flashes: Map<GlyphLane, LaneFlash>,
+        flashes: LaneFlashes,
         laneWidthPx: Int,
         noteSizePx: Int,
         receptorYPx: Float,
     ) {
         count = 0
         reach = (RAY_REACH_NOTES * noteSizePx).coerceAtLeast(1f)
-        for ((lane, flash) in flashes) {
+        for (lane in 0 until LANE_COUNT) {
             // Hits only: the light is the combo's colour, and a miss's red
             // rays lighting the notes around it the combo's would contradict
             // them.
-            if (!flash.isHit) continue
-            val l = flashLife(nowNanos, flash.atNanos)
+            if (!flashes.has(lane) || !flashes.isHit(lane)) continue
+            val l = flashLife(nowNanos, flashes.atNanos(lane))
             if (l <= 0f) continue
-            x[count] = lane.ordinal * laneWidthPx + laneWidthPx / 2f
+            x[count] = lane * laneWidthPx + laneWidthPx / 2f
             y[count] = receptorYPx
             life[count] = l
             count += 1

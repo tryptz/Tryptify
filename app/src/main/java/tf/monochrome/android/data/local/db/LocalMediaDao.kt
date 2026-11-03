@@ -247,6 +247,19 @@ interface LocalMediaDao {
     @Query("SELECT * FROM local_tracks WHERE filePath = :path LIMIT 1")
     suspend fun findByPath(path: String): LocalTrackEntity?
 
+    // The listener's own tag corrections (Edit info), by file path.
+    @Query("SELECT * FROM local_track_edits")
+    suspend fun getAllTrackEdits(): List<LocalTrackEditEntity>
+
+    @Query("SELECT * FROM local_track_edits WHERE filePath = :path LIMIT 1")
+    suspend fun getTrackEdit(path: String): LocalTrackEditEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertTrackEdit(edit: LocalTrackEditEntity)
+
+    @Query("DELETE FROM local_track_edits WHERE filePath = :path")
+    suspend fun deleteTrackEdit(path: String)
+
     @Query("SELECT * FROM local_tracks WHERE musicbrainzTrack = :mbId LIMIT 1")
     suspend fun findByMusicBrainzId(mbId: String): LocalTrackEntity?
 
@@ -353,7 +366,7 @@ interface LocalMediaDao {
     suspend fun trackPathsAfter(afterId: Long, limit: Int): List<TrackPath>
 
     /**
-     * Writes the tempo, key and gain tags of the track at [filePath] and
+     * Writes the tempo, key, gain and peak tags of the track at [filePath] and
      * nothing else: not a row rewrite, so its id, its groupings and its
      * dynamic range stay as they are.
      */
@@ -361,7 +374,8 @@ interface LocalMediaDao {
         """
         UPDATE local_tracks SET bpm = :bpm, camelotKey = :camelotKey,
             rgTrackGain = :rgTrackGain, rgAlbumGain = :rgAlbumGain,
-            r128TrackGain = :r128TrackGain, r128AlbumGain = :r128AlbumGain
+            r128TrackGain = :r128TrackGain, r128AlbumGain = :r128AlbumGain,
+            rgTrackPeak = :rgTrackPeak, rgAlbumPeak = :rgAlbumPeak
         WHERE filePath = :filePath
         """
     )
@@ -373,6 +387,8 @@ interface LocalMediaDao {
         rgAlbumGain: Float?,
         r128TrackGain: Int?,
         r128AlbumGain: Int?,
+        rgTrackPeak: Float?,
+        rgAlbumPeak: Float?,
     )
 
     // ── Albums ──────────────────────────────────────────────────────
@@ -389,6 +405,23 @@ interface LocalMediaDao {
     @Upsert
     suspend fun upsertAlbum(album: LocalAlbumEntity): Long
 
+    // A scan regroups the library against the albums, artists and genres
+    // already there, by their keys, so each keeps its id from one scan to the
+    // next: the ones below are its reads and writes.
+
+    @Query("SELECT * FROM local_albums")
+    suspend fun getAlbumsOnce(): List<LocalAlbumEntity>
+
+    @Insert
+    suspend fun insertAlbum(album: LocalAlbumEntity): Long
+
+    @Update
+    suspend fun updateAlbums(albums: List<LocalAlbumEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_albums WHERE id IN (:ids)")
+    suspend fun deleteAlbums(ids: List<Long>)
+
     // ── Artists ─────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_artists ORDER BY name")
@@ -400,6 +433,16 @@ interface LocalMediaDao {
     @Upsert
     suspend fun upsertArtist(artist: LocalArtistEntity): Long
 
+    @Insert
+    suspend fun insertArtist(artist: LocalArtistEntity): Long
+
+    @Update
+    suspend fun updateArtists(artists: List<LocalArtistEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_artists WHERE id IN (:ids)")
+    suspend fun deleteArtists(ids: List<Long>)
+
     // ── Genres ──────────────────────────────────────────────────────
 
     @Query("SELECT * FROM local_genres ORDER BY name")
@@ -407,6 +450,19 @@ interface LocalMediaDao {
 
     @Upsert
     suspend fun upsertGenre(genre: LocalGenreEntity): Long
+
+    @Query("SELECT * FROM local_genres")
+    suspend fun getGenresOnce(): List<LocalGenreEntity>
+
+    @Insert
+    suspend fun insertGenres(genres: List<LocalGenreEntity>)
+
+    @Update
+    suspend fun updateGenres(genres: List<LocalGenreEntity>)
+
+    /** Keep [ids] under SQLite's 999. */
+    @Query("DELETE FROM local_genres WHERE id IN (:ids)")
+    suspend fun deleteGenres(ids: List<Long>)
 
     // ── Folders ─────────────────────────────────────────────────────
 

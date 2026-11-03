@@ -54,6 +54,12 @@ class SpectrumAnalyzerTap @Inject constructor(
         const val FFT_SIZE_HIGH = FFT_SIZE_16K
         const val OUTPUT_BINS = 256
 
+        /** How often the music links' spectrum is taken: well under a 165 Hz frame. */
+        const val LINK_HOP_MS = 5L
+
+        /** No new sound for this long and the links hear silence. */
+        private const val LINK_IDLE_NANOS = 150_000_000L
+
         const val MIN_OVERLAP = 0.5f
         const val MAX_OVERLAP = 0.99f
         const val DEFAULT_OVERLAP = 0.96f
@@ -94,7 +100,15 @@ class SpectrumAnalyzerTap @Inject constructor(
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
     private var sampleRate = 48000
 
@@ -156,6 +170,111 @@ class SpectrumAnalyzerTap @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var analysisJob: Job? = null
 
+    /** A plain power spectrum for the music links ([LinkBandAnalysis]), and the rate it was taken at. */
+    class LinkPower(val power: FloatArray, val sampleRate: Int)
+
+    private val _linkPower = MutableStateFlow(LinkPower(FloatArray(0), 48000))
+
+    /**
+     * The music links' own spectrum, taken every [LINK_HOP_MS] over a short
+     * window, never the display's ([spectrumBins] is tilted, re-centred,
+     * blurred and smoothed for the eye). Empty while no link listens. Read the
+     * array within a frame: it is reused a few analyses later.
+     */
+    val linkPower: StateFlow<LinkPower> = _linkPower.asStateFlow()
+
+    @Volatile private var linksActive = false
+    private val linkSubscribers = AtomicInteger(0)
+    private var linkJob: Job? = null
+    /**
+     * The running links loop waits on it once it has gone silent; [queueInput]
+     * wakes it. Each loop has its own, so one let go (releaseLinks) that has
+     * not stopped yet cannot take the wait of the next.
+     */
+    @Volatile private var linkArrival: SoundArrival? = null
+
+    /** The ring fills while the display or the links listen. */
+    private val ringActive: Boolean get() = analysisActive || linksActive
+
+    /** A stake in [linkPower], paired with [releaseLinks] as [acquire] is with [release]. */
+    fun acquireLinks() {
+        if (linkSubscribers.incrementAndGet() == 1) {
+            synchronized(lifecycleLock) {
+                if (linkSubscribers.get() > 0 && !linksActive) startLinksLocked()
+            }
+        }
+    }
+
+    fun releaseLinks() {
+        if (linkSubscribers.updateAndGet { (it - 1).coerceAtLeast(0) } == 0) {
+            synchronized(lifecycleLock) {
+                if (linkSubscribers.get() == 0 && linksActive) {
+                    linksActive = false
+                    linkJob?.cancel()
+                    linkJob = null
+                    linkArrival = null
+                    _linkPower.value = LinkPower(FloatArray(0), sampleRate)
+                }
+            }
+        }
+    }
+
+    private fun startLinksLocked() {
+        if (!ringActive) restartRing()
+        linksActive = true
+        linkJob?.cancel()
+        val arrival = SoundArrival()
+        linkArrival = arrival
+        linkJob = scope.launch {
+            val analysis = LinkBandAnalysis()
+            val samples = FloatArray(LinkBandAnalysis.SIZE)
+            // Three, taken in turn, so the one a frame is reading is not the one being written.
+            val buffers = Array(3) { FloatArray(LinkBandAnalysis.BINS) }
+            var next = 0
+            var lastWriteIdx = -1
+            var idleSince = 0L
+            var silent = false
+            while (isActive) {
+                val ringLocal = ring
+                val ringLen = ringLocal.size
+                val writeIdx = ringWrite
+                val now = System.nanoTime()
+                if (writeIdx == lastWriteIdx) {
+                    // Paused or between songs: once the sound has stopped coming,
+                    // the links hear silence and rest, rather than holding the last hit.
+                    if (idleSince == 0L) idleSince = now
+                    if (!silent && now - idleSince > LINK_IDLE_NANOS) {
+                        val out = buffers[next].also { it.fill(0f) }
+                        next = (next + 1) % buffers.size
+                        _linkPower.value = LinkPower(out, sampleRate)
+                        silent = true
+                    }
+                    // Silence published, there is nothing to look at until the
+                    // next buffer: sleep until it comes, and take it at once.
+                    if (silent) arrival.await { ringWrite == lastWriteIdx } else delay(LINK_HOP_MS)
+                    continue
+                }
+                idleSince = 0L
+                silent = false
+                lastWriteIdx = writeIdx
+                var start = writeIdx - LinkBandAnalysis.SIZE
+                if (start < 0) start += ringLen
+                for (i in 0 until LinkBandAnalysis.SIZE) samples[i] = ringLocal[(start + i) % ringLen]
+                val out = buffers[next]
+                next = (next + 1) % buffers.size
+                analysis.powerSpectrum(samples, out)
+                _linkPower.value = LinkPower(out, sampleRate)
+                delay(LINK_HOP_MS)
+            }
+        }
+    }
+
+    /** A fresh ring: only post-start audio is read. */
+    private fun restartRing() {
+        ringWrite = 0
+        java.util.Arrays.fill(ring, 0f)
+    }
+
     /**
      * Reference-count subscribers. Multiple screens (Now Playing spectrum,
      * Parametric EQ, Parametric EQ Edit, Settings preview) can hold a stake
@@ -195,8 +314,8 @@ class SpectrumAnalyzerTap @Inject constructor(
         // against a stale ring. Force reallocation and refill so the first FFT
         // reads only post-re-enable audio.
         _analysisDirty = true
-        ringWrite = 0
-        java.util.Arrays.fill(ring, 0f)
+        // Not under the links' feet: they are reading this ring already.
+        if (!linksActive) restartRing()
         analysisJob?.cancel()
         analysisJob = scope.launch {
             // Local FFT work arrays (reallocated on fftSize change)
@@ -383,7 +502,7 @@ class SpectrumAnalyzerTap @Inject constructor(
         val byteCount = numFrames * frameSize
         val startPos = inputBuffer.position()
 
-        if (analysisActive) {
+        if (ringActive) {
             // Mono-sum into ring buffer via index-based reads — no duplicate() /
             // asFloatBuffer() / asShortBuffer() wrapper allocations per call.
             val ringLocal = ring
@@ -438,6 +557,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
             }
             ringWrite = w
+            linkArrival?.arrived()
             if (cn > 0) WaveScopeNative.nativePush(scopeChunk, cn, sampleRate)
         }
 
@@ -450,16 +570,23 @@ class SpectrumAnalyzerTap @Inject constructor(
         // slice we want, then restore. The relative `put(ByteBuffer)` call
         // advances both positions — inputBuffer ends at startPos + byteCount,
         // matching what DefaultAudioSink expects from an AudioProcessor.
-        if (outputBuffer.capacity() < byteCount) {
-            outputBuffer = ByteBuffer.allocateDirect(byteCount).order(ByteOrder.nativeOrder())
-        } else {
-            outputBuffer.clear()
-        }
+        val out = ensureOutput(byteCount)
         val savedLimit = inputBuffer.limit()
         inputBuffer.limit(startPos + byteCount)
-        outputBuffer.put(inputBuffer)
+        out.put(inputBuffer)
         inputBuffer.limit(savedLimit)
-        outputBuffer.flip()
+        out.flip()
+    }
+
+    /** [buffer], at least [bytes] long and cleared, as the pending output. */
+    private fun ensureOutput(bytes: Int): ByteBuffer {
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        } else {
+            buffer.clear()
+        }
+        outputBuffer = buffer
+        return buffer
     }
 
     override fun getOutput(): ByteBuffer {
@@ -493,6 +620,7 @@ class SpectrumAnalyzerTap @Inject constructor(
         flush()
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
+        buffer = AudioProcessor.EMPTY_BUFFER
     }
 
     /**

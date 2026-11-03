@@ -283,7 +283,7 @@ fun BoxScope.StudioLinkOverlay(
     val d = draft
     val target = d?.let { VisualLinkTargets.byKey(it.link.target) }
     if (d != null && target != null) {
-        val spectrum = tap.spectrumBins.collectAsState()
+        val spectrum = tf.monochrome.android.ui.musiclinks.rememberEditorSpectrum(tap)
         val key = d.link.target
         val info = target.info()
         MusicLinkEditor(

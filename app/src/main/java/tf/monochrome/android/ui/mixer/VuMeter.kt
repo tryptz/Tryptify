@@ -1,7 +1,7 @@
 package tf.monochrome.android.ui.mixer
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,8 +13,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * Segmented vertical VU meter.
@@ -34,32 +37,38 @@ import kotlinx.coroutines.isActive
  * segments are painted, so the inactive track stays clean instead of showing
  * a column of faint dots. Colours run low → warning → clip near the top.
  *
- * @param levelDb current level in dB (typically -60 … +6).
+ * @param level   current level in dB (typically -60 … +6), read where it is
+ *                drawn: the meter moves on every poll, and taking it as a value
+ *                recomposed the whole strip around it ~120 times a second.
  * @param muted   when true the bar drops to zero and dims.
  */
 @Composable
 fun VuMeter(
-    levelDb: Float,
+    level: () -> Float,
     muted: Boolean,
     modifier: Modifier = Modifier,
     accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
-    // Normalise dB -> 0..1 fraction  (-60 dB -> 0,  0 dB -> 1,  +6 dB -> clamp 1)
-    val targetFraction = if (muted) 0f
-    else ((levelDb + 60f) / 60f).coerceIn(0f, 1f)
     val warningColor = lerp(accentColor, Color(0xFFFFD166), 0.55f)
     val clipColor = lerp(accentColor, MaterialTheme.colorScheme.error, 0.80f)
     val lowColor = accentColor.copy(alpha = 0.80f)
     val trackColor = Color.Black.copy(alpha = 0.38f)
 
-    val animatedLevel by animateFloatAsState(
-        targetValue = targetFraction,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "vuLevel"
-    )
+    // Normalise dB -> 0..1 fraction  (-60 dB -> 0,  0 dB -> 1,  +6 dB -> clamp 1)
+    val currentLevel by rememberUpdatedState(level)
+    val currentMuted by rememberUpdatedState(muted)
+    fun target(): Float = if (currentMuted) 0f else ((currentLevel() + 60f) / 60f).coerceIn(0f, 1f)
+
+    // What animateFloatAsState did, without being a composition input: the same
+    // Animatable (0.01 visibility threshold), the same spring, and each new
+    // level started from the running one's velocity. The first value is read
+    // without observation, so the meter's own scope never recomposes for it.
+    val animated = remember { Animatable(Snapshot.withoutReadObservation { target() }, VU_THRESHOLD) }
+    LaunchedEffect(animated) {
+        snapshotFlow { target() }.collect { next ->
+            launch { if (next != animated.targetValue) animated.animateTo(next, VuSpring) }
+        }
+    }
 
     // ── Peak hold — frame-driven ballistics ────────────────────────────
     // Hold the maximum for 700 ms, then fall at ~0.35 full-scale/s
@@ -74,18 +83,19 @@ fun VuMeter(
         var lastFrame = 0L
         var heldSince = 0L
         while (isActive) {
-            if (peak <= 0f && animatedLevel <= 0f) {
-                snapshotFlow { animatedLevel }.first { it > 0f }
+            if (peak <= 0f && animated.value <= 0f) {
+                snapshotFlow { animated.value }.first { it > 0f }
                 lastFrame = 0L
             }
             withFrameNanos { now ->
                 val dt = if (lastFrame == 0L) 0f else (now - lastFrame) / 1e9f
                 lastFrame = now
-                if (animatedLevel >= peak) {
-                    peak = animatedLevel
+                val shown = animated.value
+                if (shown >= peak) {
+                    peak = shown
                     heldSince = now
                 } else if (now - heldSince > holdNanos) {
-                    peak = (peak - dt * 0.35f).coerceAtLeast(animatedLevel)
+                    peak = (peak - dt * 0.35f).coerceAtLeast(shown)
                 }
             }
         }
@@ -107,7 +117,7 @@ fun VuMeter(
         // Recessed track
         drawRect(color = trackColor)
 
-        val activeSegs = (segCount * animatedLevel).toInt()
+        val activeSegs = (segCount * animated.value).toInt()
         val peakSeg = (segCount * peak).toInt().coerceIn(0, segCount - 1)
 
         for (i in 0 until segCount) {
@@ -131,3 +141,12 @@ fun VuMeter(
         }
     }
 }
+
+// animateFloatAsState's own defaults for a Float: the spring is given the
+// same 0.01 threshold the Animatable stops at.
+private const val VU_THRESHOLD = 0.01f
+private val VuSpring = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium,
+    visibilityThreshold = VU_THRESHOLD,
+)

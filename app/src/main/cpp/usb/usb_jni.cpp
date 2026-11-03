@@ -117,12 +117,32 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativePlayedFrames(
     return static_cast<jlong>(driver().playedFrames());
 }
 
+// Frames written and not yet sent to the DAC: those still in the ring and
+// those queued in iso transfers in flight.
 JNIEXPORT jlong JNICALL
 Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativePendingFrames(
     JNIEnv*, jobject) {
-    long w = driver().writtenFrames();
-    long p = driver().playedFrames();
+    int64_t w = driver().writtenFrames();
+    int64_t p = driver().playedFrames();
     return static_cast<jlong>(w > p ? w - p : 0);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeParkPump(
+    JNIEnv*, jobject) {
+    return driver().parkPump() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeResumePump(
+    JNIEnv*, jobject) {
+    return driver().resumePump() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeIsPumpParked(
+    JNIEnv*, jobject) {
+    return driver().isPumpParked() ? JNI_TRUE : JNI_FALSE;
 }
 
 // --- Diagnostics surface ---------------------------------------------

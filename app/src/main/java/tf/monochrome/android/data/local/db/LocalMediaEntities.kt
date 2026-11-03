@@ -75,6 +75,9 @@ data class LocalTrackEntity(
     val rgAlbumGain: Float? = null,
     val r128TrackGain: Int? = null,
     val r128AlbumGain: Int? = null,
+    // ReplayGain's peaks, a fraction of full scale: how far a quiet song may be raised.
+    val rgTrackPeak: Float? = null,
+    val rgAlbumPeak: Float? = null,
 
     // Tempo and key, from the file's tags (TBPM / BPM, TKEY / INITIALKEY).
     // The key is a Camelot code: 1..12 the minor keys 1A..12A, 13..24 the
@@ -202,3 +205,100 @@ data class LocalFacetTally(
     val name: String,
     val trackCount: Int,
 )
+
+/**
+ * The listener's own corrections to one song's tags (Edit info in its menu),
+ * by its file's path. Kept apart from local_tracks because a scan that reads
+ * the file again writes that row whole, under a new id; the scan lays these
+ * back over the file's tags every time it reads it ([withEdit]). The file
+ * itself is never written.
+ *
+ * Null keeps the file's value. An empty text clears it: an album artist
+ * taken out leaves the song under its own artist.
+ */
+@Entity(tableName = "local_track_edits")
+data class LocalTrackEditEntity(
+    @PrimaryKey val filePath: String,
+    val title: String? = null,
+    val artist: String? = null,
+    val albumArtist: String? = null,
+    val album: String? = null,
+    val genre: String? = null,
+    val year: Int? = null,
+    val trackNumber: Int? = null,
+    val discNumber: Int? = null,
+) {
+    /** Nothing changed: no reason to keep the row. */
+    val isEmpty: Boolean
+        get() = title == null && artist == null && albumArtist == null && album == null &&
+            genre == null && year == null && trackNumber == null && discNumber == null
+}
+
+/** This song's tags with the listener's [edit] over them; itself when there is none. */
+fun LocalTrackEntity.withEdit(edit: LocalTrackEditEntity?): LocalTrackEntity {
+    if (edit == null || edit.isEmpty) return this
+    fun String?.over(file: String?): String? = if (this == null) file else trim().ifEmpty { null }
+    val newTitle = edit.title.over(title)
+    return copy(
+        title = newTitle,
+        titleSearchKey = if (edit.title == null) titleSearchKey
+        else newTitle?.let { tf.monochrome.android.player.LocalTrackMatching.searchKey(it) },
+        artist = edit.artist.over(artist),
+        albumArtist = edit.albumArtist.over(albumArtist),
+        album = edit.album.over(album),
+        genre = edit.genre.over(genre),
+        year = edit.year ?: year,
+        trackNumber = edit.trackNumber ?: trackNumber,
+        discNumber = edit.discNumber ?: discNumber,
+    )
+}
+
+/** What Edit info's fields hold, as typed. */
+data class TypedTags(
+    val title: String = "",
+    val artist: String = "",
+    val albumArtist: String = "",
+    val album: String = "",
+    val genre: String = "",
+    val year: String = "",
+    val trackNumber: String = "",
+    val discNumber: String = "",
+) {
+    companion object {
+        /** The fields as [track] shows them now. */
+        fun of(track: LocalTrackEntity) = TypedTags(
+            title = track.title.orEmpty(),
+            artist = track.artist.orEmpty(),
+            albumArtist = track.albumArtist.orEmpty(),
+            album = track.album.orEmpty(),
+            genre = track.genre.orEmpty(),
+            year = track.year?.toString().orEmpty(),
+            trackNumber = track.trackNumber?.toString().orEmpty(),
+            discNumber = track.discNumber?.toString().orEmpty(),
+        )
+    }
+}
+
+/**
+ * The edit [typed] makes to the song at [filePath], whose file gives [file]:
+ * only what differs from the file is kept, so a field put back as the file
+ * has it follows the file again. A text field emptied clears that tag; a
+ * number field emptied, or not a number, keeps the file's.
+ */
+fun trackEditFrom(filePath: String, file: LocalTrackEntity, typed: TypedTags): LocalTrackEditEntity {
+    fun text(value: String, fileValue: String?): String? =
+        value.trim().takeIf { it != fileValue.orEmpty().trim() }
+    fun number(value: String, fileValue: Int?): Int? =
+        value.trim().toIntOrNull()?.takeIf { it > 0 && it != fileValue }
+    return LocalTrackEditEntity(
+        filePath = filePath,
+        title = text(typed.title, file.title),
+        artist = text(typed.artist, file.artist),
+        albumArtist = text(typed.albumArtist, file.albumArtist),
+        album = text(typed.album, file.album),
+        genre = text(typed.genre, file.genre),
+        year = number(typed.year, file.year),
+        trackNumber = number(typed.trackNumber, file.trackNumber),
+        discNumber = number(typed.discNumber, file.discNumber),
+    )
+}

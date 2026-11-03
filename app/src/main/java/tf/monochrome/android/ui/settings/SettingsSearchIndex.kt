@@ -92,12 +92,13 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Custom colors", R.string.settings_custom_colors, "Appearance", listOf("colour", "accent", "background", "pick", "override")),
     entry("Use system font size", R.string.settings_use_system_font_size, "Fonts", listOf("text size", "accessibility", "os", "display")),
     entry("Romaji Lyrics", R.string.settings_romaji_lyrics, "Appearance", listOf("japanese", "transliterate", "latin", "kana", "lyrics")),
-    entry("Server lyrics", R.string.settings_server_lyrics, "Appearance", listOf("whisper", "sync", "synced", "time", "timed", "karaoke", "word", "railway", "parser", "chart server", "lyrics")),
     entry("Show Explicit Badges", R.string.settings_show_explicit_badges, "Appearance", listOf("explicit", "badge", "parental", "e")),
     entry("Song row badges", R.string.settings_row_badges, "Appearance", listOf("badge", "badges", "chip", "tag", "tags", "source", "local", "qobuz", "tidal", "quality", "lossless", "flac", "atmos", "download", "duration", "length", "list", "row")),
     entry("Legacy player", R.string.settings_legacy_player, "Appearance", listOf("old", "flat", "classic", "pre-glass", "design")),
     entry("Remove liquid glass", R.string.settings_remove_liquid_glass, "Appearance", listOf("flat", "opaque", "blur", "performance", "glass")),
     entry("Disable animations", R.string.settings_disable_animations, "Appearance", listOf("motion", "reduce", "still", "accessibility")),
+    entry("Home screen widget", R.string.settings_widget, "Appearance", listOf("widget", "launcher", "glass", "opacity", "transparent", "home screen"))
+        .at(SettingsDestination.Route("widget_settings")),
     entry("CRT effect", R.string.settings_crt_effect, "Appearance", listOf("tv", "television", "retro", "scanlines", "crt", "shader", "monitor", "vintage", "old", "curvature", "curve", "zoom", "size", "chromatic", "aberration", "rgb", "mask", "glow", "bloom", "royale", "crt-royale", "aperture", "grille", "slot", "halation", "diffusion", "beam")),
 
     // ── Visual Studio ───────────────────────────────────────────────────
@@ -166,7 +167,11 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     // ── Audio ───────────────────────────────────────────────────────────
     entry("Gapless playback", R.string.settings_gapless_playback, "Audio", listOf("gap", "continuous", "album")),
     entry("Crossfade", R.string.search_crossfade, "Audio", listOf("fade", "transition", "blend")),
-    entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level")),
+    entry(
+        "Continue into the next list", R.string.settings_continue_into_next_list, "Audio",
+        listOf("next playlist", "next album", "next folder", "autoplay", "continue", "end of playlist", "previous playlist"),
+    ),
+    entry("ReplayGain", R.string.settings_replaygain, "Audio", listOf("replay gain", "loudness", "normalize", "normalise", "volume", "r128", "level", "lufs", "target loudness")),
     entry(
         "Play alongside other apps", R.string.settings_play_alongside_other_apps, "Audio",
         listOf("audio focus", "focus", "game", "gaming", "mix", "pause", "duck", "interrupt", "video"),

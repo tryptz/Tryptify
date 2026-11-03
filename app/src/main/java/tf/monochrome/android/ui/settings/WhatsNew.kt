@@ -1,6 +1,8 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.annotation.StringRes
 import tf.monochrome.android.BuildConfig
+import tf.monochrome.android.R
 
 /**
  * The "What's New" entries shown in About, and the version they belong to.
@@ -34,10 +36,10 @@ import tf.monochrome.android.BuildConfig
  * from the outside "this works now" and "this works differently now" are the
  * same news: the thing does not do what it did.
  */
-enum class WhatsNewKind(val heading: String) {
-    NEW("New"),
-    CHANGED("Changed"),
-    REMOVED("Removed"),
+enum class WhatsNewKind(val heading: String, @StringRes val headingRes: Int) {
+    NEW("New", R.string.whats_new_kind_new),
+    CHANGED("Changed", R.string.whats_new_kind_changed),
+    REMOVED("Removed", R.string.whats_new_kind_removed),
 }
 
 data class WhatsNewEntry(
@@ -52,6 +54,14 @@ data class WhatsNewEntry(
      * confident label on a lot of guesses. New entries should set it.
      */
     val kind: WhatsNewKind? = null,
+    /**
+     * The same title and body in the listener's language, from strings.tsv,
+     * or 0 for an entry written before the notes were translated: those show
+     * the English above. Every release from 1.9.51 on has them (WhatsNewTest),
+     * and the English here must read as the table's English row does.
+     */
+    @StringRes val titleRes: Int = 0,
+    @StringRes val bodyRes: Int = 0,
 )
 
 data class WhatsNewRelease(
@@ -61,6 +71,26 @@ data class WhatsNewRelease(
 )
 
 object WhatsNew {
+
+    /**
+     * [section]'s heading in the listener's language, or 0 to print it as it
+     * is written: the sections the translated releases use.
+     */
+    @StringRes
+    fun sectionRes(section: String): Int = when (section) {
+        YOUTUBE_SOUNDCLOUD -> R.string.whats_new_section_youtube_soundcloud
+        PLAYBACK -> R.string.whats_new_section_playback
+        PLAYLISTS -> R.string.whats_new_section_playlists
+        CONNECTIONS -> R.string.whats_new_section_connections
+        LIBRARY -> R.string.whats_new_section_library
+        LYRICS -> R.string.whats_new_section_lyrics
+        USB_DAC -> R.string.whats_new_section_usb_dac
+        TRYPT_MANIA -> R.string.whats_new_section_trypt_mania
+        MUSIC_LINKS -> R.string.whats_new_section_music_links
+        SHARING -> R.string.whats_new_section_sharing
+        WIDGET -> R.string.whats_new_section_widget
+        else -> 0
+    }
 
     /** What travels between this device and the signed-in account, and when. */
     private const val ACCOUNT_SYNC = "Account sync"
@@ -131,6 +161,15 @@ object WhatsNew {
     /** Settings and knobs that follow a part of the song, and the page that lists them. */
     private const val MUSIC_LINKS = "Music links"
 
+    /** Songs and albums sent as tryptify.com links, and opened from them. */
+    private const val SHARING = "Sharing"
+
+    /** The two built-in song sources: YouTube on the phone, SoundCloud through Tryptify's server. */
+    private const val YOUTUBE_SOUNDCLOUD = "YouTube and SoundCloud"
+
+    /** The now playing widget on the home screen. */
+    private const val WIDGET = "Home screen widget"
+
     /** Sharing a whole look, and taking someone else's. */
     private const val THEME_STORE = "Theme Store"
 
@@ -157,6 +196,188 @@ object WhatsNew {
 
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
+        WhatsNewRelease(
+            versionCode = 196,
+            versionName = "1.9.51",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = YOUTUBE_SOUNDCLOUD,
+                    title = "YouTube and SoundCloud, built in",
+                    body = "Search them with their own chips, then play or download their songs. YouTube runs on your phone with no sign-in; SoundCloud works with your Tryptify sign-in.",
+                    titleRes = R.string.whats_new_1951_youtube_title,
+                    bodyRes = R.string.whats_new_1951_youtube_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share link",
+                    body = "In a song's or the player's menu and on an album's page: a tryptify.com link that plays in anyone's Tryptify, on any service they have. Links shared from TrypT-hifi play here too.",
+                    titleRes = R.string.whats_new_1951_share_link_title,
+                    bodyRes = R.string.whats_new_1951_share_link_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share YouTube and SoundCloud songs",
+                    body = "Share link works for them too: signed in, Discord shows the cover with a play button. A shared song none of your services has, or a SoundCloud link opened signed out, plays from YouTube.",
+                    titleRes = R.string.whats_new_1951_share_youtube_title,
+                    bodyRes = R.string.whats_new_1951_share_youtube_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Continue into the next list",
+                    body = "When a playlist, album or folder ends, the next one on the screen you opened it from plays, and Previous goes back a list. It's on by default (Settings › Audio › Playback), and your playlists can now be sorted.",
+                    titleRes = R.string.whats_new_1951_next_list_title,
+                    bodyRes = R.string.whats_new_1951_next_list_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "ReplayGain is back",
+                    body = "It evens songs out to the loudness you pick, -23 to -8 LUFS, without clipping, and measures untagged songs as they play. In Settings › Audio › Audio processing, and as a switch in the player's audio panel.",
+                    titleRes = R.string.whats_new_1951_replaygain_title,
+                    bodyRes = R.string.whats_new_1951_replaygain_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "More from your music server",
+                    body = "It counts your plays, stars what you like and sends its own lyrics, and Library › My server lists its playlists and liked songs. On mobile data it can stream a smaller MP3.",
+                    titleRes = R.string.whats_new_1951_my_server_title,
+                    bodyRes = R.string.whats_new_1951_my_server_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LIBRARY,
+                    title = "Edit a song's info",
+                    body = "In a local song's ⋮ menu, Edit info fixes its title, artist, album and more. Tryptify keeps the edit and leaves the file as it is; Last.fm gets it from the song's next play.",
+                    titleRes = R.string.whats_new_1951_edit_info_title,
+                    bodyRes = R.string.whats_new_1951_edit_info_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Your files' own lyrics first",
+                    body = "The .lrc beside a song and lyrics in its tags come first, and show offline. LRC files that read wrong, LRCLib's included, now read right.",
+                    titleRes = R.string.whats_new_1951_file_lyrics_title,
+                    bodyRes = R.string.whats_new_1951_file_lyrics_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Chart your own songs",
+                    body = "Trypt Mania › Generate charts charts a song on Tryptify's server: your first song is free, then minute packs from $2.99. A server of your own stays free.",
+                    titleRes = R.string.whats_new_1951_charting_title,
+                    bodyRes = R.string.whats_new_1951_charting_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Trypt Mania through your DAC and DSP",
+                    body = "The game plays through your USB DAC and the DSP engine, with AutoEQ, the Oxford Inflator and ReplayGain in its own Settings › Audio. Motion blur, off by default, can trail the notes and the gliding lyrics.",
+                    titleRes = R.string.whats_new_1951_tm_dac_title,
+                    bodyRes = R.string.whats_new_1951_tm_dac_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = TRYPT_MANIA,
+                    title = "Auto play and race your best",
+                    body = "In Player options › Judge, Auto play plays the run for you and is never saved, and Race your best puts your best run of the chart beside you as a score.",
+                    titleRes = R.string.whats_new_1951_tm_auto_race_title,
+                    bodyRes = R.string.whats_new_1951_tm_auto_race_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MUSIC_LINKS,
+                    title = "Music links presets",
+                    body = "Save every link on the Music links page under a name, load a set back in one tap with Undo, and share one as a file.",
+                    titleRes = R.string.whats_new_1951_link_presets_title,
+                    bodyRes = R.string.whats_new_1951_link_presets_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = WIDGET,
+                    title = "A glass home screen widget",
+                    body = "Flat see-through glass with the cover and a play button, in three resizable sizes. Set its look in Settings › Appearance › Home screen widget, with a live preview.",
+                    titleRes = R.string.whats_new_1951_widget_title,
+                    bodyRes = R.string.whats_new_1951_widget_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = USB_DAC,
+                    title = "DACs with one clock stay exclusive",
+                    body = "A USB DAC that runs only 48 and 96 kHz, like the Nothing Ear (1), plays CD-rate songs in exclusive mode, resampled to its nearest rate. Rates it takes stay bit-perfect.",
+                    titleRes = R.string.whats_new_1951_one_clock_dac_title,
+                    bodyRes = R.string.whats_new_1951_one_clock_dac_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Lighter on battery and memory",
+                    body = "Less CPU while music plays, less memory and smoother screens, and a USB DAC wakes the phone far less, resting its stream while paused.",
+                    titleRes = R.string.whats_new_1951_lighter_title,
+                    bodyRes = R.string.whats_new_1951_lighter_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "A wider title in the player",
+                    body = "The song's title now runs the whole width, out to the heart, with the artist and the heart on the line under it.",
+                    titleRes = R.string.whats_new_1951_player_title_title,
+                    bodyRes = R.string.whats_new_1951_player_title_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "A cleaner Oxford Compressor",
+                    body = "With a fast release it no longer distorts bass: steady tones keep a steady gain, while drums still recover quickly.",
+                    titleRes = R.string.whats_new_1951_compressor_title,
+                    bodyRes = R.string.whats_new_1951_compressor_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Scrobbled under the right artist",
+                    body = "A local song from a label's compilation or a various-artists album is now played and sent to Last.fm under its own artist, not the album artist. Albums still group by album artist.",
+                    titleRes = R.string.whats_new_1951_scrobble_artist_title,
+                    bodyRes = R.string.whats_new_1951_scrobble_artist_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Generated charts follow the song",
+                    body = "Verses are sparser than choruses, the loudest parts burst into faster steps on Hard and Challenge, and the arrows change pattern as the song goes. Generate a chart again to get the new one.",
+                    titleRes = R.string.whats_new_1951_tm_charts_title,
+                    bodyRes = R.string.whats_new_1951_tm_charts_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "A run ends with its song",
+                    body = "After the last note the song plays to its end (tap to skip), then stripes sweep across and fade to black before your results.",
+                    titleRes = R.string.whats_new_1951_tm_run_end_title,
+                    bodyRes = R.string.whats_new_1951_tm_run_end_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Tap to sync counts every tap",
+                    body = "The Bluetooth sync test counts your taps from the first one, and no longer reads a whole click off, so wireless headphones get the right offset.",
+                    titleRes = R.string.whats_new_1951_tap_sync_title,
+                    bodyRes = R.string.whats_new_1951_tap_sync_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = TRYPT_MANIA,
+                    title = "Pack music and pictures stay",
+                    body = "Your pack and your imported packs now keep to separate folders, so stopping Your pack no longer takes the imported packs' music and pictures with it, and pack pictures no longer vanish when space runs low.",
+                    titleRes = R.string.whats_new_1951_pack_folders_title,
+                    bodyRes = R.string.whats_new_1951_pack_folders_body,
+                ),
+            ),
+        ),
         WhatsNewRelease(
             versionCode = 195,
             versionName = "1.9.5",

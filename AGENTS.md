@@ -66,7 +66,11 @@ files that nothing ever opened.
 
 The native DSP has host tests that build with the desktop compiler, no
 device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
-widths, the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
+widths, ReplayGain's stage in front of the mixer, the Oxford effects and every
+snapin (`replay_gain_test`), the mixer's exactness (a flat mix and a fader
+moved and back come out bit for bit, `engine_exactness_test`), the effects'
+delay lines and buffers (`snapin_buffers_test`), the finite guards
+(`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music
 links (`mod_route_test`, held to the same numbers as the Kotlin
@@ -78,16 +82,33 @@ submodule and is skipped without it:
 app/src/main/cpp/dsp/tests/run_host_tests.sh
 ```
 
-Two more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, sixteen tests; the
-script above runs only `channel_placer_test` from it) and Trypt Mania's game
-engine (`glyph/tests/`, held to the same rules as its Kotlin twin):
+The phone's compiler is stricter about `-ffast-math` than the desktop's:
+clang 21 (NDK r29) takes every float argument as finite and folds a plain bit
+test for NaN away, which no host build does, so a guard can pass every host
+test and still do nothing on the phone. `dsp/util/finite.h` hides the bits
+behind an empty asm; use `dspIsFinite`/`dspAllFinite`/`dspZeroNonFinite` (or
+the same barrier) for any finiteness check. `finite_guard_test` is also built
+with the NDK and run under qemu for both ARM ABIs when the NDK and
+`qemu-user-static` are present (`apt-get install qemu-user-static`);
+otherwise that step says it skipped.
+
+Four more native suites are CMake projects of their own, built and run on the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, nineteen tests; the
+script above runs only `channel_placer_test` from it), Trypt Mania's game
+engine (`glyph/tests/`, held to the same rules as its Kotlin twin), the
+motion blur behind the note trails and the lyric glide (`motion/tests/`) and
+the RAR reader for Trypt Mania's StepMania imports, over the vendored
+libarchive (`archive/tests/`, on libarchive's own test archives):
 
 ```
 cmake -S app/src/main/cpp/atmos/tests -B build/atmos-tests
 cmake --build build/atmos-tests && ctest --test-dir build/atmos-tests --output-on-failure
 cmake -S app/src/main/cpp/glyph/tests -B build/glyph-tests
 cmake --build build/glyph-tests && ctest --test-dir build/glyph-tests --output-on-failure
+cmake -S app/src/main/cpp/motion/tests -B build/motion-tests
+cmake --build build/motion-tests && ctest --test-dir build/motion-tests --output-on-failure
+cmake -S app/src/main/cpp/archive/tests -B build/archive-tests
+cmake --build build/archive-tests && ctest --test-dir build/archive-tests --output-on-failure
 ```
 
 Nothing runs any of these automatically: the one CI workflow
@@ -103,7 +124,10 @@ and a rewording made only there reverts. `StringResourcesTest` fails when the
 XML and the table disagree. Names that are never translated (`app_name`,
 `trypt_mania`) are listed in the script's `NON_TRANSLATABLE`. Plurals are rows
 whose key ends `#one`, `#other` and so on, and the script refuses a row with
-an empty language. Recurring terms (tab names, settings paths) are fixed in
+an empty language. What's New is no exception: from 1.9.51 on, every entry
+(`ui/settings/WhatsNew.kt`) names its title and body rows (`titleRes`,
+`bodyRes`), its section a row of `WhatsNew.sectionRes`, and the English
+written in the entry must match the table's (`WhatsNewTest`). Recurring terms (tab names, settings paths) are fixed in
 `app/l10n/GLOSSARY.md`; reuse its row, or add one first.
 
 ## Trypt Mania's StepMania art
@@ -114,6 +138,11 @@ judgement, grade and full-combo art with its typefaces
 `tools/stepmania_skin/build_retro_skin.py` and `build_theme.py`. Regenerate
 them with those scripts rather than editing the PNGs; each writes the licence
 StepMania's notice requires next to the art.
+
+Noteskins, themes and announcers the listener imports from StepMania
+downloads are not shipped art: they are baked on the phone at import
+(`glyph/style/`), each with a `LICENSE.txt` naming where it came from, and
+never added to the repository.
 
 ## Trypt Mania's built-in servers are build secrets
 
@@ -168,7 +197,7 @@ and `1` when it was left out; the second must print `0`. The cloud setup below w
 workflow sets neither variable, so an APK it builds has no built-in servers.
 
 The other settings `local.properties` can override (`themeStore.url`,
-`lastfm.apiKey`) are public and have committed defaults.
+`lastfm.apiKey`, `scxyt.url`) are public and have committed defaults.
 They are not secrets, but the rule for `local.properties` stays the same: it is
 never committed.
 
@@ -232,6 +261,122 @@ Supabase session.
 The cloud is played by saving it as the Subsonic server, with a device
 password from `POST /v1/subsonic-keys`, so everything above about that server
 applies. `CloudTest` holds the app to the server's error codes and JSON.
+
+## YouTube and SoundCloud
+
+Both built in, songs only: `data/scxyt/` and `PlaybackSource.Scxyt`, with the
+ids the server has always handed out (`yt:<videoId>`, `sc:<digits>`), so
+saved queues, likes and downloads keep working. `ScxytRouter` sends each call
+its own way.
+
+**YouTube is extracted on the phone**, with NewPipeExtractor
+(`data/youtube/`; GPL-3.0-or-later, from JitPack). YouTube answers a
+data-centre address with its bot check, which is all the server ever got; a
+phone on a home or mobile network is served. No sign-in. Search asks YouTube
+Music's songs (or its music videos where the songs answer nothing, as in a
+country without YouTube Music) and YouTube's own videos at once, and takes
+from each in turn (`YoutubeMapping.mix`): a song that is only someone's
+upload is in YouTube's videos alone. An upload's title names the artist
+("East Clubbers- To The Moon And Back"), so it is split at its first spaced
+dash and bracketed noise like "(Official Video)" is dropped
+(`titleAndArtistOfVideo`); a "- Topic" channel's title is kept whole. A
+result over 30 minutes is left out. A pasted YouTube link finds that one
+song. A play or
+a download first fetches the whole audio (itag 140, AAC, whenever there is
+one) into `cacheDir/youtube`, in pieces of 1 MiB at most (`ChunkedDownload`:
+googlevideo throttles or refuses open-ended requests), and plays or copies
+that file: a stream link is tied to the phone's address and expires, and the
+player never sees one. The cache holds 256 MiB, least recently played out
+first, never a file used in the last hour (the player may hold it for
+gapless playback); `YoutubeAudioCache`. The song next in line, and only
+that one, is fetched the same way while the one before plays
+(`StreamResolver.warmUpcoming`, `UpcomingPrepare`), so it can be pre-queued
+for gapless playback; it waits while the song asked for is still being
+fetched, and stops when the queue moves on without it. A
+SoundCloud song next has its link asked for ahead and kept for its play,
+once (`ScxytRepository.prepareAhead`). Live streams and songs over 30
+minutes are refused, as the server refused them. NewPipe needs the R8 rules
+at the end of `proguard-rules.pro` (from NewPipe's own app): Rhino runs
+YouTube's player script and reaches Java by reflection, protobuf-lite reads
+fields by name. It also needs core library desugaring with
+`desugar_jdk_libs_nio`, as NewPipe's app has: it calls Java APIs Android only
+has from 13 on (URLEncoder and URLDecoder with a Charset,
+`Collectors.toUnmodifiableList`) in every search, which would crash YouTube
+on Android 8 to 12 without it.
+
+**PO tokens** (YouTube's proof-of-origin tokens) are made in a WebView, as
+NewPipe's app makes them: `data/youtube/potoken/`, ported from its
+`util/potoken/` (TeamNewPipe/NewPipe master at `00acf2f3`, the commit on
+v0.26.5; GPL-3.0-or-later) with `assets/po_token.html`, coroutines in place
+of RxJava and the extractor's own downloader for BotGuard's two requests.
+`YoutubeOnDevice` hands `PoTokenProviderImpl` to
+`YoutubeStreamExtractor.setPoTokenProvider` when it sets NewPipe up. Only
+the WEB client's tokens can be made in a WebView; the Android and iOS
+clients' need DroidGuard and Apple's attestation, so those are always null,
+as in NewPipe. That null is what keeps today's path: on v0.26.5 a token for
+the Android client would move it from the "reel" client, which needs none
+and is what works, to the plain Android one (`PoTokenWiringTest` holds the
+first player request to the reel client with the provider set). v0.26.5
+never asks for a WEB token at all (and the iOS client, the only other one
+asked, is off), so on this version the WebView never runs: the provider
+stands ready for an extractor that asks, and NewPipe's newer extractor
+commits leave `setPoTokenProvider` a no-op until they support SABR, so check
+an upgrade's `YoutubeStreamExtractor` for where it asks. A token that cannot
+be made (no WebView, an old or broken one, a BotGuard or JavaScript error, a
+network error, a 20 s timeout, a call from the main thread) is null and
+extraction goes on without it; after a failure tokens are not tried for 5
+minutes, and after a syntax error in the page never again until the app
+restarts. Tokens are kept per visitor data until BotGuard's integrity token
+is 10 minutes from expiring, then the WebView is made anew. The page calls
+`PoTokenWebView`'s `@JavascriptInterface` methods by name: a keep rule in
+`proguard-rules.pro` holds them. `JavaScriptUtilTest` and
+`PoTokenProviderImplTest` hold the parsing, the cache and every fallback,
+without a WebView; nothing here has run BotGuard on a phone.
+
+**SoundCloud goes through trypt-hifi-scxyt** (its own repository; its
+README's "The API Tryptify uses" is the contract), which searches and fetches
+with yt-dlp on its machine. Its address is `BuildConfig.SCXYT_URL`,
+overridable with `scxyt.url` in `local.properties`. It holds no secret: calls
+carry the Supabase session (the token from `CloudRepository.bearer`), and
+signed out SoundCloud is off. A play or a download asks `/api/v1/prepare`
+first and uses the signed link it returns.
+
+**Share link** on a song from either is a tryptify.com link to the song
+alone (`share/SharedLinks.kt`, `ShareLinks.songLink`):
+`https://tryptify.com/listen/youtube/track/<videoId>` or
+`/listen/soundcloud/track/<number>`, with `title`, `artist` and `duration`
+(seconds) in the query, and for SoundCloud `page`, the song's soundcloud.com
+address (the server's `Track.url`, carried on `UnifiedTrack.pageUrl`), only
+when it is `https://soundcloud.com/<artist>/<song>`. Last comes `s`, the
+signature of the preview Discord plays under the cover (its play button).
+No TrypT-hifi signs these; trypt-hifi-scxyt does, when the song is shared
+(`ShareLinks.signedSongLink`, `ScxytClient.share`): `POST /api/v1/share?id=`
+with the Supabase session makes the 30-second clip and answers `s`, and for
+SoundCloud the page, used when the song has none. YouTube turns the server
+away, so for a YouTube song the phone sends the audio itself: the whole file
+from `YoutubeAudioCache` (fetched first, as a play fetches it, when it is not
+there; usually it has just played) as the request body, streamed, with its
+type (`audio/mp4` or `audio/webm`), up to 40 MB. A SoundCloud song the server
+fetches. That takes seconds, so the share says it is preparing the song
+(`share_preparing`) and the share sheet opens when the answer comes. Signed
+out, or when anything fails (no network, the server's refusal, a song too
+large, two minutes without an answer), the link goes without `s`: it opens
+and plays the same, and Discord shows a small card. A failed preview never
+stops the share. The website (tryptz/tryptify.com) makes the rest of the page
+from YouTube's and SoundCloud's oEmbed, and shows the preview only for an
+`s` of 16 base64url characters the server vouches for. Opened in the app
+(`SharedSongResolver`), `s` is ignored: a YouTube link plays that song, with
+no sign-in; a SoundCloud link plays from the server when signed in, and
+signed out the best match a YouTube search for its artist and title finds,
+with a toast saying so. A catalog song link that no service on the phone has
+falls back to YouTube the same way; an album link does not.
+`SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the
+signature and its fallback, the match and the routing.
+
+`ScxytTest` holds the app to the server's JSON and error codes (the share's
+upload too), `ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
+`ChunkedDownloadTest`, `YoutubeAudioCacheTest` and the PO-token tests above
+the YouTube side, all without a network.
 
 ## projectM is patched, and its presets are scanned
 

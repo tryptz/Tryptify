@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import tf.monochrome.android.R
+import java.io.File
 
 /**
  * When the update bar appears, and the shape of the notes behind it. The
@@ -13,6 +15,9 @@ import org.junit.Test
 class WhatsNewTest {
 
     private val newest = WhatsNew.releases.first().versionCode
+
+    /** The first release whose notes are in every language: 1.9.51. */
+    private val firstTranslated = 196
 
     @Test
     fun `notes exist and are newest first`() {
@@ -123,6 +128,35 @@ class WhatsNewTest {
         assertTrue(WhatsNew.unseen(newest).isEmpty())
         assertEquals(WhatsNew.releases.size, WhatsNew.unseen(0).size)
         assertTrue(WhatsNew.unseen(newest - 1).all { it.versionCode > newest - 1 })
+    }
+
+    @Test
+    fun `every release from 1951 on is in the listener's language`() {
+        // The project rule: new user-facing text goes in all eight languages. The
+        // notes did not, until 1.9.51; from there each entry, its section and
+        // the kind headings come from strings.tsv, and the English written
+        // here must be the table's, or the two drift apart.
+        val english = File("l10n/strings.tsv").readLines(Charsets.UTF_8)
+            .map { it.split('\t') }
+            .filter { it.size > 1 }
+            .associate { it[0] to it[1] }
+        val names = R.string::class.java.fields.associate { it.getInt(null) to it.name }
+        fun englishOf(res: Int) = names[res]?.let { english[it] }
+
+        val translated = WhatsNew.releases.filter { it.versionCode >= firstTranslated }
+        assertTrue(translated.isNotEmpty())
+        translated.flatMap { it.entries }.forEach { entry ->
+            assertTrue("no translated title for '${entry.title}'", entry.titleRes != 0)
+            assertTrue("no translated body for '${entry.title}'", entry.bodyRes != 0)
+            assertEquals(entry.title, englishOf(entry.titleRes))
+            assertEquals(entry.body, englishOf(entry.bodyRes))
+            entry.section?.let { section ->
+                val res = WhatsNew.sectionRes(section)
+                assertTrue("section '$section' has no translation", res != 0)
+                assertEquals(section, englishOf(res))
+            }
+        }
+        WhatsNewKind.entries.forEach { assertEquals(it.heading, englishOf(it.headingRes)) }
     }
 
     @Test

@@ -44,6 +44,12 @@ data class PersistedQueue(
      * common case. A second copy of the list would double the blob to say it.
      */
     val originalOrder: List<Int> = emptyList(),
+    /**
+     * The lists the queue was played from, so it still carries on into the
+     * next one after a restart. Optional, so blobs from before it read as
+     * "none" and older builds skip it (`ignoreUnknownKeys`): no version bump.
+     */
+    val listContext: ListContext? = null,
 )
 
 object PlaybackSnapshotCodec {
@@ -122,15 +128,38 @@ object QueueOrdering {
 
 /**
  * How much of a long queue is worth writing down. A queue can run to thousands
- * of entries and the blob is rewritten on every change. Biased forward: what's
- * coming up matters more on reopening than what already played.
+ * of entries and the blob is rewritten whenever what it holds changes. Biased
+ * forward: what's coming up matters more on reopening than what already played.
  */
 object QueueWindow {
     const val MAX_PERSISTED_ENTRIES = 300
     const val KEEP_BEHIND = 50
 
+    /**
+     * How far the window moves at a time. It starts on a multiple of this, so
+     * moving on a track leaves it where it was all but once every [STEP]
+     * tracks, and the save then writes the play head alone, not the whole
+     * window again (PlaybackStateRepository). It keeps [KEEP_BEHIND] to
+     * [KEEP_BEHIND] + [STEP] - 1 tracks behind the current one, and the rest of
+     * [MAX_PERSISTED_ENTRIES] ahead of it: 200 or more.
+     */
+    const val STEP = 50
+
     /** [from] until [until] of the original queue, and where the current track lands in it. */
-    data class Window(val from: Int, val until: Int, val currentIndex: Int)
+    data class Window(val from: Int, val until: Int, val currentIndex: Int) {
+        /**
+         * [lists] as saved with this window of a queue of [size]. A window
+         * that cuts off the front no longer starts where its first list does
+         * ([ListContext.headCut]), so Previous on its first track must not
+         * jump past the rest of that list. One that cuts off the end no
+         * longer ends where its last list does ([ListContext.tailCut]), so
+         * the rest of that list plays before the next.
+         */
+        fun lists(lists: ListContext, size: Int): ListContext = lists.copy(
+            headCut = lists.headCut || from > 0,
+            tailCut = lists.tailCut || until < size,
+        )
+    }
 
     fun around(size: Int, currentIndex: Int, max: Int = MAX_PERSISTED_ENTRIES): Window {
         if (size <= 0) return Window(0, 0, -1)
@@ -138,7 +167,7 @@ object QueueWindow {
 
         val current = currentIndex.coerceIn(0, size - 1)
         // Take the tail near the end, so the window is always exactly `max`.
-        val from = (current - KEEP_BEHIND).coerceIn(0, size - max)
+        val from = (Math.floorDiv(current - KEEP_BEHIND, STEP) * STEP).coerceIn(0, size - max)
         return Window(from, from + max, current - from)
     }
 }

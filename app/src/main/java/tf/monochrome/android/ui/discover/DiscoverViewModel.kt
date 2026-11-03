@@ -1162,16 +1162,44 @@ class DiscoverViewModel @Inject constructor(
     val planetFacts: StateFlow<Map<String, tf.monochrome.android.data.charts.ArtistFacts>> = _planetFacts.asStateFlow()
     private val factsAsked = mutableSetOf<String>()
 
+    /**
+     * The artists the map has wanted facts for, the most recent last. This
+     * ViewModel lives as long as the activity, on purpose, and every system the
+     * camera rested on used to add its artists for good; only the
+     * [PLANET_FACTS_KEPT] most recently wanted are kept now, and a system come
+     * back to after that simply asks again.
+     */
+    private val factsWanted = LinkedHashSet<String>()
+
     /** Asks for the facts of [system]'s artists not already known or on their way. */
     private fun loadPlanetFacts(system: tf.monochrome.android.ui.discover.galaxy.PlanetSystem) {
         for (planet in system.planets) {
             val artist = planet.label
+            // Wanted again: the newest, so the system on screen is never the one let go.
+            factsWanted.remove(artist)
+            factsWanted.add(artist)
             if (artist in _planetFacts.value || !factsAsked.add(artist)) continue
             viewModelScope.launch {
                 val facts = runCatching { genreCharts.artistFacts(artist) }.getOrNull()
-                if (facts != null) _planetFacts.update { it + (artist to facts) } else factsAsked.remove(artist)
+                // Let go while it was on its way: not kept, and free to be asked for again.
+                if (facts != null && artist in factsWanted) {
+                    _planetFacts.update { it + (artist to facts) }
+                } else {
+                    factsAsked.remove(artist)
+                }
             }
         }
+        trimPlanetFacts()
+    }
+
+    /** Lets go of the facts of the artists wanted longest ago, past [PLANET_FACTS_KEPT]. */
+    private fun trimPlanetFacts() {
+        val excess = factsWanted.size - PLANET_FACTS_KEPT
+        if (excess <= 0) return
+        val gone = factsWanted.take(excess).toSet()
+        factsWanted.removeAll(gone)
+        factsAsked.removeAll(gone)
+        _planetFacts.update { it - gone }
     }
 
     fun playChartEntry(
@@ -1464,6 +1492,9 @@ class DiscoverViewModel @Inject constructor(
 
         /** How long the map stays on a genre before its planets are fetched. */
         const val MAP_SYSTEM_DWELL_MS = 700L
+
+        /** How many artists' planet facts are kept ([factsWanted]): at six planets a system, about sixteen systems. */
+        const val PLANET_FACTS_KEPT = 100
 
         /** How long after the last change to the galaxy's look it is saved. */
         const val GALAXY_VISUALS_SAVE_MS = 350L

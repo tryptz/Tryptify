@@ -139,9 +139,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import tf.monochrome.android.ui.theme.MonoDimens
+import tf.monochrome.android.ui.theme.reduceMotion
 import tf.monochrome.android.ui.theme.rememberMotionFloat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.text.style.TextOverflow
 import tf.monochrome.android.ui.eq.EqViewModel
 import tf.monochrome.android.ui.eq.EqProfileMiniGraph
@@ -252,6 +257,9 @@ internal val settingsPageIds: List<String> get() = settingsPages
  * caller pointing at the wrong page.
  */
 val SETTINGS_TAB_ABOUT: Int = settingsTabIndex("About")
+
+/** Index of the Audio tab, where ReplayGain's mode and target live; derived like [SETTINGS_TAB_ABOUT]. */
+val SETTINGS_TAB_AUDIO: Int = settingsTabIndex("Audio")
 
 /** One selectable step in the Appearance › Font Size picker. */
 private data class FontScalePreset(@StringRes val label: Int, val scale: Float)
@@ -750,6 +758,13 @@ private fun AppearanceTab(
             Spacer(modifier = Modifier.height(16.dp))
             InterfaceControls(viewModel, navController)
             Spacer(modifier = Modifier.height(16.dp))
+            // The home-screen widget's look has a page of its own, for its preview.
+            SettingItem(
+                title = stringResource(R.string.settings_widget),
+                subtitle = stringResource(R.string.settings_widget_summary),
+                onClick = { navController.navigateTool(Screen.WidgetSettings) },
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             // Last of all: the whole app through an old TV.
             CrtEffectSetting(viewModel)
         }
@@ -1020,16 +1035,6 @@ private fun InterfaceControls(viewModel: SettingsViewModel, navController: NavCo
             }
         }
     }
-
-    // Server lyrics — a song the race leaves without word timing goes to the
-    // chart server, which hears the vocals and times every word (ServerLyricsEngine).
-    val serverLyrics by viewModel.serverLyrics.collectAsStateWithLifecycle()
-    SettingSwitchItem(
-        title = stringResource(R.string.settings_server_lyrics),
-        subtitle = stringResource(R.string.settings_server_lyrics_subtitle),
-        checked = serverLyrics,
-        onCheckedChange = { viewModel.setServerLyrics(it) }
-    )
 
 
     Spacer(modifier = Modifier.height(16.dp))
@@ -1586,6 +1591,7 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     // because that tab had become the place settings went when no tab obviously
     // owned them.
     val gapless by viewModel.gaplessPlayback.collectAsStateWithLifecycle()
+    val continueIntoNextList by viewModel.continueIntoNextList.collectAsStateWithLifecycle()
     val crossfade by viewModel.crossfadeDuration.collectAsStateWithLifecycle()
     val exclusiveUsb by viewModel.usbExclusiveBitPerfectEnabled.collectAsStateWithLifecycle()
     val gaplessNoResample by viewModel.gaplessNoResample.collectAsStateWithLifecycle()
@@ -1665,6 +1671,14 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
             valueRange = 0f..12f,
             steps = 11,
             modifier = Modifier.fillMaxWidth()
+        )
+
+        // What happens after the last song of a list, so next to the blend.
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_continue_into_next_list),
+            subtitle = stringResource(R.string.settings_continue_into_next_list_desc),
+            checked = continueIntoNextList,
+            onCheckedChange = { viewModel.setContinueIntoNextList(it) },
         )
 
         // Issue #131: music under a game without the game pausing it.
@@ -1872,63 +1886,76 @@ private fun AudioTab(viewModel: SettingsViewModel, navController: NavController)
     }
 }
 
-// ReplayGain: the mode, and the pre-amp once a mode is on. Chips, laid out as
-// the DSP block size below is.
+// ReplayGain: a switch, then once it is on, what it does to the song playing
+// and the target loudness. On is Smart (SettingsViewModel.setReplayGainOn);
+// the Track and Album modes are no longer offered, and a listener who chose
+// one sees ReplayGain on.
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun ReplayGainSetting(viewModel: SettingsViewModel) {
     val settings by viewModel.replayGain.collectAsStateWithLifecycle()
-    Text(
-        text = stringResource(R.string.settings_replaygain),
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.settingsAnchor(stringResource(R.string.settings_replaygain)),
+    val now by viewModel.replayGainNow.collectAsStateWithLifecycle()
+    val on = settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF
+    SettingSwitchItem(
+        title = stringResource(R.string.settings_replaygain),
+        subtitle = stringResource(R.string.settings_replaygain_desc),
+        checked = on,
+        onCheckedChange = { viewModel.setReplayGainOn(it) },
     )
-    Text(
-        text = stringResource(R.string.settings_replaygain_desc),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        tf.monochrome.android.audio.replaygain.ReplayGainMode.entries.forEach { mode ->
-            tf.monochrome.android.ui.mixer.GlassChoiceChip(
-                label = stringResource(
-                    when (mode) {
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF -> R.string.state_off
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.TRACK -> R.string.settings_replaygain_track
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.ALBUM -> R.string.settings_replaygain_album
-                        tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART -> R.string.settings_replaygain_smart
-                    },
-                ),
-                selected = mode == settings.mode,
-                accent = MaterialTheme.colorScheme.primary,
-                onClick = { viewModel.setReplayGainMode(mode) },
-            )
+    val reading = now
+    if (on && reading != null) {
+        // A measured song's gain moves as its reading builds: read it off the
+        // stage twice a second, and only while this is on screen.
+        var live by remember { mutableStateOf<Pair<Float, Float>?>(null) }
+        if (!reading.tagged) {
+            LaunchedEffect(reading) {
+                while (true) {
+                    live = viewModel.replayGainLive()
+                    kotlinx.coroutines.delay(500)
+                }
+            }
         }
+        // Numbers and units, the same in every language.
+        fun db(v: Float) = String.format(Locale.US, "%+.1f dB", v)
+        val measured = live?.takeIf { it.second > -100f }
+        Text(
+            text = when {
+                reading.tagged -> stringResource(R.string.settings_replaygain_now, db(reading.gainDb))
+                measured != null -> stringResource(
+                    R.string.settings_replaygain_now_measured,
+                    db(measured.first),
+                    String.format(Locale.US, "%.1f LUFS", measured.second),
+                )
+                else -> stringResource(R.string.settings_replaygain_now_untagged)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
     if (settings.mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF) {
         Text(
-            text = stringResource(R.string.eq_preamp),
+            text = stringResource(R.string.settings_replaygain_target),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.settings_replaygain_target_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         androidx.compose.foundation.layout.FlowRow(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS.forEach { db ->
+            tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS.forEach { lufs ->
                 tf.monochrome.android.ui.mixer.GlassChoiceChip(
                     // Numbers and a unit, the same in every language.
-                    label = if (db > 0f) "+${db.toInt()} dB" else "${db.toInt()} dB",
-                    selected = db == settings.preampDb,
+                    label = "${lufs.toInt()} LUFS",
+                    selected = lufs == settings.targetLufs,
                     accent = MaterialTheme.colorScheme.primary,
-                    onClick = { viewModel.setReplayGainPreamp(db) },
+                    onClick = { viewModel.setReplayGainTarget(lufs) },
                 )
             }
         }
@@ -3333,47 +3360,64 @@ internal fun SettingsGroupHeader(title: String) {
  * it, it needed to be findable at a glance on the way past.
  *
  * The sheen comes from [rememberMotionFloat], so "disable animations" leaves the
- * strip lit but perfectly still rather than driving a gradient forever.
+ * strip lit but perfectly still rather than driving a gradient forever. It runs
+ * only while the header is in view: the whole tab is one lazy item, so the
+ * header stays composed however far down the page is scrolled, and its sweep
+ * kept the window redrawing at the display's rate the whole time About was open.
  */
 @Composable
 private fun LitGroupHeader(title: String, badge: String? = null) {
     val primary = MaterialTheme.colorScheme.primary
-    val sweep = rememberMotionFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        durationMillis = 5200,
-        label = "litHeaderSheen",
-        repeatMode = RepeatMode.Restart,
-        still = 0.5f,
-    )
+    var inView by remember { mutableStateOf(true) }
+    // Off screen the band would travel where nobody can see it. Back in view
+    // the sweep starts again from the left, where the band is still off the
+    // strip, so it slides in rather than jumping.
+    val sweep = if (inView || reduceMotion()) {
+        rememberMotionFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            durationMillis = 5200,
+            label = "litHeaderSheen",
+            repeatMode = RepeatMode.Restart,
+            still = 0.5f,
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            // Clipped by the list's viewport, so this is the part actually on screen.
+            .onGloballyPositioned { inView = it.boundsInWindow().height > 0f }
             .clip(MonoDimens.shapeMd)
-            .drawBehind {
-                drawRect(
-                    Brush.horizontalGradient(
-                        listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
-                    ),
+            .drawWithCache {
+                val wash = Brush.horizontalGradient(
+                    listOf(primary.copy(alpha = 0.18f), primary.copy(alpha = 0.05f)),
                 )
-                // A soft band travelling left to right. Read from the draw scope
-                // rather than recomposed, so the motion never invalidates the
-                // settings list behind it.
-                val head = size.width * (sweep.value * 1.7f - 0.35f)
+                // The band, made once for this size and slid across by the
+                // draw rather than rebuilt for every position.
                 val half = size.width * 0.22f
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            primary.copy(alpha = 0.22f),
-                            Color.Transparent,
-                        ),
-                        startX = head - half,
-                        endX = head + half,
+                val band = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        primary.copy(alpha = 0.22f),
+                        Color.Transparent,
                     ),
+                    startX = -half,
+                    endX = half,
                 )
+                onDrawBehind {
+                    drawRect(wash)
+                    // A soft band travelling left to right. Read from the draw
+                    // scope rather than recomposed, so the motion never
+                    // invalidates the settings list behind it.
+                    val head = size.width * (sweep.value * 1.7f - 0.35f)
+                    translate(left = head) {
+                        drawRect(brush = band, topLeft = Offset(-head, 0f), size = size)
+                    }
+                }
             }
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
@@ -3940,7 +3984,7 @@ private fun WhatsNewPanel(highlight: Boolean) {
 
                     if (kind != null) {
                         Text(
-                            text = kind.heading,
+                            text = stringResource(kind.headingRes),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary,
@@ -3954,8 +3998,9 @@ private fun WhatsNewPanel(highlight: Boolean) {
                     var section: String? = null
                     entries.forEach { entry ->
                         if (entry.section != null && entry.section != section) {
+                            val sectionRes = WhatsNew.sectionRes(entry.section)
                             Text(
-                                text = entry.section,
+                                text = if (sectionRes != 0) stringResource(sectionRes) else entry.section,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
@@ -3963,13 +4008,15 @@ private fun WhatsNewPanel(highlight: Boolean) {
                         }
                         section = entry.section
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            // In the listener's language where the release was
+                            // translated; the English as written before that.
                             Text(
-                                text = entry.title,
+                                text = if (entry.titleRes != 0) stringResource(entry.titleRes) else entry.title,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = entry.body,
+                                text = if (entry.bodyRes != 0) stringResource(entry.bodyRes) else entry.body,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

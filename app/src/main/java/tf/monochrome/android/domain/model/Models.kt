@@ -326,8 +326,10 @@ enum class GenreConfidence {
 // algorithmic queue-maker that seeds a station from a track, and the two would
 // be read as the same thing by anyone grepping for it.
 // SUBSONIC is the listener's own server (Navidrome, Gonic, Airsonic…), added
-// under Settings › Connections. Appended last: the enum is serialized by name.
-enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, DEEZER, LIVE_RADIO, SUBSONIC }
+// under Settings › Connections. YOUTUBE and SOUNDCLOUD come through the
+// built-in trypt-hifi-scxyt server (PlaybackSource.Scxyt). Appended last: the
+// enum is serialized by name.
+enum class SourceType { API, COLLECTION, LOCAL, QOBUZ, APPLE, DEEZER, LIVE_RADIO, SUBSONIC, YOUTUBE, SOUNDCLOUD }
 
 @Serializable
 enum class AudioCodec(val displayName: String) {
@@ -464,7 +466,37 @@ sealed class PlaybackSource {
         val suffix: String? = null,
         val bitRateKbps: Int? = null,
     ) : PlaybackSource()
+
+    /**
+     * A YouTube video or SoundCloud track, fetched by the built-in
+     * trypt-hifi-scxyt server (data/scxyt) and played from it.
+     *
+     * Only the server's id (`yt:<video id>` or `sc:<track id>`). The stream
+     * link is asked for when it is played (StreamResolver): the server has to
+     * fetch the song first, and the link it hands back is signed for six
+     * hours, too short to keep in a saved queue.
+     */
+    @Serializable
+    @SerialName("Scxyt")
+    data class Scxyt(val mediaId: String) : PlaybackSource()
 }
+
+/**
+ * Where a YouTube or SoundCloud song's legacy id lives: from 2^52, above every
+ * catalogue's ids (TIDAL, Qobuz, Deezer and Apple stay far below 2^32) and
+ * still under 2^53, so the website's JavaScript reads it exactly. A liked or
+ * playlisted one syncs by this id, and 1.9.5 and older play a synced row's id
+ * from TIDAL whatever its `source` says: in this range TIDAL has nothing, so
+ * such a build skips the song instead of playing another one under the same
+ * number, as the plain hash did.
+ */
+const val SCXYT_ID_BASE: Long = 1L shl 52
+
+/** A YouTube or SoundCloud song's legacy id, from its unified [id]. */
+fun scxytLegacyId(id: String): Long = SCXYT_ID_BASE + (id.hashCode().toLong() and 0xFFFF_FFFFL)
+
+/** [id] is in the YouTube and SoundCloud range: never one to send to TIDAL. */
+fun isScxytLegacyId(id: Long): Boolean = id >= SCXYT_ID_BASE && id < SCXYT_ID_BASE + (1L shl 32)
 
 @Serializable
 data class CollectionDirectLink(
@@ -527,6 +559,12 @@ data class UnifiedTrack(
     // Artwork
     val artworkUri: String? = null,
 
+    // The song's own page on its service, where its id does not give it: a
+    // SoundCloud song's address there, as the server found it (its Track.url).
+    // Share link puts it in its link for the website to link the song to.
+    // Null for everything else.
+    val pageUrl: String? = null,
+
     // Audio quality
     val codec: AudioCodec? = null,
     val sampleRate: Int? = null,
@@ -547,6 +585,9 @@ data class UnifiedTrack(
     val replayGainAlbum: Float? = null,
     val r128TrackGain: Int? = null,
     val r128AlbumGain: Int? = null,
+    // ReplayGain's peaks, a fraction of full scale (1.0 = 0 dBFS).
+    val replayGainTrackPeak: Float? = null,
+    val replayGainAlbumPeak: Float? = null,
 
     // Lyrics
     val lyrics: TrackLyrics? = null,
@@ -633,6 +674,8 @@ data class UnifiedTrack(
             // Same reasoning as Apple: the downloader and the legacy resolver
             // key on this id, and must see the real Deezer id to route it.
             is PlaybackSource.DeezerPreview -> s.deezerId
+            // Out of every catalogue's range; see SCXYT_ID_BASE.
+            is PlaybackSource.Scxyt -> scxytLegacyId(id)
             else -> id.hashCode().toLong()
         }
 

@@ -1,5 +1,6 @@
 package tf.monochrome.android.data.api
 
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -13,10 +14,23 @@ class ApiServerTest {
 
     @Test
     fun `only a server that serves nothing but Trypt Mania is listed under it`() {
-        assertTrue(ApiServer("https://a", setOf(ApiService.STEMS, ApiService.LYRICS)).isTryptMania)
+        assertTrue(ApiServer("https://a", setOf(ApiService.STEMS, ApiService.MULTIPLAYER)).isTryptMania)
         assertTrue(ApiServer("https://b", setOf(ApiService.MULTIPLAYER)).isTryptMania)
         assertTrue("a catalog makes it a streaming one", !ApiServer("https://c", setOf(ApiService.TIDAL, ApiService.STEMS)).isTryptMania)
         assertTrue("one not checked yet is streaming", !ApiServer("https://d").isTryptMania)
+    }
+
+    @Test
+    fun `a saved server naming a service this build no longer has still loads, without it`() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        // Saved by a build that timed lyrics on the chart server (LYRICS, removed 2026-10-29).
+        val saved = """[{"url":"https://parser.example.app/s","services":["STEMS","LYRICS"],"checkedAt":5,"stemDevice":"cpu"},
+                       {"url":"https://tidal.example.com","services":["TIDAL"]}]"""
+        val list = json.decodeFromString<List<ApiServer>>(saved)
+        assertEquals(setOf(ApiService.STEMS), list[0].services)
+        assertEquals(setOf(ApiService.TIDAL), list[1].services)
+        // Written back, it names only what this build knows.
+        assertTrue("LYRICS" !in json.encodeToString(list))
     }
 
     @Test

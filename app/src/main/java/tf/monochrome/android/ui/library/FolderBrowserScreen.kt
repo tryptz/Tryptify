@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.player.ListRef
 import tf.monochrome.android.ui.components.materialSurface
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.compose.foundation.background
@@ -95,7 +96,6 @@ fun FolderBrowserScreen(
     navController: NavController,
     viewModel: LocalLibraryViewModel = hiltViewModel(),
     onPlayTrack: (UnifiedTrack, List<UnifiedTrack>) -> Unit,
-    onPlayAll: (List<UnifiedTrack>) -> Unit,
     onAddToQueue: (UnifiedTrack) -> Unit,
     playerViewModel: PlayerViewModel
 ) {
@@ -118,10 +118,14 @@ fun FolderBrowserScreen(
     // folder sort. While a search is open they take what it shows instead:
     // the buttons play what is on screen.
     fun play(path: String, shuffle: Boolean) {
+        // What plays decides where it goes on to: after a search's songs,
+        // the next folder; after a whole branch, the folder after the branch.
+        val searched = path == folderPath && listQuery.isNotBlank()
+        val from = ListRef.Folder(path, withSubfolders = !searched)
         val start: (List<UnifiedTrack>) -> Unit = { list ->
-            if (shuffle) playerViewModel.shufflePlayUnified(list) else onPlayAll(list)
+            if (shuffle) playerViewModel.shufflePlayUnified(list, from) else playerViewModel.playAllUnified(list, from)
         }
-        if (path == folderPath && listQuery.isNotBlank()) {
+        if (searched) {
             if (visibleTracks.isNotEmpty()) start(visibleTracks)
         } else {
             viewModel.loadFolderForPlay(path, start)

@@ -191,6 +191,15 @@ fun GlyphPacksScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
+                if (packs.folderShared) {
+                    Text(
+                        "Your imported packs are linked from this same folder. Change folder to keep your " +
+                            "charts apart from them.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = scheme.error,
+                        modifier = Modifier.padding(top = MonoDimens.spacingXs),
+                    )
+                }
                 Text(
                     "${packs.ownCharts} chart${if (packs.ownCharts == 1) "" else "s"} made so far.",
                     style = MaterialTheme.typography.labelMedium,

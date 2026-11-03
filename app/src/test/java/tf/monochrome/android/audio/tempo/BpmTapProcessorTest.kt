@@ -101,16 +101,18 @@ class BpmTapProcessorTest {
     }
 
     @Test
-    fun aTapMeasuresAgainFromWhatIsPlaying() {
+    fun aTapMeasuresAgainFromWhatPlaysAfterIt() {
         tap.newTrack()
         play(128f, 20f)
         play(140f, 12f)
 
         tap.measure()
         assertNull(tap.bpm.value)
-        // The last ten seconds are already in hand, so it settles within the
-        // five readings of one measurement, then holds.
-        val again = play(140f, 6f)
+        // Nothing is fed once a tempo is known, so a tap starts from fresh
+        // audio: the six seconds of the first reading, then four more, about
+        // ten in all. The 128 heard before it plays no part. Then it holds.
+        assertEquals(listOf<Float?>(null), play(140f, 5f))
+        val again = play(140f, 7f)
         assertEquals(140f, again.last()!!, 1.5f)
         assertEquals(listOf(again.last()), play(140f, 10f))
     }

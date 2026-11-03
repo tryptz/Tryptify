@@ -62,6 +62,8 @@ data class GlyphUiState(
     val selectedDifficulty: StepManiaDifficulty? = null,
     val generation: GlyphGenerationState? = null,
     val packs: GlyphPacksUi = GlyphPacksUi(),
+    /** Charting on Tryptify's server by the minute: the listener's minutes and packs. */
+    val charting: GlyphChartingUi = GlyphChartingUi(),
     /** Fast (a GPU server) or Slow (a CPU server); kept between sessions. */
     val chartMode: tf.monochrome.android.audio.stepmania.ChartMode = tf.monochrome.android.audio.stepmania.ChartMode.FAST,
     /** The separation servers there are, for what each mode can do. */
@@ -81,6 +83,12 @@ data class GlyphUiState(
      * preview starts and goes as the preview stops; null between them.
      */
     val backdrop: GlyphBackdrop? = null,
+    /**
+     * A song preview has been started and not stopped: while it is, the song
+     * card's beat light runs its frame clock; with none it is still and runs
+     * nothing.
+     */
+    val previewPlaying: Boolean = false,
     /** Best StepMania grade per difficulty of the selected song, for the menu. */
     val bestGrades: Map<StepManiaDifficulty, GlyphAttempt> = emptyMap(),
     val gameplay: GlyphGameplayUi = GlyphGameplayUi(),
@@ -92,6 +100,10 @@ data class GlyphUiState(
     val keys: GlyphKeyBindings = GlyphKeyBindings.DEFAULT,
     /** How late the sound reaches the player, in ms; every judgement and the field allow for it. */
     val audioOffsetMs: Int = 0,
+    /** The app's audio settings the Settings' Audio tab switches: the game plays through the same engine. */
+    val audio: GlyphAudioUi = GlyphAudioUi(),
+    /** Imported StepMania noteskins, themes and announcers, and the ones in use (the Themes screen). */
+    val themes: GlyphThemesUi = GlyphThemesUi(),
     /** The output that offset belongs to, by name, or null for one with no slot. */
     val syncOutput: String? = null,
     /** Settings opened on its Sync tab from Settings › Audio, to measure the output. */
@@ -121,10 +133,58 @@ data class GlyphBackdrop(val trackId: String, val imageUri: String?)
  * Where the mode is. [MENU] is the front door; [HOME] is the song list, which
  * Play and the map editor both pick a song from.
  */
-enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
+enum class GlyphScreen { MENU, HOME, OPTIONS, LEADERBOARD, SETTINGS, PACKS, THEMES, CHARTING, EDITOR, GAMEPLAY, TRAINING, RESULTS, MULTIPLAYER }
 
 /** Whether the song list is choosing a song to play, a chart to edit, or a chart for the room. */
 enum class GlyphSongListMode { PLAY, EDIT, ROOM }
+
+/** What the Themes screen shows: what was imported, what is in use, and an import's progress or outcome. */
+data class GlyphThemesUi(
+    val styles: tf.monochrome.android.glyph.style.GlyphStyleLibrary.Styles = tf.monochrome.android.glyph.style.GlyphStyleLibrary.Styles(),
+    /** The imported theme in use, by id; null is Tryptify's own. */
+    val themeId: String? = null,
+    /** The imported announcer who speaks, by id; null is none. */
+    val announcerId: String? = null,
+    /** The imported character who dances behind the field, by id; null is none. */
+    val characterId: String? = null,
+    /** That character's folder, for the playfield's dancer; null with none. */
+    val characterDir: java.io.File? = null,
+    /** How big the judgement, the combo and the dancer are drawn. */
+    val sizes: GlyphStyleSizes = GlyphStyleSizes(),
+    val importing: Boolean = false,
+    val message: String? = null,
+)
+
+/** The themes' parts' sizes, each a scale of its own size (Themes › Sizes). */
+data class GlyphStyleSizes(
+    val judgement: Float = 1f,
+    val combo: Float = 1f,
+    val dancer: Float = 1f,
+) {
+    fun clamped(): GlyphStyleSizes = GlyphStyleSizes(
+        judgement = judgement.inRange(),
+        combo = combo.inRange(),
+        dancer = dancer.inRange(),
+    )
+
+    private fun Float.inRange() = if (isFinite()) coerceIn(MIN, MAX) else 1f
+
+    companion object {
+        const val MIN = 0.5f
+        const val MAX = 2f
+    }
+}
+
+/**
+ * The three audio settings the game's Settings switch, as the app has them:
+ * AutoEQ on (and not handed to the system's), the Oxford Inflator in, and
+ * ReplayGain on in any mode.
+ */
+data class GlyphAudioUi(
+    val autoEq: Boolean = false,
+    val inflator: Boolean = false,
+    val replayGain: Boolean = false,
+)
 
 /**
  * Multiplayer: the rooms server's session as the rooms screen and the game
@@ -345,6 +405,8 @@ data class GlyphGameplayUi(
     val measure: Int = 0,
     val sectionLabel: String = "",
     val score: GlyphScoreSnapshot = GlyphScoreSnapshot(),
+    /** Your best run's score and combo as it stood at this point of the song; null with no race. */
+    val race: GlyphRaceUi? = null,
     val lastJudgement: GlyphJudgement? = null,
     val lastJudgementAtMs: Long = 0L,
     val heldLanes: Set<GlyphLane> = emptySet(),
@@ -367,6 +429,10 @@ data class GlyphGameplayUi(
     val failedAtMs: Long = 0L,
     /** That fail stopped the run (Immediate): it holds under FAILED, then shows the results. */
     val failStops: Boolean = false,
+    /** When the last note was judged and the song began playing out, wall-clock ms; 0 before. */
+    val outroStartedAtMs: Long = 0L,
+    /** When the stripes began closing over the field on the way to the results, wall-clock ms; 0 before. */
+    val endingAtMs: Long = 0L,
 ) {
     val progress: Float
         get() = if (durationSeconds <= 0f) 0f else (positionSeconds / durationSeconds).coerceIn(0f, 1f)
@@ -415,6 +481,20 @@ data class GlyphModifiers(
     val graphics: GlyphGraphics = GlyphGraphics(),
     /** The playfield's artwork. Looks only, so not in [altersScoring]. */
     val skin: tf.monochrome.android.glyph.asset.GlyphSkin = tf.monochrome.android.glyph.asset.GlyphSkin.DEFAULT,
+    /**
+     * StepMania's AutoPlay: the game plays the chart itself, through
+     * [tf.monochrome.android.glyph.engine.GlyphAutoplay], and the player's
+     * touches are ignored. Its runs are never kept (no score, history, ghost
+     * or leaderboard), it is off in a multiplayer room, and it is not saved
+     * between sessions, so it never stays on unnoticed.
+     */
+    val autoplay: Boolean = false,
+    /**
+     * Race your best: this chart's best full run plays beside you as a
+     * score, on the multiplayer board ([tf.monochrome.android.glyph.engine.GlyphGhostRace]).
+     * Kept between sessions. Not in rooms, Training Ground or auto play.
+     */
+    val raceBest: Boolean = true,
 ) {
     val mirror: Boolean get() = turn == GlyphTurn.MIRROR
     val shuffle: Boolean get() = turn == GlyphTurn.SHUFFLE
@@ -423,6 +503,9 @@ data class GlyphModifiers(
     val altersScoring: Boolean
         get() = speed != 1f || timingWindowScale != 1f
 }
+
+/** The best run raced against, where it stands now. */
+data class GlyphRaceUi(val score: Int = 0, val combo: Int = 0)
 
 /** Training Ground's own state. */
 data class GlyphTrainingUi(
@@ -458,6 +541,8 @@ data class GlyphResultsUi(
     /** Accuracy per song section, in order, for the graph. */
     val sections: List<GlyphSectionResult> = emptyList(),
     val selectedSection: Int? = null,
+    /** Played by auto play: shown, never kept. */
+    val auto: Boolean = false,
 )
 
 /**
@@ -485,6 +570,20 @@ data class GlyphSectionResult(
  * StepMania packs: the ones imported, the one importing, and the player's own
  * pack — the charts made in the app, saved as a pack in a folder they chose.
  */
+data class GlyphChartingUi(
+    val account: tf.monochrome.android.audio.stepmania.ChartingAccount = tf.monochrome.android.audio.stepmania.ChartingAccount(),
+    /** A line to show once, as a string resource; null when there is none. */
+    @androidx.annotation.StringRes val notice: Int? = null,
+    /** A Creem checkout the screen opens in the browser, once. */
+    val checkoutUrl: String? = null,
+    /** The chart line as it stands: the songs being charted now, the ones waiting, and the batch's count. */
+    val queue: tf.monochrome.android.audio.stepmania.ChartQueueState = tf.monochrome.android.audio.stepmania.ChartQueueState(),
+)
+
+/**
+ * The Packs screen: the packs imported, an import under way, and the own
+ * pack — the charts made in the app, saved as a pack in a folder they chose.
+ */
 data class GlyphPacksUi(
     val imported: List<tf.monochrome.android.glyph.pack.GlyphPackLibrary.Pack> = emptyList(),
     val importing: GlyphPackImportUi? = null,
@@ -496,6 +595,12 @@ data class GlyphPacksUi(
     val saving: String? = null,
     /** How the last import or save ended, until dismissed. */
     val message: String? = null,
+    /**
+     * The own pack's folder is one an imported pack is linked from: they
+     * should not share one (stopping or moving the own pack used to take the
+     * imported packs' music and pictures with it).
+     */
+    val folderShared: Boolean = false,
 )
 
 /** The pack importing now, and how many wait behind it. */

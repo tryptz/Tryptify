@@ -276,7 +276,12 @@ class LocalMediaRepository @Inject constructor(
                 durationSeconds = durationSeconds,
                 trackNumber = trackNumber,
                 discNumber = discNumber,
-                artistName = albumArtist ?: artist ?: "Unknown Artist",
+                // The song's own artist, as the player, Last.fm, ListenBrainz
+                // and Discord should name it: on a various-artists album or a
+                // label's compilation the album artist is the label, not who
+                // made this song. The albums and artists lists still group
+                // by album artist (MediaScanner.regroup).
+                artistName = artist ?: albumArtist ?: "Unknown Artist",
                 artistNames = listOfNotNull(artist, albumArtist).distinct(),
                 albumArtistName = albumArtist,
                 // Local artist id (local_artists table) so song rows can link to
@@ -307,6 +312,8 @@ class LocalMediaRepository @Inject constructor(
                 replayGainAlbum = rgAlbumGain,
                 r128TrackGain = r128TrackGain,
                 r128AlbumGain = r128AlbumGain,
+                replayGainTrackPeak = rgTrackPeak,
+                replayGainAlbumPeak = rgAlbumPeak,
                 lyrics = lyrics?.let { TrackLyrics(basic = it) },
                 isrc = isrc,
                 musicBrainzTrackId = musicbrainzTrack,

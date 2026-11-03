@@ -1,17 +1,15 @@
 package tf.monochrome.android.data.local.coil
 
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
-import androidx.core.graphics.scale
 import coil3.ImageLoader
-import coil3.asImage
 import coil3.decode.DataSource
+import coil3.decode.ImageSource
 import coil3.fetch.FetchResult
 import coil3.fetch.Fetcher
-import coil3.fetch.ImageFetchResult
+import coil3.fetch.SourceFetchResult
 import coil3.request.Options
-import coil3.toAndroidUri
+import okio.Buffer
 import java.io.File
 
 /**
@@ -49,18 +47,14 @@ class AudioFileCoverFetcher(
             retriever.setDataSource(filePath)
             val bytes = retriever.embeddedPicture
                 ?: return null.also { NoEmbeddedArt.remember(filePath, stamp) }
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-            // Downsample to the size Coil asked for so we don't keep a 4K cover
-            // in memory for a 200dp player thumbnail.
-            val sized = options.size.let { sz ->
-                val w = sz.width.pxOrNull() ?: bitmap.width
-                val h = sz.height.pxOrNull() ?: bitmap.height
-                if (w >= bitmap.width && h >= bitmap.height) bitmap
-                else bitmap.scale(w.coerceAtMost(bitmap.width), h.coerceAtMost(bitmap.height))
-            }
-            ImageFetchResult(
-                image = sized.asImage(),
-                isSampled = sized !== bitmap,
+            // The picture's bytes, not a bitmap: Coil's decoder reads the size
+            // from the header and decodes straight to the size asked for, its
+            // aspect kept, as a hardware bitmap where it can. Decoded here at
+            // full size first, a 3000-pixel cover was 36 MB on the heap for a
+            // 200dp thumbnail, then squeezed to the requested box.
+            SourceFetchResult(
+                source = ImageSource(Buffer().write(bytes), options.fileSystem),
+                mimeType = null,
                 dataSource = DataSource.DISK,
             )
         } catch (_: Throwable) {
@@ -128,10 +122,5 @@ class AudioFileCoverFetcher(
             "mp3", "flac", "m4a", "mp4", "aac", "ogg", "oga", "opus",
             "wav", "wma", "aif", "aiff", "ape", "dsf", "dff",
         )
-
-        fun coil3.size.Dimension.pxOrNull(): Int? = when (this) {
-            is coil3.size.Dimension.Pixels -> px
-            else -> null
-        }
     }
 }

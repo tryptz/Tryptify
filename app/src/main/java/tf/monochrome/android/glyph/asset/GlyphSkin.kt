@@ -15,17 +15,53 @@ import kotlinx.serialization.Serializable
  * vector pack the mode shipped with.
  *
  * Whatever a skin does not provide — lifts, fakes, the UI icons — comes from
- * the vector pack, so every skin is complete.
+ * the vector pack, so every skin is complete. An imported StepMania noteskin
+ * is baked at import into the same layout as the retro one (one PNG per lane
+ * and part, and a manifest), so the playfield draws it exactly as it draws
+ * the built-in ones (see `glyph/style/StepManiaStyleBaker`).
  */
-enum class GlyphSkin(val id: String, val label: String, val root: String?, val isGlass: Boolean) {
-    RETRO_GLASS("retro_glass", "Retro glass", RETRO_ROOT, isGlass = true),
-    RETRO("retro", "Retro", RETRO_ROOT, isGlass = false),
-    CLASSIC("classic", "Classic", null, isGlass = false),
-    ;
+class GlyphSkin(
+    val id: String,
+    val label: String,
+    /** The skin's folder: an asset path for the built-in ones, a folder on the phone for an imported one. */
+    val root: String?,
+    val isGlass: Boolean,
+    /** True when [root] is a folder on the phone (an imported StepMania noteskin), not one in the app. */
+    val isFile: Boolean = false,
+) {
+    override fun equals(other: Any?): Boolean = other is GlyphSkin && other.id == id && other.root == root
+    override fun hashCode(): Int = id.hashCode() * 31 + (root?.hashCode() ?: 0)
+    override fun toString(): String = id
 
     companion object {
+        val RETRO_GLASS = GlyphSkin("retro_glass", "Retro glass", RETRO_ROOT, isGlass = true)
+        val RETRO = GlyphSkin("retro", "Retro", RETRO_ROOT, isGlass = false)
+        val CLASSIC = GlyphSkin("classic", "Classic", null, isGlass = false)
+
+        /** The skins the app ships, in the order the pickers list them. */
+        val entries: List<GlyphSkin> = listOf(RETRO_GLASS, RETRO, CLASSIC)
+
         val DEFAULT = RETRO_GLASS
-        fun fromId(id: String?): GlyphSkin = entries.firstOrNull { it.id == id } ?: DEFAULT
+
+        /**
+         * The StepMania noteskins imported on this phone (Trypt Mania's
+         * Themes), kept up to date by `GlyphStyleLibrary`, which reads them
+         * before anything asks for a skin by its id.
+         */
+        @Volatile
+        var imported: List<GlyphSkin> = emptyList()
+
+        /** Every skin to pick from: the app's, then the imported ones. */
+        fun all(): List<GlyphSkin> = entries + imported
+
+        /** An imported skin's id: its folder's name, so it survives a restart and a re-import. */
+        fun importedId(folder: String): String = "$IMPORTED_PREFIX$folder"
+
+        fun isImportedId(id: String): Boolean = id.startsWith(IMPORTED_PREFIX)
+
+        fun fromId(id: String?): GlyphSkin = all().firstOrNull { it.id == id } ?: DEFAULT
+
+        private const val IMPORTED_PREFIX = "imported:"
     }
 }
 

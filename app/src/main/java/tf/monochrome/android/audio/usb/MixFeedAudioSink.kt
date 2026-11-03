@@ -163,12 +163,22 @@ class MixFeedAudioSink(
         if (fmt != AudioProcessor.AudioFormat.NOT_SET) chain.refreshActive()
     }
 
+    /**
+     * Resets the chain too, as DefaultAudioSink resets its own processors.
+     * Nothing else ever reached these: the transposer is a fresh
+     * StretchAudioProcessor per tail, and only its reset frees its native
+     * engine, a few megabytes a blend.
+     */
     override fun reset() {
         flush()
+        chain.reset()
         mix.close()
     }
 
     override fun release() {
+        // Reset again in case the player was released without a reset first;
+        // the processors take a second one as a no-op.
+        chain.reset()
         mix.close()
         super.release()
     }

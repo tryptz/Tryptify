@@ -308,7 +308,7 @@ class ProjectMOverlayView(
                     return
                 }
                 pass.ensureCreated()
-                repository.onSurfaceAttached(width, height)
+                repository.onSurfaceAttached(this@ProjectMOverlayView, width, height)
                 attached = true
 
                 while (true) {
@@ -340,7 +340,7 @@ class ProjectMOverlayView(
                 // Exactly once per attach, whether the loop exited cleanly,
                 // threw, or was torn down — the repository's surface count
                 // must never leak upward through this view.
-                if (attached) runCatching { repository.onSurfaceDetached() }
+                if (attached) runCatching { repository.onSurfaceDetached(this@ProjectMOverlayView) }
                 runCatching { pass.release() }
                 releaseEgl()
                 threadAlive.set(false)

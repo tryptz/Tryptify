@@ -5,9 +5,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import tf.monochrome.android.data.api.HifiPayload.Kind
+import tf.monochrome.android.data.api.model.AlbumResponse
 import tf.monochrome.android.data.api.model.ArtistResponse
 import tf.monochrome.android.data.api.model.LyricsResponse
 import tf.monochrome.android.data.api.model.PlaylistResponse
+import tf.monochrome.android.data.api.model.TrackInfoResponse
 
 class HifiPayloadTest {
 
@@ -115,6 +117,66 @@ class HifiPayloadTest {
     fun `a data-wrapped answer is unwrapped as before`() {
         val body = """{"version":"2.9","data":{"id":5,"title":"Help!","items":[]}}"""
         assertEquals("""{"id":5,"title":"Help!","items":[]}""", HifiPayload.entity(json, body, "album"))
+    }
+
+    // The two-pass reads the client used before: the payload printed back to
+    // text, then decoded. What the one-pass reads must agree with exactly.
+    private fun oldUnwrap(body: String): String = runCatching {
+        val element = json.parseToJsonElement(body)
+        if (element is kotlinx.serialization.json.JsonObject && element.containsKey("data")) element["data"].toString() else body
+    }.getOrDefault(body)
+
+    @Test
+    fun `entities read off the tree are the ones read through text`() {
+        val artist = """{"version":"2.9","artist":{"id":3346,"name":"The Beatles","picture":"a1b2","artistTypes":["ARTIST"]},"cover":{"id":3346}}"""
+        assertEquals(
+            json.decodeFromString<ArtistResponse>(HifiPayload.entity(json, artist, "artist")),
+            HifiPayload.decodeEntity(json, ArtistResponse.serializer(), artist, "artist"),
+        )
+        val playlist = """{"version":"2.9","playlist":{"uuid":"p-1","title":"Essentials","numberOfTracks":2,"creator":{"id":0}},"items":[{"item":{"id":1,"title":"A","audioModes":["DOLBY_ATMOS"]},"type":"track"},{"item":{"id":2,"title":"B","duration":"125"},"type":"track"}]}"""
+        assertEquals(
+            json.decodeFromString<PlaylistResponse>(HifiPayload.entity(json, playlist, "playlist")),
+            HifiPayload.decodeEntity(json, PlaylistResponse.serializer(), playlist, "playlist"),
+        )
+        // Already the entity, and data-wrapped: both of the other paths through it.
+        val flat = """{"lyrics":"Yesterday","subtitles":"[00:01.00]Yesterday"}"""
+        assertEquals(
+            json.decodeFromString<LyricsResponse>(HifiPayload.entity(json, flat, "lyrics")),
+            HifiPayload.decodeEntity(json, LyricsResponse.serializer(), flat, "lyrics"),
+        )
+        val wrapped = """{"version":"2.9","data":{"trackId":1,"lyrics":"Yesterday","isRightToLeft":null}}"""
+        assertEquals(
+            json.decodeFromString<LyricsResponse>(HifiPayload.entity(json, wrapped, "lyrics")),
+            HifiPayload.decodeEntity(json, LyricsResponse.serializer(), wrapped, "lyrics"),
+        )
+    }
+
+    @Test
+    fun `data read off the tree is the data read through text`() {
+        val album = """{"version":"2.9","data":{"id":5,"title":"Help!","numberOfTracks":2,"explicit":null,"audioModes":["STEREO"],"tracks":{"totalNumberOfItems":2,"items":[{"id":1,"title":"Help!","trackNumber":1},{"id":2,"title":"The Night Before","trackNumber":"2"}]}}}"""
+        assertEquals(
+            json.decodeFromString<AlbumResponse>(oldUnwrap(album)),
+            HifiPayload.decodeData(json, AlbumResponse.serializer(), album),
+        )
+        // No {data}: the answer itself.
+        val info = """{"id":7,"title":"Yesterday","duration":125,"isrc":"GBAYE0601477","artist":{"id":3346,"name":"The Beatles"}}"""
+        assertEquals(
+            json.decodeFromString<TrackInfoResponse>(oldUnwrap(info)),
+            HifiPayload.decodeData(json, TrackInfoResponse.serializer(), info),
+        )
+    }
+
+    @Test
+    fun `an answer that does not decode fails as it always did`() {
+        // Not JSON at all, and JSON of the wrong shape: the same exception and
+        // message as decoding the text, which screens may show.
+        for (body in listOf("<html></html>", """{"version":"2.9","data":null}""", """{"data":[1,2]}""")) {
+            val before = runCatching { json.decodeFromString<AlbumResponse>(oldUnwrap(body)) }.exceptionOrNull()
+            val after = runCatching { HifiPayload.decodeData(json, AlbumResponse.serializer(), body) }.exceptionOrNull()
+            assertTrue("$body decoded", before != null && after != null)
+            assertEquals(before!!::class, after!!::class)
+            assertEquals(before.message, after.message)
+        }
     }
 
     @Test

@@ -103,10 +103,19 @@ fun GlyphRoute(
                 if (state.gameplay.isPlaying) viewModel.onEvent(GlyphEvent.TogglePause)
             }
             if (event == Lifecycle.Event.ON_RESUME) viewModel.onForeground()
+            // Out of sight, not merely out of focus (a split screen still
+            // shows the rooms list): only then does the rooms socket close.
+            if (event == Lifecycle.Event.ON_STOP) viewModel.onHidden()
+            if (event == Lifecycle.Event.ON_START) viewModel.onShown()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    // The note art, some twenty megabytes of it, is the mode's: kept from run
+    // to run while the mode is up, and let go when it is left rather than held
+    // until the next visit. Coming back warms it again.
+    DisposableEffect(assets) { onDispose { assets.releaseImages() } }
 
     // Back in a run pauses it, and only Back from the pause leaves: the pause
     // panel is where "Quit to songs" lives, so Back walks the same two steps.
@@ -126,6 +135,8 @@ fun GlyphRoute(
             GlyphScreen.HOME -> viewModel.onEvent(GlyphEvent.BackToMenu)
             GlyphScreen.SETTINGS -> viewModel.onEvent(GlyphEvent.CloseSettings)
             GlyphScreen.PACKS -> viewModel.onEvent(GlyphEvent.ClosePacks)
+            GlyphScreen.THEMES -> viewModel.onEvent(GlyphEvent.CloseThemes)
+            GlyphScreen.CHARTING -> viewModel.onEvent(GlyphEvent.CloseCharting)
             GlyphScreen.EDITOR -> viewModel.onEvent(GlyphEvent.CloseEditor)
             // The rooms screen's own handler leaves a room first; this is
             // what is left once it has, or when there was none.
@@ -225,6 +236,19 @@ fun GlyphRoute(
                 modifier = Modifier.fillMaxSize(),
             )
 
+            GlyphScreen.THEMES -> GlyphThemesScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            GlyphScreen.CHARTING -> GlyphChartingScreen(
+                state = state,
+                onEvent = viewModel::onEvent,
+                onSignIn = onSignIn,
+                modifier = Modifier.fillMaxSize(),
+            )
+
             GlyphScreen.MULTIPLAYER -> GlyphMultiplayerScreen(
                 state = state,
                 onEvent = viewModel::onEvent,
@@ -257,6 +281,7 @@ fun GlyphRoute(
                 explosionProvider = explosionProvider,
                 comboBurstProvider = comboBurstProvider,
                 comboProvider = comboProvider,
+                sharedDance = viewModel::sharedDance,
                 modifier = Modifier.fillMaxSize(),
             )
 

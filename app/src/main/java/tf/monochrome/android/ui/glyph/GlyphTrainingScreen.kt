@@ -90,8 +90,7 @@ fun GlyphTrainingScreen(
     onEvent: (GlyphEvent) -> Unit,
     modifier: Modifier = Modifier,
     ghost: GlyphGhost? = null,
-    explosionProvider: () -> Map<tf.monochrome.android.glyph.asset.GlyphLane, LaneFlash> =
-        { emptyMap() },
+    explosionProvider: () -> LaneFlashes = { NO_FLASHES },
     comboBurstProvider: () -> Long = { 0L },
     comboProvider: () -> Int = { 0 },
 ) {
@@ -183,6 +182,8 @@ fun GlyphTrainingScreen(
                 // Held sideways, a centred column of the setting's width, its
                 // receptors nearer the bottom: thumbs come from the sides.
                 receptorInset = if (landscape && !gameplay.modifiers.reverse) LANDSCAPE_RECEPTOR_INSET else null,
+                // Paused, the field stops redrawing once its flashes have faded.
+                running = gameplay.isPlaying,
                 modifier = Modifier
                     .fillMaxSize()
                     .glyphFieldColumn(fieldFraction),
@@ -611,7 +612,7 @@ fun GlyphSkinControl(
         ControlHeader(label = "Notes", value = skin.label)
         Spacer(Modifier.height(MonoDimens.spacingSm))
         GlyphChipRow(
-            options = GlyphSkin.entries.toList(),
+            options = GlyphSkin.all(),
             selected = skin,
             label = { it.label },
             onSelect = onSelect,
@@ -623,6 +624,7 @@ fun GlyphSkinControl(
                     "StepMania's retro arrows in the app's glass, from your UI panel glass settings."
                 GlyphSkin.RETRO -> "StepMania's retro arrows, as StepMania draws them."
                 GlyphSkin.CLASSIC -> "Trypt Mania's own vector arrows."
+                else -> "A StepMania noteskin you imported, under Themes."
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

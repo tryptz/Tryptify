@@ -293,6 +293,9 @@ class PartyController @Inject constructor(
                     { cont.resume(runCatching { future.get() }.getOrNull()) { _, _, _ -> } },
                     MoreExecutors.directExecutor(),
                 )
+                // Timed out: let it go when it does connect, or it holds the
+                // service up for good (as ConnectController does).
+                cont.invokeOnCancellation { MediaController.releaseFuture(future) }
             }
         }
         mc?.addListener(object : Player.Listener {

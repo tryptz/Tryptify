@@ -161,6 +161,30 @@ class StepManiaScoringTest {
     }
 
     @Test
+    fun thePercentReadsAsTheFormatStringDidInEveryLanguageOfTheApp() {
+        // Made by hand now, not by String.format: held to the old format's
+        // text, in each of the app's languages as the phone's own, and over
+        // every hundredth from below zero to past full, with float noise.
+        val before = java.util.Locale.getDefault()
+        try {
+            for (tag in listOf("en", "de", "es", "fr", "it", "ja", "tr", "zh-CN")) {
+                val locale = java.util.Locale.forLanguageTag(tag)
+                java.util.Locale.setDefault(locale)
+                for (step in -150..10_150) {
+                    for (nudge in listOf(-0.000004f, 0f, 0.000004f)) {
+                        val percent = step / 10_000f + nudge
+                        val hundredths = kotlin.math.floor(percent.toDouble() * 10_000.0 + 1e-3).toLong()
+                        val expected = String.format(locale, "%d.%02d%%", hundredths / 100, hundredths % 100)
+                        assertEquals("$percent in $tag", expected, StepManiaScoreKeeper.formatPercent(percent))
+                    }
+                }
+            }
+        } finally {
+            java.util.Locale.setDefault(before)
+        }
+    }
+
+    @Test
     fun turnsArePermutationsAndLeftAndRightUndoEachOther() {
         for (turn in GlyphTurn.entries) {
             val mapped = GlyphLane.entries.map { turn.map(it, shuffleSeed = 42L) }

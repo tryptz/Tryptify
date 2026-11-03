@@ -236,47 +236,122 @@ static inline void zeroSlotMeters(Bus& bus) {
 }
 
 // Append silence to a bus's waveform tap so the scope decays instead of
-// freezing on the last audible block.
+// freezing on the last audible block. Once the whole ring is silence there is
+// nothing left to do: a silent bus (most of the 48 can be) costs nothing, and
+// where the head stops does not show, every sample behind it being zero.
 static inline void writeWaveSilence(Bus& bus, int numFrames) {
+    if (bus.waveSilent >= WAVE_TAP_SIZE) return;
     int wp = bus.waveTapPos.load(std::memory_order_relaxed);
-    for (int i = 0; i < numFrames; i++) {
-        bus.waveTap[wp] = 0.0f;
-        wp = (wp + 1) & (WAVE_TAP_SIZE - 1);
+    // Up to the ring's end, then on from its start.
+    for (int done = 0; done < numFrames;) {
+        const int m = std::min(numFrames - done, WAVE_TAP_SIZE - wp);
+        std::memset(bus.waveTap + wp, 0, sizeof(float) * static_cast<size_t>(m));
+        wp = (wp + m) & (WAVE_TAP_SIZE - 1);
+        done += m;
     }
     bus.waveTapPos.store(wp, std::memory_order_relaxed);
+    bus.waveSilent = std::min(WAVE_TAP_SIZE, bus.waveSilent + numFrames);
+}
+
+// Post-fader mono scope tap: (l + r) / 2 of [numFrames] frames into the ring,
+// in runs up to its end so each is a plain loop.
+static inline void writeWaveTap(Bus& bus, const float* l, const float* r, int numFrames) {
+    int wp = bus.waveTapPos.load(std::memory_order_relaxed);
+    for (int done = 0; done < numFrames;) {
+        const int m = std::min(numFrames - done, WAVE_TAP_SIZE - wp);
+        float* w = bus.waveTap + wp;
+        const float* a = l + done;
+        const float* b = r + done;
+        for (int i = 0; i < m; i++) w[i] = 0.5f * (a[i] + b[i]);
+        wp = (wp + m) & (WAVE_TAP_SIZE - 1);
+        done += m;
+    }
+    bus.waveTapPos.store(wp, std::memory_order_relaxed);
+    bus.waveSilent = 0;
+}
+
+// A one-pole glide never lands. Within about 1e-5 of its target each step
+// rounds to nothing and it sits there for good (further out at high rates),
+// so a fader moved and moved back stayed a hair off unity, and the output
+// off bit-perfect, until the engine was rebuilt. Close enough is made exact:
+// within 1e-4 of the target (0.0009 dB), or once a whole block has gone by
+// without the gain moving at all.
+static inline float landGain(float gain, float target, float atStart) {
+    return (std::fabs(target - gain) <= 1e-4f * target || gain == atStart) ? target : gain;
+}
+
+// A fader's gain on one block, from [inL]/[inR] into [outL]/[outR] (the same
+// buffers, for a bus): a one-pole glide from [gainL]/[gainR] to the target
+// while they differ, and once there a plain multiply, or at unity nothing.
+// Returns whether the block came through as it went in. The gains are worked
+// on in locals: as members they could alias the samples, which kept the
+// compiler storing and reloading them on every sample.
+static bool applyFader(float& gainL, float& gainR, float targetL, float targetR, float coeff,
+                       const float* inL, const float* inR, float* outL, float* outR, int numFrames) {
+    float gL = gainL;
+    float gR = gainR;
+    if (gL == targetL && gR == targetR) {
+        if (gL == 1.0f && gR == 1.0f) {
+            if (outL != inL) std::memcpy(outL, inL, sizeof(float) * static_cast<size_t>(numFrames));
+            if (outR != inR) std::memcpy(outR, inR, sizeof(float) * static_cast<size_t>(numFrames));
+            return true;
+        }
+        for (int i = 0; i < numFrames; i++) {
+            outL[i] = inL[i] * gL;
+            outR[i] = inR[i] * gR;
+        }
+        return false;
+    }
+    const float startL = gL;
+    const float startR = gR;
+    for (int i = 0; i < numFrames; i++) {
+        gL += coeff * (targetL - gL);
+        gR += coeff * (targetR - gR);
+        outL[i] = inL[i] * gL;
+        outR[i] = inR[i] * gR;
+    }
+    gainL = landGain(gL, targetL, startL);
+    gainR = landGain(gR, targetR, startR);
+    return false;
 }
 
 void DspEngine::process(float* left, float* right, int numFrames) {
-    if (numFrames <= 0) return;
+    if (numFrames <= 0) {
+        processUnchanged_ = true;
+        return;
+    }
     // Lock for reading plugin chains (brief lock — plugins don't allocate during process)
     std::lock_guard<std::mutex> lock(chainMutex_);
     // Every scratch buffer holds maxBlockSize_ frames; a longer block runs in
     // pieces instead of writing past them.
+    bool unchanged = true;
     for (int done = 0; done < numFrames; done += maxBlockSize_) {
         const int n = std::min(maxBlockSize_, numFrames - done);
-        processBlockLocked(left + done, right + done, n);
+        unchanged = processBlockLocked(left + done, right + done, n) && unchanged;
     }
+    processUnchanged_ = unchanged;
 }
 
-void DspEngine::processBlockLocked(float* left, float* right, int numFrames) {
+bool DspEngine::processBlockLocked(float* left, float* right, int numFrames) {
     // A NaN or infinity from upstream would lodge in every filter and
     // feedback path it reached and silence the mix until the effects were
     // rebuilt. It never gets in.
-    dspZeroNonFinite(left, numFrames);
-    dspZeroNonFinite(right, numFrames);
+    const bool replacedL = dspZeroNonFinite(left, numFrames);
+    const bool replacedR = dspZeroNonFinite(right, numFrames);
     processMixBusesLocked(left, right, numFrames);
     const int slots = masterSlotCountLocked();
     for (int s = 0; s < slots; s++) processMasterSlotLocked(s, numFrames, nullptr);
     finishBlockLocked(left, right, numFrames);
+    return !replacedL && !replacedR && blockUnchanged_;
 }
 
-void DspEngine::runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run) {
+bool DspEngine::runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int numFrames, bool run) {
     const float dw = plugin.getDryWet();
     if (!run || dw <= 0.001f) {
         // Not processing, but still as late as when it is: the chain's delay
         // must not change with the bypass switch or the mix knob.
         plugin.delayDry(l, r, numFrames);
-        return;
+        return plugin.latency() == 0;
     }
     // The dry signal, for the blend and for the guard below. Delayed by the
     // oversampling latency so it lines up with the wet, which also keeps the
@@ -292,7 +367,7 @@ void DspEngine::runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int n
         plugin.resetAll();
         std::copy(dryBufL_.begin(), dryBufL_.begin() + numFrames, l);
         std::copy(dryBufR_.begin(), dryBufR_.begin() + numFrames, r);
-        return;
+        return false;
     }
     if (dw < 0.999f) {
         const float wet = dw, dry = 1.0f - dw;
@@ -301,6 +376,7 @@ void DspEngine::runSlotLocked(SnapinProcessor& plugin, float* l, float* r, int n
             r[i] = dryBufR_[i] * dry + r[i] * wet;
         }
     }
+    return false;
 }
 
 int DspEngine::chainLatencyLocked(const Bus& bus) {
@@ -343,6 +419,29 @@ bool DspEngine::skippedOnThisLane(const SnapinProcessor& plugin) const {
 // next write at [ringPos]) before it; g ramps g0 -> g1 across the piece.
 static inline void tapAdd(float* dst, const float* cur, const std::vector<float>& ring, int ringPos,
                           int n, int k, float g0, float g1) {
+    if (g0 == g1) {
+        // A level not moving: every route but one being turned. The first k
+        // samples come from the ring and the rest from this piece, as two
+        // plain loops rather than a choice on every sample, so the second
+        // vectorises; and at unity there is no multiply. The same sums, bit
+        // for bit (g + 0 is g, and x * 1 is x). The buffers never overlap: a
+        // bus sends to the master or to another bus, never to itself.
+        const int head = std::min(k, n);
+        const float g = g0;
+        float* __restrict d = dst;
+        const float* __restrict c = cur;
+        const float* hist = ring.data();
+        for (int i = 0; i < head; i++) d[i] += hist[(ringPos - (k - i)) & (PDC_SIZE - 1)] * g;
+        if (g == 1.0f) {
+            for (int i = head; i < n; i++) d[i] += c[i - k];
+        } else {
+            for (int i = head; i < n; i++) d[i] += c[i - k] * g;
+        }
+        return;
+    }
+    // A level being turned, one step a sample, as it always was. Written as a
+    // loop the vectoriser can take, it would sum the steps in another order,
+    // which -ffast-math allows, and the glide would round differently.
     const float step = (g1 - g0) / static_cast<float>(n);
     float g = g0;
     for (int i = 0; i < n; i++) {
@@ -353,10 +452,13 @@ static inline void tapAdd(float* dst, const float* cur, const std::vector<float>
     }
 }
 
+// [n] samples onto the ring at [pos]: up to its end, then on from its start.
 static inline void ringAppend(std::vector<float>& ring, int& pos, const float* x, int n) {
-    for (int i = 0; i < n; i++) {
-        ring[static_cast<size_t>(pos)] = x[i];
-        pos = (pos + 1) & (PDC_SIZE - 1);
+    for (int done = 0; done < n;) {
+        const int m = std::min(n - done, PDC_SIZE - pos);
+        std::memcpy(ring.data() + pos, x + done, sizeof(float) * static_cast<size_t>(m));
+        pos = (pos + m) & (PDC_SIZE - 1);
+        done += m;
     }
 }
 
@@ -502,6 +604,10 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
     }
 
     for (int b = 0; b < active; b++) blockPeakL_[b] = blockPeakR_[b] = 0.0f;
+    // Each piece clears mixUnchanged_ if it reaches the master changed; the
+    // master's slots do the same to masterUnchanged_.
+    mixUnchanged_ = true;
+    masterUnchanged_ = true;
     for (int done = 0; done < numFrames; done += ROUTE_BLOCK) {
         processMixPieceLocked(left, right, done, std::min(ROUTE_BLOCK, numFrames - done), done == 0);
     }
@@ -533,6 +639,14 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
         std::fill(bus.inR.begin(), bus.inR.begin() + numFrames, 0.0f);
     }
 
+    // Whether this piece reaches the master as the player sent it: by one
+    // route, at unity and with no delay, from a bus that took the player's
+    // signal alone and left it as it was. [fed] marks the buses something
+    // was sent into, which then hold more than the player's signal.
+    int masterRoutes = 0;
+    bool masterRouteExact = false;
+    bool fed[TOTAL_BUSES] = {};
+
     for (int k = 0; k < orderCount_; k++) {
         const int b = order_[k];
         Bus& bus = buses_[b];
@@ -563,6 +677,9 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
 
         float* l = bus.inL.data();
         float* r = bus.inR.data();
+        // Still the player's signal exactly: it takes it with no delay and
+        // nothing else was sent in. Each stage below can only take that away.
+        bool exact = takesInput_[b] && inDelay_[b] == 0 && !fed[b];
         // The player's signal, delayed to arrive with the sends into this bus.
         if (takesInput_[b]) {
             const int delay = std::min(PDC_SIZE - 1, inDelay_[b]);
@@ -579,7 +696,7 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
         if (mixBypass) {
             if (first) zeroSlotMeters(bus);
             for (auto& plugin : bus.plugins) {
-                if (plugin) runSlotLocked(*plugin, l, r, numFrames, false);
+                if (plugin) exact = runSlotLocked(*plugin, l, r, numFrames, false) && exact;
             }
         } else {
             for (size_t s = 0; s < bus.plugins.size(); s++) {
@@ -593,7 +710,7 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
                             std::memory_order_relaxed);
                 };
                 if (run) meter(bus.slotInPeak[s]);
-                runSlotLocked(*plugin, l, r, numFrames, run);
+                exact = runSlotLocked(*plugin, l, r, numFrames, run) && exact;
                 if (run) {
                     meter(bus.slotOutPeak[s]);
                 } else {
@@ -607,24 +724,16 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
         recalcBusGains(busGainDb, busPan, bus.targetGainL, bus.targetGainR);
 
         // Fader and pan with smoothing, in place: the buffer is post-fader now.
+        exact = applyFader(bus.smoothGainL, bus.smoothGainR, bus.targetGainL, bus.targetGainR,
+                           gainSmoothCoeff_, l, r, l, r, numFrames) && exact;
         float busPeakL = blockPeakL_[b], busPeakR = blockPeakR_[b];
-        int wavePos = bus.waveTapPos.load(std::memory_order_relaxed);
         for (int i = 0; i < numFrames; i++) {
-            bus.smoothGainL += gainSmoothCoeff_ * (bus.targetGainL - bus.smoothGainL);
-            bus.smoothGainR += gainSmoothCoeff_ * (bus.targetGainR - bus.smoothGainR);
-            float sL = l[i] * bus.smoothGainL;
-            float sR = r[i] * bus.smoothGainR;
-            l[i] = sL;
-            r[i] = sR;
-            float absL = std::fabs(sL);
-            float absR = std::fabs(sR);
+            float absL = std::fabs(l[i]);
+            float absR = std::fabs(r[i]);
             if (absL > busPeakL) busPeakL = absL;
             if (absR > busPeakR) busPeakR = absR;
-            // Post-fader mono scope tap
-            bus.waveTap[wavePos] = 0.5f * (sL + sR);
-            wavePos = (wavePos + 1) & (WAVE_TAP_SIZE - 1);
         }
-        bus.waveTapPos.store(wavePos, std::memory_order_relaxed);
+        writeWaveTap(bus, l, r, numFrames);
         blockPeakL_[b] = busPeakL;
         blockPeakR_[b] = busPeakR;
 
@@ -650,8 +759,13 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
                 dl = buses_[d].inL.data();
                 dr = buses_[d].inR.data();
                 delay = inDelay_[d] - outLat_[b];
+                fed[d] = true;
             }
             delay = std::max(0, std::min(PDC_SIZE - 1, delay));
+            if (d == MASTER_BUS) {
+                masterRoutes++;
+                masterRouteExact = exact && from == 1.0f && target == 1.0f && delay == 0;
+            }
             tapAdd(dl, l, bus.pdcL, bus.pdcPos, numFrames, delay, from, target);
             tapAdd(dr, r, bus.pdcR, bus.pdcPos, numFrames, delay, from, target);
         }
@@ -667,6 +781,8 @@ void DspEngine::processMixPieceLocked(const float* left, const float* right, int
     pos = inRingPos_;
     ringAppend(inRingR_, pos, inPR, numFrames);
     inRingPos_ = pos;
+
+    if (masterRoutes != 1 || !masterRouteExact) mixUnchanged_ = false;
 }
 
 void DspEngine::processMasterSlotLocked(int slot, int numFrames, const float* detectorKey) {
@@ -675,6 +791,7 @@ void DspEngine::processMasterSlotLocked(int slot, int numFrames, const float* de
     const size_t s = static_cast<size_t>(slot);
     {
         auto& plugin = master.plugins[s];
+        bool untouched = true;
         if (plugin && !plugin->isBypassed() && !skippedOnThisLane(*plugin)) {
             // Linked detection for this block only: a multi-lane host hands
             // every lane the same key, so every lane computes the same gain.
@@ -682,17 +799,18 @@ void DspEngine::processMasterSlotLocked(int slot, int numFrames, const float* de
             master.slotInPeak[s].store(
                 stereoPeak(sumL_.data(), sumR_.data(), numFrames),
                 std::memory_order_relaxed);
-            runSlotLocked(*plugin, sumL_.data(), sumR_.data(), numFrames, true);
+            untouched = runSlotLocked(*plugin, sumL_.data(), sumR_.data(), numFrames, true);
             master.slotOutPeak[s].store(
                 stereoPeak(sumL_.data(), sumR_.data(), numFrames),
                 std::memory_order_relaxed);
             plugin->setDetectorKey(nullptr);
         } else {
             // Bypassed, it still delays by its latency, as on a mix bus.
-            if (plugin) runSlotLocked(*plugin, sumL_.data(), sumR_.data(), numFrames, false);
+            if (plugin) untouched = runSlotLocked(*plugin, sumL_.data(), sumR_.data(), numFrames, false);
             master.slotInPeak[s].store(0.0f, std::memory_order_relaxed);
             master.slotOutPeak[s].store(0.0f, std::memory_order_relaxed);
         }
+        if (!untouched) masterUnchanged_ = false;
     }
 }
 
@@ -702,27 +820,23 @@ void DspEngine::finishBlockLocked(float* left, float* right, int numFrames) {
     float masterGainDb = master.gainDb.load(std::memory_order_relaxed);
     float masterPan = monoLane_ ? 0.0f : master.pan.load(std::memory_order_relaxed);
     recalcBusGains(masterGainDb, masterPan, master.targetGainL, master.targetGainR);
+    const bool unity = applyFader(master.smoothGainL, master.smoothGainR,
+                                  master.targetGainL, master.targetGainR, gainSmoothCoeff_,
+                                  sumL_.data(), sumR_.data(), left, right, numFrames);
+    blockUnchanged_ = mixUnchanged_ && masterUnchanged_ && unity;
+    // Last line: nothing non-finite leaves the engine.
+    dspZeroNonFinite(left, numFrames);
+    dspZeroNonFinite(right, numFrames);
     float masterPeakL = 0.0f, masterPeakR = 0.0f;
     bool clipped = false;
-    int masterWavePos = master.waveTapPos.load(std::memory_order_relaxed);
     for (int i = 0; i < numFrames; i++) {
-        master.smoothGainL += gainSmoothCoeff_ * (master.targetGainL - master.smoothGainL);
-        master.smoothGainR += gainSmoothCoeff_ * (master.targetGainR - master.smoothGainR);
-        left[i]  = sumL_[i] * master.smoothGainL;
-        right[i] = sumR_[i] * master.smoothGainR;
-        // Last line: nothing non-finite leaves the engine.
-        if (!dspIsFinite(left[i])) left[i] = 0.0f;
-        if (!dspIsFinite(right[i])) right[i] = 0.0f;
         float absL = std::fabs(left[i]);
         float absR = std::fabs(right[i]);
         if (absL > masterPeakL) masterPeakL = absL;
         if (absR > masterPeakR) masterPeakR = absR;
         if (absL > 1.0f || absR > 1.0f) clipped = true;
-        // Post-fader mono scope tap
-        master.waveTap[masterWavePos] = 0.5f * (left[i] + right[i]);
-        masterWavePos = (masterWavePos + 1) & (WAVE_TAP_SIZE - 1);
     }
-    master.waveTapPos.store(masterWavePos, std::memory_order_relaxed);
+    writeWaveTap(master, left, right, numFrames);
     master.peakL.store(masterPeakL, std::memory_order_relaxed);
     master.peakR.store(masterPeakR, std::memory_order_relaxed);
     if (clipped) clipped_.store(true, std::memory_order_relaxed);
@@ -1010,6 +1124,7 @@ void DspEngine::resetBusLocked(Bus& bus) {
     }
     std::fill(std::begin(bus.waveTap), std::end(bus.waveTap), 0.0f);
     bus.waveTapPos.store(0, std::memory_order_relaxed);
+    bus.waveSilent = WAVE_TAP_SIZE;
     bus.decayL = bus.decayR = bus.holdL = bus.holdR = -60.0f;
     bus.holdCounterL = bus.holdCounterR = 0;
     bus.publishMeters();
@@ -1038,6 +1153,7 @@ void DspEngine::moveBusLocked(Bus& dst, Bus& src) {
     }
     std::copy(std::begin(src.waveTap), std::end(src.waveTap), std::begin(dst.waveTap));
     dst.waveTapPos.store(src.waveTapPos.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    dst.waveSilent = src.waveSilent;
     dst.decayL = src.decayL;
     dst.decayR = src.decayR;
     dst.holdL = src.holdL;
@@ -1243,6 +1359,13 @@ bool DspEngine::anySoloed() const {
 void DspEngine::recalcBusGains(float gainDb, float pan, float& targetL, float& targetR) {
     float linear = (gainDb <= -100.0f) ? 0.0f
         : std::pow(10.0f, gainDb / 20.0f);
+
+    // Centre is unity on both sides, exactly: the curve below gives the right
+    // side 0.99999994 there, which kept every bus a hair under bit-perfect.
+    if (pan == 0.0f) {
+        targetL = targetR = linear;
+        return;
+    }
 
     // Balance, not pan: every bus and the master carry stereo, so centre is
     // unity and turning one way only turns the other side down. The

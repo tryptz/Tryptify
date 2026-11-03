@@ -53,9 +53,10 @@ class StepManiaMapGenerator(
         require(request.musicFileName.isNotBlank()) { "music file name must not be blank" }
         require(request.difficulties.isNotEmpty()) { "at least one difficulty is required" }
 
+        val intensity = measureIntensity(analysis)
         val charts = request.difficulties
             .sortedBy { it.ordinal }
-            .map { difficulty -> buildChart(analysis, difficulty, request.title.hashCode()) }
+            .map { difficulty -> buildChart(analysis, difficulty, request.title.hashCode(), intensity) }
         return GeneratedSimfile(
             ssc = SscWriter.write(request, analysis, charts),
             analysis = analysis,
@@ -72,17 +73,28 @@ class StepManiaMapGenerator(
      * an arrow, it steps the way the tune moved — further right as it rises,
      * left as it falls — and a sung note held long enough becomes a freeze
      * arrow. Without stems this is exactly the drum-only chart.
+     *
+     * How many arrows a measure gets follows how hard the song is going
+     * there ([intensity], 0 to 1 per measure): a verse is sparser than its
+     * chorus, and on Hard and Challenge the loudest parts burst into
+     * sixteenths. The arrows the tune does not lead walk a pattern
+     * ([PATTERNS], mirrored or flipped), which may change at each measure.
+     * Seeded from the title, so a song always charts the same.
      */
     private fun buildChart(
         analysis: RhythmAnalysis,
         difficulty: StepManiaDifficulty,
         seed: Int,
+        intensity: FloatArray,
     ): StepChart {
         val strengths = analysis.gridStrengths
         val stems = analysis.stems
         val events = ArrayList<StepEvent>()
-        val laneOrder = if (seed and 1 == 0) LANE_ORDER_A else LANE_ORDER_B
-        var noteIndex = kotlin.math.abs(seed % laneOrder.size)
+        val random = java.util.Random(seed.toLong() * 31 + difficulty.ordinal)
+        val library = if (difficulty <= StepManiaDifficulty.EASY) GENTLE_PATTERNS else PATTERNS
+        var pattern = transformed(library[random.nextInt(library.size)], random.nextInt(4))
+        var patternStep = random.nextInt(pattern.size)
+        var patternMeasure = -1
         val minimumHold = minimumHoldTicks(difficulty)
 
         // The last single arrow, which the next one steps away from rather
@@ -104,7 +116,8 @@ class StepManiaMapGenerator(
             val strength = maxOf(drum, melody, bass)
             val holding = tick <= heldUntil
             if (holding && !placesDuringHold(difficulty, tick)) continue
-            if (!shouldPlace(difficulty, tick, strength)) continue
+            val level = intensity.getOrElse(tick / TICKS_PER_MEASURE) { NEUTRAL_INTENSITY }
+            if (!shouldPlace(difficulty, tick, strength, level)) continue
 
             val sustain = stems?.sustainTicks?.get(tick) ?: 0
             val holdTicks = if (!holding && minimumHold > 0 && sustain >= minimumHold) {
@@ -113,9 +126,11 @@ class StepManiaMapGenerator(
             } else {
                 0
             }
-            val jump = holdTicks == 0 && !holding && shouldJump(difficulty, tick, strength)
+            val jump = holdTicks == 0 && !holding && shouldJump(difficulty, tick, strength, level)
             val laneMask = if (jump) {
-                val pair = JUMP_PAIRS[(noteIndex / 3) % JUMP_PAIRS.size]
+                // Any pair but one on the arrow just stepped on.
+                val pairs = JUMP_PAIRS.filter { lastLane !in it }
+                val pair = pairs[random.nextInt(pairs.size)]
                 lastLane = -1
                 (1 shl pair[0]) or (1 shl pair[1])
             } else {
@@ -130,8 +145,23 @@ class StepManiaMapGenerator(
                 } else {
                     null
                 }
+                val patterned = if (followed == null) {
+                    val measure = tick / TICKS_PER_MEASURE
+                    if (measure != patternMeasure) {
+                        if (patternMeasure >= 0 && random.nextFloat() < PATTERN_CHANGE) {
+                            pattern = transformed(library[random.nextInt(library.size)], random.nextInt(4))
+                            // Started where it does not repeat the last arrow.
+                            patternStep = random.nextInt(pattern.size)
+                            if (pattern[patternStep] == lastLane) patternStep += 1
+                        }
+                        patternMeasure = measure
+                    }
+                    pattern[patternStep % pattern.size].also { patternStep += 1 }
+                } else {
+                    null
+                }
                 val lane = awayFrom(
-                    lane = followed ?: laneOrder[noteIndex % laneOrder.size],
+                    lane = followed ?: patterned!!,
                     last = lastLane,
                     held = if (holding) heldLane else -1,
                     // Moved off a taken arrow, a tune-led one keeps going the way the tune went.
@@ -150,7 +180,6 @@ class StepManiaMapGenerator(
                 1 shl lane
             }
             events += StepEvent(tick, laneMask, holdTicks)
-            noteIndex += 1
         }
 
         val lastTail = events.maxOfOrNull { it.tick + it.holdTicks } ?: 0
@@ -206,41 +235,152 @@ class StepManiaMapGenerator(
         StepManiaDifficulty.HARD, StepManiaDifficulty.CHALLENGE -> true
     }
 
+    /**
+     * Whether a hit this [strength] on [tick] gets an arrow, in a measure
+     * going at [level] (0 its calmest, 1 its fullest). Each difficulty reads
+     * beats, off-beat eighths and sixteenths, and how strong a hit has to be
+     * for each moves from its calm threshold to its full one with the level.
+     */
     private fun shouldPlace(
         difficulty: StepManiaDifficulty,
         tick: Int,
         strength: Float,
+        level: Float,
     ): Boolean {
-        val quarter = tick % 4 == 0
-        val eighth = tick % 2 == 0
-        return when (difficulty) {
-            StepManiaDifficulty.BEGINNER -> quarter && (tick % 8 == 0 || strength >= 0.7f)
-            StepManiaDifficulty.EASY -> quarter || (eighth && strength >= 0.78f)
-            StepManiaDifficulty.MEDIUM ->
-                (eighth && (quarter || strength >= 0.38f)) || (!eighth && strength >= 0.94f)
-            StepManiaDifficulty.HARD -> eighth || strength >= 0.62f
-            StepManiaDifficulty.CHALLENGE -> eighth || strength >= 0.34f
+        val threshold = when {
+            tick % 4 == 0 -> when (difficulty) {
+                // Beginner's half notes, then its other beats when the song is full.
+                StepManiaDifficulty.BEGINNER -> if (tick % 8 == 0) lerp(0.3f, 0f, level) else lerp(0.95f, 0.6f, level)
+                StepManiaDifficulty.EASY -> lerp(0.15f, 0f, level)
+                StepManiaDifficulty.MEDIUM -> lerp(0.1f, 0f, level)
+                StepManiaDifficulty.HARD, StepManiaDifficulty.CHALLENGE -> 0f
+            }
+            tick % 2 == 0 -> when (difficulty) {
+                StepManiaDifficulty.BEGINNER -> NEVER
+                StepManiaDifficulty.EASY -> lerp(NEVER, 0.7f, level)
+                StepManiaDifficulty.MEDIUM -> lerp(0.7f, 0.3f, level)
+                StepManiaDifficulty.HARD -> lerp(0.45f, 0f, level)
+                StepManiaDifficulty.CHALLENGE -> lerp(0.25f, 0f, level)
+            }
+            else -> when (difficulty) {
+                StepManiaDifficulty.BEGINNER, StepManiaDifficulty.EASY -> NEVER
+                StepManiaDifficulty.MEDIUM -> lerp(NEVER, 0.9f, level)
+                StepManiaDifficulty.HARD -> lerp(0.95f, 0.5f, level)
+                StepManiaDifficulty.CHALLENGE -> lerp(0.75f, 0.3f, level)
+            }
         }
+        return strength >= threshold
     }
 
+    /** A jump: on a big downbeat, and on Hard and Challenge on more strong beats where the song is fullest. */
     private fun shouldJump(
         difficulty: StepManiaDifficulty,
         tick: Int,
         strength: Float,
+        level: Float,
     ): Boolean {
-        if (tick % TICKS_PER_MEASURE != 0) return false
+        if (tick % 4 != 0) return false
+        val downbeat = tick % TICKS_PER_MEASURE == 0
+        val half = tick % 8 == 0
         return when (difficulty) {
-            StepManiaDifficulty.HARD -> strength >= 0.82f
-            StepManiaDifficulty.CHALLENGE -> strength >= 0.58f
-            else -> false
+            StepManiaDifficulty.BEGINNER, StepManiaDifficulty.EASY -> false
+            StepManiaDifficulty.MEDIUM -> downbeat && strength >= 0.9f && level >= 0.75f
+            StepManiaDifficulty.HARD ->
+                (downbeat && strength >= 0.82f) || (half && strength >= 0.95f && level >= 0.8f)
+            StepManiaDifficulty.CHALLENGE ->
+                (half && strength >= 0.75f) || (strength >= 0.92f && level >= 0.8f)
         }
     }
 
-    private companion object {
+    private fun lerp(calm: Float, full: Float, level: Float): Float = calm + (full - calm) * level
+
+    /** [pattern] as is (0), mirrored left to right (1), flipped up and down (2), or both (3). */
+    private fun transformed(pattern: IntArray, how: Int): IntArray = IntArray(pattern.size) { i ->
+        var lane = pattern[i]
+        if (how and 1 != 0) lane = if (lane == 0) 3 else if (lane == 3) 0 else lane
+        if (how and 2 != 0) lane = if (lane == 1) 2 else if (lane == 2) 1 else lane
+        lane
+    }
+
+    internal companion object {
         const val TICKS_PER_MEASURE = 16
-        val LANE_ORDER_A = intArrayOf(0, 1, 3, 2, 1, 0, 2, 3)
-        val LANE_ORDER_B = intArrayOf(3, 2, 0, 1, 2, 3, 1, 0)
-        val JUMP_PAIRS = arrayOf(intArrayOf(0, 2), intArrayOf(1, 3))
+
+        /**
+         * The shapes single arrows walk, lanes left 0, down 1, up 2, right 3,
+         * each also played mirrored or flipped. None steps on the same arrow
+         * twice in a row, round its end included.
+         */
+        private val GENTLE_PATTERNS = arrayOf(
+            intArrayOf(0, 1, 2, 3), // stairs
+            intArrayOf(0, 3), // across
+            intArrayOf(1, 2), // up and down
+            intArrayOf(0, 1, 3, 2), // round
+            intArrayOf(0, 2, 3, 1), // the other way round
+            intArrayOf(0, 1, 0, 2), // from the left
+        )
+        private val PATTERNS = GENTLE_PATTERNS + arrayOf(
+            intArrayOf(0, 1, 2, 3, 2, 1), // roll there and back
+            intArrayOf(0, 2, 1, 3), // zigzag
+            intArrayOf(0, 1, 3, 1), // triangle
+            intArrayOf(0, 3, 1, 3, 2, 3), // round the right foot
+            intArrayOf(0, 2, 0, 3, 1, 3), // candles
+            intArrayOf(0, 1, 2, 3, 1, 0, 3, 2), // stairs, then crossed back
+        )
+
+        /** Every pair a jump can take. */
+        private val JUMP_PAIRS = listOf(
+            intArrayOf(0, 3), intArrayOf(1, 2), intArrayOf(0, 1),
+            intArrayOf(2, 3), intArrayOf(0, 2), intArrayOf(1, 3),
+        )
+
+        /** How often a measure starts a new pattern rather than carrying on. */
+        private const val PATTERN_CHANGE = 0.55f
+
+        /** A threshold no hit reaches. */
+        private const val NEVER = 1.01f
+
+        /** The level of every measure when the song keeps one level throughout. */
+        const val NEUTRAL_INTENSITY = 0.6f
+
+        /** How far apart the song's quieter and fuller measures must be to count as sections. */
+        private const val SECTION_SPREAD = 0.04f
+
+        /**
+         * How hard the song is going in each measure, 0 to 1: the measure's
+         * mean hit (drums, tune or bass, the strongest), smoothed with its
+         * neighbours so a fill does not flip it, then placed between the
+         * song's quieter (15th percentile) and fuller (85th) measures. A song
+         * that keeps one level is [NEUTRAL_INTENSITY] throughout.
+         */
+        fun measureIntensity(analysis: RhythmAnalysis): FloatArray {
+            val strengths = analysis.gridStrengths
+            val stems = analysis.stems
+            val measures = (strengths.size + TICKS_PER_MEASURE - 1) / TICKS_PER_MEASURE
+            if (measures == 0) return FloatArray(0)
+            val raw = FloatArray(measures) { measure ->
+                val from = measure * TICKS_PER_MEASURE
+                val until = minOf(strengths.size, from + TICKS_PER_MEASURE)
+                var sum = 0f
+                for (tick in from until until) {
+                    sum += maxOf(
+                        strengths[tick],
+                        (stems?.melodyOnsets?.get(tick) ?: 0f) * MELODY_WEIGHT,
+                        (stems?.bassOnsets?.get(tick) ?: 0f) * BASS_WEIGHT,
+                    )
+                }
+                sum / (until - from)
+            }
+            val smooth = FloatArray(measures) { m ->
+                val before = raw[maxOf(0, m - 1)]
+                val after = raw[minOf(measures - 1, m + 1)]
+                0.25f * before + 0.5f * raw[m] + 0.25f * after
+            }
+            val sorted = smooth.sortedArray()
+            val low = sorted[(sorted.lastIndex * 0.15f).toInt()]
+            val high = sorted[(sorted.lastIndex * 0.85f + 0.5f).toInt()]
+            if (high - low < SECTION_SPREAD) return FloatArray(measures) { NEUTRAL_INTENSITY }
+            return FloatArray(measures) { m -> ((smooth[m] - low) / (high - low)).coerceIn(0f, 1f) }
+        }
 
         /** How much a tune's note start counts against a drum hit's. */
         const val MELODY_WEIGHT = 0.9f

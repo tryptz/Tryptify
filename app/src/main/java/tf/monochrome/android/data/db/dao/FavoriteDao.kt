@@ -24,6 +24,10 @@ interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertTrackIfNotExists(track: FavoriteTrackEntity)
 
+    /** [insertTrackIfNotExists] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTracksIfNotExist(tracks: List<FavoriteTrackEntity>)
+
     @Query("DELETE FROM favorite_tracks WHERE id = :trackId")
     suspend fun deleteFavoriteTrack(trackId: Long)
 
@@ -46,6 +50,10 @@ interface FavoriteDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAlbumIfNotExists(album: FavoriteAlbumEntity)
 
+    /** [insertAlbumIfNotExists] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAlbumsIfNotExist(albums: List<FavoriteAlbumEntity>)
+
     @Query("DELETE FROM favorite_albums WHERE id = :albumId")
     suspend fun deleteFavoriteAlbum(albumId: Long)
 
@@ -67,6 +75,10 @@ interface FavoriteDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertArtistIfNotExists(artist: FavoriteArtistEntity)
+
+    /** [insertArtistIfNotExists] for many, in one transaction: the cloud pull's. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertArtistsIfNotExist(artists: List<FavoriteArtistEntity>)
 
     @Query("DELETE FROM favorite_artists WHERE id = :artistId")
     suspend fun deleteFavoriteArtist(artistId: Long)

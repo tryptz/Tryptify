@@ -17,7 +17,10 @@ class LyricsLookupTest {
 
     @Test
     fun `ids that are not TIDAL's skip TIDAL by id`() {
-        for (s in listOf(SourceType.LOCAL, SourceType.COLLECTION, SourceType.QOBUZ, SourceType.DEEZER)) {
+        for (s in listOf(
+            SourceType.LOCAL, SourceType.COLLECTION, SourceType.QOBUZ, SourceType.DEEZER,
+            SourceType.YOUTUBE, SourceType.SOUNDCLOUD,
+        )) {
             assertTrue("$s", LyricsLookup.skipsTidalById(s))
         }
         assertFalse(LyricsLookup.skipsTidalById(SourceType.API))

@@ -5,7 +5,7 @@
 [![Downloads](https://img.shields.io/github/downloads/tryptz/Tryptify/total?label=downloads&color=2EA44F&logo=github)](https://github.com/tryptz/Tryptify/releases)
 [![Latest release](https://img.shields.io/github/v/release/tryptz/Tryptify?label=latest%20release&color=8E5CFF)](https://github.com/tryptz/Tryptify/releases/latest)
 ![Platform](https://img.shields.io/badge/platform-Android%208.0%2B%20(API%2026)-3DDC84?logo=android&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.9.5-8E5CFF)
+![Version](https://img.shields.io/badge/version-1.9.51-8E5CFF)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1.0-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/UI-Jetpack%20Compose%20%C2%B7%20Material%203-4285F4?logo=jetpackcompose&logoColor=white)
 ![Native](https://img.shields.io/badge/native-C%2B%2B17%20%C2%B7%20JNI%20%C2%B7%20NEON-00599C?logo=cplusplus&logoColor=white)
@@ -83,7 +83,7 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 
 | | |
 | --- | --- |
-| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, and Tryptify Cloud. |
+| **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, Tryptify Cloud, YouTube with no sign-in, and SoundCloud with your Tryptify account. |
 | **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $1.29 a month for 10 GB up to 10 TB, with a 7-day free trial. |
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
 | **DSP mixing console** | A C++17 engine with up to 48 buses, 36 processors and EBU R128 meters. |
@@ -100,15 +100,16 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 | **Library galaxy** | Your artists as stars, albums as planets and tracks as moons, offline. |
 | **Tryptify Connect** | Your phone and tryptify.com see each other: move the music between them at the same second, or steer one from the other. |
 | **Listening parties** | Hear the same moment of the same song with friends, in the app or a browser, with a shared queue, chat and vote skip. |
+| **Share links** | Send a song or album as a tryptify.com link: it plays in anyone's Tryptify, on whatever service they have, and shows its cover and a 30-second preview in Discord. |
 | **Web player** | [tryptify.com/player](https://tryptify.com/player) plays your files, your server, Tryptify Cloud and TrypT HiFi through the app's AutoEQ. |
 | **Eight languages** | English, 简体中文, 日本語, Français, Español, Türkçe, Deutsch and Italiano. |
-| **Everywhere else** | Widget, Android Auto, Discord, Last.fm, ListenBrainz, downloads and account sync. |
+| **Everywhere else** | A glass home screen widget in three sizes, Android Auto, Discord, Last.fm, ListenBrainz, downloads and account sync. |
 
 ## How the sound flows
 
 ```mermaid
 flowchart LR
-    S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud"] --> X["ExoPlayer"]
+    S["Local · TIDAL · Qobuz · Deezer · Subsonic · Cloud · YouTube · SoundCloud"] --> X["ExoPlayer"]
     X --> RG["ReplayGain"]
     RG --> EQ["AutoEQ"]
     EQ --> M["DSP console"]
@@ -127,7 +128,7 @@ git clone --recursive https://github.com/tryptz/Tryptify.git
 ./gradlew :app:testDebugUnitTest
 ```
 
-Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: [release notes](docs/releases/1.9.5.md) and [CHANGELOG](CHANGELOG.md).
+Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: [release notes](docs/releases/1.9.51.md) and [CHANGELOG](CHANGELOG.md).
 
 ## Licences
 
@@ -136,7 +137,10 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
 - **Third-party parts keep their own licences:** projectM (LGPL-2.1), libusb
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,
-  `app/src/main/assets/fonts/LICENSES.txt`) and the rest named in their
-  folders.
+  `app/src/main/assets/fonts/LICENSES.txt`), NewPipeExtractor for YouTube
+  (GPL-3.0-or-later, a library the build fetches), NewPipe's PO-token
+  WebView (GPL-3.0-or-later, adapted from TeamNewPipe/NewPipe in
+  `app/src/main/java/tf/monochrome/android/data/youtube/potoken/` and
+  `app/src/main/assets/po_token.html`) and the rest named in their folders.
 
 Built by **[tryptz](https://github.com/tryptz)**.

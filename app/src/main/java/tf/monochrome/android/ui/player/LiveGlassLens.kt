@@ -79,7 +79,7 @@ internal fun Modifier.liveGlassLens(
      */
     ground: Color = MaterialTheme.colorScheme.background,
 ): Modifier {
-    val shader = remember { runCatching { RuntimeShader(LIVE_LENS_SRC) }.getOrNull() } ?: return this
+    val shader = liveLensShader ?: return this
     val view = LocalView.current
     val divisor = LocalLensDivisor.current
     // Where this pane is on screen. Written by layout, read by draw; not state,
@@ -165,20 +165,17 @@ internal fun Modifier.liveGlassLens(
             backdrop.renderEffect = effect.get(
                 LensEffectKey(size, margin, blurPx, lensR, lensW, glass, frost, k),
             ) {
-                shader.setFloatUniform("uSize", size.width / k, size.height / k)
-                shader.setFloatUniform("uMargin", margin / k, margin / k)
-                shader.setFloatUniform("uLensR", lensR / k)
-                shader.setFloatUniform("uLensW", lensW / k)
-                shader.setFloatUniform("uRefraction", glass.refraction)
-                shader.setFloatUniform("uDepth", glass.depth)
-                shader.setFloatUniform("uDispersion", glass.dispersion)
-                // Premultiplied, for a plain src-over in the shader. Zero: the
-                // live lens is clear glass. Any frost veil read on device as a
-                // dull, frosted pane over the backdrop, which was asked to go;
-                // the slab's thin tint on top is the only colour the glass adds.
-                val fa = frost.alpha * LIVE_LENS_FROST_SHARE
-                shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
-                val lens = RenderEffect.createRuntimeShaderEffect(shader, "content")
+                val lens = liveLensEffect(
+                    shader,
+                    size = Size(size.width / k, size.height / k),
+                    margin = margin / k,
+                    lensR = lensR / k,
+                    lensW = lensW / k,
+                    refraction = glass.refraction,
+                    depth = glass.depth,
+                    dispersion = glass.dispersion,
+                    frost = frost,
+                )
                 // Chain order: the inner effect (the blur) runs first and the
                 // outer one (the lens) bends its output.
                 if (blurOn) {
@@ -273,6 +270,40 @@ private class LensEffectCache {
 }
 
 /**
+ * One pane's lens: every uniform [LIVE_LENS_SRC] declares, set on the shared
+ * [shader], and the effect made from them. The only place an effect is made
+ * from it; the parameters are the uniforms, in the shader's px, and none has
+ * a default, so no pane can inherit another's (see [liveLensShader]).
+ */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+private fun liveLensEffect(
+    shader: RuntimeShader,
+    size: Size,
+    margin: Float,
+    lensR: Float,
+    lensW: Float,
+    refraction: Float,
+    depth: Float,
+    dispersion: Float,
+    frost: Color,
+): RenderEffect {
+    shader.setFloatUniform("uSize", size.width, size.height)
+    shader.setFloatUniform("uMargin", margin, margin)
+    shader.setFloatUniform("uLensR", lensR)
+    shader.setFloatUniform("uLensW", lensW)
+    shader.setFloatUniform("uRefraction", refraction)
+    shader.setFloatUniform("uDepth", depth)
+    shader.setFloatUniform("uDispersion", dispersion)
+    // Premultiplied, for a plain src-over in the shader. Zero: the live lens
+    // is clear glass. Any frost veil read on device as a dull, frosted pane
+    // over the backdrop, which was asked to go; the slab's thin tint on top is
+    // the only colour the glass adds.
+    val fa = frost.alpha * LIVE_LENS_FROST_SHARE
+    shader.setFloatUniform("uFrost", frost.red * fa, frost.green * fa, frost.blue * fa, fa)
+    return RenderEffect.createRuntimeShaderEffect(shader, "content")
+}
+
+/**
  * The clip for a lens of [corner], which may be [Dp.Infinity] for a disc or a
  * pill. `RoundedCornerShape(Dp.Infinity)` cannot be drawn: Compose scales
  * corners that overflow the box by minDimension / their sum, which for
@@ -352,12 +383,33 @@ private class LensAnchor {
     var screen: Offset = Offset.Zero
 }
 
-/** Whether [LIVE_LENS_SRC] compiles here, asked once per process. */
-internal val liveLensCompiles: Boolean by lazy {
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+/**
+ * Whether [LIVE_LENS_SRC] compiles here: whether there is a [liveLensShader].
+ * Asked on every Android version, so the version goes first: below 13 there
+ * is no RuntimeShader class for reading the shader to cast to.
+ */
+internal val liveLensCompiles: Boolean
+    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && liveLensShader != null
+
+/**
+ * [LIVE_LENS_SRC], compiled once for the whole process and shared by every
+ * lens: the mini player, the tab bar, every `GlassPanel` and the player's
+ * disc and dock. Null below API 33, or where it will not compile.
+ *
+ * Shared on the same terms as the slab's shader (see `liquidGlassShader`): an
+ * effect copies the uniforms as it is made, every effect is made by
+ * [liveLensEffect], which sets all of them first, and it is never a paint
+ * shader. It was one per pane, a fresh SkSL parse on the main thread whenever
+ * a pane came into composition.
+ */
+private val liveLensShader: RuntimeShader? by lazy {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        null
+    } else {
         runCatching { RuntimeShader(LIVE_LENS_SRC) }
             .onFailure { android.util.Log.w(LENS_TAG, "live lens shader did not compile: ${it.message}") }
-            .getOrNull() != null
+            .getOrNull()
+    }
 }
 
 // The live backdrop, bent by the lens rim. `content` is the screen behind the

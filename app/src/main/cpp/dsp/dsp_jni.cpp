@@ -46,14 +46,20 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeReconfigure(
 
 // ── Audio processing ────────────────────────────────────────────────────
 
-extern "C" JNIEXPORT void JNICALL
+/**
+ * Processes one stereo block from the input arrays into the output arrays.
+ * Returns whether the output is the input unchanged
+ * (DspEngine::lastProcessUnchanged), so the 16-bit path can keep the
+ * source's samples; false when nothing was processed.
+ */
+extern "C" JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcess(
     JNIEnv* env, jobject /*thiz*/, jlong enginePtr,
     jfloatArray inputL, jfloatArray inputR,
     jfloatArray outputL, jfloatArray outputR,
     jint numFrames) {
     auto* engine = getEngine(enginePtr);
-    if (!engine || numFrames <= 0) return;
+    if (!engine || numFrames <= 0) return JNI_FALSE;
 
     float* inL = env->GetFloatArrayElements(inputL, nullptr);
     float* inR = env->GetFloatArrayElements(inputR, nullptr);
@@ -65,19 +71,22 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcess(
         if (inR)  env->ReleaseFloatArrayElements(inputR, inR, JNI_ABORT);
         if (outL) env->ReleaseFloatArrayElements(outputL, outL, JNI_ABORT);
         if (outR) env->ReleaseFloatArrayElements(outputR, outR, JNI_ABORT);
-        return;
+        return JNI_FALSE;
     }
 
     // Copy input to output buffers, then process in-place
     std::copy(inL, inL + numFrames, outL);
     std::copy(inR, inR + numFrames, outR);
 
-    engine->primary().process(outL, outR, numFrames);
+    DspEngine& primary = engine->primary();
+    primary.process(outL, outR, numFrames);
+    const bool unchanged = primary.lastProcessUnchanged();
 
     env->ReleaseFloatArrayElements(inputL, inL, JNI_ABORT);
     env->ReleaseFloatArrayElements(inputR, inR, JNI_ABORT);
     env->ReleaseFloatArrayElements(outputL, outL, 0);  // commit changes
     env->ReleaseFloatArrayElements(outputR, outR, 0);
+    return unchanged ? JNI_TRUE : JNI_FALSE;
 }
 
 // ── Bus configuration ───────────────────────────────────────────────────
@@ -394,20 +403,23 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeSetSpreadChannels(
 /**
  * Processes planar float channels in place, in a direct buffer: channel c at
  * byte offset c * stride * 4, [numFrames] samples each. Direct, so nothing is
- * copied or allocated per block.
+ * copied or allocated per block. Returns whether every channel came back
+ * unchanged (MultiLaneEngine::lastProcessUnchanged); false when nothing was
+ * processed.
  */
-extern "C" JNIEXPORT void JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcessPlanar(
     JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jobject planar,
     jint numChannels, jint stride, jint numFrames) {
     auto* engine = getEngine(enginePtr);
-    if (!engine || !planar || numFrames <= 0 || numFrames > stride) return;
-    if (numChannels < 1 || numChannels > 2 * MultiLaneEngine::MAX_LANES) return;
+    if (!engine || !planar || numFrames <= 0 || numFrames > stride) return JNI_FALSE;
+    if (numChannels < 1 || numChannels > 2 * MultiLaneEngine::MAX_LANES) return JNI_FALSE;
     auto* base = static_cast<float*>(env->GetDirectBufferAddress(planar));
-    if (!base) return;
+    if (!base) return JNI_FALSE;
     const jlong capacity = env->GetDirectBufferCapacity(planar);
-    if (capacity < static_cast<jlong>(numChannels) * stride * 4) return;
+    if (capacity < static_cast<jlong>(numChannels) * stride * 4) return JNI_FALSE;
     float* channels[2 * MultiLaneEngine::MAX_LANES];
     for (int c = 0; c < numChannels; c++) channels[c] = base + static_cast<size_t>(c) * stride;
     engine->processPlanar(channels, numChannels, numFrames);
+    return engine->lastProcessUnchanged() ? JNI_TRUE : JNI_FALSE;
 }

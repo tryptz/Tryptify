@@ -35,6 +35,7 @@ import tf.monochrome.android.audio.sync.OutputSyncRepository
 import tf.monochrome.android.glyph.data.TryptManiaRequests
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.navigateTool
+import tf.monochrome.android.ui.components.holdToRepeat
 
 @HiltViewModel
 class OutputSyncViewModel @Inject constructor(val sync: OutputSyncRepository) : ViewModel()
@@ -68,9 +69,13 @@ fun BluetoothSyncRow(navController: NavController, viewModel: OutputSyncViewMode
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(top = 4.dp),
         ) {
+            // Held down, the buttons keep stepping: a delay of a few hundred
+            // milliseconds is thirty-odd taps otherwise.
+            val lessEnabled = output != null && ms > OutputSync.MIN_MS
             IconButton(
                 onClick = { viewModel.sync.setForCurrent(ms - STEP_MS) },
-                enabled = output != null && ms > OutputSync.MIN_MS,
+                enabled = lessEnabled,
+                modifier = Modifier.holdToRepeat(lessEnabled) { viewModel.sync.setForCurrent(viewModel.sync.delayMs.value - STEP_MS) },
             ) {
                 Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.settings_bluetooth_sync_less))
             }
@@ -80,9 +85,11 @@ fun BluetoothSyncRow(navController: NavController, viewModel: OutputSyncViewMode
                 textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(min = 72.dp),
             )
+            val moreEnabled = output != null && ms < OutputSync.MAX_MS
             IconButton(
                 onClick = { viewModel.sync.setForCurrent(ms + STEP_MS) },
-                enabled = output != null && ms < OutputSync.MAX_MS,
+                enabled = moreEnabled,
+                modifier = Modifier.holdToRepeat(moreEnabled) { viewModel.sync.setForCurrent(viewModel.sync.delayMs.value + STEP_MS) },
             ) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.settings_bluetooth_sync_more))
             }

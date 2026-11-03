@@ -67,6 +67,8 @@ add_library(monochrome_dsp SHARED
     dsp/meter/loudness_jni.cpp
     # Each local track's dynamic range, measured as it plays, for the library galaxy.
     dsp/meter/dynamic_range_jni.cpp
+    # ReplayGain's stage, ahead of the mixer: every song at the target loudness.
+    dsp/replaygain/replay_gain_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE
@@ -123,6 +125,45 @@ target_link_libraries(monochrome_glyph
     android
     log
 )
+
+# ── Motion blur ───────────────────────────────────────────────────────────
+# The speed tracker and the trail and blur plans behind Trypt Mania's note
+# trails and the lyric glide's blur. Its own small .so, loaded the first time
+# either is switched on. motion_blur.cpp carries no Android headers, so
+# motion/tests builds it on a desktop; only motion_jni.cpp does.
+add_library(monochrome_motion SHARED
+    motion/motion_blur.cpp
+    motion/motion_jni.cpp
+)
+
+target_include_directories(monochrome_motion PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/motion
+)
+
+target_compile_features(monochrome_motion PRIVATE cxx_std_17)
+
+# No -ffast-math: the plans check their inputs with isfinite, which fast-math
+# is free to fold away (see dsp/util/finite.h).
+target_compile_options(monochrome_motion PRIVATE
+    -O2 -fno-exceptions -fno-rtti
+)
+
+set_target_properties(monochrome_motion PROPERTIES DEBUG_POSTFIX "")
+
+# ── RAR import (Trypt Mania's StepMania downloads) ──────────────────────────
+# libarchive's RAR and RAR5 readers (third_party/libarchive), behind a small
+# reader that Kotlin's StyleArchive drives file by file.
+include(${CMAKE_CURRENT_SOURCE_DIR}/archive/libarchive_rar.cmake)
+
+add_library(monochrome_archive SHARED
+    archive/rar_reader.cpp
+    archive/rar_jni.cpp
+)
+
+target_compile_features(monochrome_archive PRIVATE cxx_std_17)
+target_compile_options(monochrome_archive PRIVATE -O2 -fno-exceptions -fno-rtti)
+set_target_properties(monochrome_archive PROPERTIES DEBUG_POSTFIX "")
+target_link_libraries(monochrome_archive archive_rar)
 
 # ── libusb (USB Audio Class direct output) ────────────────────────────────
 # Vendored at third_party/libusb. Upstream uses autotools + Android.mk;

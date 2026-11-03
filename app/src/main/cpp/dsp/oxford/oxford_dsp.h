@@ -146,6 +146,15 @@ public:
         return y;
     }
 
+    // Takes [x] into the history without working out an output: what
+    // process() does to the filter, less its 511-tap dot product. The history
+    // is the filter's only state, so one fed this way and then process()ed is
+    // exactly one that was process()ed all along.
+    inline void push(float x) noexcept {
+        buffer_[writePos_] = x;
+        writePos_ = (writePos_ + 1) % LEN;
+    }
+
 private:
     std::array<float, LEN> h_{};
     std::array<float, LEN> buffer_{};
@@ -312,12 +321,16 @@ public:
 
                 // Always advance the delay line + FIR buffers so toggling
                 // BAND SPLIT is seamless (no jump when state becomes active).
+                // The FIRs' outputs are only worked out while it is on: off,
+                // the default, that was two 511-tap dot products per sample
+                // per channel, a fifth of a core at 48 kHz stereo, for values
+                // nothing read.
                 const float xd = dryDelay_[c].process(x);
-                const float lo = firLow_ [c].process(x);
-                const float hi = firHigh_[c].process(x);
 
                 float shaped;
                 if (split) {
+                    const float lo = firLow_ [c].process(x);
+                    const float hi = firHigh_[c].process(x);
                     const float mid = xd - lo - hi;
                     // Each band is shaped independently, so each needs its own
                     // oversampler state — sharing one would smear the filter
@@ -326,6 +339,8 @@ public:
                            + shapeOs(c, kOsMid,  mid, A, B, C, D, osFactor)
                            + shapeOs(c, kOsHigh, hi,  A, B, C, D, osFactor);
                 } else {
+                    firLow_ [c].push(x);
+                    firHigh_[c].push(x);
                     shaped = shapeOs(c, kOsFull, xd, A, B, C, D, osFactor);
                 }
 
@@ -420,7 +435,7 @@ private:
 
 // ============================================================================
 // Compressor: feed-forward, log-domain, soft-knee, decoupled attack/release.
-// Stereo-linked (max-of-channels peak detection).
+// Stereo-linked (max-of-channels peak detection), with an adaptive peak hold.
 // ============================================================================
 
 class CompressorProcessor {
@@ -446,6 +461,8 @@ public:
         nCh_  = std::clamp(numChannels, 1, kMaxChannels);
         envDb_ = -120.0f;
         grSmoothDb_ = 0.0f;
+        sinceRise_ = holdLen_ = holdLeft_ = 0;
+        rising_ = false;
         grCoef_ = std::exp(-1.0f / (0.030f * static_cast<float>(sr_)));  // 30 ms UI smoothing
         osFactorApplied_ = 0;  // force a re-prepare against the new rate
     }
@@ -480,12 +497,14 @@ public:
             // actually runs at — otherwise turning oversampling on would make
             // the compressor that many times faster.
             grCoef_ = std::exp(-1.0f / (0.030f * static_cast<float>(osRate_)));
+            sinceRise_ = holdLen_ = holdLeft_ = 0;  // counted in running-rate samples
             osFactorApplied_ = osFactor;
         }
 
         const float aCoef = std::exp(-1.0f / (aMs * 0.001f * static_cast<float>(osRate_)));
         const float rCoef = std::exp(-1.0f / (rMs * 0.001f * static_cast<float>(osRate_)));
         const float makeupLin = dbToLin(mkupDb);
+        const int   maxHold   = static_cast<int>(kMaxHoldMs * 0.001 * osRate_);
         const float halfKnee  = kneeDb * 0.5f;
         const float slope     = 1.0f - 1.0f / ratio;  // dB reduction per dB over threshold
 
@@ -509,9 +528,27 @@ public:
 
             const float inDb = (peak > 1e-9f) ? 20.0f * std::log10(peak) : -120.0f;
 
-            // Level envelope with separate attack/release (decoupled peak detector)
-            if (inDb > envDb_) envDb_ = inDb + (envDb_ - inDb) * aCoef;
-            else               envDb_ = inDb + (envDb_ - inDb) * rCoef;
+            // Level envelope with separate attack/release (decoupled peak
+            // detector), holding each peak until the next one is due.
+            // The detector reads a rectified waveform, which falls to nothing
+            // at every zero crossing: with a release shorter than a bass
+            // wave (a 5 ms release against 50 Hz's 10 ms between crests), the
+            // gain rose and fell inside every cycle and reshaped it, 13-18 %
+            // THD on 30-100 Hz at 20:1 with 0.1/5 ms. The hold is the gap
+            // between the last two rises, so it spans one crest to the next:
+            // a steady tone sees a steady gain, while treble and transients,
+            // whose crests come close together, keep their quick release.
+            // Capped at kMaxHoldMs (one wave of 40 Hz).
+            if (sinceRise_ < maxHold) ++sinceRise_;
+            if (inDb > envDb_) {
+                if (!rising_) { holdLen_ = sinceRise_; sinceRise_ = 0; rising_ = true; }
+                envDb_ = inDb + (envDb_ - inDb) * aCoef;
+                holdLeft_ = holdLen_;
+            } else {
+                rising_ = false;
+                if (holdLeft_ > 0) --holdLeft_;
+                else envDb_ = inDb + (envDb_ - inDb) * rCoef;
+            }
 
             // Static curve with quadratic soft knee
             const float over = envDb_ - threshDb;
@@ -560,6 +597,8 @@ private:
         return (f >= 4) ? 4 : (f >= 2 ? 2 : 1);
     }
 
+    static constexpr double kMaxHoldMs = 25.0;
+
     ChannelOversampler os_[kMaxChannels];
     float  up_[kMaxChannels][kMaxOsFactor] = {};
     int    osFactorApplied_{0};
@@ -570,6 +609,11 @@ private:
     float  envDb_{-120.0f};
     float  grSmoothDb_{0.0f};
     float  grCoef_{0.0f};
+    // The adaptive hold, in running-rate samples (see process()).
+    int    sinceRise_{0};
+    int    holdLen_{0};
+    int    holdLeft_{0};
+    bool   rising_{false};
 };
 
 } // namespace trypt::dsp

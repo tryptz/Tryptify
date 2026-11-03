@@ -48,6 +48,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: PreferencesManager,
+    replayGainNow: tf.monochrome.android.audio.replaygain.ReplayGainNow,
+    private val replayGainProcessor: tf.monochrome.android.audio.replaygain.ReplayGainProcessor,
     private val apiServerProber: tf.monochrome.android.data.api.ApiServerProber,
     private val serverAccess: tf.monochrome.android.data.api.ApiServerAccess,
     private val authRepository: AuthRepository,
@@ -189,6 +191,8 @@ class SettingsViewModel @Inject constructor(
 
     // --- Interface ---
     val gaplessPlayback: StateFlow<Boolean> = preferences.gaplessPlayback
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val continueIntoNextList: StateFlow<Boolean> = preferences.continueIntoNextList
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showExplicitBadges: StateFlow<Boolean> = preferences.showExplicitBadges
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -342,8 +346,6 @@ class SettingsViewModel @Inject constructor(
             SharingStarted.WhileSubscribed(5000),
             tf.monochrome.android.data.preferences.LyricsWordProvider.BOTH
         )
-    val serverLyrics: StateFlow<Boolean> = preferences.serverLyrics
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val lyrics3dRotation: StateFlow<Float> = preferences.lyrics3dRotation
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 12f)
     val lyrics3dWaveSpeed: StateFlow<Float> = preferences.lyrics3dWaveSpeed
@@ -527,6 +529,7 @@ class SettingsViewModel @Inject constructor(
 
     // --- Interface actions ---
     fun setGaplessPlayback(enabled: Boolean) { viewModelScope.launch { preferences.setGaplessPlayback(enabled) } }
+    fun setContinueIntoNextList(enabled: Boolean) { viewModelScope.launch { preferences.setContinueIntoNextList(enabled) } }
     fun setShowExplicitBadges(enabled: Boolean) { viewModelScope.launch { preferences.setShowExplicitBadges(enabled) } }
     fun setRowBadges(badges: tf.monochrome.android.data.preferences.RowBadges) { viewModelScope.launch { preferences.setRowBadges(badges) } }
 
@@ -583,7 +586,27 @@ class SettingsViewModel @Inject constructor(
     } }
     fun setCrossfadeDuration(seconds: Int) { viewModelScope.launch { preferences.setCrossfadeDuration(seconds) } }
     fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) { viewModelScope.launch { preferences.setReplayGainMode(mode) } }
-    fun setReplayGainPreamp(db: Float) { viewModelScope.launch { preferences.setReplayGainPreamp(db) } }
+
+    /**
+     * ReplayGain's switch. On is Smart: the album's gain while an album plays
+     * in order, the song's own otherwise, which is what the Track and Album
+     * modes each got right half the time.
+     */
+    fun setReplayGainOn(on: Boolean) = setReplayGainMode(
+        if (on) tf.monochrome.android.audio.replaygain.ReplayGainMode.SMART
+        else tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
+    )
+
+    /**
+     * A measured song's gain now, dB, and its loudness so far, LUFS (below
+     * -999 before the first reading): read off the stage, for the readout.
+     */
+    fun replayGainLive(): Pair<Float, Float> =
+        20f * kotlin.math.log10(replayGainProcessor.appliedGain) to replayGainProcessor.measuredLufs
+
+    /** What ReplayGain is doing to the song playing; null while off or nothing plays. */
+    val replayGainNow: StateFlow<tf.monochrome.android.audio.replaygain.ReplayGainNow.Reading?> = replayGainNow.reading
+    fun setReplayGainTarget(lufs: Float) { viewModelScope.launch { preferences.setReplayGainTarget(lufs) } }
 
     // --- Audio speed actions ---
     fun setPlaybackSpeed(speed: Float) { viewModelScope.launch { preferences.setPlaybackSpeed(speed) } }
@@ -601,7 +624,6 @@ class SettingsViewModel @Inject constructor(
     fun setLyricsWordProvider(mode: tf.monochrome.android.data.preferences.LyricsWordProvider) {
         viewModelScope.launch { preferences.setLyricsWordProvider(mode) }
     }
-    fun setServerLyrics(enabled: Boolean) { viewModelScope.launch { preferences.setServerLyrics(enabled) } }
     fun setNowPlayingViewMode(mode: NowPlayingViewMode) { viewModelScope.launch { preferences.setNowPlayingViewMode(mode) } }
     fun setVisualizerEngineEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerEngineEnabled(enabled) } }
     fun setVisualizerRotationSeconds(seconds: Int) { viewModelScope.launch { preferences.setVisualizerRotationSeconds(seconds) } }
@@ -1152,7 +1174,8 @@ class SettingsViewModel @Inject constructor(
             calculateCacheSize()
             // No rescan to follow: cover art used to live here, so clearing
             // the cache cost every local track its artwork and a full reindex
-            // to get it back. It lives in filesDir now, untouched by this.
+            // to get it back. It lives in filesDir now, untouched by this,
+            // as do the covers of Trypt Mania's pack songs (glyph/art).
         }
     }
 

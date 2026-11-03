@@ -39,6 +39,29 @@ class LrcFormatTest {
     }
 
     @Test
+    fun aRepeatedChorusMovesItsWordsWithIt() {
+        val lyrics = LrcFormat.parse("[00:46.35][02:27.15]<00:46.35>Tick-<00:46.80>tock<00:47.50>\n")!!
+        assertEquals(listOf(46_350L, 46_800L), lyrics.lines[0].words.map { it.startMs })
+        assertEquals(listOf(147_150L, 147_600L), lyrics.lines[1].words.map { it.startMs })
+        assertEquals(148_300L, lyrics.lines[1].words.last().endMs)
+    }
+
+    @Test
+    fun wordsNeverJumpBackAlongTheLine() {
+        val lyrics = LrcFormat.parse("[00:47.76]<00:47.76>the <00:48.81>hour <00:34.38>of <00:49.90>clock<00:50.50>\n")!!
+        val starts = lyrics.lines[0].words.map { it.startMs }
+        assertEquals(starts.sorted(), starts)
+        assertEquals(48_810L, starts[2])
+    }
+
+    @Test
+    fun wordStampsFromTheLinesStartAreMadeTheSongs() {
+        val lyrics = LrcFormat.parse("[00:30.00]<00:00.00>Hello <00:00.40>there<00:01.00>\n")!!
+        assertEquals(listOf(30_000L, 30_400L), lyrics.lines[0].words.map { it.startMs })
+        assertEquals(31_000L, lyrics.lines[0].words.last().endMs)
+    }
+
+    @Test
     fun millisecondFractionsAndNothingTimedAreHandled() {
         assertEquals(10_123L, LrcFormat.parse("[00:10.123]x")!!.lines[0].timeMs)
         assertNull(LrcFormat.parse("just words\nno times"))

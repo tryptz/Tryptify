@@ -180,6 +180,33 @@ internal fun WirePack.toStore() = StorePack(
 )
 
 /**
+ * The Theme Store's pictures, decoded, by pack and hash: a handful at a time,
+ * about a screenful. Each is around 2.5 MB, and a picture that is evicted, or
+ * let go when the app is hidden (`MonochromeApp.onTrimMemory`), is decoded
+ * again from its file on disk the next time it is shown, never downloaded
+ * again. A row on screen holds its own picture, so evicting one never takes it
+ * off the screen.
+ *
+ * One per process, outside the repository, so the app can empty it without
+ * building the repository and its HTTP client to do so.
+ */
+internal object ThemeStorePictures {
+    private const val BYTES = 12 * 1024 * 1024
+
+    private val cache = object : LruCache<String, Bitmap>(BYTES) {
+        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+    }
+
+    fun get(key: String): Bitmap? = cache.get(key)
+
+    fun put(key: String, picture: Bitmap) {
+        cache.put(key, picture)
+    }
+
+    fun clear() = cache.evictAll()
+}
+
+/**
  * The Theme Store, on its own server (`tryptify-servers/theme-store`, a Railway Function
  * with its own Postgres). Every call needs an account: it carries the Supabase
  * session's access token, which the server checks against the project's public
@@ -196,13 +223,11 @@ class ThemeStoreRepository @Inject constructor(
     private val refreshing = Mutex()
 
     /**
-     * Store pictures, decoded, by pack and hash: about a dozen at a time, a
-     * screenful and the rows either side of it. On disk they are kept by the
-     * same name, so a picture is downloaded once until its pack gets a new one.
+     * Store pictures are kept decoded in [ThemeStorePictures]. On disk they are
+     * kept by the same name, so a picture is downloaded once until its pack
+     * gets a new one.
      */
-    private val pictures = object : LruCache<String, Bitmap>(PICTURE_CACHE_BYTES) {
-        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
-    }
+    private val pictures = ThemeStorePictures
     private val pictureDir by lazy { File(context.cacheDir, "theme_store_pictures") }
 
     val user: StateFlow<UserProfile?> = auth.userProfile
@@ -401,7 +426,6 @@ class ThemeStoreRepository @Inject constructor(
 
     private companion object {
         const val MAX_DESCRIPTION = 280
-        const val PICTURE_CACHE_BYTES = 32 * 1024 * 1024
         val SAFE_ID = Regex("[0-9a-fA-F-]{36}")
         val SAFE_HASH = Regex("[0-9a-f]{8,64}")
     }

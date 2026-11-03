@@ -122,6 +122,17 @@ sealed interface GlyphEvent {
     /** A player without the song: the one the host shared, fetched and readied with. */
     data object FetchRoomSong : GlyphEvent
 
+    // ── charting by the minute ──────────────────────────────────────────
+    data object OpenCharting : GlyphEvent
+    data object CloseCharting : GlyphEvent
+    /** The screen is back in front (after a checkout in the browser): read the account again. */
+    data object RefreshCharting : GlyphEvent
+    /** The checkout link was handed to the browser. */
+    data object ChartingUrlOpened : GlyphEvent
+    /** Buy a pack of minutes, by its [tf.monochrome.android.audio.stepmania.ChartingPack.id]. */
+    data class BuyMinutes(val packId: String) : GlyphEvent
+    data object DismissChartingNotice : GlyphEvent
+
     // ── packs ───────────────────────────────────────────────────────────
     data object OpenPacks : GlyphEvent
     data object ClosePacks : GlyphEvent
@@ -151,9 +162,40 @@ sealed interface GlyphEvent {
     data class SetDark(val dark: Boolean) : GlyphEvent
     data class SetMini(val mini: Float) : GlyphEvent
     data class SetFailType(val failType: tf.monochrome.android.glyph.engine.GlyphFailType) : GlyphEvent
+    /** Auto play on or off for the next run (never saved between sessions). */
+    data class SetAutoplay(val on: Boolean) : GlyphEvent
+    /** Race your best on or off (kept between sessions). */
+    data class SetRaceBest(val on: Boolean) : GlyphEvent
     data class SetPlayerName(val name: String) : GlyphEvent
     data class SetPreviews(val on: Boolean) : GlyphEvent
     data class SetGraphics(val graphics: tf.monochrome.android.glyph.engine.GlyphGraphics) : GlyphEvent
+
+    // ── themes: imported StepMania noteskins, themes and announcers ─────
+    data object OpenThemes : GlyphEvent
+    data object CloseThemes : GlyphEvent
+    data class ImportStyle(val uri: android.net.Uri) : GlyphEvent
+    /** A download from the StepMania Archive's pages, imported as a picked file is. */
+    data class ImportStyleUrl(val url: String, val name: String) : GlyphEvent
+    /** The archive's shared dances, for characters imported without them. */
+    data object ImportDances : GlyphEvent
+    /** The judgement's, the combo's and the dancer's sizes (Themes › Sizes). */
+    data class SetStyleSizes(val sizes: GlyphStyleSizes) : GlyphEvent
+    /** The character to dance behind the field, by id; null for none. */
+    data class UseCharacter(val id: String?) : GlyphEvent
+    /** The theme to wear, by id; null for Tryptify's own. */
+    data class UseTheme(val id: String?) : GlyphEvent
+    /** The announcer to hear, by id; null for none. */
+    data class UseAnnouncer(val id: String?) : GlyphEvent
+    data class RemoveStyle(val style: tf.monochrome.android.glyph.style.GlyphStyleLibrary.Style) : GlyphEvent
+    data object DismissThemesMessage : GlyphEvent
+
+    /** A song in the charting screen's history, tapped: open it in the song list. */
+    data class OpenChartedSong(val title: String) : GlyphEvent
+
+    // ── audio: the app's own settings, switched from the game ───────────
+    data class SetAutoEq(val on: Boolean) : GlyphEvent
+    data class SetInflator(val on: Boolean) : GlyphEvent
+    data class SetReplayGain(val on: Boolean) : GlyphEvent
 
     // ── transport ───────────────────────────────────────────────────────
     data object StartPlay : GlyphEvent

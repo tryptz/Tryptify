@@ -16,22 +16,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import tf.monochrome.android.data.api.LrcFormat
 import tf.monochrome.android.data.preferences.PreferencesManager
-import tf.monochrome.android.data.repository.LyricsJob
 import tf.monochrome.android.data.repository.MusicRepository
-import tf.monochrome.android.data.repository.ServerLyricsEngine
-import tf.monochrome.android.data.repository.ServerLyricsStatus
+import tf.monochrome.android.data.repository.TimedLyricsStore
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.Lyrics
 import tf.monochrome.android.domain.model.Track
 import tf.monochrome.android.player.NowPlayingLyricsHolder
 import tf.monochrome.android.player.QueueManager
-import tf.monochrome.android.player.UnifiedTrackRegistry
 
 /**
  * The lyrics editor's working copy of the playing song's lyrics, and every
  * move on it ([LyricsEdit]) with undo. Saving hands the copy to
- * [ServerLyricsEngine.publish]: kept like a server's answer, shown in the
- * player at once, and written beside the download as an `.lrc`.
+ * [TimedLyricsStore.publish]: kept for good, shown in the player at once,
+ * and written beside the download as an `.lrc`.
  *
  * The copy starts from whatever the player shows (the race's answer, a
  * server's, or an earlier edit) the first time a song is on, and from a
@@ -41,10 +38,9 @@ import tf.monochrome.android.player.UnifiedTrackRegistry
 class LyricsEditorViewModel @Inject constructor(
     queueManager: QueueManager,
     private val holder: NowPlayingLyricsHolder,
-    private val engine: ServerLyricsEngine,
+    private val store: TimedLyricsStore,
     private val repository: MusicRepository,
     private val preferences: PreferencesManager,
-    private val unifiedTrackRegistry: UnifiedTrackRegistry,
 ) : ViewModel() {
 
     val track: StateFlow<Track?> = queueManager.currentTrack
@@ -81,13 +77,6 @@ class LyricsEditorViewModel @Inject constructor(
     private val _note = MutableStateFlow<EditorNote?>(null)
     val note: StateFlow<EditorNote?> = _note.asStateFlow()
 
-    /** Where the server stands with the playing song, as the lyrics view shows it. */
-    val serverStatus: StateFlow<ServerLyricsStatus?> =
-        combine(track, engine.status) { t, all -> t?.let { all[it.id] } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-    val hasServer: StateFlow<Boolean> = engine.hasServer
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
-
     private var loadedFor: Long? = null
 
     init {
@@ -103,9 +92,9 @@ class LyricsEditorViewModel @Inject constructor(
                 }
             }
         }
-        // A server's answer, landing while nothing has been changed, is worth more than an empty page.
+        // Lyrics kept for the song while nothing has been changed are worth more than an empty page.
         viewModelScope.launch {
-            engine.results.collect { (trackId, lyrics) ->
+            store.results.collect { (trackId, lyrics) ->
                 if (trackId == track.value?.id && !_dirty.value) reset(lyrics)
             }
         }
@@ -240,7 +229,7 @@ class LyricsEditorViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val sorted = LyricsEdit.sorted(lyrics)
-            engine.publish(t.id, sorted, lrcText())
+            store.publish(t.id, sorted, lrcText())
             repository.forgetLyrics(t.id)
             _draft.value = sorted
             _dirty.value = false
@@ -248,30 +237,11 @@ class LyricsEditorViewModel @Inject constructor(
         }
     }
 
-    /** Sends the song to the server with the copy's words, so the words come back timed. */
-    fun timeOnServer() {
-        val t = track.value ?: return
-        viewModelScope.launch {
-            val unified = unifiedTrackRegistry[t.id]
-            engine.request(
-                LyricsJob(
-                    track = t,
-                    unified = unified,
-                    query = repository.lyricsQueryFor(t),
-                    plain = _draft.value?.lines?.joinToString("\n") { it.text }?.takeIf { it.isNotBlank() },
-                    convertToRomaji = preferences.romajiLyrics.first(),
-                ),
-            )
-        }
-    }
-
-    fun cancelServer() = engine.cancelAll()
-
     /** Drops what was saved for the song, so the next lookup races the catalogues again. */
     fun forgetSaved() {
         val t = track.value ?: return
         viewModelScope.launch {
-            engine.forget(t.id)
+            store.forget(t.id)
             repository.forgetLyrics(t.id)
             _note.value = EditorNote.FORGOTTEN
         }

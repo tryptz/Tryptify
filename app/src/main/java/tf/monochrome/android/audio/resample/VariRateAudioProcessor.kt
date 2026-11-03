@@ -7,7 +7,9 @@ import androidx.media3.common.audio.AudioProcessor.AudioFormat
 import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicReferenceArray
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.ceil
@@ -41,13 +43,37 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
 
     private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
+    /** What [getOutput] hands on: [buffer], or EMPTY once it has been taken. */
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
+
+    /**
+     * The output's memory, kept across blocks. [getOutput] has to leave
+     * [outputBuffer] empty, so the memory cannot live there: when it did,
+     * every block found a capacity of 0 and allocated a new direct buffer.
+     */
+    private var buffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false
 
-    /** Designed off the audio thread, swapped in atomically. */
-    private class Table(val ratio: Double, val kernel: SincKernel)
+    /** The end of stream's lookahead, still to be pushed out (see [queueEndOfStream]). */
+    private var tailPending = false
 
-    private val tableRef = AtomicReference(Table(1.0, SincKernel.design(1.0)))
+    /**
+     * A designed kernel, swapped in atomically. Keyed by [cutoffScale], the
+     * one thing about the ratio the design depends on: every ratio at or
+     * below 1 has the same kernel.
+     */
+    private class Table(val cutoffScale: Double, val kernel: SincKernel)
+
+    /**
+     * The last few tables designed, so going back to a speed used a moment ago
+     * (toggling a preset, stepping the speed down and up again) costs a lookup
+     * instead of a new 257 x 64 design on the caller's thread, which for the
+     * player's own speed changes is the playback thread.
+     */
+    private val recentTables = AtomicReferenceArray<Table>(KERNEL_CACHE)
+    private val nextRecent = AtomicInteger(0)
+
+    private val tableRef = AtomicReference(tableFor(cutoffScale(1.0), 1.0))
 
     @Volatile private var ratio: Float = 1f
 
@@ -60,12 +86,19 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
     private var pos = 0.0
 
     /**
+     * One output frame's taps: the polyphase row for its read position,
+     * blended once and then run over every channel.
+     */
+    private var taps = FloatArray(0)
+
+    /**
      * Sets input frames consumed per output frame. 1.0 is a no-op and makes the
      * processor inactive.
      *
      * Designs the kernel here, on the caller's thread: it is a user-driven
      * control change, and the alternative is either designing sinc tables on
      * the audio thread or running with a cutoff that does not match the ratio.
+     * A kernel designed recently is reused rather than designed again.
      */
     fun setRatio(newRatio: Float) {
         if (!newRatio.isFinite() || newRatio <= 0f) return
@@ -73,9 +106,19 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         if (clamped == ratio) return
         ratio = clamped
         val r = clamped.toDouble()
-        if (tableRef.get().ratio != r) {
-            tableRef.set(Table(r, SincKernel.design(r, HALF_WIDTH, PHASES)))
+        val scale = cutoffScale(r)
+        if (tableRef.get().cutoffScale != scale) tableRef.set(tableFor(scale, r))
+    }
+
+    /** A recent table with [scale], or a new one designed for [ratio] and remembered. */
+    private fun tableFor(scale: Double, ratio: Double): Table {
+        for (i in 0 until KERNEL_CACHE) {
+            val t = recentTables.get(i)
+            if (t != null && t.cutoffScale == scale) return t
         }
+        val t = Table(scale, SincKernel.design(ratio, HALF_WIDTH, PHASES))
+        recentTables.set(Math.floorMod(nextRecent.getAndIncrement(), KERNEL_CACHE), t)
+        return t
     }
 
     fun getRatio(): Float = ratio
@@ -140,11 +183,18 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         var produced = 0
         val step = ratio.toDouble()
         val last = total - 1 - halfWidth
+        val kernel = active.kernel
+        val width = 2 * halfWidth
+        if (taps.size != width) taps = FloatArray(width)
         while (floor(pos) <= last && produced < maxOut) {
             val i = floor(pos).toInt()
             val frac = pos - i
+            // The taps depend on the read position alone, so they are worked
+            // out once a frame rather than once a channel.
+            blendTaps(kernel, frac, taps)
+            val base = i - halfWidth + 1
             for (c in 0 until channels) {
-                writeSample(produced * channels + c, encoding, filter(work[c], i, frac, active.kernel))
+                writeSample(produced * channels + c, encoding, convolve(work[c], base, taps, width))
             }
             produced++
             pos += step
@@ -160,36 +210,51 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
     }
 
     override fun getOutput(): ByteBuffer {
+        if (tailPending && outputBuffer === AudioProcessor.EMPTY_BUFFER) {
+            tailPending = false
+            queueTail()
+        }
         val buf = outputBuffer
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         return buf
     }
 
     override fun isEnded(): Boolean =
-        inputEnded && outputBuffer === AudioProcessor.EMPTY_BUFFER
+        inputEnded && !tailPending && outputBuffer === AudioProcessor.EMPTY_BUFFER
 
+    /**
+     * Push the filter's own latency out as zeros so the last few milliseconds
+     * of the track are not swallowed by the tail.
+     *
+     * Not here, though: in [getOutput], once the last block has been taken.
+     * Media3's pipeline tells a stage the stream ended without checking that
+     * the stage's previous output was read, and the output buffer is reused,
+     * so filtering the tail here could overwrite a block still waiting to be
+     * played.
+     */
     override fun queueEndOfStream() {
-        // Push the filter's own latency out as zeros so the last few
-        // milliseconds of the track are not swallowed by the tail.
-        if (!inputEnded && inputFormat != AudioFormat.NOT_SET && isActive) {
-            val halfWidth = active.kernel.halfWidth
-            val channels = inputFormat.channelCount
-            val bytesPerSample =
-                if (inputFormat.encoding == C.ENCODING_PCM_FLOAT) 4 else 2
-            val tail = ByteBuffer
-                .allocateDirect(halfWidth * bytesPerSample * channels)
-                .order(ByteOrder.nativeOrder())
-            // allocateDirect zero-fills, so this is silence of exactly the
-            // filter's lookahead.
-            tail.position(0).limit(halfWidth * bytesPerSample * channels)
-            queueInput(tail)
-        }
+        if (!inputEnded && inputFormat != AudioFormat.NOT_SET && isActive) tailPending = true
         inputEnded = true
+    }
+
+    private fun queueTail() {
+        val halfWidth = active.kernel.halfWidth
+        val channels = inputFormat.channelCount
+        val bytesPerSample =
+            if (inputFormat.encoding == C.ENCODING_PCM_FLOAT) 4 else 2
+        val tail = ByteBuffer
+            .allocateDirect(halfWidth * bytesPerSample * channels)
+            .order(ByteOrder.nativeOrder())
+        // allocateDirect zero-fills, so this is silence of exactly the
+        // filter's lookahead.
+        tail.position(0).limit(halfWidth * bytesPerSample * channels)
+        queueInput(tail)
     }
 
     override fun flush() {
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
+        tailPending = false
         if (pendingFormat != AudioFormat.NOT_SET) {
             inputFormat = pendingFormat
             pendingFormat = AudioFormat.NOT_SET
@@ -209,28 +274,33 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
         inputFormat = AudioFormat.NOT_SET
         hist = emptyArray()
         work = emptyArray()
+        buffer = AudioProcessor.EMPTY_BUFFER
     }
 
     // ── internals ────────────────────────────────────────────────────────
 
     /**
-     * One output sample: the polyphase row for [frac], linearly interpolated
-     * between the two nearest phases so the fraction is not quantised to the
-     * table's resolution.
+     * The polyphase row for [frac] into [out], linearly interpolated between
+     * the two nearest phases so the fraction is not quantised to the table's
+     * resolution.
      */
-    private fun filter(work: FloatArray, i: Int, frac: Double, kernel: SincKernel): Float {
-        val width = 2 * kernel.halfWidth
-        val base = i - kernel.halfWidth + 1
+    private fun blendTaps(kernel: SincKernel, frac: Double, out: FloatArray) {
         val phasePos = frac * kernel.phases
         val p = phasePos.toInt().coerceIn(0, kernel.phases - 1)
         val blend = (phasePos - p).toFloat()
         val a = kernel.taps[p]
         val b = kernel.taps[p + 1]
+        for (k in out.indices) out[k] = a[k] + (b[k] - a[k]) * blend
+    }
+
+    /**
+     * One output sample: [width] input frames from [base] against [taps], in
+     * the same order the per-channel blend used to sum them, so the result
+     * is the same to the bit.
+     */
+    private fun convolve(work: FloatArray, base: Int, taps: FloatArray, width: Int): Float {
         var acc = 0f
-        for (k in 0 until width) {
-            val tap = a[k] + (b[k] - a[k]) * blend
-            acc += work[base + k] * tap
-        }
+        for (k in 0 until width) acc += work[base + k] * taps[k]
         return acc
     }
 
@@ -246,11 +316,12 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
     }
 
     private fun ensureOutput(bytes: Int) {
-        if (outputBuffer.capacity() < bytes) {
-            outputBuffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
+        if (buffer.capacity() < bytes) {
+            buffer = ByteBuffer.allocateDirect(bytes).order(ByteOrder.nativeOrder())
         } else {
-            outputBuffer.clear()
+            buffer.clear()
         }
+        outputBuffer = buffer
     }
 
     private fun readInterleaved(
@@ -296,5 +367,14 @@ class VariRateAudioProcessor @Inject constructor() : AudioProcessor {
 
         /** Matches Sonic's own tolerance for "close enough to 1 to skip". */
         const val RATIO_DEADZONE = 1e-4f
+
+        /** Kernels remembered by [tableFor]: about 66 KB each. */
+        const val KERNEL_CACHE = 4
+
+        /**
+         * What a kernel's design takes from the ratio: the cutoff comes down
+         * by it when decimating and stays put otherwise ([SincKernel.design]).
+         */
+        fun cutoffScale(ratio: Double): Double = kotlin.math.min(1.0, 1.0 / ratio.coerceAtLeast(1e-6))
     }
 }

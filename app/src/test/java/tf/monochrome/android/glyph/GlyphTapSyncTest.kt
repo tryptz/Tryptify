@@ -62,24 +62,57 @@ class GlyphTapSyncTest {
     }
 
     @Test
-    fun theWarmUpIsNotCountedAndTheCountStopsWhenFull() {
+    fun everyTapCountsFromTheFirstAndTheCountStopsWhenFull() {
         val sync = GlyphTapSync()
-        assertFalse(sync.tap(at(0, 200f)))
-        assertFalse(sync.tap(at(1, 200f)))
-        assertTrue(sync.tap(at(2, 200f)))
-        assertEquals(1, sync.taps)
-        tapAll(sync, { 200f }, 3 until GlyphSyncTrack.BEATS)
+        assertTrue(sync.tap(at(0, 200f)))
+        assertTrue(sync.tap(at(1, 200f)))
+        assertEquals(2, sync.taps)
+        tapAll(sync, { 200f }, 2 until GlyphSyncTrack.BEATS)
         assertEquals(GlyphTapSync.NEEDED, sync.taps)
         assertFalse(sync.tap(at(40, 200f)))
     }
 
     @Test
+    fun aSlowFirstReactionDoesNotCostTheSecondTap() {
+        // The first click after the silence is reacted to, 260 ms after it is
+        // heard; the rest are tapped in time. The second tap used to be thrown
+        // away as a repeat, and the count stood still for the first few taps.
+        val sync = GlyphTapSync()
+        assertTrue(sync.tap(at(0, 250f + 260f)))
+        assertTrue(sync.tap(at(1, 250f)))
+        assertTrue(sync.tap(at(2, 250f)))
+        assertEquals(3, sync.taps)
+        tapAll(sync, { 250f }, 3 until GlyphSyncTrack.BEATS)
+        assertEquals(250, sync.offsetMs)
+        assertTrue(sync.steady)
+    }
+
+    @Test
+    fun aSlowFirstReactionDoesNotReadAClickOff() {
+        // 150 ms headphones and a 350 ms first reaction used to read 570 ms.
+        val sync = GlyphTapSync()
+        sync.tap(at(0, 150f + 350f))
+        tapAll(sync, { 150f }, 1 until GlyphSyncTrack.BEATS)
+        assertEquals(150, sync.offsetMs)
+        assertFalse(sync.couldBeAClickOff)
+    }
+
+    @Test
+    fun wiredHeadphonesWithAReactionReadNearZero() {
+        // Was read as 432 ms: the reaction pushed the anchor onto the next click.
+        val sync = GlyphTapSync()
+        sync.tap(at(0, 250f))
+        tapAll(sync, { 0f }, 1 until GlyphSyncTrack.BEATS)
+        assertEquals(0, sync.offsetMs)
+    }
+
+    @Test
     fun nothingIsReadUntilEnoughTapsCount() {
         val sync = GlyphTapSync()
-        tapAll(sync, { 100f }, 0 until GlyphTapSync.WARMUP + GlyphTapSync.MIN_TAPS - 1)
+        tapAll(sync, { 100f }, 0 until GlyphTapSync.MIN_TAPS - 1)
         assertNull(sync.offsetMs)
         assertNull(sync.spreadMs)
-        sync.tap(at(GlyphTapSync.WARMUP + GlyphTapSync.MIN_TAPS - 1, 100f))
+        sync.tap(at(GlyphTapSync.MIN_TAPS - 1, 100f))
         assertEquals(100, sync.offsetMs)
     }
 

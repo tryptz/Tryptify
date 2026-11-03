@@ -10,6 +10,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,8 +67,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.R
 import tf.monochrome.android.data.api.LrcFormat
-import tf.monochrome.android.data.repository.LyricsStage
-import tf.monochrome.android.data.repository.ServerLyricsStatus
 import tf.monochrome.android.domain.model.LyricLine
 import tf.monochrome.android.ui.glyph.GlyphButton
 import tf.monochrome.android.ui.mixer.GlassChoiceChip
@@ -86,7 +85,7 @@ import tf.monochrome.android.ui.settings.StudioSection
  * button under it, then the lines, then every setting in the Studio's own
  * sections. See docs/ui-invariants.md, "Lyrics".
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun LyricsEditorScreen(
     navController: NavController,
@@ -105,10 +104,12 @@ fun LyricsEditorScreen(
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     val note by viewModel.note.collectAsStateWithLifecycle()
     val fx by viewModel.lyricsFx.collectAsStateWithLifecycle()
-    val serverStatus by viewModel.serverStatus.collectAsStateWithLifecycle()
-    val hasServer by viewModel.hasServer.collectAsStateWithLifecycle()
     val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
-    val position by playerViewModel.positionMs.collectAsStateWithLifecycle()
+    // Held as State: the play head ticks four times a second, and more at
+    // lyric boundaries. Read here it recomposed the whole editor for the
+    // transport's clock alone. The transport reads it, and a stamp reads it
+    // when it is pressed.
+    val positionState = playerViewModel.positionMs.collectAsStateWithLifecycle()
     val duration by playerViewModel.durationMs.collectAsStateWithLifecycle()
     val accent = MaterialTheme.colorScheme.primary
 
@@ -158,7 +159,7 @@ fun LyricsEditorScreen(
             Spacer(Modifier.height(8.dp))
             Transport(
                 isPlaying = isPlaying,
-                positionMs = position,
+                position = positionState,
                 durationMs = duration,
                 onTogglePlay = playerViewModel::togglePlayPause,
                 onSeek = playerViewModel::seekTo,
@@ -166,7 +167,7 @@ fun LyricsEditorScreen(
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 GlyphButton(
                     text = stringResource(R.string.lyrics_editor_stamp),
-                    onClick = { viewModel.stamp(position) },
+                    onClick = { viewModel.stamp(positionState.value) },
                     primary = true,
                     enabled = !draft?.lines.isNullOrEmpty(),
                     modifier = Modifier.weight(1f),
@@ -175,14 +176,17 @@ fun LyricsEditorScreen(
                 TextButton(onClick = { viewModel.nudgeSelected(-stepMs) }) { Text("−$stepMs") }
                 TextButton(onClick = { viewModel.nudgeSelected(stepMs) }) { Text("+$stepMs") }
             }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            // Wrapped, not scrolled sideways: a scrolling row hid the last
+            // chips past the edge, with nothing to say they were there.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 GlassChoiceChip(stringResource(R.string.lyrics_editor_line_mode), selected = !wordMode, accent = accent, onClick = { viewModel.wordMode.value = false })
-                Spacer(Modifier.width(6.dp))
                 GlassChoiceChip(stringResource(R.string.lyrics_editor_word_mode), selected = wordMode, accent = accent, onClick = { viewModel.wordMode.value = true })
-                Spacer(Modifier.width(14.dp))
                 for (step in listOf(10L, 50L, 100L, 500L)) {
                     GlassChoiceChip("$step ms", selected = stepMs == step, accent = accent, onClick = { viewModel.stepMs.value = step })
-                    Spacer(Modifier.width(6.dp))
                 }
             }
             Spacer(Modifier.height(4.dp))
@@ -226,7 +230,11 @@ fun LyricsEditorScreen(
                     onHold = { rowMenu = i },
                 )
                 if (i == selectedLine && wordMode && line.words.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 6.dp)) {
+                    FlowRow(
+                        Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         line.words.forEachIndexed { w, word ->
                             GlassChoiceChip(
                                 label = "${word.text} ${LrcFormat.stamp(word.startMs).drop(3)}",
@@ -237,7 +245,6 @@ fun LyricsEditorScreen(
                                     playerViewModel.seekTo(word.startMs)
                                 },
                             )
-                            Spacer(Modifier.width(6.dp))
                         }
                     }
                 }
@@ -253,7 +260,7 @@ fun LyricsEditorScreen(
                 )
                 FxNudge(label = stringResource(R.string.lyrics_editor_shift_all), step = stepMs.toFloat(), unit = " ms") { viewModel.shiftAll(it.toLong()) }
                 if (selectedLine in lines.indices) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+                    FlowRow(Modifier.fillMaxWidth()) {
                         if (lines[selectedLine].words.isEmpty()) {
                             TextButton(onClick = { viewModel.splitWords(selectedLine) }) { Text(stringResource(R.string.lyrics_editor_split_words)) }
                         } else {
@@ -266,13 +273,13 @@ fun LyricsEditorScreen(
                 }
 
                 StudioSection(stringResource(R.string.lyrics_editor_text))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                FlowRow(Modifier.fillMaxWidth()) {
                     TextButton(onClick = { pasting = true }) { Text(stringResource(R.string.lyrics_editor_paste)) }
                     TextButton(onClick = { inserting = lines.size - 1 }) { Text(stringResource(R.string.lyrics_editor_add_line)) }
                 }
 
                 StudioSection(stringResource(R.string.lyrics_editor_file))
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                FlowRow(Modifier.fillMaxWidth()) {
                     TextButton(
                         onClick = {
                             val lrc = viewModel.lrcText() ?: return@TextButton
@@ -285,18 +292,7 @@ fun LyricsEditorScreen(
                         },
                         enabled = lines.isNotEmpty(),
                     ) { Text(stringResource(R.string.lyrics_editor_export)) }
-                    if (hasServer) {
-                        val busy = serverStatus is ServerLyricsStatus.Working || serverStatus == ServerLyricsStatus.Waiting
-                        if (busy) {
-                            TextButton(onClick = viewModel::cancelServer) { Text(stringResource(R.string.lyrics_server_cancel)) }
-                        } else {
-                            TextButton(onClick = viewModel::timeOnServer) { Text(stringResource(R.string.lyrics_server_sync)) }
-                        }
-                    }
                     TextButton(onClick = viewModel::forgetSaved) { Text(stringResource(R.string.lyrics_editor_forget)) }
-                }
-                serverStatusText(serverStatus)?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                 }
                 note?.let {
                     val text = when (it) {
@@ -331,7 +327,7 @@ fun LyricsEditorScreen(
             initial = "",
             onDismiss = { inserting = null },
         ) { text ->
-            viewModel.insertAfter(index, text, position)
+            viewModel.insertAfter(index, text, positionState.value)
             inserting = null
         }
     }
@@ -381,22 +377,10 @@ fun LyricsEditorScreen(
 
 private fun lines(draft: tf.monochrome.android.domain.model.Lyrics?): List<LyricLine> = draft?.lines.orEmpty()
 
-@Composable
-private fun serverStatusText(status: ServerLyricsStatus?): String? = when (status) {
-    ServerLyricsStatus.Waiting -> stringResource(R.string.lyrics_server_waiting)
-    is ServerLyricsStatus.Working -> when (status.stage) {
-        LyricsStage.DOWNLOADING -> stringResource(R.string.lyrics_server_downloading)
-        LyricsStage.SENDING -> stringResource(R.string.lyrics_server_sending, status.host)
-        LyricsStage.HEARING -> stringResource(R.string.lyrics_server_hearing, status.host)
-    }
-    is ServerLyricsStatus.Failed -> stringResource(R.string.lyrics_server_failed, status.reason)
-    ServerLyricsStatus.NoFile -> stringResource(R.string.lyrics_server_no_file)
-    ServerLyricsStatus.NoServer -> stringResource(R.string.lyrics_server_no_server)
-    null -> null
-}
 
 @Composable
-private fun Transport(isPlaying: Boolean, positionMs: Long, durationMs: Long, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {
+private fun Transport(isPlaying: Boolean, position: State<Long>, durationMs: Long, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit) {
+    val positionMs = position.value
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         IconButton(onClick = onTogglePlay) {
             Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null)

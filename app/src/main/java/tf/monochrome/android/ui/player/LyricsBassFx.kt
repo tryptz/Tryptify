@@ -24,7 +24,10 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.dp
+import tf.monochrome.android.audio.eq.LinkBandAnalysis
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
+import tf.monochrome.android.domain.model.BandRange
+import tf.monochrome.android.domain.model.LinkShape
 import tf.monochrome.android.domain.model.LyricsFxSettings
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -58,35 +61,32 @@ val LocalLyricGlyphAnchors = compositionLocalOf<LyricGlyphAnchors?> { null }
 /** Shared bass pulse so the line pump and the full-screen glow use one analyzer stake and breathe together. */
 val LocalBeatPulse = compositionLocalOf<State<Float>?> { null }
 
-// 40–110 Hz — the kick/bass fundamentals — mapped into the tap's 256
-// log-spaced bins (20 Hz..20 kHz): log10(f/20)/3 * 255.
-private const val BASS_BIN_START = 26
-private const val BASS_BIN_END = 62
+/** The kick and the bass's fundamentals: what the beat engine listens to. */
+private const val BASS_LO_HZ = 40f
+private const val BASS_HI_HZ = 110f
+
+/** Anything quieter than this (dBFS) is silence: the music links' own quiet limit. */
+private const val BASS_QUIET_DB = LinkShape.DEFAULT_QUIET_DB
 
 private const val SPRING_STIFFNESS = 300f
 
-// Adaptive kick detection. The tap emits per-bin levels in dB (pink-compensated
-// and re-centered so the midband sits at 0 dB), and in real music the bass band
-// sits WELL above that reference — often +12 dB or more on anything bass-heavy.
-// An absolute threshold therefore pins at max on every frame, so the pump swells
-// once and just stays swollen. Instead we track a slow "bass floor" and drive the
-// pulse from how far the instantaneous level pokes ABOVE that floor — i.e. the
-// kick transient — which rests near 0 between kicks whatever the mix level is.
-//
-// FLOOR_FALL_SEC: time constant when the floor follows the level down (toward the
-// quiet gaps between kicks). FLOOR_RISE_SEC: much slower, so the floor creeps up
-// through sustained-loud sections without ever chasing a kick's own transient.
-// KICK_RANGE_DB: dB above the floor that counts as a full-strength kick.
-private const val FLOOR_FALL_SEC = 0.4f
-private const val FLOOR_RISE_SEC = 2.5f
-private const val KICK_RANGE_DB = 8f
-
 /**
- * Per-frame bass pulse in 0..~1.6 (>1 on overshoot). FFT bass bins → dB →
- * kick transient above an adaptive bass floor → attack/release envelope →
- * underdamped spring (attack, release, bounce are Studio settings). Read from
- * draw/layer lambdas only, so the pulse never causes recomposition. Ref-counts
- * a stake on the analyzer for exactly as long as it is composed.
+ * Per-frame bass pulse in 0..~1.6 (>1 on overshoot): the beat engine. It
+ * listens as the music links do, never to the display's spectrum: the energy
+ * of 40–110 Hz alone, from the links' own short-window analysis
+ * ([SpectrumAnalyzerTap.linkPower], [LinkBandAnalysis.bandDb]), and the kick
+ * read off it by the links' own detector ([BandRange]: an adaptive floor and
+ * ceiling, silence-proof, restarting after a pause). Then the Studio's attack
+ * and release, and an underdamped spring for the bounce.
+ *
+ * It used to average the display spectrum's bass bins: tilted, re-centred each
+ * frame on the mids (so the kick read lower when the vocals rose), smoothed
+ * over a fifth of a second and taken over an 8K window, with a floor of its own
+ * that silence dragged down, so after every pause it swelled and stuck. It
+ * also ran the display's big FFT just for this.
+ *
+ * Read from draw/layer lambdas only, so the pulse never causes recomposition.
+ * Holds a stake on the links' analysis while the screen is started.
  */
 @Composable
 internal fun rememberBassPulse(): State<Float> =
@@ -97,49 +97,37 @@ internal fun rememberBassPulse(tap: SpectrumAnalyzerTap?, fx: LyricsFxSettings):
     val pulse = remember { mutableFloatStateOf(0f) }
     // Bail before the analyzer stake and the per-frame loop, not after: with
     // animations off there is no pulse to draw, so there is no reason to keep
-    // the FFT tap alive or to wake on every frame.
+    // the analysis alive or to wake on every frame.
     if (tf.monochrome.android.ui.theme.reduceMotion()) return pulse
     if (tap == null) return pulse
 
     // Held while the screen is started, not merely composed: in the
     // background, or with the phone locked, nothing is reading the pulse.
     androidx.lifecycle.compose.LifecycleStartEffect(tap) {
-        tap.acquire()
-        LyricsDebug.log("FFT analyzer staked (bass pulse active)")
+        tap.acquireLinks()
+        LyricsDebug.log("beat engine listening (links' analysis staked)")
         onStopOrDispose {
-            tap.release()
-            LyricsDebug.log("FFT analyzer released (bass pulse stopped)")
+            tap.releaseLinks()
+            LyricsDebug.log("beat engine stopped (links' analysis released)")
         }
     }
     LaunchedEffect(tap, fx.attackMs, fx.releaseMs, fx.bounce) {
         val attackSec = (fx.attackMs / 1000f).coerceAtLeast(0.001f)
         val releaseSec = (fx.releaseMs / 1000f).coerceAtLeast(0.01f)
         val springDamping = 2f * fx.springDampingRatio * sqrt(SPRING_STIFFNESS)
+        val kick = BandRange()
         var env = 0f
         var pos = 0f
         var vel = 0f
-        var floor = 0f
-        var floorInit = false
         var lastNanos = -1L
         while (true) {
             withFrameNanos { now ->
                 val dt = if (lastNanos < 0) 0.016f
                 else ((now - lastNanos) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
                 lastNanos = now
-                val bins = tap.spectrumBins.value
-                var sum = 0f
-                for (b in BASS_BIN_START..BASS_BIN_END) sum += bins[b]
-                val db = sum / (BASS_BIN_END - BASS_BIN_START + 1)
-
-                // Adaptive bass floor: falls quickly toward the quiet gaps between
-                // kicks, rises slowly so it never chases a kick's own transient.
-                if (!floorInit) { floor = db; floorInit = true }
-                val floorTau = if (db < floor) FLOOR_FALL_SEC else FLOOR_RISE_SEC
-                floor += (db - floor) * (1f - exp(-dt / floorTau))
-
-                // Kick = how far the level pokes above the floor, in kick-range dB.
-                // Rests near 0 between kicks regardless of the mix's bass level.
-                val raw = ((db - floor) / KICK_RANGE_DB).coerceIn(0f, 1f)
+                val spectrum = tap.linkPower.value
+                val db = LinkBandAnalysis.bandDb(spectrum.power, spectrum.sampleRate, BASS_LO_HZ, BASS_HI_HZ)
+                val raw = kick.step(db, BASS_QUIET_DB, dt)
                 val coef = if (raw > env) 1f - exp(-dt / attackSec) else 1f - exp(-dt / releaseSec)
                 env += (raw - env) * coef
                 vel += ((env - pos) * SPRING_STIFFNESS - vel * springDamping) * dt

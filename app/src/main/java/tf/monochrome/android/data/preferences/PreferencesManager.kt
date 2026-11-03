@@ -100,6 +100,24 @@ class PreferencesManager @Inject constructor(
     internal val store: DataStore<Preferences> get() = dataStore
 
     companion object {
+        /**
+         * The target loudness [prefs] hold, LUFS. Unset, it comes from a
+         * pre-amp chosen before the target existed, the nearest target to it.
+         * With neither set but ReplayGain on from an earlier build, the
+         * pre-amp was at its default of 0 dB, which played at ReplayGain's own
+         * reference: -18 LUFS, not the new default of -14, which would have
+         * made those listeners' music 4 dB louder after the update. Anyone
+         * else gets the default.
+         */
+        internal fun replayGainTargetOf(prefs: Preferences): Float {
+            val rg = tf.monochrome.android.audio.replaygain.ReplayGain
+            prefs[REPLAYGAIN_TARGET_LUFS]?.takeIf { it in rg.TARGET_STEPS }?.let { return it }
+            prefs[REPLAYGAIN_PREAMP_DB]?.let { return rg.targetFromPreamp(it) }
+            val mode = prefs[REPLAYGAIN_MODE]
+            val wasOn = mode != null && mode != tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF.name
+            return if (wasOn) rg.targetFromPreamp(0f) else rg.DEFAULT_TARGET_LUFS
+        }
+
         private const val MAX_SEARCH_HISTORY_SIZE = 10
 
         /**
@@ -297,6 +315,7 @@ class PreferencesManager @Inject constructor(
         // Interface
         private val GAPLESS_PLAYBACK = booleanPreferencesKey("gapless_playback")
         private val GAPLESS_NO_RESAMPLE = booleanPreferencesKey("gapless_no_resample")
+        private val CONTINUE_INTO_NEXT_LIST = booleanPreferencesKey("continue_into_next_list")
         private val WHATS_NEW_SEEN_VERSION = intPreferencesKey("whats_new_seen_version")
         private val WHATS_NEW_NEVER_SHOW = booleanPreferencesKey("whats_new_never_show")
         private val DONATE_PLAYS_SINCE_PROMPT = intPreferencesKey("donate_plays_since_prompt")
@@ -316,7 +335,9 @@ class PreferencesManager @Inject constructor(
         private val NORMALIZATION_ENABLED = booleanPreferencesKey("normalization_enabled")
         // ReplayGain (audio/replaygain): the mode's name and the pre-amp in dB.
         private val REPLAYGAIN_MODE = stringPreferencesKey("replaygain_mode")
+        // Replaced by the target; read once more for a listener who chose one.
         private val REPLAYGAIN_PREAMP_DB = floatPreferencesKey("replaygain_preamp_db")
+        private val REPLAYGAIN_TARGET_LUFS = floatPreferencesKey("replaygain_target_lufs")
         private val CROSSFADE_DURATION = intPreferencesKey("crossfade_duration")
 
         // Downloads
@@ -353,7 +374,6 @@ class PreferencesManager @Inject constructor(
         private val VISUALIZER_BRIGHTNESS = intPreferencesKey("visualizer_brightness")
         private val ROMAJI_LYRICS = booleanPreferencesKey("romaji_lyrics")
         private val LYRICS_WORD_PROVIDER = stringPreferencesKey("lyrics_word_provider")
-        private val SERVER_LYRICS = booleanPreferencesKey("server_lyrics")
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
         private val AUTO_DOWNLOAD_LIKED = booleanPreferencesKey("auto_download_liked")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
@@ -508,6 +528,7 @@ class PreferencesManager @Inject constructor(
         private val ALBUM_SORT = stringPreferencesKey("library_album_sort")
         private val ARTIST_SORT = stringPreferencesKey("library_artist_sort")
         private val FOLDER_SORT = stringPreferencesKey("library_folder_sort")
+        private val PLAYLIST_SORT = stringPreferencesKey("library_playlist_sort")
         private val LEGACY_BYPASS_VOLUME_RESET = booleanPreferencesKey("legacy_bypass_volume_reset")
 
         // Car mode
@@ -552,9 +573,9 @@ class PreferencesManager @Inject constructor(
             DYNAMIC_COLORS_MENUS, DYNAMIC_COLORS_KEEP_BACKGROUND, APP_TV_SHADER, APP_TV_TUNING, APP_TV_TARGET, COLOR_TRANSITION_MS,
             CUSTOM_THEME_ENABLED, CUSTOM_ACCENT, CUSTOM_BACKGROUND,
             FONT_SCALE, FONT_SCALE_FOLLOW_SYSTEM,
-            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, SHOW_EXPLICIT_BADGES,
+            GAPLESS_PLAYBACK, GAPLESS_NO_RESAMPLE, CONTINUE_INTO_NEXT_LIST, SHOW_EXPLICIT_BADGES,
             ROW_BADGE_SOURCE, ROW_BADGE_QUALITY, ROW_BADGE_FORMAT, ROW_BADGE_DOWNLOAD, ROW_BADGE_DURATION,
-            NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
+            NORMALIZATION_ENABLED, REPLAYGAIN_MODE, REPLAYGAIN_PREAMP_DB, REPLAYGAIN_TARGET_LUFS, CROSSFADE_DURATION, MULTICHANNEL_DOWNMIX_ENABLED,
             PLAYBACK_SPEED, PRESERVE_PITCH, PITCH_SEMITONES, SPEED_UNIT_SEMITONES, SPEED_UNIT_BPM,
             PITCH_ENGINE, PITCH_QUALITY,
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
@@ -562,7 +583,7 @@ class PreferencesManager @Inject constructor(
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, API_SERVERS, DEV_MODE_ENABLED,
             NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             MINI_PLAYER_HIDE_WITH_TABS,
-            ROMAJI_LYRICS, LYRICS_WORD_PROVIDER, SERVER_LYRICS,
+            ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             VISUAL_LINKS_JSON, MUSIC_LINKS_PAUSED,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
@@ -1160,6 +1181,16 @@ class PreferencesManager @Inject constructor(
     }
 
     /**
+     * When a playlist, album or folder runs out, play the one beside it on the
+     * screen it was opened from, and after the last one, song radio. Previous
+     * on its first song goes to the list before. On by default.
+     */
+    val continueIntoNextList: Flow<Boolean> = dataStore.data.map { it[CONTINUE_INTO_NEXT_LIST] ?: true }
+    suspend fun setContinueIntoNextList(enabled: Boolean) {
+        dataStore.edit { it[CONTINUE_INTO_NEXT_LIST] = enabled }
+    }
+
+    /**
      * Refuse to resample across a gapless transition. On by default.
      *
      * A track that plays at a different sample rate forces the output to be
@@ -1293,24 +1324,34 @@ class PreferencesManager @Inject constructor(
         dataStore.edit { it[NORMALIZATION_ENABLED] = enabled }
     }
 
-    /** ReplayGain's mode and pre-amp. Off unless chosen, so nothing sounds different until then. */
+    /**
+     * ReplayGain's mode and target loudness. Off unless chosen, so nothing
+     * sounds different until then. A pre-amp chosen before the target existed
+     * becomes the target nearest it ([replayGainTargetOf]).
+     */
     val replayGainSettings: Flow<tf.monochrome.android.audio.replaygain.ReplayGainSettings> = dataStore.data.map { prefs ->
         tf.monochrome.android.audio.replaygain.ReplayGainSettings(
             mode = prefs[REPLAYGAIN_MODE]
                 ?.let { runCatching { tf.monochrome.android.audio.replaygain.ReplayGainMode.valueOf(it) }.getOrNull() }
                 ?: tf.monochrome.android.audio.replaygain.ReplayGainMode.OFF,
-            preampDb = prefs[REPLAYGAIN_PREAMP_DB]
-                ?.takeIf { it in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS } ?: 0f,
+            targetLufs = replayGainTargetOf(prefs),
         )
     }.distinctUntilChanged()
 
     suspend fun setReplayGainMode(mode: tf.monochrome.android.audio.replaygain.ReplayGainMode) {
-        dataStore.edit { it[REPLAYGAIN_MODE] = mode.name }
+        dataStore.edit {
+            // The target as it reads now is written down before the mode
+            // changes, since what an unset target reads as depends on the mode
+            // (see replayGainTargetOf): turning ReplayGain on in this build
+            // must not read as having had it on in an earlier one.
+            if (it[REPLAYGAIN_TARGET_LUFS] == null) it[REPLAYGAIN_TARGET_LUFS] = replayGainTargetOf(it)
+            it[REPLAYGAIN_MODE] = mode.name
+        }
     }
 
-    suspend fun setReplayGainPreamp(db: Float) {
-        if (db !in tf.monochrome.android.audio.replaygain.ReplayGain.PREAMP_STEPS) return
-        dataStore.edit { it[REPLAYGAIN_PREAMP_DB] = db }
+    suspend fun setReplayGainTarget(lufs: Float) {
+        if (lufs !in tf.monochrome.android.audio.replaygain.ReplayGain.TARGET_STEPS) return
+        dataStore.edit { it[REPLAYGAIN_TARGET_LUFS] = lufs }
     }
 
     /**
@@ -1567,14 +1608,6 @@ class PreferencesManager @Inject constructor(
     val downloadLyrics: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_LYRICS] ?: false }
 
     /**
-     * Send a song with no word-timed lyrics to a lyrics server (Settings ›
-     * Connections) to be heard and timed, by itself. On by default: the
-     * build's own server times lyrics, and only songs with a file on the
-     * phone are sent.
-     */
-    val serverLyrics: Flow<Boolean> = dataStore.data.map { it[SERVER_LYRICS] ?: true }
-
-    /**
      * Download a song as it's liked. Off by default, and deliberately
      * forward-only: turning it on downloads nothing that is already liked.
      * Sweeping an existing Liked Songs list would enqueue thousands of workers
@@ -1670,9 +1703,6 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setDownloadLyrics(enabled: Boolean) {
         dataStore.edit { it[DOWNLOAD_LYRICS] = enabled }
-    }
-    suspend fun setServerLyrics(enabled: Boolean) {
-        dataStore.edit { it[SERVER_LYRICS] = enabled }
     }
     suspend fun setAutoDownloadLikedSongs(enabled: Boolean) {
         dataStore.edit { it[AUTO_DOWNLOAD_LIKED] = enabled }
@@ -2452,6 +2482,10 @@ class PreferencesManager @Inject constructor(
     /** The one song-and-folder sort every folder screen uses (FolderSort.encode). */
     val folderSort: Flow<String?> = dataStore.data.map { it[FOLDER_SORT] }.distinctUntilChanged()
     suspend fun setFolderSort(value: String) { dataStore.edit { it[FOLDER_SORT] = value } }
+
+    /** How the Library lists the listener's playlists ([tf.monochrome.android.ui.library.PlaylistSort]). */
+    val playlistSort: Flow<String?> = dataStore.data.map { it[PLAYLIST_SORT] }.distinctUntilChanged()
+    suspend fun setPlaylistSort(value: String) { dataStore.edit { it[PLAYLIST_SORT] = value } }
 
     // --- Car mode ---
     val carModeBandCount: Flow<Int> = dataStore.data.map { it[CAR_MODE_BAND_COUNT] ?: 10 }

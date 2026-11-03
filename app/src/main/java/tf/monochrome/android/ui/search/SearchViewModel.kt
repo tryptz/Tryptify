@@ -42,6 +42,7 @@ class SearchViewModel @Inject constructor(
     private val genreGraph: GenreGraphRepository,
     libraryRepository: LibraryRepository,
     private val subsonicRepository: tf.monochrome.android.data.subsonic.SubsonicRepository,
+    private val scxytRepository: tf.monochrome.android.data.scxyt.ScxytRepository,
 ) : ViewModel() {
 
     /**
@@ -50,6 +51,7 @@ class SearchViewModel @Inject constructor(
      * remote ones when textual relevance is otherwise identical.
      */
     companion object {
+        private const val TAG = "SearchViewModel"
         private const val SEARCH_DEBOUNCE_MS = 250L
         // Page size used by the initial query and every loadMore. End-of-results
         // is detected when fewer than PAGE_SIZE items come back (matching the
@@ -71,6 +73,24 @@ class SearchViewModel @Inject constructor(
         private const val SOURCE_BOOST_LOCAL = 90
         private const val SOURCE_BOOST_COLLECTION = 70
         private const val SOURCE_BOOST_API = 50
+
+        /**
+         * Whether a song from [type] is listed under this chip. A downloaded
+         * song is a local one, whichever service it came from.
+         */
+        internal fun SearchSourceFilter.lists(type: SourceType, downloaded: Boolean): Boolean =
+            sourceType == null || (if (downloaded) SourceType.LOCAL else type) == sourceType
+
+        /**
+         * YouTube and SoundCloud, as far as [filter] can list their songs: the
+         * only ones a search under it asks. All and Local (a downloaded song)
+         * take both, each one's own chip only it, and the other chips neither,
+         * so a listener searching TIDAL sends YouTube nothing.
+         */
+        internal fun lateSourcesFor(filter: SearchSourceFilter): List<tf.monochrome.android.data.scxyt.ScxytSource> =
+            tf.monochrome.android.data.scxyt.ScxytSource.entries.filter {
+                filter.lists(it.sourceType, downloaded = false) || filter.lists(it.sourceType, downloaded = true)
+            }
     }
 
     enum class SearchTypeFilter(@androidx.annotation.StringRes val label: Int) {
@@ -94,7 +114,12 @@ class SearchViewModel @Inject constructor(
         LOCAL("Local", SourceType.LOCAL, R.string.source_local),
         COLLECTION("Collection", SourceType.COLLECTION, R.string.source_collection),
         SUBSONIC("My server", SourceType.SUBSONIC, R.string.source_subsonic),
+        YOUTUBE("YouTube", SourceType.YOUTUBE),
+        SOUNDCLOUD("SoundCloud", SourceType.SOUNDCLOUD),
     }
+
+    /** One line under the source chips about the chosen source: [text] takes the service's name. */
+    data class SourceNote(@androidx.annotation.StringRes val text: Int, val service: String)
 
     /** What the UI prefetch trigger is asking for more of. */
     enum class SearchPageType { TRACKS, ALBUMS, ARTISTS, PLAYLISTS }
@@ -162,6 +187,11 @@ class SearchViewModel @Inject constructor(
         _endReached.value = false
         loadMoreJobs.values.forEach { it.cancel() }
         loadMoreJobs.clear()
+        // The previous query's YouTube and SoundCloud searches go too, so a
+        // late answer can't merge into the new query's results.
+        currentRound?.cancel()
+        currentRound = null
+        _isSearchingMore.value = false
     }
 
     private val _query = MutableStateFlow("")
@@ -171,6 +201,12 @@ class SearchViewModel @Inject constructor(
     private val _allAlbums = MutableStateFlow<List<Album>>(emptyList())
     private val _allArtists = MutableStateFlow<List<Artist>>(emptyList())
     private val _allPlaylists = MutableStateFlow<List<Playlist>>(emptyList())
+
+    // YouTube and SoundCloud as the last search left them: the note each
+    // gets under the chips when it gave nothing because it is off (SoundCloud
+    // signed out; YouTube needs no sign-in) or turned away. Never an error
+    // row or a toast — the other sources' results stand.
+    private val _scxytNotes = MutableStateFlow<Map<SourceType, Int>>(emptyMap())
 
     // Which catalog each album / artist result came from. Tracks carry their
     // own sourceType; Album and Artist don't, and adding one to those models
@@ -206,6 +242,16 @@ class SearchViewModel @Inject constructor(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    // Results are up and YouTube or SoundCloud is still out: the small
+    // spinner under them, and no "No results found" yet.
+    private val _isSearchingMore = MutableStateFlow(false)
+    val isSearchingMore: StateFlow<Boolean> = _isSearchingMore.asStateFlow()
+
+    // The query being searched, with its YouTube and SoundCloud searches;
+    // null between queries. Dropped (and its late answers with it) whenever a
+    // newer query starts.
+    private var currentRound: SearchRound<tf.monochrome.android.data.scxyt.ScxytSource, ScxytPage>? = null
+
     val searchHistory: StateFlow<List<String>> = preferences.searchHistory
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -233,10 +279,7 @@ class SearchViewModel @Inject constructor(
         } else if (source == SearchSourceFilter.ALL) {
             trackResults
         } else {
-            trackResults.filter { track ->
-                val effective = if (track.legacyId in downloaded) SourceType.LOCAL else track.sourceType
-                effective == source.sourceType
-            }
+            trackResults.filter { track -> source.lists(track.sourceType, track.legacyId in downloaded) }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -270,6 +313,13 @@ class SearchViewModel @Inject constructor(
             else -> emptyList()
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val sourceNote: StateFlow<SourceNote?> = combine(_selectedSource, _scxytNotes) { source, notes ->
+        val type = source.sourceType ?: return@combine null
+        val text = notes[type] ?: return@combine null
+        val service = tf.monochrome.android.data.scxyt.ScxytSource.of(type) ?: return@combine null
+        SourceNote(text, service.label)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     // The source row sits under the type row for every type, now that albums
     // and artists filter by source too. It used to vanish on Albums, Artists
@@ -337,6 +387,13 @@ class SearchViewModel @Inject constructor(
 
     fun setSelectedSource(source: SearchSourceFilter) {
         _selectedSource.value = source
+        // A chip that lists YouTube or SoundCloud asks for them now if this
+        // query's search left them out (lateSourcesFor), and its spinner
+        // shows while they are out.
+        currentRound?.let { round ->
+            round.ask(lateSourcesFor(source))
+            settle(round)
+        }
     }
 
     private suspend fun performSearch(query: String) {
@@ -349,6 +406,21 @@ class SearchViewModel @Inject constructor(
         // are artists and titles.
         val genre = genreGraph.graph.resolve(query.trim())
         val trimmedQuery = genre?.queries()?.firstOrNull() ?: query.trim()
+        // YouTube and SoundCloud, songs only, one request each, as far as the
+        // chosen chip can list them (lateSourcesFor). YouTube is searched from
+        // the phone, signed in or not; SoundCloud goes to the server only
+        // signed in: without a session nothing is sent at all. Same budget as
+        // Qobuz. They are not awaited with the rest: what follows is shown the
+        // moment it is in, and each is merged into it as it answers
+        // (mergeLate), so the slowest of them never holds the others up.
+        val round = SearchRound(
+            query = trimmedQuery,
+            parent = viewModelScope,
+            search = { source: tf.monochrome.android.data.scxyt.ScxytSource -> searchScxyt(trimmedQuery, source) },
+            onAnswer = { source, page -> mergeLate(this, source, page) },
+        )
+        currentRound = round
+        round.ask(lateSourcesFor(_selectedSource.value))
         // TIDAL, Qobuz, and the local/collection library all run in parallel.
         // Qobuz failures (instance unset, network error, schema mismatch) are
         // swallowed so the existing TIDAL flow keeps working unchanged.
@@ -392,13 +464,17 @@ class SearchViewModel @Inject constructor(
         val deezerAlbums = deezerSearch?.albums ?: emptyList()
         val deezerArtists = deezerSearch?.artists ?: emptyList()
         val deezerHasResults = deezerTracks.isNotEmpty() || deezerAlbums.isNotEmpty() || deezerArtists.isNotEmpty()
-        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && !deezerHasResults && subsonicTracks.isEmpty()) {
+        if (searchResult.isFailure && unifiedResults == null && !qobuzAvailable && !deezerHasResults &&
+            subsonicTracks.isEmpty()
+        ) {
             // Every backend failed (offline / all instances down). Distinguish
             // this from a successful-but-empty search so the UI can offer a
-            // retry instead of a flat "No results found".
+            // retry instead of a flat "No results found" — once YouTube and
+            // SoundCloud have answered with nothing too (settle): while they
+            // are out the spinner stays.
             clearResults()
-            _searchError.value = true
-            _isSearching.value = false
+            round.firstShown(failed = true, firstPage = 0)
+            settle(round)
             return
         }
 
@@ -483,7 +559,41 @@ class SearchViewModel @Inject constructor(
             seedPageEnd(playlistsPage, /*tidal=*/0, /*qobuz=*/0,       qobuzAvailable)
         }
         _endReached.value = tracksPage.done() && albumsPage.done() && artistsPage.done() && playlistsPage.done()
-        _isSearching.value = false
+        round.firstShown(failed = false, firstPage = _allTracks.value.size)
+        settle(round)
+    }
+
+    /**
+     * One of YouTube and SoundCloud has answered [round]'s query: its note
+     * replaces the one it left last time, and its songs are ranked into the
+     * first page (SearchRound.mergeIntoFirstPage).
+     */
+    private fun mergeLate(
+        round: SearchRound<tf.monochrome.android.data.scxyt.ScxytSource, ScxytPage>,
+        source: tf.monochrome.android.data.scxyt.ScxytSource,
+        page: ScxytPage,
+    ) {
+        if (round !== currentRound) return
+        _scxytNotes.value = (_scxytNotes.value - source.sourceType) +
+            listOfNotNull(page.note?.let { source.sourceType to it })
+        if (page.tracks.isNotEmpty()) {
+            _allTracks.value = round.mergeIntoFirstPage(_allTracks.value, page.tracks) {
+                scoreTracks(round.query, it)
+            }
+        }
+        settle(round)
+    }
+
+    /** The spinners and the error state for where [round] stands (SearchRound.state). */
+    private fun settle(round: SearchRound<tf.monochrome.android.data.scxyt.ScxytSource, ScxytPage>) {
+        if (round !== currentRound) return
+        val found = _allTracks.value.isNotEmpty() || _allAlbums.value.isNotEmpty() ||
+            _allArtists.value.isNotEmpty() || _allPlaylists.value.isNotEmpty()
+        val state = round.state(found)
+        if (state == SearchRound.State.UNREACHABLE) clearResults()
+        _searchError.value = state == SearchRound.State.UNREACHABLE
+        _isSearching.value = state == SearchRound.State.SEARCHING
+        _isSearchingMore.value = state == SearchRound.State.MORE_COMING
     }
 
     // Seed paging state from the initial page. Both catalogues paginate from
@@ -540,7 +650,6 @@ class SearchViewModel @Inject constructor(
                 // Qobuz has no playlists. Dedup makes a backend that ignores
                 // &offset= harmless: a repeated page adds nothing → we mark end.
                 if (!state.qobuzEnd && type != SearchPageType.PLAYLISTS) {
-                    val before = currentCountFor(type)
                     val qobuz = withTimeoutOrNull(QOBUZ_BUDGET_MS) {
                         runCatching { repository.searchQobuz(q, state.qobuzOffset) }.getOrNull()?.getOrNull()
                     }
@@ -552,6 +661,10 @@ class SearchViewModel @Inject constructor(
                         SearchPageType.PLAYLISTS -> emptyList()
                     }
                     state.qobuzOffset += qItems.size
+                    // Counted after the fetch, not before it: YouTube's or
+                    // SoundCloud's songs merged in meanwhile (mergeLate) would
+                    // read as this page's and keep a repeated page from ending.
+                    val before = currentCountFor(type)
                     appendPage(type, qItems, PageSource.QOBUZ, q = q)
                     if (qItems.isEmpty() || currentCountFor(type) == before) state.qobuzEnd = true
                 } else if (type == SearchPageType.PLAYLISTS) {
@@ -645,7 +758,34 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    /** One of YouTube and SoundCloud's answers: its songs, or the note it leaves under its chip. */
+    private class ScxytPage(val tracks: List<UnifiedTrack> = emptyList(), @androidx.annotation.StringRes val note: Int? = null)
+
+    /**
+     * [source]'s first page for [query]. Every failure is quiet: signed out,
+     * SoundCloud is off; turned away (SoundCloud refusing the server, or
+     * YouTube's bot check refusing this network), it gives nothing until
+     * that passes; anything else, it gives nothing this time.
+     */
+    private suspend fun searchScxyt(query: String, source: tf.monochrome.android.data.scxyt.ScxytSource): ScxytPage {
+        val result = withTimeoutOrNull(QOBUZ_BUDGET_MS) { scxytRepository.search(query, source) }
+            ?: return ScxytPage()
+        return when (val error = result.exceptionOrNull()) {
+            null -> ScxytPage(result.getOrDefault(emptyList()))
+            is tf.monochrome.android.data.scxyt.ScxytError.SignedOut -> ScxytPage(note = R.string.scxyt_note_signed_out)
+            is tf.monochrome.android.data.scxyt.ScxytError.Blocked -> {
+                android.util.Log.d(TAG, "${source.label} is turning us away: ${error.message}")
+                ScxytPage(note = R.string.scxyt_note_unavailable)
+            }
+            else -> {
+                android.util.Log.d(TAG, "${source.label} search failed: ${error.message}")
+                ScxytPage()
+            }
+        }
+    }
+
     private fun clearResults() {
+        _scxytNotes.value = emptyMap()
         _albumSources.value = emptyMap()
         _artistSources.value = emptyMap()
         _allTracks.value = emptyList()
@@ -653,6 +793,7 @@ class SearchViewModel @Inject constructor(
         _allArtists.value = emptyList()
         _allPlaylists.value = emptyList()
         _isSearching.value = false
+        _isSearchingMore.value = false
         _searchError.value = false
     }
 
@@ -700,6 +841,10 @@ class SearchViewModel @Inject constructor(
         // The listener's own library, on their own server: between the files
         // on the phone and the catalogues, like a collection.
         SourceType.SUBSONIC -> SOURCE_BOOST_COLLECTION
+        // Fetched from video and upload sites: a catalogue's copy of the same
+        // song is the label's master, so these rank under every catalogue.
+        SourceType.YOUTUBE -> SOURCE_BOOST_API - 8
+        SourceType.SOUNDCLOUD -> SOURCE_BOOST_API - 9
     }
 
     private fun scoreField(query: String, rawValue: String?, baseScore: Int): Int {

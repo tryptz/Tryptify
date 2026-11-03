@@ -21,6 +21,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +45,11 @@ private val Context.qobuzIdDataStore: DataStore<Preferences> by
  *
  * The in-memory maps remain the synchronous source of truth (lookups never block on
  * disk); persistence pre-seeds them and is updated in the background.
+ *
+ * Nothing is ever forgotten, deliberately. A favourite album or artist is saved
+ * with no note of its service, so this registry is the only record that its id
+ * is a Qobuz, Deezer or Apple one: an id dropped to keep the sets small would
+ * open that favourite against TIDAL, as some other record or as an error.
  */
 @Singleton
 class QobuzIdRegistry @Inject constructor(
@@ -96,6 +102,27 @@ class QobuzIdRegistry @Inject constructor(
     // to (the download queue, restored at startup) would read "not Qobuz".
     private val loaded = CompletableDeferred<Unit>()
 
+    // Which saved sets have changed since they were last written, a bit each.
+    // Only those are encoded and written: the id sets run to tens of thousands,
+    // and one new album slug used to re-encode all ten of them.
+    private val dirty = AtomicInteger(0)
+
+    /** One saved set: its bit in [dirty], its key, and how it is written. */
+    private class Saved(val bit: Int, val key: Preferences.Key<String>, val encode: () -> String)
+
+    private val saved = listOf(
+        Saved(ALBUM_SLUGS, KEY_ALBUM_SLUGS) { json.encodeToString(albumSlugs.toMap()) },
+        Saved(ARTIST_IDS, KEY_ARTIST_IDS) { json.encodeToString(qobuzArtistIds.toList()) },
+        Saved(TRACK_IDS, KEY_TRACK_IDS) { json.encodeToString(qobuzTrackIds.toList()) },
+        Saved(APPLE_TRACK_IDS, KEY_APPLE_TRACK_IDS) { json.encodeToString(appleTrackIds.toList()) },
+        Saved(APPLE_ID_BY_TRACK, KEY_APPLE_ID_BY_TRACK) { json.encodeToString(appleIdByTrack.toMap()) },
+        Saved(APPLE_ALBUM_IDS, KEY_APPLE_ALBUM_IDS) { json.encodeToString(appleAlbumIds.toList()) },
+        Saved(APPLE_ARTIST_IDS, KEY_APPLE_ARTIST_IDS) { json.encodeToString(appleArtistIds.toList()) },
+        Saved(DEEZER_TRACK_IDS, KEY_DEEZER_TRACK_IDS) { json.encodeToString(deezerTrackIds.toList()) },
+        Saved(DEEZER_ALBUM_IDS, KEY_DEEZER_ALBUM_IDS) { json.encodeToString(deezerAlbumIds.toList()) },
+        Saved(DEEZER_ARTIST_IDS, KEY_DEEZER_ARTIST_IDS) { json.encodeToString(deezerArtistIds.toList()) },
+    )
+
     init {
         scope.launch {
             try {
@@ -106,25 +133,30 @@ class QobuzIdRegistry @Inject constructor(
         }
         scope.launch {
             @OptIn(FlowPreview::class)
-            saveSignal.debounce(SAVE_DEBOUNCE_MS).collect { persist() }
+            saveSignal.debounce(SAVE_DEBOUNCE_MS).collect {
+                // Never before the load: a set written then would be only this
+                // session's ids, over the file that has every earlier one.
+                loaded.await()
+                persist()
+            }
         }
     }
 
     fun registerAlbum(qobuzId: Long, slug: String) {
         if (slug.isBlank()) return
-        if (albumSlugs.put(qobuzId, slug) != slug) markDirty()
+        if (albumSlugs.put(qobuzId, slug) != slug) markDirty(ALBUM_SLUGS)
     }
 
     fun albumSlugFor(qobuzId: Long): String? = albumSlugs[qobuzId]
 
     fun registerArtist(id: Long) {
-        if (qobuzArtistIds.add(id)) markDirty()
+        if (qobuzArtistIds.add(id)) markDirty(ARTIST_IDS)
     }
 
     fun isQobuzArtist(id: Long): Boolean = id in qobuzArtistIds
 
     fun registerTrack(id: Long) {
-        if (qobuzTrackIds.add(id)) markDirty()
+        if (qobuzTrackIds.add(id)) markDirty(TRACK_IDS)
     }
 
     fun isQobuzTrack(id: Long): Boolean = id in qobuzTrackIds
@@ -133,37 +165,37 @@ class QobuzIdRegistry @Inject constructor(
     suspend fun awaitLoaded() = loaded.await()
 
     fun registerAppleTrack(id: Long) {
-        if (appleTrackIds.add(id)) markDirty()
+        if (appleTrackIds.add(id)) markDirty(APPLE_TRACK_IDS)
     }
 
     fun isAppleTrack(id: Long): Boolean = id in appleTrackIds
 
     fun registerAppleAlbum(id: Long) {
-        if (id != 0L && appleAlbumIds.add(id)) markDirty()
+        if (id != 0L && appleAlbumIds.add(id)) markDirty(APPLE_ALBUM_IDS)
     }
 
     fun isAppleAlbum(id: Long): Boolean = id in appleAlbumIds
 
     fun registerAppleArtist(id: Long) {
-        if (id != 0L && appleArtistIds.add(id)) markDirty()
+        if (id != 0L && appleArtistIds.add(id)) markDirty(APPLE_ARTIST_IDS)
     }
 
     fun isAppleArtist(id: Long): Boolean = id in appleArtistIds
 
     fun registerDeezerTrack(id: Long) {
-        if (id != 0L && deezerTrackIds.add(id)) markDirty()
+        if (id != 0L && deezerTrackIds.add(id)) markDirty(DEEZER_TRACK_IDS)
     }
 
     fun isDeezerTrack(id: Long): Boolean = id in deezerTrackIds
 
     fun registerDeezerAlbum(id: Long) {
-        if (id != 0L && deezerAlbumIds.add(id)) markDirty()
+        if (id != 0L && deezerAlbumIds.add(id)) markDirty(DEEZER_ALBUM_IDS)
     }
 
     fun isDeezerAlbum(id: Long): Boolean = id in deezerAlbumIds
 
     fun registerDeezerArtist(id: Long) {
-        if (id != 0L && deezerArtistIds.add(id)) markDirty()
+        if (id != 0L && deezerArtistIds.add(id)) markDirty(DEEZER_ARTIST_IDS)
     }
 
     fun isDeezerArtist(id: Long): Boolean = id in deezerArtistIds
@@ -171,7 +203,7 @@ class QobuzIdRegistry @Inject constructor(
     /** Remember the Apple adamId that matches a foreign (Qobuz/TIDAL/local) track id. */
     fun registerAppleIdFor(trackId: Long, adamId: Long) {
         if (trackId == 0L || adamId <= 0L) return
-        if (appleIdByTrack.put(trackId, adamId) != adamId) markDirty()
+        if (appleIdByTrack.put(trackId, adamId) != adamId) markDirty(APPLE_ID_BY_TRACK)
     }
 
     /** The Apple adamId matching this track id, if one has been resolved. */
@@ -186,7 +218,7 @@ class QobuzIdRegistry @Inject constructor(
      */
     fun markNoAppleMatch(trackId: Long) {
         if (trackId == 0L) return
-        if (appleIdByTrack.put(trackId, NO_APPLE_MATCH) != NO_APPLE_MATCH) markDirty()
+        if (appleIdByTrack.put(trackId, NO_APPLE_MATCH) != NO_APPLE_MATCH) markDirty(APPLE_ID_BY_TRACK)
     }
 
     /** True once a lookup has been attempted for this id (hit or miss). */
@@ -201,34 +233,23 @@ class QobuzIdRegistry @Inject constructor(
     /** The Qobuz artist id for a foreign (TIDAL) artist id, if one was linked. */
     fun qobuzArtistIdFor(foreignId: Long): Long? = artistAliases[foreignId]
 
-    private fun markDirty() {
+    private fun markDirty(set: Int) {
+        // Marked before the signal, so the save the signal leads to sees it.
+        dirty.getAndUpdate { bits -> bits or set }
         saveSignal.tryEmit(Unit)
     }
 
     private suspend fun persist() {
+        // Taken before encoding: an id registered while this runs marks its set
+        // again and is written by the next save.
+        val changed = dirty.getAndSet(0)
+        if (changed == 0) return
         runCatching {
-            val albumsJson = json.encodeToString(albumSlugs.toMap())
-            val artistsJson = json.encodeToString(qobuzArtistIds.toList())
-            val tracksJson = json.encodeToString(qobuzTrackIds.toList())
-            val appleTracksJson = json.encodeToString(appleTrackIds.toList())
-            val appleBridgeJson = json.encodeToString(appleIdByTrack.toMap())
-            val appleAlbumsJson = json.encodeToString(appleAlbumIds.toList())
-            val appleArtistsJson = json.encodeToString(appleArtistIds.toList())
-            val deezerTracksJson = json.encodeToString(deezerTrackIds.toList())
-            val deezerAlbumsJson = json.encodeToString(deezerAlbumIds.toList())
-            val deezerArtistsJson = json.encodeToString(deezerArtistIds.toList())
-            dataStore.edit { prefs ->
-                prefs[KEY_ALBUM_SLUGS] = albumsJson
-                prefs[KEY_ARTIST_IDS] = artistsJson
-                prefs[KEY_TRACK_IDS] = tracksJson
-                prefs[KEY_APPLE_TRACK_IDS] = appleTracksJson
-                prefs[KEY_APPLE_ID_BY_TRACK] = appleBridgeJson
-                prefs[KEY_APPLE_ALBUM_IDS] = appleAlbumsJson
-                prefs[KEY_APPLE_ARTIST_IDS] = appleArtistsJson
-                prefs[KEY_DEEZER_TRACK_IDS] = deezerTracksJson
-                prefs[KEY_DEEZER_ALBUM_IDS] = deezerAlbumsJson
-                prefs[KEY_DEEZER_ARTIST_IDS] = deezerArtistsJson
-            }
+            val values = saved.filter { (it.bit and changed) != 0 }.map { Pair(it.key, it.encode()) }
+            dataStore.edit { prefs -> values.forEach { (key, value) -> prefs[key] = value } }
+        }.onFailure { _ ->
+            // Not written: these go again with the next save.
+            dirty.getAndUpdate { bits -> bits or changed }
         }
     }
 
@@ -280,6 +301,19 @@ class QobuzIdRegistry @Inject constructor(
 
     private companion object {
         const val SAVE_DEBOUNCE_MS = 750L
+
+        // A bit per saved set, for [dirty].
+        const val ALBUM_SLUGS = 1 shl 0
+        const val ARTIST_IDS = 1 shl 1
+        const val TRACK_IDS = 1 shl 2
+        const val APPLE_TRACK_IDS = 1 shl 3
+        const val APPLE_ID_BY_TRACK = 1 shl 4
+        const val APPLE_ALBUM_IDS = 1 shl 5
+        const val APPLE_ARTIST_IDS = 1 shl 6
+        const val DEEZER_TRACK_IDS = 1 shl 7
+        const val DEEZER_ALBUM_IDS = 1 shl 8
+        const val DEEZER_ARTIST_IDS = 1 shl 9
+
         val KEY_ALBUM_SLUGS = stringPreferencesKey("album_slugs")
         val KEY_ARTIST_IDS = stringPreferencesKey("artist_ids")
         val KEY_TRACK_IDS = stringPreferencesKey("track_ids")

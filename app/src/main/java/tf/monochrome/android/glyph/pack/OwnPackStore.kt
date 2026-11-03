@@ -49,12 +49,21 @@ class OwnPackStore @Inject constructor(
         _folder.value = tree
     }
 
+    /**
+     * Stop saving made charts to the chosen folder. Its write grant goes
+     * back; its read grant too unless a pack imported from the same folder is
+     * read from it in place, whose music and pictures would otherwise stop
+     * loading at the next start.
+     */
     fun forget() {
         _folder.value?.let { tree ->
+            val packs = File(context.filesDir, "glyph/packs")
+            val stillRead = GlyphPackLibrary.isReadFrom(packs, tree.toString())
             runCatching {
                 context.contentResolver.releasePersistableUriPermission(
                     tree,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                    if (stillRead) android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    else android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
                 )
             }
         }

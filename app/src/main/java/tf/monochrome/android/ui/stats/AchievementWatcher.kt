@@ -63,16 +63,24 @@ class AchievementWatcher @Inject constructor(
             playEventDao.playCount().distinctUntilChanged(),
             achievementStore.log,
             glyphAttempts.revision,
-        ) { _, log, _ -> log }
-            .mapLatest { log -> evaluate(log) }
+        ) { _, log, revision -> log to revision }
+            .mapLatest { (log, revision) -> evaluate(log, revision) }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * The attempt store's revision [tryptMania] was last summed at, so a play
+     * counted anywhere else in the app does not read every chart's history
+     * again: only a saved or cleared run changes the sum. Written only from
+     * [evaluate], which runs one at a time.
+     */
+    private var tryptManiaRevision: Long? = null
 
     /** The pill has shown [achievement]. */
     fun shown(achievement: Achievement) {
         _pending.update { it - achievement }
     }
 
-    private suspend fun evaluate(log: FeatureLog): List<AchievementState> {
+    private suspend fun evaluate(log: FeatureLog, glyphRevision: Long): List<AchievementState> {
         val now = System.currentTimeMillis()
         val zone = ZoneId.systemDefault()
         val month = StatsReportBuilder.window(StatsRange.Month, now, zone, null)
@@ -85,7 +93,7 @@ class AchievementWatcher @Inject constructor(
             hiResSeconds = playEventDao.hiResSeconds(),
             playsAfterMidnight = playEventDao.playsAfterMidnight(),
             log = log,
-            tryptMania = TryptManiaStats.from(glyphAttempts.recentRuns(Int.MAX_VALUE)).also { _tryptMania.value = it },
+            tryptMania = tryptManiaAt(glyphRevision),
         )
         val states = Achievements.evaluate(facts, settingsPageIds, SnapinType.availableTypes().map { it.name }, now)
         val fresh = Achievements.newlyUnlocked(states, log.unlockedAt)
@@ -100,5 +108,14 @@ class AchievementWatcher @Inject constructor(
             _pending.update { waiting -> waiting + done.filter { it !in waiting } }
         }
         return states
+    }
+
+    /** The runs summed up as of [revision]: read again only when it has moved. */
+    private suspend fun tryptManiaAt(revision: Long): TryptManiaStats {
+        if (revision == tryptManiaRevision) return _tryptMania.value
+        val stats = TryptManiaStats.from(glyphAttempts.recentRuns(Int.MAX_VALUE))
+        _tryptMania.value = stats
+        tryptManiaRevision = revision
+        return stats
     }
 }

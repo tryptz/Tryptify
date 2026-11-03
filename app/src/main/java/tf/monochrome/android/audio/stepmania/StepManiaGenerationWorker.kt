@@ -138,6 +138,7 @@ class StepManiaGenerationWorker @AssistedInject constructor(
                 destination = Uri.fromFile(destination),
                 request = request,
                 mode = job.mode,
+                durationSeconds = job.durationSeconds,
             ) { progress -> report(job, progress) }
         } finally {
             // A picked file was granted for this job; nothing reads it after.

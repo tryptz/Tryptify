@@ -211,9 +211,8 @@ class DownloadQueueTest {
     @Test
     fun `the queue round-trips through persistence`() {
         val q = queue()
-        var saved: String? = null
-        q.onChanged = { saved = it }
         q.enqueue(items(50))
+        val saved = q.savedJson()
 
         val restored = queue()
         restored.restore(saved)
@@ -231,9 +230,8 @@ class DownloadQueueTest {
         // The id alone is a bare number TIDAL also uses, and the registry that
         // tells them apart may not be loaded yet when the queue comes back.
         val q = queue()
-        var saved: String? = null
-        q.onChanged = { saved = it }
         q.enqueue(listOf(item(1).copy(isQobuz = true), item(2)))
+        val saved = q.savedJson()
 
         val restored = queue()
         restored.restore(saved)
@@ -266,4 +264,119 @@ class DownloadQueueTest {
         assertEquals(1f, q.entries.value.first { it.item.trackId == 1L }.progress, 0.0001f)
         assertEquals(0f, q.entries.value.first { it.item.trackId == 2L }.progress, 0.0001f)
     }
+
+    @Test
+    fun `progress is published a percent or a quarter second at a time`() {
+        val q = queue()
+        var now = 0L
+        q.clock = { now }
+        q.enqueue(items(1))
+        q.takeNext(1)
+        fun shown() = q.entries.value.single().progress
+
+        // The first report of a transfer always shows.
+        q.setProgress(1, 0.05f)
+        assertEquals(0.05f, shown(), 0.0001f)
+        // An 8 KB read of a 40 MB file is a fraction of a percent: held back.
+        q.setProgress(1, 0.0502f)
+        q.setProgress(1, 0.055f)
+        assertEquals(0.05f, shown(), 0.0001f)
+        // A whole percent goes out at once.
+        q.setProgress(1, 0.061f)
+        assertEquals(0.061f, shown(), 0.0001f)
+        // A slow transfer still moves, once a quarter second has passed.
+        now += 100
+        q.setProgress(1, 0.062f)
+        assertEquals(0.061f, shown(), 0.0001f)
+        now += DownloadQueue.PROGRESS_INTERVAL_MS
+        q.setProgress(1, 0.063f)
+        assertEquals(0.063f, shown(), 0.0001f)
+        // And the finish is never held back.
+        q.setProgress(1, 1f)
+        assertEquals(1f, shown(), 0.0001f)
+    }
+
+    @Test
+    fun `a retried transfer reports its first progress again`() {
+        val q = queue()
+        q.clock = { 0L }
+        q.enqueue(items(1))
+        q.takeNext(1)
+        q.setProgress(1, 0.5f)
+        q.fail(1, retryable = true)
+        q.takeNext(1)
+        // Within a percent of the last attempt's last report, at the same
+        // instant: still shown, because it is this attempt's first.
+        q.setProgress(1, 0.05f)
+        q.setProgress(1, 0.051f)
+        assertEquals(0.05f, q.entries.value.single().progress, 0.0001f)
+    }
+
+    @Test
+    fun `progress makes far fewer queue updates than reads`() {
+        val q = queue()
+        var now = 0L
+        q.clock = { now }
+        q.enqueue(items(3))
+        q.takeNext(1)
+        var updates = 0
+        var last = q.entries.value
+        // A 40 MB file in 8 KB reads, arriving a millisecond apart.
+        val reads = 40_000_000 / 8_192
+        for (read in 1..reads) {
+            now++
+            q.setProgress(1, 0.05f + 0.9f * read / reads)
+            if (q.entries.value !== last) { updates++; last = q.entries.value }
+        }
+        assertTrue("$updates updates for $reads reads", updates in 1..200)
+    }
+
+    @Test
+    fun `only a change to which tracks are queued asks for a save`() {
+        val q = queue()
+        q.enqueue(items(3))
+        val afterEnqueue = q.saveRevision.value
+        // Status changes are not saved, so they must not cost a write.
+        q.takeNext(2)
+        q.setProgress(1, 0.5f)
+        q.fail(2, retryable = true)
+        q.requeueOrphans()
+        assertEquals(afterEnqueue, q.saveRevision.value)
+        // Re-requesting tracks that are all queued already changes nothing.
+        q.enqueue(items(2))
+        assertEquals(afterEnqueue, q.saveRevision.value)
+        q.complete(1)
+        assertTrue(q.saveRevision.value > afterEnqueue)
+        assertEquals(listOf(2L, 3L), restoredIds(q.savedJson()))
+    }
+
+    @Test
+    fun `what is saved is always the queue as it stands`() {
+        val q = queue()
+        q.enqueue(items(5))
+        q.takeNext(3)
+        q.complete(1)
+        q.remove(4)
+        assertEquals(listOf(2L, 3L, 5L), restoredIds(q.savedJson()))
+        q.clear()
+        assertEquals(emptyList<Long>(), restoredIds(q.savedJson()))
+    }
+
+    @Test
+    fun `a download asked for before the saved queue loads is kept`() {
+        val saved = queue().apply { enqueue(items(2)) }.savedJson()
+        val q = queue()
+        // Queued in the first moments after launch, before the saved queue
+        // was read; one of them is also in the saved queue.
+        q.enqueue(listOf(item(2), item(9)))
+        q.takeNext(1)
+        q.restore(saved)
+        assertEquals(listOf(1L, 2L, 9L), q.entries.value.map { it.item.trackId })
+        // The track already running keeps running rather than starting over.
+        assertEquals(DownloadStatus.DOWNLOADING, q.entries.value.first { it.item.trackId == 2L }.status)
+        assertEquals(listOf(1L, 2L, 9L), restoredIds(q.savedJson()))
+    }
+
+    private fun restoredIds(json: String): List<Long> =
+        queue().apply { restore(json) }.entries.value.map { it.item.trackId }
 }

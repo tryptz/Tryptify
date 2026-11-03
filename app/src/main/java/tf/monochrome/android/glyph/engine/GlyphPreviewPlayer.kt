@@ -8,7 +8,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.RenderersFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -24,15 +26,24 @@ import kotlinx.coroutines.launch
  * scrobbling must not see it. Unlike the transport it takes audio focus, so
  * tapping a song pauses whatever the app was playing rather than talking over
  * it. Built on first use, so a visit that never previews costs nothing.
+ * Its sound goes where the [renderers]' audio sink sends it: the exclusive
+ * USB DAC when one is claimed (`UsbGameAudio`), Android's output otherwise.
  */
 class GlyphPreviewPlayer(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val renderers: RenderersFactory = DefaultRenderersFactory(context),
 ) {
     private var player: ExoPlayer? = null
     private var envelope: Job? = null
     private var clipStartSeconds = 0f
     private var clipLengthSeconds = DEFAULT_LENGTH_SECONDS
+
+    /** Told when a preview starts or stops sounding, on the main thread: for whoever routes the volume keys. */
+    var onPlayingChanged: ((Boolean) -> Unit)? = null
+
+    /** Told which song a preview was just prepared for: for the chain's per-song stages (ReplayGain). */
+    var onPrepared: ((Uri) -> Unit)? = null
 
     /**
      * Where in the song the preview is now, or null when it is not playing:
@@ -77,6 +88,7 @@ class GlyphPreviewPlayer(
         )
         p.volume = 0f
         p.prepare()
+        onPrepared?.invoke(uri)
         p.playWhenReady = true
         // The volume follows the position inside the clip, so every loop fades
         // in from its start and out into its end, as StepMania's samples do.
@@ -112,9 +124,10 @@ class GlyphPreviewPlayer(
         envelope?.cancel()
         player?.release()
         player = null
+        onPlayingChanged?.invoke(false)
     }
 
-    private fun build(): ExoPlayer = ExoPlayer.Builder(context)
+    private fun build(): ExoPlayer = ExoPlayer.Builder(context, renderers)
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(C.USAGE_MEDIA)
@@ -123,7 +136,14 @@ class GlyphPreviewPlayer(
             /* handleAudioFocus = */ true,
         )
         .build()
-        .apply { repeatMode = Player.REPEAT_MODE_ONE }
+        .apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+            addListener(object : Player.Listener {
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    onPlayingChanged?.invoke(isPlaying)
+                }
+            })
+        }
 
     companion object {
         /** StepMania's default #SAMPLELENGTH. */

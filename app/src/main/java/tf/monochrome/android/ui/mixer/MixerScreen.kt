@@ -166,18 +166,6 @@ fun MixerScreen(
      */
     playerViewModel: PlayerViewModel
 ) {
-    // Frame-synced meter/tap polling: one native read per display frame, so
-    // the VU meters and FX visuals update at the panel's native refresh rate
-    // (120 Hz where the device permits) and stop while the mixer is off
-    // screen. Replaces the old fixed 16 ms ViewModel loop that capped
-    // everything at 60 Hz.
-    LaunchedEffect(Unit) {
-        while (true) {
-            withFrameNanos { }
-            viewModel.pollTick()
-        }
-    }
-
     val enabled by viewModel.enabled.collectAsStateWithLifecycle()
     val buses by viewModel.buses.collectAsStateWithLifecycle()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsStateWithLifecycle()
@@ -200,9 +188,11 @@ fun MixerScreen(
     var showInsertRack by remember { mutableStateOf(false) }
     var showSpatialMap by remember { mutableStateOf(false) }
     val spatialPlacement by viewModel.spatialPlacement.collectAsStateWithLifecycle()
-    // The detector measures only while the map is up.
-    LaunchedEffect(showSpatialMap) {
-        if (showSpatialMap) viewModel.openSpatialMap() else viewModel.closeSpatialMap()
+    // The detector measures only while the map is up, and only while the
+    // screen is started: not in the background, not with the phone off.
+    androidx.lifecycle.compose.LifecycleStartEffect(showSpatialMap) {
+        if (showSpatialMap) viewModel.openSpatialMap()
+        onStopOrDispose { viewModel.closeSpatialMap() }
     }
     androidx.activity.compose.BackHandler(enabled = showSpatialMap) { showSpatialMap = false }
     var showResetConfirm by remember { mutableStateOf(false) }
@@ -296,6 +286,20 @@ fun MixerScreen(
     // (which would cancel its scope and skip the settle).
     val composeCanvas by remember { derivedStateOf { progress > 0.0001f || dragging } }
     val composeMixer by remember { derivedStateOf { progress < 0.9999f || dragging } }
+
+    // Frame-synced meter/tap polling: one native read per display frame, so
+    // the VU meters and FX visuals update at the panel's native refresh rate
+    // (120 Hz where the device permits) and stop while the mixer is off
+    // screen. Replaces the old fixed 16 ms ViewModel loop that capped
+    // everything at 60 Hz. The FX tap is read only while its page is
+    // composed: nothing else draws it, and each read is a JNI call and a
+    // 1,024-sample copy.
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameNanos { }
+            viewModel.pollTick(fxShown = composeCanvas)
+        }
+    }
 
     // ── Preset import / export (SAF document pickers) ───────────────────
     val context = LocalContext.current
@@ -570,9 +574,10 @@ fun MixerScreen(
                 Row(modifier = Modifier.fillMaxSize()) {
 
                     // Horizontal-scrolling channel strips. Hoisted into its own
-                    // composable that collects the 60Hz busLevels flow LOCALLY,
-                    // so meter frames recompose only the strips — never the
-                    // header, the DSP-canvas page, or the transition gating.
+                    // composable that collects the per-frame busLevels flow
+                    // LOCALLY and hands it to the meters as providers, so meter
+                    // frames recompose nothing — not the strips, the header,
+                    // the DSP-canvas page, or the transition gating.
                     ChannelStripRow(
                         viewModel = viewModel,
                         buses = buses,
@@ -791,11 +796,11 @@ private fun DspPowerToggle(
 
 /**
  * The row of channel strips: buses 1 to 16 in number order, the master last,
- * then a + tile that adds a bus while there is room for one. The 60 Hz
- * `busLevels` meter flow is collected HERE rather than in [MixerScreen] so a
- * new meter frame recomposes only the strips — the header, the DSP-canvas
- * page, and the drag-transition gating all stay out of the per-frame path
- * (mirrors the local `audioAmplitude` pattern).
+ * then a + tile that adds a bus while there is room for one. The per-frame
+ * `busLevels` meter flow is collected HERE rather than in [MixerScreen], and
+ * read only inside each strip's level provider, so a meter frame recomposes
+ * nothing at all: the meters animate from it and the strips, the header, the
+ * DSP-canvas page and the drag-transition gating stay out of the per-frame path.
  *
  * Every callback is by bus index, not by position in the row: the master sits
  * at index 4 but is drawn last, so the two differ for every bus past 4.
@@ -852,7 +857,7 @@ private fun ChannelStripRow(
                     },
                     bus = bus,
                     isSelected = index == selectedBusIndex,
-                    levels = busLevels.getOrNull(index) ?: BusLevels(),
+                    levels = { busLevels.getOrNull(index) ?: BusLevels() },
                     accentColor = if (bus.isMaster) accent else busAccent(channelDynamicColor, accent, index),
                     hazeState = hazeState,
                     onSelect = { onSelectBus(index) },

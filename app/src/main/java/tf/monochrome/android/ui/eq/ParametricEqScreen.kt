@@ -161,7 +161,9 @@ fun ParametricEqScreen(
                         centerOnZero = true,
                         showLegend = false,
                         maxAbsDragGain = EqLimits.PARAMETRIC_MAX_BAND_DB,
-                        spectrumBins = if (spectrumEnabled) spectrumBins else FloatArray(0),
+                        // Read by the graph's spectrum layer as it draws, so a
+                        // new analyser frame recomposes nothing here.
+                        spectrumBins = if (spectrumEnabled) ({ spectrumBins }) else null,
                         spectrumColor = MaterialTheme.colorScheme.primary,
                         onBandDragged = { bandId, freq, gain ->
                             viewModel.updateBandByDrag(bandId, freq, gain)

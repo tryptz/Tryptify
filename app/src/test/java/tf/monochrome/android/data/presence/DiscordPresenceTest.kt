@@ -164,6 +164,37 @@ class DiscordPresenceTest {
     }
 
     @Test
+    fun `a dispatch is read without its payload, wherever the payload sits`() {
+        // Discord puts d last, but nothing says it must; and READY's d is
+        // megabytes of nested objects, which must be stepped over, not lost in.
+        val payload = """{"guilds":[{"id":"1","channels":[{"id":"2","name":"op \"0\" {not a brace}"}]}],"user":{"id":"3","s":9,"op":4}}"""
+        assertEquals(
+            DiscordPresence.Frame.Dispatch("MESSAGE_CREATE", 42),
+            DiscordPresence.parseFrame("""{"d":$payload,"t":"MESSAGE_CREATE","s":42,"op":0}"""),
+        )
+        assertEquals(
+            DiscordPresence.Frame.Dispatch("READY", 1),
+            DiscordPresence.parseFrame("""{"t":"READY","s":1,"op":0,"d":$payload}"""),
+        )
+    }
+
+    @Test
+    fun `a dispatch reads its sequence and event as before`() {
+        // A null sequence, and a quoted one, read as they always did.
+        assertEquals(DiscordPresence.Frame.Dispatch("RESUMED", null), DiscordPresence.parseFrame("""{"t":"RESUMED","s":null,"op":0,"d":{}}"""))
+        assertEquals(DiscordPresence.Frame.Dispatch("READY", 7), DiscordPresence.parseFrame("""{"t":"READY","s":"7","op":"0","d":{}}"""))
+        assertEquals(DiscordPresence.Frame.Dispatch(null, 3), DiscordPresence.parseFrame("""{"t":null,"s":3,"op":0}"""))
+    }
+
+    @Test
+    fun `hello is read when its payload comes first`() {
+        assertEquals(
+            DiscordPresence.Frame.Hello(45_000),
+            DiscordPresence.parseFrame("""{"d":{"heartbeat_interval":45000},"op":10}"""),
+        )
+    }
+
+    @Test
     fun `an unresumable invalid session is distinguished from a resumable one`() {
         // The difference decides whether reconnecting is worth doing: a refused
         // token retried forever is how an app gets its user rate limited.

@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -145,6 +146,7 @@ data class MainPlayerUiState(
     val compressorEnabled: Boolean,
     val inflatorEnabled: Boolean,
     val crossfeedEnabled: Boolean = false,
+    val replayGainEnabled: Boolean = false,
     val autoEqEnabled: Boolean = false,
     val systemWideAutoEqEnabled: Boolean = false,
     val toneControls: tf.monochrome.android.domain.model.ToneControls =
@@ -199,6 +201,8 @@ fun MainPlayerScreen(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit = {},
+    onReplayGainOpen: () -> Unit = {},
     onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
@@ -756,6 +760,7 @@ fun MainPlayerScreen(
                 compressorEnabled = state.compressorEnabled,
                 inflatorEnabled = state.inflatorEnabled,
                 crossfeedEnabled = state.crossfeedEnabled,
+                replayGainEnabled = state.replayGainEnabled,
                 autoEqEnabled = state.autoEqEnabled,
                 systemWideAutoEqEnabled = state.systemWideAutoEqEnabled,
                 toneControls = state.toneControls,
@@ -771,6 +776,8 @@ fun MainPlayerScreen(
                 onCompressorOpen = onCompressorOpen,
                 onInflatorOpen = onInflatorOpen,
                 onCrossfeedOpen = onCrossfeedOpen,
+                onReplayGainToggle = onReplayGainToggle,
+                onReplayGainOpen = onReplayGainOpen,
                 onAutoEqToggle = onAutoEqToggle,
                 onSystemWideAutoEqToggle = onSystemWideAutoEqToggle,
                 onToneControlsChange = onToneControlsChange,
@@ -895,6 +902,7 @@ private fun StatusOverlayPanel(
     compressorEnabled: Boolean,
     inflatorEnabled: Boolean,
     crossfeedEnabled: Boolean,
+    replayGainEnabled: Boolean,
     autoEqEnabled: Boolean,
     systemWideAutoEqEnabled: Boolean,
     toneControls: tf.monochrome.android.domain.model.ToneControls,
@@ -910,6 +918,8 @@ private fun StatusOverlayPanel(
     onCompressorOpen: () -> Unit,
     onInflatorOpen: () -> Unit,
     onCrossfeedOpen: () -> Unit,
+    onReplayGainToggle: (Boolean) -> Unit,
+    onReplayGainOpen: () -> Unit,
     onAutoEqToggle: (Boolean) -> Unit,
     onSystemWideAutoEqToggle: (Boolean) -> Unit,
     onToneControlsChange: (tf.monochrome.android.domain.model.ToneControls) -> Unit,
@@ -1076,6 +1086,10 @@ private fun StatusOverlayPanel(
                 onInflatorToggle, onLongPress = onInflatorOpen)
             ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.crossfeed_detail), crossfeedEnabled, accent,
                 onCrossfeedToggle, onLongPress = onCrossfeedOpen)
+            // Not an effect but a level: every song at one loudness. Long-press
+            // opens Settings › Audio, where its mode and target are.
+            ToggleRow(stringResource(R.string.settings_replaygain), stringResource(R.string.replaygain_detail), replayGainEnabled, accent,
+                onReplayGainToggle, onLongPress = onReplayGainOpen)
         }
             }
     }
@@ -1216,64 +1230,79 @@ private fun PlayerTrackInfo(
     onArtistClick: (Long, String) -> Unit,
     isLiveStream: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // A title too long for the line shows the rest of itself and
-            // comes back, rather than ending in "…".
-            tf.monochrome.android.ui.components.BackAndForthText(
-                text = track?.title ?: stringResource(R.string.no_track_playing),
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (track != null) {
-                // Prefer the UnifiedTrack credits (carry per-artist ids incl. local
-                // artist ids); fall back to the legacy Track when unknown.
-                val refs = artists.ifEmpty { track.uiArtistRefs() }
-                ClickableArtists(
-                    artists = refs,
-                    fallbackName = track.displayArtist.ifBlank { stringResource(R.string.unknown) },
-                    // The name goes with the id, because the id is sometimes
-                    // 0: a catalogue row can reach the player identified only
-                    // by what it is called, and the artist page can search for
-                    // that. Passing the id alone made this link a dead end.
-                    onArtistClick = { ref -> onArtistClick(ref.id ?: 0L, ref.name) },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.6f),
-                    linkColor = Color.White.copy(alpha = 0.85f),
-                )
-                // Where it plays from, and "via" when that is another
-                // service or the device — never a silent switch.
-                tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
-                    tf.monochrome.android.ui.components.PlayerSourceTag(
-                        source = picked,
-                        via = via,
-                        modifier = Modifier.padding(top = 2.dp),
+    // The title has the whole width, out to the heart's right edge; the
+    // artist and where it plays from share the line below with the heart.
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // A title too long for the line shows the rest of itself and
+        // comes back, rather than ending in "…".
+        tf.monochrome.android.ui.components.BackAndForthText(
+            text = track?.title ?: stringResource(R.string.no_track_playing),
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.White,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (track != null) {
+                    // Prefer the UnifiedTrack credits (carry per-artist ids incl. local
+                    // artist ids); fall back to the legacy Track when unknown.
+                    val refs = artists.ifEmpty { track.uiArtistRefs() }
+                    ClickableArtists(
+                        artists = refs,
+                        fallbackName = track.displayArtist.ifBlank { stringResource(R.string.unknown) },
+                        // The name goes with the id, because the id is sometimes
+                        // 0: a catalogue row can reach the player identified only
+                        // by what it is called, and the artist page can search for
+                        // that. Passing the id alone made this link a dead end.
+                        onArtistClick = { ref -> onArtistClick(ref.id ?: 0L, ref.name) },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.6f),
+                        linkColor = Color.White.copy(alpha = 0.85f),
+                    )
+                    // Where it plays from, and "via" when that is another
+                    // service or the device — never a silent switch.
+                    tf.monochrome.android.ui.components.LocalPlayerSource.current?.let { (picked, via) ->
+                        tf.monochrome.android.ui.components.PlayerSourceTag(
+                            source = picked,
+                            via = via,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.unknown),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-            } else {
-                Text(
-                    text = stringResource(R.string.unknown),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.6f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
-        }
-        // No heart for a station: there is no track to favourite, and the
-        // globe's own panel is where a station is kept.
-        if (!isLiveStream) {
-            IconButton(onClick = onToggleLike) {
-                Icon(
-                    imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
-                    tint = if (isLiked) accent else Color.White,
-                )
+            // No heart for a station: there is no track to favourite, and the
+            // globe's own panel is where a station is kept.
+            if (!isLiveStream) {
+                // Moved out by the button's own inset (48 dp round a 24 dp
+                // heart), so the heart itself ends where the title does; and
+                // up, so it is centred on the artist's line (its line height,
+                // which the font settings change) whether or not the source
+                // tag is under it, adding no height.
+                val artistLine = with(androidx.compose.ui.platform.LocalDensity.current) {
+                    MaterialTheme.typography.bodyLarge.lineHeight.takeIf { it.isSp }?.toDp() ?: 24.dp
+                }
+                IconButton(
+                    onClick = onToggleLike,
+                    modifier = Modifier.offset(x = 12.dp, y = artistLine / 2 - 24.dp),
+                ) {
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isLiked) stringResource(R.string.action_unlike) else stringResource(R.string.action_like),
+                        tint = if (isLiked) accent else Color.White,
+                    )
+                }
             }
         }
     }

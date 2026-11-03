@@ -24,7 +24,7 @@ class AlbumDetailViewModel @Inject constructor(
     private val downloadManager: DownloadManager,
 ) : ViewModel() {
 
-    private val albumId: Long = savedStateHandle.get<Long>("albumId") ?: 0L
+    val albumId: Long = savedStateHandle.get<Long>("albumId") ?: 0L
 
     private val _albumDetail = MutableStateFlow<AlbumDetail?>(null)
     val albumDetail: StateFlow<AlbumDetail?> = _albumDetail.asStateFlow()

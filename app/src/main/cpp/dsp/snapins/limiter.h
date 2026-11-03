@@ -25,17 +25,21 @@ public:
         delayL_.reset();
         delayR_.reset();
 
-        // Monotone deque for sliding window max (stores indices into ring)
-        peakRing_.resize(maxLookaheadSamples_ + 1, 0.0f);
-        dequeIdx_.resize(maxLookaheadSamples_ + 1, 0);
+        // Monotone deque for sliding window max (stores positions in the
+        // ring). assign, not resize, here and below: a rate change must not
+        // carry the old rate's peaks and ramp into the new one.
+        peakRing_.assign(static_cast<size_t>(maxLookaheadSamples_ + 1), 0.0f);
+        dequePos_.assign(static_cast<size_t>(maxLookaheadSamples_ + 1), 0);
         ringSize_ = lookaheadSamples_;
         ringWritePos_ = 0;
         dqFront_ = 0;
         dqBack_ = 0;
-        globalSampleIdx_ = 0;
 
-        // Gain ramp buffer for the attack envelope within the lookahead window
-        gainRamp_.resize(maxLookaheadSamples_ + 1, 1.0f);
+        // Gain ramp buffer for the attack envelope within the lookahead
+        // window. Empty is 0 dB, as reset() leaves it. It used to start at 1
+        // here, which sounds the same: a slot only counts through a min()
+        // with a reduction, and a reduction is never above 0 dB.
+        gainRamp_.assign(static_cast<size_t>(maxLookaheadSamples_ + 1), 0.0f);
         rampWritePos_ = 0;
 
         gainReductionDb_ = 0.0f;
@@ -49,6 +53,9 @@ public:
         const float outputLin = dbToLin(outputGainDb_);
         const float threshLin = dbToLin(thresholdDb_);
         const float invThresh = (threshLin > 1e-20f) ? 1.0f / threshLin : 1e20f;
+        const int ringLen = static_cast<int>(peakRing_.size());
+        const int dequeLen = static_cast<int>(dequePos_.size());
+        const int rampSize = static_cast<int>(gainRamp_.size());
 
         for (int i = 0; i < numFrames; i++) {
             // Apply input gain
@@ -67,46 +74,47 @@ public:
             float peak = key_ ? key_[i] * inputLin : std::max(std::fabs(inL), std::fabs(inR));
 
             // --- Sliding window maximum via monotone deque (O(1) amortised) ---
+            // The deque holds positions in the ring, oldest first, and an
+            // entry's age is how far the write head has moved past it. An
+            // entry leaves at ringSize_ samples old, short of the ring's
+            // length, so its age can always be read off the ring. A sample
+            // counter used to stand in for the positions: an int, never reset
+            // between songs, which past 2^31 samples (12 hours at 48 kHz, 3
+            // at 4x) went negative, and with it its % of the ring, which then
+            // indexed before the buffer.
+            //
             // Write peak into ring buffer
             peakRing_[ringWritePos_] = peak;
-            int currentIdx = globalSampleIdx_;
 
             // Remove elements from back of deque that are <= current peak
             while (dqFront_ != dqBack_) {
-                int backPos = dqBack_ - 1;
-                if (backPos < 0) backPos += static_cast<int>(dequeIdx_.size());
-                int backIdx = dequeIdx_[backPos];
-                int ringPos = backIdx % static_cast<int>(peakRing_.size());
-                if (peakRing_[ringPos] <= peak) {
+                const int backPos = (dqBack_ == 0 ? dequeLen : dqBack_) - 1;
+                if (peakRing_[dequePos_[backPos]] <= peak) {
                     dqBack_ = backPos;
                 } else {
                     break;
                 }
             }
 
-            // Push current index
-            dequeIdx_[dqBack_] = currentIdx;
-            dqBack_ = (dqBack_ + 1) % static_cast<int>(dequeIdx_.size());
+            // Push current position
+            dequePos_[dqBack_] = ringWritePos_;
+            if (++dqBack_ == dequeLen) dqBack_ = 0;
 
             // Remove expired elements from front
             while (dqFront_ != dqBack_) {
-                if (currentIdx - dequeIdx_[dqFront_] >= ringSize_) {
-                    dqFront_ = (dqFront_ + 1) % static_cast<int>(dequeIdx_.size());
-                } else {
-                    break;
-                }
+                int age = ringWritePos_ - dequePos_[dqFront_];
+                if (age < 0) age += ringLen;
+                if (age < ringSize_) break;
+                if (++dqFront_ == dequeLen) dqFront_ = 0;
             }
 
             // The front of the deque is the max in the window
             float maxPeak = 0.0f;
             if (dqFront_ != dqBack_) {
-                int frontIdx = dequeIdx_[dqFront_];
-                int frontRingPos = frontIdx % static_cast<int>(peakRing_.size());
-                maxPeak = peakRing_[frontRingPos];
+                maxPeak = peakRing_[dequePos_[dqFront_]];
             }
 
-            ringWritePos_ = (ringWritePos_ + 1) % static_cast<int>(peakRing_.size());
-            globalSampleIdx_++;
+            if (++ringWritePos_ == ringLen) ringWritePos_ = 0;
 
             // --- Compute target gain ---
             float targetGainDb = 0.0f;
@@ -128,13 +136,15 @@ public:
                 // across the lookahead window for the difference
                 float diff = targetGainDb - gainReductionDb_;
                 int rampLen = lookaheadSamples_;
+                // The ramp is shorter than its buffer, so it wraps once at most.
+                int pos = rampWritePos_;
                 for (int s = 0; s < rampLen; s++) {
                     // Raised cosine: 0 at s=0, 1 at s=rampLen-1
                     float t = static_cast<float>(s) / static_cast<float>(std::max(1, rampLen - 1));
                     float cosineGain = 0.5f * (1.0f - std::cos(3.14159265358979f * t));
-                    int pos = (rampWritePos_ + s) % static_cast<int>(gainRamp_.size());
                     // Blend the new reduction into whatever is already scheduled
                     gainRamp_[pos] = std::min(gainRamp_[pos], gainReductionDb_ + diff * cosineGain);
+                    if (++pos == rampSize) pos = 0;
                 }
                 gainReductionDb_ = targetGainDb;
             } else {
@@ -149,7 +159,7 @@ public:
 
             // Reset this ramp slot for future use
             gainRamp_[rampWritePos_] = 0.0f;
-            rampWritePos_ = (rampWritePos_ + 1) % static_cast<int>(gainRamp_.size());
+            if (++rampWritePos_ == rampSize) rampWritePos_ = 0;
 
             float gainLin = dbToLin(appliedGainDb);
 
@@ -200,12 +210,11 @@ public:
     void reset() override {
         delayL_.reset(); delayR_.reset();
         std::fill(peakRing_.begin(), peakRing_.end(), 0.0f);
-        std::fill(dequeIdx_.begin(), dequeIdx_.end(), 0);
+        std::fill(dequePos_.begin(), dequePos_.end(), 0);
         std::fill(gainRamp_.begin(), gainRamp_.end(), 0.0f);
         ringWritePos_ = 0;
         dqFront_ = 0;
         dqBack_ = 0;
-        globalSampleIdx_ = 0;
         rampWritePos_ = 0;
         gainReductionDb_ = 0.0f;
     }
@@ -246,12 +255,11 @@ private:
 
     // Sliding window max via monotone deque
     std::vector<float> peakRing_;
-    std::vector<int> dequeIdx_;
+    std::vector<int> dequePos_;  // positions in peakRing_
     int ringSize_ = 0;
     int ringWritePos_ = 0;
     int dqFront_ = 0;
     int dqBack_ = 0;
-    int globalSampleIdx_ = 0;
 
     // Gain ramp buffer for raised-cosine attack
     std::vector<float> gainRamp_;

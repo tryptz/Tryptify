@@ -52,6 +52,7 @@ class TrackDownloader @Inject constructor(
     private val downloadDao: DownloadDao,
     private val qobuzIdRegistry: tf.monochrome.android.data.api.QobuzIdRegistry,
     private val localLibraryRevision: tf.monochrome.android.data.local.LocalLibraryRevision,
+    private val scxyt: tf.monochrome.android.data.scxyt.ScxytRepository,
 ) {
 
     /** What became of one attempt. */
@@ -119,6 +120,11 @@ class TrackDownloader @Inject constructor(
         val appleId = explicitAppleId ?: trackId
         val deezerId = item.deezerId.takeIf { it > 0L }
             ?: trackId.takeIf { qobuzIdRegistry.isDeezerTrack(it) && !qobuzIdRegistry.isQobuzTrack(it) }
+        // A YouTube or SoundCloud song: its trackId is a hash, and only this
+        // names it. Checked before every catalogue, which would take the hash
+        // for one of their ids.
+        val scxytId = item.scxytId
+        val scxytService = scxytId?.let { tf.monochrome.android.data.scxyt.ScxytSource.ofId(it) }
 
         return try {
             // Each service downloads in its own quality setting. Apple's ladder
@@ -130,11 +136,13 @@ class TrackDownloader @Inject constructor(
                 qobuzIdRegistry.isQobuzTrack(trackId) -> ApiService.QOBUZ
                 else -> ApiService.TIDAL
             }
-            val quality = if (service == ApiService.APPLE) {
-                appleTier(preferences.appleQuality.first())
-            } else {
-                preferences.downloadQuality(service).first()
+            val quality = when {
+                // What the server has, AAC or MP3: there is no tier to choose.
+                scxytId != null -> AudioQuality.HIGH
+                service == ApiService.APPLE -> appleTier(preferences.appleQuality.first())
+                else -> preferences.downloadQuality(service).first()
             }
+            val from = scxytService?.label ?: service.label
 
             // Resolve the download URL from the track's own service, and only
             // that one. Apple tracks go through getAppleStreamUrl, which streams
@@ -144,7 +152,28 @@ class TrackDownloader @Inject constructor(
             // own server's download route.
             // Set when TIDAL's Dolby Atmos mix is what downloads (TIDAL Dolby Atmos on).
             var isAtmosDownload = false
-            val streamUrl = if (deezerId != null) {
+            // A YouTube song is fetched whole into the app's cache first, and
+            // the download is a copy of that file rather than a second fetch.
+            var cachedAudio: File? = null
+            val streamUrl = if (scxytId != null) {
+                // YouTube is fetched on the phone (seconds); SoundCloud by the
+                // server (seconds, up to a minute), which hands back a signed
+                // link that needs no headers. The server's file already
+                // carries the title, artist and cover: an .m4a is tagged
+                // again below as every download is, and an MP3, which nothing
+                // here tags, keeps the server's. YouTube's carries none.
+                Log.i(TAG, "\"$trackTitle\" is $scxytId - fetching it from ${scxytService?.label}")
+                val prepared = scxyt.prepare(scxytId)
+                prepared.getOrNull()?.also { cachedAudio = it.file }?.link ?: run {
+                    val error = prepared.exceptionOrNull()
+                    Log.w(TAG, "${scxytService?.label} could not be fetched for $scxytId (\"$trackTitle\"): ${error?.message}")
+                    error?.let { onFailure(tf.monochrome.android.data.scxyt.ScxytMessages.text(context, it, scxytId)) }
+                    // Busy, a timeout or no answer may pass; YouTube's bot
+                    // check, an age check or a missing video will not.
+                    val retryable = (error as? tf.monochrome.android.data.scxyt.ScxytError)?.retryable ?: true
+                    return if (retryable) Outcome.RETRYABLE else Outcome.PERMANENT
+                }
+            } else if (deezerId != null) {
                 // A Deezer pick downloads from Deezer, the same way a Qobuz
                 // pick downloads from Qobuz: /api/deezer/download in the
                 // chosen quality. No other catalogue stands in — the bare
@@ -202,7 +231,13 @@ class TrackDownloader @Inject constructor(
             onProgress(0.05f)
             val tempAudio = File.createTempFile("dl_audio", ".dl", context.cacheDir)
             try {
-            val fetched = httpClient.prepareGet(streamUrl).execute { response ->
+            val local = cachedAudio
+            val fetched = if (local != null) {
+                // Copied, not moved: the tags below rewrite the file, and the
+                // cache's copy is what the player plays.
+                local.copyTo(tempAudio, overwrite = true)
+                true
+            } else httpClient.prepareGet(streamUrl).execute { response ->
                 if (!response.status.isSuccess()) return@execute false
                 val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
                 val channel = response.bodyAsChannel()
@@ -280,9 +315,9 @@ class TrackDownloader @Inject constructor(
             // the temp file (JAudioTagger is file-based): in place for FLAC, on
             // a copy for .m4a (see tagAudioFile). Best-effort: a tagging
             // failure never fails the download (the bytes are good).
-            Log.i(TAG, "\"$trackTitle\" (id=$trackId) from ${service.label}: ${format.extension}" + if (isAtmosDownload) ", Dolby Atmos" else "")
+            Log.i(TAG, "\"$trackTitle\" (id=$trackId) from $from: ${format.extension}" + if (isAtmosDownload) ", Dolby Atmos" else "")
             if (format == DownloadFormat.FLAC) repairFlacHeader(tempAudio, trackTitle)
-            if (!isApple && !isAtmosDownload && format != DownloadFormat.MP3) {
+            if (!isApple && !isAtmosDownload && format.taggable) {
                 tagAudioFile(
                     file = tempAudio,
                     format = format,
@@ -346,7 +381,9 @@ class TrackDownloader @Inject constructor(
             val downloadLyricsEnabled = preferences.downloadLyrics.first()
             if (downloadLyricsEnabled) {
                 try {
-                    val lyrics = apiClient.getLyrics(trackId)
+                    // TIDAL by id only for an id that is TIDAL's: a YouTube or
+                    // SoundCloud song's is a hash, which can name another song there.
+                    val lyrics = (if (scxytId != null) null else apiClient.getLyrics(trackId))
                         ?: lrcLibClient.lookup(
                             tf.monochrome.android.data.api.LyricsQuery(
                                 title = trackTitle,

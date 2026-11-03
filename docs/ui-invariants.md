@@ -195,7 +195,9 @@ slide and Back by hand, and that is the cheaper half of the trade.
 (a row's ⋮ from every list; a long-press where a row has no preview) draws in the nav host's overlay slot
 at `Alignment.BottomCenter`, where the sheet was, so it blurs the list it was opened
 from. Its Track info turns the same pane into the song's tags and Back returns to
-the actions. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
+the actions; Edit info, for a song with a file, turns it into fields for its
+tags the same way (`TrackEditPane`, `imePadding` so the fields stay above the
+keyboard), and closes the menu once saved. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
 above; outside the nav host it falls back to a plain dialog, never to nothing.
 
 **An overlay pane animates in its own layer, and a bottom one clears the bar.**
@@ -206,8 +208,8 @@ Its transitions start hidden (`MutableTransitionState(false)`); given
 `visible = true` on its first composition `AnimatedVisibility` would just appear,
 and the first menu after launch would pop in. A pane at `Alignment.BottomCenter`
 sits `bottomClearance` (the nav host's `chromeHeightNow`) above the bottom edge,
-on top of the tab bar rather than over its buttons. In the song menu, Track info
-and the actions turn as pages (`AnimatedContent`, the pane's height following),
+on top of the tab bar rather than over its buttons. In the song menu, Track info,
+Edit info and the actions turn as pages (`AnimatedContent`, the pane's height following),
 not a cut.
 
 With low-performance mode these panes keep their fallback: "Disable
@@ -334,6 +336,40 @@ or not, doing nothing (seen on device). The wave is the one sung line, while
 the lyrics show, never a screen the listener idles on; the god rays already
 redraw that screen every frame.
 
+**Each glass shader is compiled once for the whole process, and every effect
+made from it sets every uniform first.** The glass, the live lens, the god
+rays, the curvature, FXAA and the dither are each one `RuntimeShader` in a
+top-level `by lazy`, shared by every pane, lens and lyric layer; there used to
+be one per call site, and a page of chips parsed the 470-line glass source ten
+to twenty times on the main thread. It is safe only because an effect copies
+the uniforms and bound children as it is made. So an effect is made only
+through the one function that sets every declared uniform on every path and
+binds `uArt` (`liquidGlassEffect`, `liveLensEffect`, `setGodRayUniforms`): a
+fresh shader starts at zero, a shared one holds the last pane's values. Never
+use one as a Paint or brush shader, which the render thread reads later; set
+uniforms on the main thread only; and the probes check the Android version
+before reading the shader. `SharedShaderUniformsTest` holds it.
+
+**The blurred background's cover is decoded small, and only under a blur.**
+`BlurredCoverLayer` asks Coil for `blurredCoverDecodePx`: at least four
+decoded pixels under one sigma of its blur, never under 256 px (256 on a phone
+at 40 and 64dp), and only on Android 12 and up, where `Modifier.blur` runs;
+below that the cover is drawn sharp at full size. Decoded at screen size it was
+6 to 39 MB a song, under a blur that hides anything finer than about 100 px.
+The size follows the blur, so never pin a number. `BlurredCoverDecodeTest`
+holds it.
+
+**A pane reads where it sits only when it has art to place.** `playerGlass`
+and the lyric glass read `anchor.rect` only while `backdrop.art` is set;
+without art the uniforms take no anchor and are the same as before. Read
+always, every art-less pane re-ran its layer on each frame of a scroll.
+
+**The player route never reads the colour fade.** It is held as State and read
+by the screen call, the hero slot, `PlayerGlassColors` and the system bars
+(through `derivedStateOf`, so the icons flip on the same frame), each in its
+own scope; the god rays' light reads its accent in the draw phase. Read in the
+route, every frame of the fade (up to 8 s) recomposed the whole player.
+
 ### Lyrics: letter glass and god rays
 
 **Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a
@@ -354,6 +390,17 @@ Moving a default restyles every listener's lyrics. Still letters
 (`glassTiltReactivity` 0) hold no gravity sensor, as on the player glass. The
 letters get no lens rim, haze or drop shadow: those belong to panes.
 
+**The tilt moves only when the glass can show it.** The gravity sensor reads
+50 times a second; `GravityTiltSource` smooths it and publishes a new tilt
+only once it has moved by `TILT_STEP` (about a third of a degree). Publishing
+every reading redrew every tilted surface, the god rays' march and the glass
+included, 50 times a second with the phone lying still, and the phone ran hot
+(seen on device). For the same reason the rays' light (`LyricRayLight`) is
+handed remembered `band` and `lettersBox` lambdas: a new lambda each
+recomposition was a new light, a new backdrop and new render effects, hundreds
+a second in the Studio. The lyric font is read once for the app
+(`LyricFontCache`), not once per line as each scrolls in.
+
 **The shadow and the god rays live on the background, under the glass UI — in
 both modes.** They are drawn by `LyricBackdropFx` in the player's `fxUnderlay`:
 full screen, after the album background, inside the haze sources, before the
@@ -370,7 +417,13 @@ fish-eye: the middle keeps its size and lines bow outward toward rounded
 corners, the top and bottom (`curvatureDeg`) and the sides
 (`curvatureSideDeg`, unset on a curve saved with one angle, which keeps its
 shape) bowed apart, as the CRT effect's two curves; set to the sung line or word, its tube covers that box alone, read in
-the draw phase, flat outside it and in its own rounded-off corners) and the backdrop draws that copy as its input and
+the draw phase and flat outside it. Over the sung letters it bends fully, and
+through the room around them (the headroom reaching into the lines above and
+below, and the words beside a word) the bend eases off to none at the tube's
+edge (`localTubeSource`). Cut off there instead, it tore and doubled the
+neighbouring lines' letters along a seam. The bend is taken in the tube's
+width both ways (`uAspect`): in the box's own proportions a short, wide line
+was bent as a whole screen is, and its letters leaned like italics at its ends) and the backdrop draws that copy as its input and
 hands back only the shadow and the shafts (`uRaysOnly`); the real letters draw
 over them. Where a pixel's march misses the sung line it hands back nothing,
 never the copy: returning the copy there drew plain letters under the glass
@@ -432,6 +485,15 @@ swells its own lines and nothing else; the cover used to punch in on every
 kick (with a strength slider), and a cover bouncing to the bass was taken out.
 `WaveCandySettings` no longer has `kickZoom`; an older saved blob that has it
 still reads, since the settings JSON ignores unknown keys.
+
+**The player's title runs to the heart's right edge.** The title has a line
+of its own, the whole width (`PlayerTrackInfo`); the artist and the source
+tag share the line under it with the heart. The heart's button is moved out
+by its own inset (48 dp round a 24 dp heart), so the heart itself ends where
+the title does, and up by half the button less half the artist's line, so it
+sits on the artist's line without making that line taller. In one row with
+the heart, the title stopped a button and a gap short of it and cut off long
+titles early.
 
 **God rays drawn in the lyric surface (no backdrop) wrap the lyric list outside
 its side inset and outside the glass.**
@@ -496,31 +558,12 @@ The rays are off by default, and the 17 presets ahead of `Sunburst` set no
 glass optic and no ray field, so nobody's lyrics change on upgrade. The
 low-performance glass switch drops the rays with the glass.
 
-**The lyrics view's empty state carries the server's word, and one action.**
-Under "No lyrics available" the view says where a server timing stands
-(`ServerLyricsStatus`: timing on which host, failed and why, no file to send,
-no server) in the same dim white as the empty text, and offers one text
-button, "Time lyrics on the server", only while no job runs and a lyrics
-server is configured. The same action sits in the player's overflow menu, so a
-song that has plain or line-timed lyrics can still be sent. Nothing here is a
-pane, a chip or a card: it is text under text, as the empty state was. The
-timing itself never joins the lyrics race, which has fifteen seconds; it runs
-in `ServerLyricsEngine` after the race, outlives the track, and its answer is
-kept in `cached_lyrics` and read before any race from then on.
-
-**Timing lyrics is a Trypt Mania job, not a spinner.** Songs go in a line
-(`ServerLyricsEngine.request`) and `LyricsSyncWorker` drains it as
-`StepManiaGenerationWorker` drains the chart queue: an ongoing notification
-naming the song and its stage (downloading, sending, hearing), then a note
-that can be swiped away saying which songs got their words. A song with no
-file on the phone is downloaded through the app's own downloads first and
-kept, as Trypt Mania charts only what is on the phone. The lyrics view shows
-the same stage under the empty state, with "Cancel" while the line runs and
-"Time lyrics on the server" when it does not. By itself a song joins the line
-only after fifteen seconds of play (`SERVER_LYRICS_AFTER_MS`): on a phone
-skipping through a playlist, every song passed over was downloaded and timed
-for nobody. The worker runs up to eight songs at once, as many as the chart
-server said it has copies, like a chart batch's lanes.
+**The lyrics view's empty state is text, and nothing else.** Under "No lyrics
+available" nothing is offered: the server timing that used to stand there
+(a Whisper on the chart server, removed 2026-10-29 with the Parser's lyrics)
+is gone, and nothing here is a pane, a chip or a card. Word-timed lyrics
+still come from the editor, and the rows a server timed before still read
+(`TimedLyricsStore`), kept for good and read before any race.
 
 **The lyrics editor is built as the Player Visuals Studio is.** `StudioPreview`
 (the real renderer, condensed, with the listener's own Lyrics FX) pinned up
@@ -530,10 +573,35 @@ pane), and every setting below in `StudioSection`s with `FxToggle` and
 `FxNudge`. It reaches the song through the shared `PlayerViewModel`, passed in
 from the nav host as the other tool screens get it, so a stamp is the song's
 own position and a tapped line seeks. Saving goes through
-`ServerLyricsEngine.publish`: the same `cached_lyrics` row a server would
-write, the player's lyrics replaced at once, and the download's `.lrc`
+`TimedLyricsStore.publish`: a `cached_lyrics` row in the shape a server once
+wrote, the player's lyrics replaced at once, and the download's `.lrc`
 rewritten with word times. The row list pads its bottom by
-`LocalBottomChromeInset`, like the Studio.
+`LocalBottomChromeInset`, like the Studio. Its chip and button rows (the
+modes and steps, the selected line's words, the actions under each section)
+wrap in a `FlowRow`, never scroll sideways: a scrolling row hid the last
+chips (the 500 ms step, a line's first words, the server's button) past the
+edge, with nothing to say they were there.
+
+**Only the sung karaoke line reads the play head.** An inactive line takes 0,
+since its colours never use the position; given it, every visible line
+recomposed at every word start and end.
+
+**A paused Wave Candy redraws only when its picture changes.** It still asks
+the native scope every frame, because the scope's clock re-places the window
+after half a second without a render, and a full stop would jump on resume.
+
+**The glide's motion blur is one layer on the plain letters, and only while
+they move.** Studio › 3D letter wave › Motion blur, off by default and a
+personal setting (a theme neither sets nor shares it). `lyricMotionBlur` is
+the innermost modifier on the lyric list, so the copy, the glass, the shadow
+and the rays all take the smeared letters as they are, and it is one layer for
+the whole list: a layer per line cut each line's blur off flat at its own box.
+The blur is along y only, its sigma from the native tracker (`cpp/motion`) fed
+how far the lines travelled. A blur of 0 sets no effect at all, so a resting
+list is never taken offscreen, and frames run only while the list scrolls and
+until the blur has faded. It exposes for a 1/30 s frame at every refresh rate:
+the glide is slow, and exposed per frame its smear was under a pixel at
+120 Hz. Android 12 and later; off with the app's animations off.
 
 ### Music links
 
@@ -543,6 +611,37 @@ them in **inside their draw and layer blocks** (`live.lyrics(baseFx)`), the way
 the bass pulse is read. Read in composition, every lyric layer would recompose
 sixty times a second. Composition may read `linkedKeys` alone, which changes
 only when the links do — to keep a clock running for a linked ray setting.
+
+**A link hears its own band, measured, never the display's spectrum.** The
+visual links read `SpectrumAnalyzerTap.linkPower`, a plain power spectrum of
+their own (`LinkBandAnalysis`: a 2048-sample window, 43 ms at 48 kHz, taken
+whenever new sound arrives, at most every 5 ms, while a link listens:
+`acquireLinks`), and each sums only its band's bins into the band's RMS in
+dBFS, as the mixer's knob links measure theirs. Once no sound has come for
+150 ms it publishes silence and sleeps until the audio thread's next buffer
+wakes it (`SoundArrival`), rather than looking every 5 ms: paused with the
+lyrics open, that was 200 wake-ups a second for nothing. `spectrumBins` is
+for the eye: tilted pink, re-centred each frame on the 200 Hz–2 kHz average
+(a kick link fell when the vocals rose), blurred across neighbouring bins,
+smoothed over a fifth of a second and taken over an 8K or 16K window; a link
+read off it lagged, softened and moved with sound outside its band.
+
+**The lyrics' beat engine listens as the links do.** `rememberBassPulse`
+reads the energy of 40–110 Hz from the links' own analysis (`linkPower`,
+`LinkBandAnalysis.bandDb`), never the display spectrum, and finds the kick with
+the links' own detector (`BandRange`); the Studio's attack, release and bounce
+come after it, unchanged. On the display spectrum it moved with the mids,
+lagged behind its smoothing, swelled and stuck after every pause, and ran the
+display's big FFT for one band.
+
+**A link uses the band's own swing, and silence moves nothing.**
+`MusicLinkFollower` (through `BandRange`, which the beat engine shares, and `mod_route.h`, step for step) measures the band
+between an adaptive floor and ceiling, its full range being the band's own
+swing between `MIN_RANGE_DB` and `RANGE_DB`, so a loud, flat master still moves
+the setting the whole way rather than sitting at the top. Below the quiet
+limit neither moves: a pause used to drag the floor to −120 dB, and the song
+after it read as full for a dozen seconds. After a pause both start again just
+under the first sound and settle within `SETTLE_SEC`.
 
 **A rate is a target only when it adds to a phase, never when it multiplies
 the clock.** The 3D letter wave runs on a clock of its own,
@@ -566,6 +665,24 @@ editor and undo on `LyricsFxStudioViewModel`, so a link made there is the
 Studio's and the Music links page's, never a second copy. The curve and tilt
 link in both places (taps follow them; see the CRT paragraph below); the zoom
 stays unlinked.
+
+**The Music links page keeps presets of its links.** A presets card under
+the master switch: a `GlassChoiceChip` per saved set (tapped, it replaces
+every visual link on the page in one write, `MusicLinksRepository.replaceAll`,
+with an editor left open closed first and an Undo bar for the set it
+replaced), and three equal glass pills, Save, Import and Export. A preset is
+the page's visual links with each one's pause, never the mixer's knob
+links, which name a mix's own effect slots and travel with mixer presets.
+The set in use is marked by its links, in any order (`MusicLinkPresets.
+matches`), and only it can be deleted. Saved sets live in one file on the
+phone (`MusicLinkPresetStore`, like the CRT presets), and do not sync; a
+file is `tryptify-music-links` version 1, cleaned by `VisualLinkCodec.
+sanitize` on the way in, so a newer one opens as far as this build
+understands it and one left with no links is refused rather than clearing
+the page (`MusicLinkPresetsTest`). The name prompt is an opaque dialog (see
+Glass). Every pill label on this page is one line that shrinks before it is
+cut and is cut with an ellipsis (`PillLabel`); a plain `maxLines = 1`
+wrapped "Resume the link" after "the" and showed only that line.
 
 The link sheet and the editor are in-window glass, siblings of their screen's
 haze source, never a dialog or a `ModalBottomSheet` (see Glass). The live
@@ -706,6 +823,78 @@ a selected chip as wide as the room offered: invisible in a scrolling row, but i
 a plain `Row` or a `FlowRow` it swallowed the line and squeezed its label to a
 letter a line.
 
+### Home-screen widget
+
+**Flat glass, no gradients** (`widget/NowPlayingWidget.kt`). One see-through
+pane that the wallpaper shows through, the way ColorOS draws its own glass,
+with a 1dp edge. On it: the sharp cover, the text, the previous/next glyphs, a
+play disc and a progress line on a faint track. A version with the cover
+blurred and frosted behind everything, a top sheen and gradient discs was tried
+on a ColorOS 17 phone and rejected as ugly: do not bring back the blurred
+cover, a sheen or any gradient.
+
+**The look is the listener's**, under Settings › Appearance › Home screen
+widget (`WidgetSettingsScreen`, the owner asked for it): glass Light, Dark or
+Album colour (the cover's *average* colour, flat), opacity 0–85% (default
+Light at 18%), the edge, the cover, the progress line, a Solid or Glass play
+disc, and the text: Auto, White or Dark. The average is taken over a 16×16
+copy of the whole cover (`averageColor`); a filtered scale straight to 1×1
+read only the pixels at its middle, and a white subject on a red cover made
+white glass. Kept in its own DataStore (`WidgetStyleStore`, `widget_style`),
+not synced: it is about this phone's home screen. Every option stays one
+flat colour at an opacity.
+
+**The text colour follows the glass over the wallpaper** (`resolveWidgetLook`,
+Text: Auto). The pane is judged over the wallpaper's main colour, which Android
+gives any app without a permission (`wallpaperGround`, `getWallpaperColors`;
+`GROUND`, a dim colour, only when it cannot say), and past luminance 0.2,
+where white and near-black read equally, the ink turns dark, and the solid disc
+with it. It used to be judged over the fixed dim colour, and on the owner's
+light wallpaper the widget drew faint white text on light glass (seen on
+device). Text: White and Dark override it, for a wallpaper whose main colour is
+not what sits behind the widget. `WidgetStyleTest` sweeps every glass, cover,
+opacity and a range of wallpapers for 4:1. The widget and the Settings preview
+both draw from `resolveWidgetLook`, and the preview stands on the wallpaper's
+colours and shows the song the widget is showing (`NowPlayingSnapshotStore`),
+so it cannot drift from the widget. Settings reads those colours off the main
+thread (a binder call) and shows nothing until it has them, as with the saved
+style, so the stand-in colours never flash.
+
+**A widget's tint drops its alpha. Translucency is a background colour.**
+Glance's `ColorFilter.tint` becomes `ImageView.setColorFilter`, which is
+SRC_ATOP: it keeps the drawable's own alpha and only mixes the colour in. The
+first version drew the pane as a white shape tinted "dark at 22%", and it came
+out solid light grey with no wallpaper through it; the glass play disc came out
+solid white with its white glyph lost in it (seen on device). So the pane and
+the clear play disc are `background(ColorProvider(...))` with a corner clip
+(round from Android 12, square below), the solid disc is a tinted shape
+(`widget_glass_disc`, opaque, round everywhere), and the edge keeps its 0.35
+alpha in the drawable (`widget_glass_edge`) and takes only its colour from the
+tint. Never tint anything with a translucent colour. The style is collected in
+the widget's composition, not read once, so a change in Settings redraws a
+widget whose session is still open.
+
+**Three picker entries, one widget.** `NowPlayingSmallWidgetReceiver` (2x2),
+`NowPlayingWidgetReceiver` (5x2: the full width of ColorOS's five-column
+grid, the owner's ask; the original class name, so widgets already placed
+stay) and `NowPlayingLargeWidgetReceiver` (4x4) all host `NowPlayingWidget`,
+each with its own `now_playing_widget_*_info` and picker preview
+(`layout/widget_glass_preview*`, the default look). Every entry resizes;
+the widget is laid out at its **exact** size (`SizeMode.Exact`), and
+`pickLayout` (`WidgetSizing.kt`) picks what fits: 2x1 compact, 4x1 bar, 2x2
+square, 4x2 and wider medium, 4x4 large, with the cover grown into the room
+there is (`mediumCover`, `barCover`, `largeCover`). Never go back to fixed
+`SizeMode.Responsive` buckets: the medium bucket asked for 140dp, ColorOS
+reports a 5x2 a little shorter, and the launcher fell back to the bar, a thin
+row with a tiny cover in a tall empty pane (seen on device). `WidgetSizingTest`
+holds the ColorOS sizes and checks the medium layout fits wherever it is
+picked.
+
+**The corner is the launcher's** (`widget_glass_radius`, the system's
+`system_app_widget_background_radius` from Android 12) and the root carries
+`appWidgetBackground`, so on ColorOS, One UI and Pixel it rounds like the
+widgets beside it.
+
 ### Search bars
 
 Every search bar in the app is `SearchOverlay` + `GlassSearchBar`. There is one
@@ -767,6 +956,14 @@ cards and the Visualizer and Waveform buttons under them, one material and one
 corner. Those two stayed on the old frosted tint after the cards moved,
 and read as dark outlined tiles beside real glass. Their "on" is the accent
 and a ring, not a stronger tint: glass has none to switch to.
+
+**The sheet's switch rows end with ReplayGain.** Under the buttons sit
+Compressor, Inflator and Crossfeed, each a `ToggleRow` whose long-press opens
+its page, and ReplayGain last: on is the smart mode, as Settings › Audio's
+own switch sets it, and its long-press opens that tab
+(`SETTINGS_TAB_AUDIO`, derived from the tab list, never a number), where
+its other modes and the target are. The same setting as Trypt Mania's Audio
+tab and Settings › Audio: one value, three places to flip it.
 
 **A press's swell is animated into `GlassPress.amount` by the animation
 itself** (`animate { press.amount = value }`). It must never be copied across
@@ -1037,8 +1234,8 @@ its text, from the accent through amber to red as the time runs out
 `LocalSongPreview`, given at the nav host the way `LocalPlayInTryptMania` is, so
 no screen wires it by hand.
 
-**A held song streams at 320 kbps.** `SongPreview` asks the resolver for
-`AudioQuality.HIGH` (AAC on TIDAL and Apple, MP3 on Qobuz and Deezer): a
+**A held song streams lossy.** `SongPreview` asks the resolver for
+`AudioQuality.HIGH` (AAC 320 on TIDAL and Apple, MP3 320 on Qobuz and Deezer): a
 25 s preview of a song that may never be played should start in a moment
 and cost little, not fetch a Hi-Res FLAC that the Qobuz cache fills from
 the front. A song already in the Qobuz or Deezer cache whole, at any
@@ -1089,6 +1286,62 @@ files go up. A batch says it was queued once, then once when it is done
 to a listener's own music server: the Subsonic API has none.
 
 `SongPreviewTest` holds the start point, the fade and the fill's colours.
+
+### The next list
+
+**"Continue into the next list" (Settings › Audio › Playback, on by
+default) plays the list beside the one that ended, on the screen it was
+opened from.** An album opened from an artist's page goes on to the next
+album there (albums, then EPs and singles, as the page reads), one from the
+Library's liked albums, a search or a Discover shelf to the next one in that
+row; a playlist to the next in the Library's (or the music server's) list; a
+phone folder to the next folder with songs in the whole tree, top to bottom,
+each folder before its subfolders, as the folder browser shows them. After
+the last list comes radio from its last song. Previous on the first song
+goes to the last song of the list before. Repeat All loops the list playing
+and Repeat One the song, as before; under shuffle the next list is shuffled
+too. No label in the player says any of this.
+
+- **Every screen that opens a list records its row as it opens it**
+  (`ListTrail.opened`), and every screen that plays one says which list it is
+  (the `from` of `PlayerViewModel.playTrack`, `playAll`, `playUnifiedTrack`
+  and the rest). A new screen of albums or playlists that skips the first
+  plays each list alone, straight into radio at its end; one that skips the
+  second does not carry on at all.
+- **The trail holds ids, never songs**, and only the last few rows, each to
+  100 lists either side (`ListContext.MAX_EITHER_SIDE`). A list's songs are
+  loaded when playback reaches it (`ListTrackLoader`, at most 1,000). A
+  folder's neighbour is looked for, never the whole tree (`FolderWalk`).
+- **Finished lists stay in the queue.** The queue sheet scrolls back
+  through every list played, and the player's "3 / 12" counts from the first
+  song of the first list. An earlier build dropped a list once the next one
+  played: the queue sheet lost its history and the count restarted at every
+  list. The queue grows only by what has played, plus the one list added
+  ahead, as it does under song radio. **It stops at 2,000 songs behind**
+  (`QueueManager.MAX_BEHIND`): past that, adding to the queue drops the
+  oldest, whole lists where it knows where they start, down to about 1,500,
+  and the count starts from there. Hours of radio or list after list
+  otherwise grew it, and everything it holds, for as long as the app ran.
+- **A list that will not load is not the end.** Offline or with a server
+  down, the lists are kept, and the last song's end, or Next, looks again
+  (waiting at most 15 seconds, one wait at a time); a list that fails three
+  times running is passed over (`ListSearch.MAX_TRIES`). Only a list that
+  really is empty, or the end of the row, starts radio. An earlier build took
+  any failed load for "no next list", forgot the row and started radio. A
+  saved queue cut short at its end plays the rest of its last list first
+  (`ListContext.tailCut`), instead of jumping to the list after it.
+- **Shuffle leaves the lists already played behind.** Turned on mid-way
+  through a run of lists, it shuffles the list playing and those after it;
+  the finished lists stay where they are, so they are not played again.
+  Turned off, the play head stays on the same copy of the song.
+- **The Library's playlists have a sort, and it is saved**
+  (`PlaylistSort`, the sort button at the end of the New playlist row): last
+  edited first, as they always were, by name, or by date created. Last
+  edited moves a playlist to the top every time a song is added to it, so a
+  listener who walks playlists in order picks name or date created.
+
+`ListContextTest` holds the rows, the folder walk, the saved queue and the
+queue's appending, prepending and dropping.
 
 ### My server (Subsonic)
 
@@ -1181,6 +1434,108 @@ because a failed worker would fail every song queued behind it.
 **The account is re-read on resume.** Payment opens in the browser, and the
 plan should be there when the listener comes back, with no reload button.
 
+### YouTube and SoundCloud
+
+**Two more source chips at the end of Search's row, drawn like the rest**
+(`SearchSourceFilter.YOUTUBE`, `SOUNDCLOUD`): a `GlassChoiceChip` with the
+brand's mark, and its colour as the accent when chosen. Their pills
+(`SourceType.YOUTUBE`, `SOUNDCLOUD`) are the brands' own vector marks
+(`logo_youtube`, `logo_soundcloud`) in the brands' colours, untinted, like
+Qobuz's and Deezer's. Both chips are always in the row, signed in or not, as
+My server is with no server. The pill's label on a light theme is darker
+than the brand (`#B00000`, `#9C3300`), as Qobuz's is. Measure it where it
+sits: on the pill's own 14% tint of its colour, over the darkest light
+surface (Warm paper's `#F0EAE0`), not on white. There these read 4.75:1 and
+4.9:1, AA for an 11sp label; the brands' own colours read about 2.5:1, and
+the shade before these (`#CC0000`, `#B83D00`), checked only against white,
+3.8:1. The marks keep the true colours.
+
+**Off is quiet.** YouTube is searched from the phone itself
+(NewPipeExtractor) and takes no sign-in, so signed out its songs appear like
+any other source's. SoundCloud comes through the built-in trypt-hifi-scxyt
+server, which takes the Tryptify sign-in; signed out, nothing is asked of it.
+A source that gives nothing because it is off or turned away (`blocked`:
+SoundCloud refusing the server, or YouTube's bot check refusing the phone's
+network) shows only one line of plain text under the chips while its chip is
+chosen (`SearchViewModel.sourceNote`: "Sign in on the Account page to search
+SoundCloud.", which only SoundCloud's chip can say; "YouTube isn't available
+right now. Try again later."). Never a toast, an error row or the "couldn't
+reach search" state, and the other sources' results stand. A toast on every
+search while a service refuses is what this prevents. While the note shows,
+"No results found" does not: nothing was searched, and the note says why. The
+note is a polite live region, so TalkBack reads it when it appears.
+
+**They never hold the others up.** The catalogues, the library and My server
+are shown the moment they answer; YouTube and SoundCloud are asked beside them
+and merged in as each answers, each still within its 7 s (`SearchRound`).
+Their songs are ranked into the first page as if they had come with it, so a
+catalogue's copy of a song stays above theirs, and pages loaded on scroll
+meanwhile stay below. While one is out over results already up, the paging
+spinner sits under them (`isSearchingMore`); with nothing up yet, the
+full-page one stays. "No results found" and "couldn't reach search" wait for
+both: either may still find something. A newer query drops the older one's
+late answers. Only a chip that can list their songs asks for them
+(`SearchViewModel.lateSourcesFor`): All and Local (a downloaded song is
+local) ask both, each one's own chip asks it alone, and searching under
+TIDAL, Qobuz, Deezer, Collection or My server sends them nothing; choosing All,
+Local or their chip afterwards asks them then. Awaited with the rest, every
+search waited for YouTube's, up to 7 s, and sent YouTube every query
+whichever chip was chosen.
+
+**Signing in names the place.** Every line that asks for a sign-in for
+SoundCloud says "Sign in on the Account page", as Tryptify Cloud's does: a bare
+"Sign in to search SoundCloud" reads as a SoundCloud account, which the app
+has nowhere to enter. The onboarding's Account step and the Account page's
+sign-in card list SoundCloud among what signing in turns on.
+
+**Songs only, with no album or artist links.** A song names a channel, not a
+catalogue artist, and its ids are strings: "Go to album/artist" is hidden
+(`CatalogNav`), as for My server.
+
+**A song that cannot be fetched says why, once.** It is skipped like any
+song that fails, with a toast in words for its error (`ScxytMessages`);
+`blocked` names the service and what it refuses: the phone's network for
+YouTube ("YouTube is blocking this network right now. Try again later, or
+switch between Wi-Fi and mobile data."), Tryptify's server for SoundCloud
+("SoundCloud is blocking Tryptify's server right now. Try again later.").
+Never "the server" alone: the listener has never heard of it. No connection
+has its own line ("Couldn't reach YouTube. Check your connection and try
+again."). A queue failing for one reason says it once, not once a song
+(`PlayerViewModel.tellResolveFailure`).
+
+**The play button's spinner shows while the song asked for is made ready.**
+A YouTube song is fetched whole and a SoundCloud one prepared by the server
+before the player gets anything, which takes seconds, longer on mobile data,
+and the player's own buffering state has nothing to say meanwhile: the tap
+looked dead and got tapped again. So `PlayerViewModel.isBuffering` is the
+player buffering *or* `PreparingPlay.waiting`, the same ring either way, for
+a tap in the app and for the service's own advance (a track end, a blend, a
+notification skip) alike. Never for a song made ready ahead of its turn: the
+next song warming while this one plays shows nothing. Every play takes a turn
+(`PreparingPlay.begin`), and only the newest one's ending clears it, so a
+slow fetch that ends after a newer tap neither clears that tap's spinner nor
+leaves one stuck, and it does not play over the newer song or skip it by
+failing. A plain boolean set and cleared by each play gets exactly that
+wrong. A turn ends when its play's job completes (`invokeOnCompletion`, not a
+`finally`), so a play whose scope was cancelled before it started does not
+leave the spinner on either. `PreparingPlayTest` holds it.
+
+**Download is in the ⋮ menu**, which registers the song first
+(`PlayerViewModel.downloadUnified`) so the download is fetched by the song's
+own id rather than its hashed one: a YouTube song's is a copy of the file the
+phone fetched to play, a SoundCloud one's comes from the server. Share file
+shares only a song's download; with none, it says to download the song first
+or use Share link. The cover is the service's own https picture,
+with no sign-in in it.
+
+**Share link is in the ⋮ menu and the player's menu**, as a link to the song
+alone (`ShareLinks.songLink`). The local song menu (`UnifiedTrackContextMenuHost`)
+offers it for these songs only: a file or a server song has no catalog, and a
+catalog song there would be shared by its legacy track, whose album id is a
+hash no catalog loads. Signed in, the share waits for the Discord preview
+before the share sheet opens, so its toast says what it is waiting for
+("Making the Discord preview for …"), not a bare "Preparing".
+
 ### Themes
 
 Light variants are **generated**, never hand-written, and every foreground is
@@ -1263,6 +1618,15 @@ crossing for every point inside it, so an even-odd fill inverts: sea filled,
 continents punched out. It looked like the theme flickering. `GlobeLandClipTest`
 sweeps 840 cameras and includes a test that reverses the arc direction and
 asserts the sea floods, so the fix cannot be undone by a sign.
+
+**The globe is turned, not re-projected.** Every point of the asset is placed
+on the sphere once (`GlobeLandClip.spherePoints`). Each frame turns it with one
+`Turn` (four trig calls). The dots, labels, outlines and land clipper all read
+that one turn, so they agree on where the horizon is. `project()` is the same
+arithmetic for one point. `GlobeTurnTest` holds both, and `GlobeLandClipTest`
+still checks the fill through `clipRing`, which runs the same clipper.
+Re-projected, every drag frame was about 95,000 trig calls and 0.7 MB of
+garbage.
 
 ### The genre galaxy
 
@@ -1726,6 +2090,13 @@ column, with nothing to jump between.
   song starts its preview again. The delayed choice is cancelled when the
   screen or the app is left: run out behind the app, it started a looping
   preview there.
+* The preview loops on through Trypt Mania's menus: the main menu, the
+  options, the leaderboard, Settings, Packs, Generate charts, and queueing a
+  chart. It stops only for a run or the map editor (which play the song
+  themselves), previews switched off, the main player taking the DAC back,
+  and leaving the mode: the route's `ON_PAUSE` (`onBackground`), which is also
+  what leaving Trypt Mania for any other screen of the app sends. Each menu
+  used to stop it on the way in, so the music cut out between screens.
 * A preview fades in over 120 ms, and the player is built when the song list
   opens, not on the first song. A song's first preview waits 700 ms for its
   drop (`DropFinder` reads the whole song's loudness), then starts a third of
@@ -1783,6 +2154,95 @@ column, with nothing to jump between.
   for the whole route; the bottom insets follow, so the wheel and the pills
   take its place.
 
+**Charting by the minute is a menu pill and one screen.** "Generate charts"
+sits under Multiplayer on the start menu as a `MenuPill` like the others (a
+glass pill with a line under its name), never a button of its own style, and
+opens `GlyphChartingScreen` (`GlyphScreen.CHARTING`): a pushed menu like
+Packs, with a top bar and Back, the theme's page and ink, `GlyphPanel`s. Its
+meter reads like a plan's usage bar: minutes left over minutes bought on one
+line, one 8 dp track under them (`surfaceVariant`) with the share used filled
+in the accent, and the share and about how many songs are left under that.
+The fill turns `error` only when the minutes are gone; a second colour for
+"running low" made the bar look broken at every pack's end. With nothing
+bought the track is empty and the line says the first song is free. The packs
+are rows picked like radio buttons (`selectable`, a 2 dp accent border on the
+one picked), and one filled Buy button names the picked pack and its price in
+dollars, which is what Creem charges wherever the listener is. The account
+comes from `ChartingAccountStore`, Tryptify Cloud's answer
+(`GET /v1/charting/account`), read when the screen opens and whenever it
+comes back in front (`LifecycleResumeEffect`): a checkout opens in the
+browser, and the minutes are there when the listener returns. A song's line
+in the history is a button (`HistoryRow`, an arrow at its end, the press in
+the row's own rounded shape): it opens the song list on that song, picked
+as a tap on the wheel picks it, out of any search (`OpenChartedSong`). The
+history knows a song only by the title it was charted under, so the
+library's song of that title is taken, a charted one first; one no longer on
+the phone leaves the screen as it is with a notice. A pack bought is no song
+and takes no tap, with the arrow's room kept so the minutes line up. Signed out,
+the screen says so with Sign in, as Multiplayer does, and the free-song panel
+is gone; a pack with no product yet answers Buy with a notice panel, never a
+dead button. The song list needs nothing new: while the listener has minutes
+or their free song, Tryptify's server is first in both Fast and Slow
+(`RemoteStemAnalysis.plan`), reached through Cloud and never by an address
+of its own, and the batch confirmation reads "Separating on Tryptify's
+server" for it. While the chart line runs, the screen shows it above the
+stats as "Charting now": the batch's count and one meter, then each song in
+flight with its stage verbatim from the service, the waiting ones dimmed
+(eight at most, then "and N more"), and Cancel all; the same line the song
+list's generation panel shows, read from the same `ChartQueueState`, never a
+second count.
+
+**Trypt Mania plays through the exclusive USB DAC, and the DAC has one
+stream.** Its transport and its preview stay plain ExoPlayers, kept out of
+the shared player on purpose, but each gets a `LibusbAudioSink` of its own
+(`UsbGameAudio`), so with a DAC claimed a run's song and a preview come out
+of the DAC at the DAC level, and the volume keys move that level as for the
+main player. The driver carries a single stream, so who plays is a lease
+(`StreamLease`, `LibusbUacDriver.streamHolder`): the last player to start
+the stream holds it, the other one's writes, parks and flushes do nothing,
+and it takes the stream back on its own next play. Starting a run or a
+preview pauses the main player (`PlaybackService` watches the holder) and
+nothing resumes it; play from the notification under a run pauses the run
+and stops the preview (`GlyphViewModel.watchDacStream`). The game lets go
+by parking the stream, never stopping it: releasing the USB interface hands
+the DAC to Android's kernel driver and the main player's next start fails.
+A taken-over or fresh stream fades in from silence over about half a second,
+as any stream on this path does; the timing is untouched, since the position
+the game's clock reads is the sink's played frames. The metronome and the
+wheel's swish are raw AudioTracks and stay on Android's output. Each game
+player also runs the app's DSP engine, a `DspChain` copy of its own (the
+mixer, the Oxford Inflator, Compressor and Crossfeed, ReplayGain, AutoEQ and
+the Parametric EQ; never the taps, which show the main player's song), on
+the DAC and on Android's output alike, and it follows the app's settings
+live: `PlaybackService` publishes a `DspSeed` to `UsbGameAudio` whenever a
+setting lands on its singletons. The seed (the engine's whole state, read
+back and parsed again) is read only while a game player is alive, or once
+when the next one starts (`LazySeed`), so a knob turned with the game
+closed costs the main thread nothing. The main player's stages are never shared
+with the game: they hold one stream's state. A game song has no gain tags,
+so ReplayGain on measures it as it plays, as for an untagged song. The
+engine's own latency (the Inflator's band split is a few milliseconds)
+is what the Sync tab's offset absorbs, as for any output.
+
+**Trypt Mania's Audio tab switches the app's own audio settings.** Settings
+› Audio in the game has three `GlyphSwitchRow`s, AutoEQ, Oxford Inflator and
+ReplayGain, and a line saying the main player follows them too: they are
+the app's settings (`eq_enabled` with the system-wide correction cleared,
+`InflatorEffect.effectIn`, `replaygain_mode` SMART or OFF), not a second
+set for the game, since one engine plays both. Switching the Inflator on
+also switches the DSP engine on (`dsp_enabled`), without which the Oxford
+stages are bypassed and the switch would do nothing audible. The tab's rows
+are string resources in all eight languages; the tab labels stay the
+screen's hard-coded English like the four before it. Only while
+the game's sound is on Android's output instead (no DAC, or one that
+refused its format, when the sink passes through to Android as before) does
+`GlyphViewModel` tell `BypassVolumeController` (`androidStreamAudible`),
+so `steersOutput` is false, the keys fall through to `STREAM_MUSIC`, the
+media session reports a local device again, and the DAC's glass pop-up
+stays away. Before 2026-10-29 the mode always played on the phone beside a
+claimed DAC, and before that fix the keys stepped the DAC level, which
+nothing audible followed, and the game's volume could not be changed at all.
+
 **The card over the wheel reads the chart; it never grades it.**
 `GlyphSongInfoCard`: DDR's Groove Radar, the BPM meter, the meter in stars and a
 density graph, from `GlyphChartStats`. The radar is StepMania's own
@@ -1811,7 +2271,15 @@ the song's picture under it are soft colour rather than text bent at its rim.
 The radar is drawn in a well sunk into the card (`glassWell`: darker than the
 glass, its far wall's shadow inside its top, its near lip lit), as one with
 it; it used to sit on a second slab of glass over the card, a pane on a pane.
-The density graph has a shallower well of its own. The meter is twelve stars
+Its five axis names are set in the card's own label voice (the theme's
+`labelSmall` face, small and spaced as small capitals, in `onSurfaceVariant`),
+never a bare `TextStyle`, which fell back to the system's sans and made them
+the one text on the card in another face. Each name sits past its axis's tip
+with its near edge at the tip (above STREAM, beside VOLTAGE and CHAOS, below
+AIR and FREEZE); where the well is too tight for that, the name is pushed in
+over the web on a patch of the well's own floor, so the lines and the shape
+run under it, not through its letters. The density graph has a shallower
+well of its own. The meter is twelve stars
 cut through the card (`StarHoles`, the slab's `punch` with `punchThrough`):
 the cut goes through the frost as well as the slab, so an unlit star is a real
 hole with the page behind it sharp, the shader bevelling its edge. A lit star
@@ -1886,6 +2354,32 @@ music under FAILED. Nor do the lanes: a step under FAILED was still judged at
 the stopped music, and the results count the engine's judgements. Imm. Continue shakes and plays on. Leaving or restarting
 cancels the hold. Reduced motion keeps all of it still: the intro, roll, pop,
 fall and shake are skipped, and FAILED shows at once.
+
+**A run ends when its song does, through stripes.** After the last note the
+song plays on to its end (`playOut`); from a second after the last note a tap
+skips the rest. Then black stripes sweep in from alternate sides, each a
+little after the one above, over a fade to black, while the music fades
+with them (`GLYPH_END_WIPE_MILLIS`), and the results cut in from black.
+Every stripe is shut when the wipe ends (`GlyphEndStripesTest`): one still
+open would show the field under the results' first frame. A fail on Immediate leaves through the
+same stripes after its hold. A room's run does not wait for the song's tail,
+since the room is waiting on every phone, and an editor test play goes
+straight back to the editor. Pause does nothing during the wipe. Reduced
+motion is the fade alone.
+
+**Motion blur trails a note, it never blurs one.** Graphics › Motion blur,
+off by default, from Off to Cinematic. A note's face is where the player reads
+its timing, so the sharp note is drawn as always and a few faded copies of its
+own art lie behind it, under every sharp note in a pass of their own (drawn
+with each note, one note's smear lay over the next one's face). The native
+tracker (`cpp/motion`) measures the field's scroll, and the plan holds three
+things a slider move must not undo: every level starts the trail equally
+opaque, so a level changes grain and reach, not weight; the trail is capped at
+a share of the note's size, so a fast scroll makes a streak, not a second note;
+and a frame's copies are budgeted across the notes on screen, so a dense chart
+gets coarser trails, never a slower frame. A seek, a restart or a pause is a
+jump, not a speed. No trail on a held head (it is still), under reduced motion,
+or while the song is paused.
 
 **The TV shader is over the game, never over a menu.** `glyphTvShader`, off by
 default, goes on the gameplay picture (the playfield, the judgements and the
@@ -2087,6 +2581,17 @@ StepMania's own art — the grade, the judgement and FULL COMBO sprites — is f
 on a card; its colours as text go through `menuAccent`. Its typefaces belong to
 the playfield (the HUD, the judgement and the combo), not the menus.
 
+**A judgement lands, then holds and fades.** `GlyphJudgementFx` draws the
+word up to 84 dp tall and 86% of the field's width, so a theme's sprite is
+read at a glance, small pixel art enlarged square-edged (`FilterQuality.None`
+under 64 px). Each judgement lands larger than it rests and springs back
+(1.45× for a Marvelous, 1.3× a Perfect or Great, 1.12× the rest); a miss
+sinks and tips away instead. All of it is read in the layer, so the
+animation redraws and never recomposes; with reduced motion it is still,
+StepMania's sleep then fade. An imported theme's judgement cells are trimmed
+to their letters, at import and as they load, since a cell is often mostly
+empty and the word came out a third of its size.
+
 **A choice of a few is `GlyphSegmented`, and the chosen one is filled.** A
 `materialSurface` pill track with a solid thumb in `onSurface` and the chosen label
 knocked out in `surface`; the options' and Settings' tabs are the same control.
@@ -2096,6 +2601,90 @@ their accent. Never a selection told apart by an accent-coloured label: where a
 theme's accent is grey, the chosen chip's label was the dimmest thing in the row
 and every selection, Start included, read as disabled.
 
+**Imported StepMania styles are baked into the game's own layouts, and change only the playfield.**
+Trypt Mania › Themes (`GlyphThemesScreen`, a menu built like Packs: top bar,
+`GlyphPanel`s, `GlyphButton`s) imports a ZIP, `.smzip`, 7z or RAR
+(`StyleArchive`, the song packs' rules: nothing outside the folder, each
+kind of file bounded; RAR through libarchive's BSD readers, `RarNative`,
+never unRAR's code, whose licence a GPL app cannot ship) and finds its
+noteskins, themes and announcers by StepMania's own file names
+(`StepManiaStyleScan`), never running its Lua. At import, never while
+playing, `StepManiaStyleBaker` turns them into what the game already draws:
+a noteskin into the retro skin's layout (a PNG per lane and part and a
+`GlyphSkinManifest`, the Down arrow turned per lane, a quantized sheet a row
+per division, hold bodies and caps flipped, parts a variant lacks taken from
+the skin its metrics.ini falls back on, `NoteSkinResolver`; a part
+StepMania draws as a 3D model, like Opal's tap note, is the model drawn face
+on with its textures, `ModelSnapshot`, never the texture sheet wrapped round
+it, which is pieces, not a note), listed beside
+the app's skins in every noteskin picker (`GlyphSkin.all()`; the options'
+three-way `GlyphSegmented` turns into the pause panel's `GlyphChipRow` only
+once there are more); a theme into the names `GlyphStepArt` loads (its
+judgement sheet, its combo digits and label, its font, a gameplay
+background, a hit and a miss sound), each standing in for the app's by name
+so whatever a theme lacks stays the app's; an announcer into a folder of
+clips per moment a run has (`AnnouncerEvent`). Tryptify's own theme and no
+announcer are the defaults, so nothing changes until one is picked. A
+theme never reaches the menus: its font is the playfield's (the combo, the
+HUD), its background is behind the field only, dimmed, and the game's
+screens stay the app's. Theme and announcer sounds are game sounds
+(`GlyphStyleSounds`, `USAGE_GAME`) on Android's output, not through an
+exclusive USB DAC. Every baked folder keeps a `LICENSE.txt` naming its
+source: the art is its authors'.
+
+**A theme brings what it ships, and the Themes screen shows the arrows.** A
+theme's own `NoteSkins`, `Announcers` and `Characters` folders import as
+noteskins, announcers and characters (`StepManiaStyleScan`), and the theme's
+`style.json` keeps their ids (`StyleInfo.bundle`): picking the theme puts its
+first noteskin, its announcer and its dancer to use with it, each changeable
+after, and its row says what it comes with. Themes › Sizes scales the
+judgement, the combo (about their middles, on their layers, so nothing
+reflows) and the dancer (from its feet) between half and twice their size
+(`GlyphStyleSizes`). The Noteskins panel lists the app's skins beside the
+imported ones, each over a strip of its four arrows (`NoteSkinPreview`, the
+PNGs the field draws; none for the vector Classic).
+
+**The StepMania Archive is browsed in the app, a tab per section.** Themes'
+Browse button opens josevarela.net's archive (`StepManiaArchiveBrowser`, a
+full-screen dialog like Packs' StepMania Online one, no JavaScript, only the
+archive's pages) with a `GlyphChipRow` of its Themes, NoteSkins, Announcers
+and Characters; a ZIP, `.smzip`, 7z or RAR link tapped is downloaded (https
+only, a few redirects, `GlyphStyleLibrary.importUrl`) and imported in the
+background. The site's own phone stylesheet hides the third column of
+its download tables, which on NoteSkins is the name, leaving a column of "?"
+authors; the browser fetches `theme.css` itself and adds one rule showing it
+again on those five-column tables only (no JavaScript is turned on for it).
+The tab chips follow the page, wherever the site's own links went.
+
+**A character dances off the field's frame.** An imported StepMania character
+(MilkShape's text model, read by `Milkshape`, posed by `CharacterPose`: rigid
+skinning, a dance's keys on the rest pose by bone name) is drawn by
+`GlyphCharacterRenderer` on a background thread, 30 times a second, into a
+240×320 picture of its own (three, taken in turn); the playfield draws only
+that picture, behind the field and over the background, so a character
+never costs the field's frame. Characters carry no moves of their own: each
+points at the archive's shared DDR PC moves ("Animation + Helper Bones") by
+file name. Importing a character fetches them when the phone has none, and
+the Characters panel offers them with a button otherwise. They are a
+megabyte or two of text each, so `StyleArchive` takes `.bones.txt` up to
+8 MB (at 1 MB, four of the seventeen dances were dropped), and the renderer
+reads only the few moves it is about to dance.
+
+**The dancer dances on the beat, as DDR's do.** `DancerChoreography` locks
+every move to the song's beat, which the screen reads from the field's clock
+(`GlyphTiming.secondsToBeat`) once a frame. The DDR PC moves are cut in
+measures of 61 frames, so a beat is 15.25 frames, a step lands on the beat,
+and every move lasts whole measures: frame = beats into the move × 15.25.
+StepMania instead only speeds its dancers up or down with the tempo (0.75× at
+60 BPM to 1.5× at 300), and that drifts off the music. The dancer warms up
+until the measure of the chart's first note, then dances. Each move plays
+through, and the next, picked at random, starts on the following measure,
+blended in over half a beat. Once the run fails it rests, and a pause holds
+it. The camera works like StepMania's DancingCharacters: every two measures
+it cuts, two times in six to a sweep (from ±45°, round by up to 60° more),
+otherwise to a still angle (0 or ±35°), and it spins at 40°/s through a stop.
+Characters face MilkShape's −Z, so they are turned round to face the player.
+
 **The options' preview is the game's playfield, not a picture of one.**
 `GlyphPreviewField` draws a real engine played by `GlyphAutoplay` with the
 player's modifiers, following the song preview's own clock when it plays, and
@@ -2103,7 +2692,12 @@ player's modifiers, following the song preview's own clock when it plays, and
 (it can share the screen with the game for a cross-fade), draws nothing rather
 than a fallback square for art that is not warm, and closes its engine on
 dispose. The menu's backdrop is the same field on `GlyphDemoChart`, whose loop
-is seamless, faded out before the buttons.
+is seamless, faded out before the buttons. It scrolls at the game's scale (`GlyphPlayfield(gameScale = true)`): the
+distance a note travels in a run on this screen, shrunk like its notes, so a
+C600 note crosses the preview as fast and as far apart as in the run and the
+field is a cut of the real one. Fitted to its own 220 dp, the speed picked
+was divided by how much shorter the preview is than the screen, and C600
+crawled like a C150.
 
 **Keyboards play through `glyphKeyboard`.** The play and training screens hold
 focus themselves so a hardware keyboard needs nothing to tab to; a key is
@@ -2125,15 +2719,49 @@ setting makes gutters between lanes, never at the screen's edge. Scroll speed
 already measures the field's height, so a note's time on screen does not
 change with the width. Previews keep their own layout.
 
+**Auto play is said, and never kept.** Player options › Judge › Auto play
+lets `GlyphAutoplay`, the previews' own hands, play the run: touches are
+ignored, the HUD carries an AUTO tag beside the scroll mode, and the results
+say the run is not saved, because nothing is (no score, history, ghost or
+leaderboard). It is off in a multiplayer room, where it would post a perfect
+score to everyone, and it is never saved between sessions, so it cannot stay
+on unnoticed. When the engine is set up again (a run's start, a training loop
+armed) auto play joins it where it is (`GlyphAutoplay.syncTo`), never resets
+it, which would widen a loop's window to the whole song.
+
+**Your pack and imported packs never share a folder.** Packs › Your pack
+refuses a folder an imported pack is linked from, and linking refuses Your
+pack's folder, each with a toast and the Packs message; a setup from before
+says so in `error` in the Your pack card (`GlyphPacksUi.folderShared`) until
+the folder is changed. Shared, "Stop saving" gave back the folder's grant
+and the imported packs lost their music and pictures; `OwnPackStore.forget`
+also keeps reading a folder a pack still uses.
+
+**Racing your best is the room's board, with two cards.** Player options ›
+Judge › Race your best (on by default, kept between sessions) puts the
+multiplayer board (`RoomLeaderboard`) on a solo run: you, and this chart's
+best full run of the difficulty as it stood at this point of the song. That
+run's ghost is replayed through the same `GlyphScore` a run is scored by
+(`GlyphGhostRace`), so the two count alike, and it ends on the score its
+results showed. Only a scored run of the whole song races: never in a room,
+Training Ground, auto play or an editor test. The store keeps the ghost of
+each difficulty's best as well as the latest (`withOneGhost`).
+
 **Tap to sync is heard, never seen.** The pad in Settings › Sync does not
 flash, pulse or count with the click track: a player who follows a flash
 measures the screen, and the offset it sets is for the sound. The track plays
 through the game's own transport and each tap goes through `touchNanos` and
 `positionAt`, as a lane press does, so the reading is exactly what a run would
 judge — never a separate timer. At 140 BPM a beat (428 ms) is shorter than
-Bluetooth's lateness can be, so a tap is never matched to its nearest click:
-the first tap anchors on the first click and the rest follow the running
-median (`GlyphTapSync`), which reads up to 500 ms.
+Bluetooth's lateness can be, so a tap is never matched to its nearest click.
+Every tap counts from the first, and the beat's phase is read from all of
+them together; the first tap only says which click they answer (a reaction to
+the first click, up to 450 ms after it, or a tap in time on a later one), and
+the reading leaves it out (`GlyphTapSync`), up to 500 ms. Anchoring everything
+on the first tap is what this prevents: a first tap is a reaction, and one a
+normal 260 ms late threw the second tap away, so the count stood still for the
+first few taps, and could read a whole click off. "Could be one click off" is
+said only when the taps fit two clicks.
 
 **The offset is the output's, and the whole app's.** Trypt Mania's audio
 offset is the Bluetooth sync of the output playing now (`OutputSync`, kept per
@@ -2144,6 +2772,12 @@ leaves the mode when it closes. The lyrics (`LyricClock`), every visual link
 driver and the visualizer's bus wait the same amount (`LocalOutputSyncMs`,
 `OutputSyncRepository.delayMs`): one number per device, never three that
 drift apart. The old lyrics and visualizer sliders are a line pointing here.
+Both nudges, the Sync tab's `GlyphStepper` and the Bluetooth sync row's,
+keep stepping while held (`Modifier.holdToRepeat`: after 400 ms, faster as
+the hold goes on, cancelled by sliding away), since an offset of a few
+hundred milliseconds at 5 ms a tap was thirty-odd taps. A short press is
+still one tap with its own feedback, and a hold that stepped does not add
+the click under it on release.
 
 **Charting is a line, and a batch is asked before it starts.** Generate puts
 the song in `ChartQueue` and never cancels the one being charted; while a song
@@ -2238,6 +2872,31 @@ Ready, the host's Start, Leave, and a line of chat.
   its own (`PartyClient`, never `RoomClient`), Back from the party screen
   leaves the party on, and only Leave the party ends it.
 
+**A paused run's field stops drawing once it is still.**
+`GlyphPlayfield(running = …)`: paused, its frame clock runs until the last
+flash and combo burst have faded in real time, and starts again on Resume. A
+room's run passes true under its pause panel; previews always run. The life
+bar throbs and shimmers only in danger or full; the song card's beat light runs
+only while a preview plays. Before, a paused game redrew every frame, the CRT
+pass included, over a picture nobody could see. The dancer holds whenever
+the run is paused, a room's pause panel included, as it always has: paused,
+`GlyphDancer` reads no beat each frame and `GlyphCharacterRenderer` sleeps
+on the paused state until Resume, and a new picture only redraws its
+canvas, never recomposes it.
+
+**The field's art is warmed once per size, skin, glass and set of note
+divisions, and drawn by place** (`GlyphFieldArt`). The game keeps its own size
+(`releaseImagesExcept`) and drops the rest, so a restart draws what it has.
+Only drawn art is warmed (`GlyphAssetCatalogTest`), a fallback is one shared
+bitmap, and the rasters go when the route leaves composition.
+
+**The CRT programs are compiled once and shared by every layer.** `tvLayer`
+sets every uniform of a program before making its effect. A new uniform must
+be set there on every pass.
+
+**Out of sight and not in a room, the rooms socket closes, and opens again on
+return; in a room it stays open**, since a dropped socket loses the seat.
+
 ### Tryptify Connect
 
 **The Devices button sits in the player's top bar, left of the output
@@ -2324,6 +2983,29 @@ the bottom, and the field to say something.
   invited to party …", Join and Not now), never a dialog and never by
   leaving on its own. Signed out, the code waits in the Join field. Only the
   code is taken from a link, and an `/api/party/…` address is never one.
+* A shared link from TrypT-hifi's share button
+  (`https://tryptify.com/listen/<source>/album/<album>[/track/<track>]`, on
+  tryptify.com or www.tryptify.com only) plays at once, with no screen of its
+  own and no question, from whichever service this phone has
+  (SharedLinkResolver): the album from the catalog named in the link (an id
+  is never tried in another catalog, ids overlap); else the same recording on
+  Qobuz by the link's ISRC; else the song, or album, by title, artist and
+  length on TIDAL, Qobuz, Deezer and Apple Music, matched as a listening
+  party matches a song. The song plays as tapping it on that album's page
+  does, so playback carries on through the album; an album link starts at its
+  first song. Song radio stops first, as for an opened file. Once only:
+  rotated or reopened from Recents, it does not play again. When no service
+  here has it, a toast says so and names the catalog it came from; nothing
+  else changes.
+* Share link makes the same link here: in a song's menu (beside Share file,
+  wherever Share file is), in the player's menu (beside Send file) and as a
+  button in an album page's row (beside Download). It names the song's own
+  catalog and album there, and is signed by a TrypT-hifi this phone has added
+  (the one serving that catalog first) when one answers, so its page shows
+  the cover and Discord plays a preview; else it is made here, unsigned, and
+  still plays. It goes out through Android's share sheet as text. A local
+  file, a music server's song, a collection or a radio station has no catalog
+  to link to: a toast says so and points to Share file.
 * The host's speed is the party's, and at a party it is always vinyl style:
   the pitch rides the speed, whatever the keep-pitch switch says (the
   owner's call: "like vinyl"). The host changes it with the app's own speed

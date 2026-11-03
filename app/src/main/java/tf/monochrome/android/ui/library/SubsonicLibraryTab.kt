@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.library
 
+import tf.monochrome.android.player.ListRef
+import tf.monochrome.android.player.ListTrail
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +63,7 @@ import coil3.compose.AsyncImage
 import tf.monochrome.android.R
 import tf.monochrome.android.data.subsonic.ServerPlaylist
 import tf.monochrome.android.data.subsonic.SubsonicAlbumSort
+import tf.monochrome.android.domain.model.UnifiedAlbum
 import tf.monochrome.android.domain.model.UnifiedTrack
 import tf.monochrome.android.ui.components.FastScroller
 import tf.monochrome.android.ui.components.SearchOverlay
@@ -130,7 +133,7 @@ fun SubsonicLibraryTab(
             Column(Modifier.fillMaxSize()) {
                 DetailHeader(title = top.artist.name, subtitle = null, onBack = { viewModel.back() })
                 LoadContent(albums, onRetry = { viewModel.back(); viewModel.openArtist(top.artist) }) { list ->
-                    AlbumGrid(albums = list, onAlbumClick = viewModel::openAlbum)
+                    AlbumGrid(albums = list, onAlbumClick = { album -> openServerAlbum(viewModel, album, list) })
                 }
             }
         }
@@ -144,10 +147,10 @@ fun SubsonicLibraryTab(
                     onBack = { viewModel.back() },
                 ) {
                     if (loaded.isNotEmpty()) {
-                        IconButton(onClick = { playerViewModel.playUnifiedTrack(loaded.first(), loaded) }) {
+                        IconButton(onClick = { playerViewModel.playUnifiedTrack(loaded.first(), loaded, ListRef.SubsonicAlbum(top.album.id)) }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.action_play))
                         }
-                        IconButton(onClick = { playerViewModel.shufflePlayUnified(loaded) }) {
+                        IconButton(onClick = { playerViewModel.shufflePlayUnified(loaded, ListRef.SubsonicAlbum(top.album.id)) }) {
                             Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.action_shuffle))
                         }
                     }
@@ -155,7 +158,7 @@ fun SubsonicLibraryTab(
                 LoadContent(tracks, onRetry = { viewModel.back(); viewModel.openAlbum(top.album) }) { list ->
                     SongList(
                         tracks = list,
-                        onTrackClick = { track, queue -> playerViewModel.playUnifiedTrack(track, queue) },
+                        onTrackClick = { track, queue -> playerViewModel.playUnifiedTrack(track, queue, ListRef.SubsonicAlbum(top.album.id)) },
                         onMoreClick = { menuTrack = it },
                         navController = navController,
                         selection = selection,
@@ -173,10 +176,10 @@ fun SubsonicLibraryTab(
                     onBack = { viewModel.back() },
                 ) {
                     if (loaded.isNotEmpty()) {
-                        IconButton(onClick = { playerViewModel.playUnifiedTrack(loaded.first(), queueFrom(loaded, loaded.first())) }) {
+                        IconButton(onClick = { playerViewModel.playUnifiedTrack(loaded.first(), queueFrom(loaded, loaded.first()), ListRef.SubsonicPlaylist(top.playlist.id)) }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = stringResource(R.string.action_play))
                         }
-                        IconButton(onClick = { playerViewModel.shufflePlayUnified(loaded) }) {
+                        IconButton(onClick = { playerViewModel.shufflePlayUnified(loaded, ListRef.SubsonicPlaylist(top.playlist.id)) }) {
                             Icon(Icons.Default.Shuffle, contentDescription = stringResource(R.string.action_shuffle))
                         }
                     }
@@ -184,7 +187,14 @@ fun SubsonicLibraryTab(
                 LoadContent(tracks, onRetry = { viewModel.back(); viewModel.openPlaylist(top.playlist) }) { list ->
                     SongList(
                         tracks = list,
-                        onTrackClick = { track, queue -> playerViewModel.playUnifiedTrack(track, queueFrom(queue, track)) },
+                        onTrackClick = { track, queue ->
+                            val from = queueFrom(queue, track)
+                            playerViewModel.playUnifiedTrack(
+                                track, from, ListRef.SubsonicPlaylist(top.playlist.id),
+                                // A long playlist is queued from the song tapped.
+                                cut = from.firstOrNull() !== queue.firstOrNull(),
+                            )
+                        },
                         onMoreClick = { menuTrack = it },
                         navController = navController,
                         selection = selection,
@@ -284,7 +294,7 @@ private fun Index(
         }
         when (section) {
             Section.ALBUMS -> LoadContent(albums, onRetry = viewModel::reload, topInset = listInset) { list ->
-                AlbumGrid(albums = list, onAlbumClick = viewModel::openAlbum, topInset = listInset)
+                AlbumGrid(albums = list, onAlbumClick = { album -> openServerAlbum(viewModel, album, list) }, topInset = listInset)
             }
             Section.ARTISTS -> LoadContent(artists, onRetry = viewModel::reload, topInset = listInset) { list ->
                 ArtistList(artists = list, onArtistClick = viewModel::openArtist, topInset = listInset)
@@ -293,7 +303,14 @@ private fun Index(
                 SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
             }
             Section.PLAYLISTS -> LoadContent(playlists, onRetry = viewModel::reload, topInset = listInset) { list ->
-                PlaylistList(playlists = list, onPlaylistClick = viewModel::openPlaylist, topInset = listInset)
+                PlaylistList(
+                    playlists = list,
+                    onPlaylistClick = { playlist ->
+                        ListTrail.opened(playlist, list) { ListRef.SubsonicPlaylist(it.id) }
+                        viewModel.openPlaylist(playlist)
+                    },
+                    topInset = listInset,
+                )
             }
             Section.LIKED -> LoadContent(liked, onRetry = viewModel::reload, topInset = listInset) { list ->
                 SongList(tracks = list, onTrackClick = playSong, onMoreClick = onMore, navController = navController, selection = selection, topInset = listInset)
@@ -315,6 +332,12 @@ private fun queueFrom(list: List<UnifiedTrack>, track: UnifiedTrack): List<Unifi
 }
 
 private const val QUEUE_FROM_LIST = 1_000
+
+/** Open a server album, remembering the albums beside it for "the next list". */
+private fun openServerAlbum(viewModel: SubsonicLibraryViewModel, album: UnifiedAlbum, row: List<UnifiedAlbum>) {
+    ListTrail.opened(album, row) { ListRef.SubsonicAlbum(it.id) }
+    viewModel.openAlbum(album)
+}
 
 /** The server's playlists, in the rows [ArtistList] draws: Material, the shared row height, never glass. */
 @Composable

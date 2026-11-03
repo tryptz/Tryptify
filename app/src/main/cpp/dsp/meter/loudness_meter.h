@@ -20,6 +20,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include "../util/finite.h"
+
 namespace tryptify {
 
 class LoudnessMeter {
@@ -54,6 +56,13 @@ public:
         reset();
     }
 
+    /**
+     * Whether to track true peak. On for the Audio Pipeline panel; off for
+     * ReplayGain's stage, which reads integrated loudness alone: the 4x
+     * oversampled peak is most of what the meter costs per sample.
+     */
+    void setTruePeak(bool on) { truePeakOn_ = on; }
+
     /** Starts every measurement again: a new track, or a tap on the readout. */
     void reset() {
         std::memset(z_, 0, sizeof(z_));
@@ -80,7 +89,7 @@ public:
             double sum = 0.0;
             for (int c = 0; c < ch; ++c) {
                 const float x = frame[c];
-                trackTruePeak(c, x);
+                if (truePeakOn_) trackTruePeak(c, x);
                 const double w = weights_[c];
                 if (w == 0.0) continue;
                 const double y = kWeight(c, x);
@@ -89,7 +98,7 @@ public:
             subAccum_ += sum;
             if (++subFrames_ >= subBlockFrames_) closeSubBlock();
         }
-        if (frames > 0) {
+        if (frames > 0 && truePeakOn_) {
             reading_.truePeak = peakLinear_ > 1e-6f
                 ? clampFloor(20.f * std::log10(peakLinear_))
                 : kFloorLufs;
@@ -160,6 +169,17 @@ private:
     // gating block closes every 100 ms, which is the 75% overlap BS.1770 asks
     // for, and a short-term value every 100 ms is the 10 Hz Tech 3342 wants.
     void closeSubBlock() {
+        // A NaN or infinity from upstream would stay in the filters for good,
+        // and every block after it read as the floor; and digital silence
+        // decays them into denormals, which some cores run dozens of times
+        // slower. Both are cleared here, ten times a second.
+        const bool clean = dspIsFinite(subAccum_);
+        for (int c = 0; c < channels_; ++c) {
+            for (double& v : z_[c]) {
+                if (!dspIsFinite(v) || std::fabs(v) < 1e-30) v = 0.0;
+            }
+        }
+        if (!clean) subAccum_ = 0.0;
         subBlocks_[subHead_] = subAccum_ / double(subFrames_);
         subHead_ = (subHead_ + 1) % kShortSubBlocks;
         if (subFilled_ < kShortSubBlocks) ++subFilled_;
@@ -322,6 +342,7 @@ private:
     float peakLinear_ = 0.f;
 
     Reading reading_;
+    bool truePeakOn_ = true;
 };
 
 }  // namespace tryptify

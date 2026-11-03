@@ -7,7 +7,9 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.RenderersFactory
 import tf.monochrome.android.glyph.training.GlyphLoopSegment
 
 /**
@@ -23,10 +25,18 @@ import tf.monochrome.android.glyph.training.GlyphLoopSegment
  * The transport owns *time*, and [GlyphClock] is how anything else asks about
  * it: [pump] takes a real position from the player and hands it to the clock,
  * which interpolates between pumps. Nothing else may write the clock.
+ *
+ * Where the sound goes is the [renderers]' audio sink's business: the app
+ * hands in one that plays through the exclusive USB DAC when one is claimed
+ * (`UsbGameAudio`), and Android's output otherwise. The position read here
+ * is the sink's either way, so the clock follows what is heard.
  */
-class GlyphAudioTransport(context: Context) {
+class GlyphAudioTransport(
+    context: Context,
+    renderers: RenderersFactory = DefaultRenderersFactory(context),
+) {
 
-    private val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+    private val player: ExoPlayer = ExoPlayer.Builder(context, renderers).build().apply {
         // No repeat: looping is done by seeking, because ExoPlayer's own repeat
         // restarts the item rather than a segment inside it.
         repeatMode = Player.REPEAT_MODE_OFF
@@ -50,14 +60,44 @@ class GlyphAudioTransport(context: Context) {
 
     val isPlaying: Boolean get() = player.isPlaying
 
+    /** The song has played to its end. */
+    val hasEnded: Boolean get() = player.playbackState == Player.STATE_ENDED
+
+    /** The song's volume, 0 to 1: the run's fade out. Back to 1 on every [prepare] and [play]. */
+    var volume: Float
+        get() = player.volume
+        set(value) {
+            player.volume = value.coerceIn(0f, 1f)
+        }
+
+    /** Told when the song starts or stops sounding, on the main thread: for whoever routes the volume keys. */
+    var onPlayingChanged: ((Boolean) -> Unit)? = null
+
+    /** Told which song was just prepared: for the chain's per-song stages (ReplayGain). */
+    var onPrepared: ((Uri) -> Unit)? = null
+
+    /** Told the pitch ratio the speed makes (the speed when pitch follows it, 1 otherwise): for AutoEQ's pre-warp. */
+    var onPitchRatio: ((Float) -> Unit)? = null
+
+    init {
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                onPlayingChanged?.invoke(isPlaying)
+            }
+        })
+    }
+
     fun prepare(uri: Uri) {
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
+        player.volume = 1f
         isPrepared = true
         clock.reset()
+        onPrepared?.invoke(uri)
     }
 
     fun play() {
+        player.volume = 1f
         player.playWhenReady = true
         clock.sync(player.currentPosition / 1000f, System.nanoTime())
         clock.start(System.nanoTime())
@@ -66,6 +106,18 @@ class GlyphAudioTransport(context: Context) {
     fun pause() {
         player.playWhenReady = false
         clock.pause(System.nanoTime())
+    }
+
+    /**
+     * Pause, and have the player let go of the song: its decoder and the
+     * seconds it buffered ahead. For leaving a run for the menus, where a
+     * paused player held them for as long as the song list was open; every
+     * run prepares its song again anyway ([prepare]).
+     */
+    fun stop() {
+        pause()
+        player.stop()
+        isPrepared = false
     }
 
     fun seekTo(seconds: Float) {
@@ -87,6 +139,7 @@ class GlyphAudioTransport(context: Context) {
         val safe = speed.coerceIn(GlyphClock.MIN_SPEED, GlyphClock.MAX_SPEED)
         pitchFollowsSpeed = linkPitch
         player.playbackParameters = PlaybackParameters(safe, if (linkPitch) safe else 1f)
+        onPitchRatio?.invoke(if (linkPitch) safe else 1f)
         // The clock has to be told, or it keeps extrapolating at the old rate
         // and the notes drift away from the music within seconds.
         clock.setSpeed(safe, System.nanoTime())

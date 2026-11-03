@@ -52,6 +52,50 @@ class MusicLinkFollowerTest {
         assertTrue("a note held for half a minute should have sunk into the floor, got $held", held < 0.2f)
     }
 
+    /** Alternates [a] and [b] dB every [beat] seconds for [seconds]; the lowest and highest value seen in the last half. */
+    private fun MusicLinkFollower.swing(a: Float, b: Float, beat: Float, seconds: Float): Pair<Float, Float> {
+        val frame = 1f / 60f
+        val steps = (seconds / frame).toInt()
+        var lo = Float.MAX_VALUE
+        var hi = -Float.MAX_VALUE
+        for (i in 0 until steps) {
+            val v = step(if (((i * frame) / beat).toInt() % 2 == 0) a else b, frame)
+            if (i > steps / 2) { lo = minOf(lo, v); hi = maxOf(hi, v) }
+        }
+        return lo to hi
+    }
+
+    @Test
+    fun `after a pause the music moves it at once, not pinned at the top`() {
+        // A pause used to drag the floor to -120 dB, and the song after it read
+        // as full for a dozen seconds.
+        val f = MusicLinkFollower(LinkShape(feel = 0f, smoothing = LinkSmoothing.OFF))
+        f.swing(-20f, -14f, 0.25f, 4f)
+        f.run(-120f, 3f)
+        val (lo, hi) = f.swing(-20f, -14f, 0.25f, 2f)
+        assertTrue("it should fall back between hits after the pause, got $lo..$hi", lo < 0.2f && hi > 0.8f)
+    }
+
+    @Test
+    fun `a loud flat master still moves it the whole way`() {
+        // Three dB of swing on a brick-walled song: its whole range.
+        val f = MusicLinkFollower(LinkShape(feel = 0f, smoothing = LinkSmoothing.OFF))
+        val (lo, hi) = f.swing(-9f, -5f, 0.25f, 12f)
+        assertTrue("a 4 dB swing should sweep the range, got $lo..$hi", lo < 0.15f && hi > 0.85f)
+    }
+
+    @Test
+    fun `a dynamic song keeps its twelve decibels`() {
+        // A hit 30 dB over the floor is full, and one 6 dB over is half: the
+        // range never grows past RANGE_DB, so loud songs move as they did.
+        val f = MusicLinkFollower(LinkShape(feel = 0f, smoothing = LinkSmoothing.OFF))
+        f.run(-40f, 2f)
+        f.run(-10f, 0.05f)
+        f.run(-40f, 0.5f)
+        val half = f.run(-34f, 0.05f)
+        assertEquals(0.5f, half, 0.08f)
+    }
+
     @Test
     fun `snappy reacts faster than smooth`() {
         val snappy = MusicLinkFollower(LinkShape(feel = 0f, smoothing = LinkSmoothing.OFF))
