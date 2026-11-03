@@ -95,6 +95,7 @@
 - **Save the Music links page's links under a name**, load a set back in one tap (every link replaced at once, with Undo), and export or import one as a `.links.json` file. A preset holds each visual link with its pause; the mixer's knob links stay with mixer presets, since they name a mix's own effect slots. A file from a newer version opens as far as this one understands it.
 
 ### Changed
+- **The player's title uses the whole width**, out to the heart's right edge, with the artist and the heart on the line under it, so long titles show more before they scroll.
 - **Hold to nudge.** The audio offset in Trypt Mania's Sync tab and in Settings › Audio › Bluetooth sync keeps stepping while + or − is held, faster the longer you hold, instead of a tap per 5 ms.
 - **Trypt Mania's Groove Radar** sets its five axis names in the card's own face, beside SPEED and DENSITY, and places each past its axis's tip, so the long names no longer sit across the web.
 - **Less CPU while music plays, screen off included.** No new memory per audio buffer; EQs that are off or flat copy the sound straight through; the pitch engine is kept between songs; the Inflator's band-split filters rest while band split is off; reverb, chorus, delay and the other delay-line effects work without a divide per sample; the resampler blends its filter once per frame; the scrobble timer sleeps while paused. The BPM tap stops once it has a tempo, so tapping the number to measure again now takes about ten seconds.

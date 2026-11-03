@@ -486,6 +486,15 @@ kick (with a strength slider), and a cover bouncing to the bass was taken out.
 `WaveCandySettings` no longer has `kickZoom`; an older saved blob that has it
 still reads, since the settings JSON ignores unknown keys.
 
+**The player's title runs to the heart's right edge.** The title has a line
+of its own, the whole width (`PlayerTrackInfo`); the artist and the source
+tag share the line under it with the heart. The heart's button is moved out
+by its own inset (48 dp round a 24 dp heart), so the heart itself ends where
+the title does, and up by half the button less half the artist's line, so it
+sits on the artist's line without making that line taller. In one row with
+the heart, the title stopped a button and a gap short of it and cut off long
+titles early.
+
 **God rays drawn in the lyric surface (no backdrop) wrap the lyric list outside
 its side inset and outside the glass.**
 `lyricGodRays` is a RenderEffect, and a layer cannot draw past its own bounds,
