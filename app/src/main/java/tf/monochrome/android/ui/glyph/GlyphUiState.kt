@@ -595,6 +595,12 @@ data class GlyphPacksUi(
     val saving: String? = null,
     /** How the last import or save ended, until dismissed. */
     val message: String? = null,
+    /**
+     * The own pack's folder is one an imported pack is linked from: they
+     * should not share one (stopping or moving the own pack used to take the
+     * imported packs' music and pictures with it).
+     */
+    val folderShared: Boolean = false,
 )
 
 /** The pack importing now, and how many wait behind it. */

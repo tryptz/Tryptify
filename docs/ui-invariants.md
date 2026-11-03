@@ -2729,6 +2729,14 @@ on unnoticed. When the engine is set up again (a run's start, a training loop
 armed) auto play joins it where it is (`GlyphAutoplay.syncTo`), never resets
 it, which would widen a loop's window to the whole song.
 
+**Your pack and imported packs never share a folder.** Packs › Your pack
+refuses a folder an imported pack is linked from, and linking refuses Your
+pack's folder, each with a toast and the Packs message; a setup from before
+says so in `error` in the Your pack card (`GlyphPacksUi.folderShared`) until
+the folder is changed. Shared, "Stop saving" gave back the folder's grant
+and the imported packs lost their music and pictures; `OwnPackStore.forget`
+also keeps reading a folder a pack still uses.
+
 **Racing your best is the room's board, with two cards.** Player options ›
 Judge › Race your best (on by default, kept between sessions) puts the
 multiplayer board (`RoomLeaderboard`) on a solo run: you, and this chart's

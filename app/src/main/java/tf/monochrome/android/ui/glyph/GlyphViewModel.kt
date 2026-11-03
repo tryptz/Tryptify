@@ -671,7 +671,17 @@ class GlyphViewModel @Inject constructor(
             GlyphEvent.FetchRoomSong -> fetchRoomSong()
             is GlyphEvent.ImportPackUrl -> PackImportWorker.enqueueDownload(context, event.url, event.name)
             is GlyphEvent.ImportPackFile -> PackImportWorker.enqueueFile(context, event.uri)
-            is GlyphEvent.ImportPackFolder -> PackImportWorker.enqueueFolder(context, event.tree)
+            is GlyphEvent.ImportPackFolder -> {
+                // Not the folder the player's own charts are saved in: the
+                // two are kept apart.
+                if (ownPack.folder.value?.toString() == event.tree.toString()) {
+                    refusePackFolder(
+                        "That's the folder your own charts are saved in. Link packs from a different folder.",
+                    )
+                } else {
+                    PackImportWorker.enqueueFolder(context, event.tree)
+                }
+            }
             GlyphEvent.CancelPackImports -> PackImportWorker.cancelAll(context)
             is GlyphEvent.RemovePack -> viewModelScope.launch {
                 packLibrary.remove(event.name)
@@ -1325,9 +1335,23 @@ class GlyphViewModel @Inject constructor(
     }
 
     private fun answerPackFolder(tree: Uri?) {
+        // Not a folder imported packs are linked from: the own pack and the
+        // imported ones are kept apart. The question stays open for another.
+        if (tree != null && _ui.value.packs.imported.any { it.source == tree.toString() }) {
+            refusePackFolder(
+                "Your imported packs are linked from that folder. Choose a different folder for your own charts.",
+            )
+            return
+        }
         if (tree != null) ownPack.choose(tree) else ownPack.declined = true
         _ui.value = _ui.value.copy(askPackFolder = false)
         pendingGeneration?.also { pendingGeneration = null }?.invoke()
+    }
+
+    /** A folder turned down for the own pack or for linking: said on the Packs screen and as a toast. */
+    private fun refusePackFolder(reason: String) {
+        updatePacks { it.copy(message = reason) }
+        android.widget.Toast.makeText(context, reason, android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** The charts the app made: library songs with a chart of the app's own. */
@@ -1376,6 +1400,12 @@ class GlyphViewModel @Inject constructor(
         }
         viewModelScope.launch {
             ownPack.folder.collect { tree -> updatePacks { it.copy(folderName = tree?.let(TreePackSink::displayName)) } }
+        }
+        // A setup from before they were kept apart: flagged until it is changed.
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(packLibrary.packs, ownPack.folder) { list, tree ->
+                tree != null && list.any { it.source == tree.toString() }
+            }.collect { shared -> updatePacks { it.copy(folderShared = shared) } }
         }
         viewModelScope.launch {
             WorkManager.getInstance(context)
