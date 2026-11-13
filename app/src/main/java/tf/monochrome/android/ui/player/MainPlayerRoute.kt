@@ -81,6 +81,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -887,6 +888,23 @@ fun MainPlayerRoute(
         // fresh snapTo cancels whatever animation is running.
         val heroOffset = remember { androidx.compose.animation.core.Animatable(0f) }
         val heroScope = rememberCoroutineScope()
+        // The songs either side of this one, whose covers ride in beside it
+        // as the finger moves (SwipeNeighbours). Held still from the moment
+        // a swipe starts until its cover has landed: the skip moves the
+        // queue, and the live pair would then be the songs either side of
+        // the new one.
+        val liveNeighbours = remember(queue, currentIndex, repeatMode) {
+            SwipeNeighbours.of(queue, currentIndex, repeatMode)
+        }
+        val currentNeighbours by rememberUpdatedState(liveNeighbours)
+        var swipeNeighbours by remember { mutableStateOf<SwipeNeighbours?>(null) }
+        val neighbours = swipeNeighbours ?: liveNeighbours
+        // The cover a committed swipe brought in, held where the playing one
+        // goes while the player changes song under it and the hero's own
+        // cover dissolves to it, then faded off: so the cover that slid in is
+        // the one that stays, with no flash of the old one between.
+        var landing by remember { mutableStateOf<Track?>(null) }
+        val landingAlpha = remember { androidx.compose.animation.core.Animatable(1f) }
         val trackSwipe = Modifier.pointerInput(swipeSkipEnabled) {
             if (!swipeSkipEnabled) return@pointerInput
             val width = size.width.toFloat().coerceAtLeast(1f)
@@ -896,15 +914,40 @@ fun MainPlayerRoute(
             // (~22%) rather than a fixed pixel count, so it asks for the
             // same proportion of a gesture on any screen density.
             val skipThreshold = width * 0.22f
+            // The neighbour's cover is in place: the playing one goes and the
+            // player changes song under the landed cover, then lets it go.
+            suspend fun land(track: Track, skip: () -> Unit) {
+                landingAlpha.snapTo(1f)
+                landing = track
+                skip()
+                heroOffset.snapTo(0f)
+                kotlinx.coroutines.delay(MANUAL_MORPH_MS + 80L)
+                landingAlpha.animateTo(0f, tween(160))
+                landing = null
+            }
             detectHorizontalDragGestures(
+                onDragStart = { swipeNeighbours = currentNeighbours },
                 onDragEnd = {
                     heroScope.launch {
                         val dx = heroOffset.value
-                        // Carry the outgoing art the rest of the way off,
-                        // switch track, then bring the incoming one in
-                        // from the opposite edge — so the direction of
-                        // travel matches the direction of the swipe.
+                        val beside = swipeNeighbours ?: currentNeighbours
                         when {
+                            // The next or previous cover is beside this one:
+                            // carried the rest of the way in, it becomes the
+                            // song.
+                            dx < -skipThreshold && beside.next != null -> {
+                                heroOffset.animateTo(-width, tween(180))
+                                land(beside.next) { playerViewModel.skipToNext() }
+                            }
+                            dx > skipThreshold && beside.previous != null -> {
+                                heroOffset.animateTo(width, tween(180))
+                                land(beside.previous) { playerViewModel.skipToPreviousTrack() }
+                            }
+                        // None to show (an end of the queue): carry the
+                        // outgoing art the rest of the way off, switch
+                        // track, then bring the incoming one in from the
+                        // opposite edge — so the direction of travel
+                        // matches the direction of the swipe.
                             dx < -skipThreshold -> {
                                 heroOffset.animateTo(-width, tween(140))
                                 playerViewModel.skipToNext()
@@ -920,9 +963,15 @@ fun MainPlayerRoute(
                             // Under the threshold: spring back, no skip.
                             else -> heroOffset.animateTo(0f, spring())
                         }
+                        swipeNeighbours = null
                     }
                 },
-                onDragCancel = { heroScope.launch { heroOffset.animateTo(0f, spring()) } },
+                onDragCancel = {
+                    heroScope.launch {
+                        heroOffset.animateTo(0f, spring())
+                        swipeNeighbours = null
+                    }
+                },
                 onHorizontalDrag = { change, amount ->
                     change.consume()
                     heroScope.launch { heroOffset.snapTo(heroOffset.value + amount) }
@@ -972,6 +1021,34 @@ fun MainPlayerRoute(
                         albumArtAnchor.lineHalf =
                             Size(coords.size.width / 2f, coords.size.height / 2f)
                     } else base
+                }
+                // The covers either side, at a cover's width from the playing
+                // one, coming in as it goes out. Only the square and round
+                // covers: the visualizer takes no swipe.
+                val neighbourStyle = if (effectiveStyle == PlayerHeroStyle.CircularProgress) {
+                    PlayerHeroStyle.CircularProgress
+                } else {
+                    PlayerHeroStyle.Square
+                }
+                if (swipeSkipEnabled && effectiveStyle != PlayerHeroStyle.Visualizer) {
+                    listOf(neighbours.next to 1f, neighbours.previous to -1f).forEach { (track, side) ->
+                        if (track != null) {
+                            NeighbourCover(
+                                track = track,
+                                style = neighbourStyle,
+                                modifier = artMod.graphicsLayer {
+                                    val w = size.width.coerceAtLeast(1f)
+                                    translationX = heroOffset.value + side * w
+                                    // Seen only from the side it comes in on, and
+                                    // brighter the further it has come; at rest,
+                                    // nothing (in landscape it would sit beside
+                                    // the art).
+                                    val travelled = (heroOffset.value * -side / w).coerceIn(0f, 1f)
+                                    alpha = (1f - lyricsProgress) * ambientHideCoverAlpha * travelled
+                                },
+                            )
+                        }
+                    }
                 }
                 PlayerHero(
                     modifier = artMod.graphicsLayer {
@@ -1037,6 +1114,15 @@ fun MainPlayerRoute(
                     // it from here brings both sets of controls up together.
                     onArtTap = { ambientPresetReveal++ },
                 )
+                landing?.let { track ->
+                    NeighbourCover(
+                        track = track,
+                        style = neighbourStyle,
+                        modifier = artMod.graphicsLayer {
+                            alpha = (1f - lyricsProgress) * ambientHideCoverAlpha * landingAlpha.value
+                        },
+                    )
+                }
             }
             if (showLyricsHero) {
                 // Fx/spectrum/beat locals are provided once around the

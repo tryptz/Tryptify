@@ -1257,6 +1257,17 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * The song before this one, always: a swipe to the right on the cover,
+     * which shows that song's cover sliding in (SwipeNeighbours) and so goes
+     * where it showed, never back to this song's start as the Previous
+     * button does more than three seconds in. Under Repeat All the first
+     * song's previous is the last.
+     */
+    fun skipToPreviousTrack() {
+        if (queueManager.previous() != null) resolveAndPlay()
+    }
+
     fun seekTo(positionMs: Long) {
         // A live stream has no position to seek to: ExoPlayer reports no
         // duration, every fraction resolves to zero, and seekTo(0) would drop

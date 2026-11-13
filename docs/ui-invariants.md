@@ -332,7 +332,7 @@ ground added 49 concave anti-aliased fills on paths that change every frame.
 That halved the player's frame rate. `WaterfallMesh` builds every line as a
 ribbon with a one-pixel transparent fringe (its anti-aliasing) and the ground
 as a strip under it, in back-to-front order, in one or two draws.
-`WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
+Ridgeline's ground under the front line goes on to the bottom of the box (`ridgeGroundBase`): the front baseline sits at 98.5% of the height so its stroke is not cut, and a ground stopping there left a strip of the cover under the dark face. `WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
 hardware-drawn, each line is one stroked path, never `drawLines`.
 
 Search bars and other app chrome take **the mini player's** settings
@@ -1339,6 +1339,22 @@ all. The listener's quality setting is untouched for real plays.
 - **Hold no longer starts multi-select.** "Select" is in the ⋮ song menu of
   every list that has a selection. Left out on purpose: the queue (hold there
   drags), Trypt Mania's wheel (it previews by itself) and Discover's cards.
+
+**Swiping the player's cover shows the song it goes to.** The next song's
+cover rides in from the right and the previous one's from the left, a
+cover's width from the playing one (`SwipeNeighbours`, `NeighbourCover`, in
+`MainPlayerRoute`'s hero slot), brighter the further the finger has come
+and invisible at rest (in landscape they would sit beside the art). They
+are the queue's neighbours as a skip would move: wrapped under Repeat All,
+this song again under Repeat One, none at an end without repeat (then the
+swipe goes on as it always did, with nothing shown). The pair is held from
+the start of a swipe until its cover lands, since the skip moves the queue.
+Past the threshold the cover that came in slides into place and is held
+over the hero (`landing`) while the player changes song and the hero's own
+cover dissolves to it, then fades off: the old cover never flashes back. A
+swipe to the right goes to the song before (`skipToPreviousTrack`), as its
+cover showed, never to this song's start as the Previous button does after
+three seconds. `SwipeNeighboursTest` holds the neighbours.
 
 **A playlist is put in a new order in a mode of its own, by a handle**
 (issue #155). Reorder is in the ⋮ menu of the listener's own playlists
