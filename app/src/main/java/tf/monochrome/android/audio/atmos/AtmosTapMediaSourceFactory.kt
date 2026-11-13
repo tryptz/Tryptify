@@ -120,8 +120,21 @@ private class TapMediaPeriod(
             selections, mayRetainStreamFlags, streams, streamResetFlags, positionUs)
         for (i in streams.indices) {
             val stream = streams[i]
+            val format = selections[i]?.selectedFormat
             if (stream != null && stream !is TapSampleStream && isEac3(selections[i])) {
                 streams[i] = TapSampleStream(stream, frameBuffer)
+                android.util.Log.i(
+                    "AtmosTap",
+                    "tapping ${format?.sampleMimeType} codecs=${format?.codecs} ${format?.channelCount}ch " +
+                        "${format?.sampleRate}Hz ${format?.bitrate}bps",
+                )
+            } else if (format != null && androidx.media3.common.MimeTypes.isAudio(format.sampleMimeType) &&
+                (format.channelCount > 2)
+            ) {
+                android.util.Log.i(
+                    "AtmosTap",
+                    "not tapped (not E-AC-3): ${format.sampleMimeType} codecs=${format.codecs} ${format.channelCount}ch",
+                )
             }
         }
         return result

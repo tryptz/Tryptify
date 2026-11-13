@@ -75,6 +75,12 @@ class AtmosAudioProcessor @Inject constructor(
     private fun applyProfile(saved: RendererProfile) {
         savedProfile = saved
         val updated = saved.effective(headphones)
+        android.util.Log.i(
+            TAG,
+            "profile: headphones=$headphones saved(hrtf=${saved.hrtfEnabled} auto=${saved.hrtfAuto} " +
+                "mode=${saved.mode} speakers=${saved.speakerRender}) -> in use(hrtf=${updated.hrtfEnabled} " +
+                "mode=${updated.mode} room=${updated.roomAmount})",
+        )
         profile = updated
         refreshSofa(updated.hrtfProfileId)
         pushParams()
@@ -152,6 +158,7 @@ class AtmosAudioProcessor @Inject constructor(
 
     private fun noteOutcome(outcome: Outcome?) {
         if (outcome == lastOutcome) return
+        android.util.Log.i(TAG, "outcome: $lastOutcome -> $outcome (rendered=$renderedFrames fallback=$fallbackFrames)")
         lastOutcome = outcome
         _outcome.value = outcome
     }
@@ -239,6 +246,9 @@ class AtmosAudioProcessor @Inject constructor(
 
     private fun noteMix(mix: ObjectMix?) {
         if (mix == lastMix) return
+        if (mix != null) {
+            android.util.Log.i(TAG, "objects: ${mix.count} (${mix.parked} parked, ${mix.moving} moving, lfe=${mix.lfe})")
+        }
         lastMix = mix
         _objectMix.value = mix
     }
@@ -249,9 +259,31 @@ class AtmosAudioProcessor @Inject constructor(
         noteMix(null)
     }
 
+    // The engine's metadata state, logged when it changes (not the held-frame
+    // count, which ticks) so a log shows where a stream's objects went.
+    private val debugNow = IntArray(10)
+    private val debugLast = IntArray(10) { -1 }
+
+    private fun logMetadata() {
+        if (pipeline == 0L || AtmosNative.nativeDebugInfo(pipeline, debugNow) < 10) return
+        var changed = false
+        for (i in 0 until 10) if (i != 8 && debugNow[i] != debugLast[i]) changed = true
+        // Held frames: only that the container went missing or came back.
+        if ((debugNow[8] > 0) != (debugLast[8] > 0)) changed = true
+        if (!changed) return
+        System.arraycopy(debugNow, 0, debugLast, 0, 10)
+        android.util.Log.i(
+            TAG,
+            "metadata: container=${debugNow[0]} joc(valid=${debugNow[1]} objects=${debugNow[2]} " +
+                "dmx=${debugNow[3]}) oamd(valid=${debugNow[4]} objects=${debugNow[5]} states=${debugNow[6]} " +
+                "warp=${debugNow[7]}) held=${debugNow[8]} lfeSlot=${debugNow[9]} rawBytes=$lastFrameBytes",
+        )
+    }
+
     /** Audio thread, after a frame: what it rendered, and the meter if it is on. */
     private fun noteFrame(objects: Int) {
         noteObjects(objects)
+        logMetadata()
         if (objects <= 0 || pipeline == 0L) { meterCount = 0; return }
         val count = AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS)
         val n = AtmosNative.OBJECT_METER_FIELDS
@@ -442,6 +474,21 @@ class AtmosAudioProcessor @Inject constructor(
             // so 9.1.x falls back to the largest layout that still fits.
             if (android.os.Build.VERSION.SDK_INT < 32 && it.sinkChannelCount == 24) ChannelLayout.ATMOS_7_1_4 else it
         }
+        val why = when {
+            inputAudioFormat.channelCount <= 2 -> "stereo or mono source"
+            !AtmosNative.isAvailable -> "native renderer not loaded"
+            profile.mode == RendererMode.PASSTHROUGH && !speakers.isMultichannel ->
+                "binaural render off (hrtf=${profile.hrtfEnabled} auto=${savedProfile.hrtfAuto} headphones=$headphones)"
+            else -> null
+        }
+        if (inputAudioFormat.channelCount > 2 || why == null) {
+            android.util.Log.i(
+                TAG,
+                "configure: in=${inputAudioFormat.channelCount}ch ${inputAudioFormat.sampleRate}Hz " +
+                    "enc=${inputAudioFormat.encoding} device=${deviceChannelCount}ch layout=${speakers.label} -> " +
+                    (why?.let { "OUT of the chain: $it" } ?: "IN the chain (mode=${profile.mode})"),
+            )
+        }
         if (inputAudioFormat.channelCount <= 2 ||
             !AtmosNative.isAvailable ||
             (profile.mode == RendererMode.PASSTHROUGH && !speakers.isMultichannel)
@@ -543,9 +590,9 @@ class AtmosAudioProcessor @Inject constructor(
                 fallbackFrames++
             }
             if ((renderedFrames + fallbackFrames) % STATS_EVERY == 0L) {
-                android.util.Log.d(
+                android.util.Log.i(
                     TAG,
-                    "frames rendered=$renderedFrames fallback=$fallbackFrames " +
+                    "frames rendered=$renderedFrames fallback=$fallbackFrames objects=$objects outcome=$lastOutcome " +
                         "tapQueue=${frameBuffer.size()} gotFrame=$gotFrameCount " +
                         "noFrame=$noFrameCount lastFrameBytes=$lastFrameBytes " +
                         "anchorUs=$anchorUs")
@@ -605,6 +652,11 @@ class AtmosAudioProcessor @Inject constructor(
             return
         }
         forgetMix()  // a new stream, or another part of this one: count afresh
+        android.util.Log.i(
+            TAG,
+            "flush: applying ${pendingFormat.channelCount}ch ${pendingFormat.sampleRate}Hz layout=${pendingLayout.label} " +
+                "tapQueue=${frameBuffer.size()} tapOldestUs=${frameBuffer.peekTimeUs()}",
+        )
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
         inputFormat = pendingFormat
@@ -663,6 +715,7 @@ class AtmosAudioProcessor @Inject constructor(
         if (anchorUs == Long.MIN_VALUE) {
             val t = frameBuffer.peekTimeUs()
             if (t == Long.MIN_VALUE) { noFrameCount++; return emptyFrame }  // tap not started yet
+            android.util.Log.i(TAG, "tap clock anchored at ${t}us (queue ${frameBuffer.size()})")
             anchorUs = t
             anchorSamples = 0L
         }
@@ -683,6 +736,7 @@ class AtmosAudioProcessor @Inject constructor(
         // A gapless track change never flushes the sink, but restarts the tapped
         // timestamps — re-anchor the clock on the entry instead of drifting.
         if (entry.timeUs - expectedUs > RESYNC_US || expectedUs - entry.timeUs > RESYNC_US) {
+            android.util.Log.i(TAG, "tap clock re-anchored: expected ${expectedUs}us, frame at ${entry.timeUs}us")
             anchorUs = entry.timeUs
             anchorSamples = FRAME_SAMPLES.toLong()
         }

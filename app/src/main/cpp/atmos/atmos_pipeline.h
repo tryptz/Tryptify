@@ -136,6 +136,9 @@ class AtmosPipeline {
     room_.set_hrir_baked();
   }
 
+  // The engine's view of the last frame's metadata (ObjectEngine::debug).
+  void debug(int* out) const { engine_.debug(out); }
+
   // Objects rendered in the last frame (the LFE included), or 0 when it was
   // the decoded bed that played: no JOC yet, a plain multichannel stream, or
   // the bed mode. What the caller reports as "objects rendered".

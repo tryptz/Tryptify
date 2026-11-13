@@ -30,7 +30,10 @@ class AtmosFrameBuffer @Inject constructor() {
             // A frame that does not follow the last one (a seek, another
             // song) starts afresh: what is buffered belongs to somewhere else.
             val last = frames.lastOrNull()
-            if (last != null && (timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US)) frames.clear()
+            if (last != null && (timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US)) {
+                android.util.Log.i("AtmosTap", "jump ${last.timeUs}us -> ${timeUs}us: dropped ${frames.size} tapped frames")
+                frames.clear()
+            }
             frames.addLast(TappedFrame(timeUs, bytes))
             while (frames.size > MAX_FRAMES) frames.removeFirst()
         }

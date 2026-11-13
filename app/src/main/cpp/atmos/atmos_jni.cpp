@@ -277,4 +277,20 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeObjectMeter(
   return count;
 }
 
+// The last frame's metadata as the engine saw it (ObjectEngine::debug), for
+// the app's log. Returns how many ints were written.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeDebugInfo(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jintArray out) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  constexpr int kFields = tf::atmos::ObjectEngine::kDebugFields;
+  if (pipe == nullptr || env->GetArrayLength(out) < kFields) return 0;
+  jint buf[kFields];
+  int raw[kFields];
+  pipe->debug(raw);
+  for (int i = 0; i < kFields; ++i) buf[i] = raw[i];
+  env->SetIntArrayRegion(out, 0, kFields, buf);
+  return kFields;
+}
+
 }  // extern "C"

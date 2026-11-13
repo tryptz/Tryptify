@@ -161,6 +161,24 @@ class ObjectEngine {
     return object_count_;
   }
 
+  // What the last frame's metadata was, for a log: whether its container was
+  // found, JOC's validity, object count and downmix configuration, OAMD's
+  // validity, object count and states, the warp mode, frames held since the
+  // last container, and the LFE slot. kDebugFields ints.
+  static constexpr int kDebugFields = 10;
+  void debug(int* out) const {
+    out[0] = emdf_.has_objects() ? 1 : 0;
+    out[1] = emdf_.joc().valid() ? 1 : 0;
+    out[2] = emdf_.joc().object_count();
+    out[3] = emdf_.joc().downmix_config();
+    out[4] = emdf_.oamd().valid() ? 1 : 0;
+    out[5] = emdf_.oamd().object_count();
+    out[6] = emdf_.oamd().state_count();
+    out[7] = emdf_.oamd().warp_mode();
+    out[8] = held_frames_;
+    out[9] = lfe_slot_;
+  }
+
   // Objects in the last upmix, in OAMD order (JOC objects + the bed LFE).
   int object_count() const { return object_count_; }
   int frame_samples() const { return frame_samples_; }

@@ -177,5 +177,12 @@ object AtmosNative {
      */
     external fun nativeObjectMeter(pipeline: Long, out: FloatArray): Int
 
+    /**
+     * The last frame's Atmos metadata as the native engine saw it, for the
+     * log: [container found, JOC valid, JOC objects, downmix configuration,
+     * OAMD valid, OAMD objects, OAMD states, warp mode, frames held, LFE slot].
+     */
+    external fun nativeDebugInfo(pipeline: Long, out: IntArray): Int
+
     const val OBJECT_METER_FIELDS = 5
 }

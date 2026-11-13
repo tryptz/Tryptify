@@ -197,6 +197,7 @@ class PlaybackService : MediaSessionService() {
         if (player.playbackState == Player.STATE_IDLE || player.currentMediaItem == null) return
         val parameters = player.trackSelectionParameters
         if (C.TRACK_TYPE_AUDIO in parameters.disabledTrackTypes) return
+        android.util.Log.i("AtmosProcessor", "reconfiguring the audio chain for the playing song (${channels}ch source)")
         runCatching {
             player.trackSelectionParameters =
                 parameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
@@ -1424,6 +1425,14 @@ class PlaybackService : MediaSessionService() {
             val headphones = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any {
                 it.type in headphoneTypes ||
                     (it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE && (it.channelCounts.maxOrNull() ?: 2) <= 2)
+            }
+            if (headphonesConnected.value != headphones) {
+                android.util.Log.i(
+                    "AtmosProcessor",
+                    "outputs: " + audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                        .joinToString { "type${it.type}/${it.channelCounts.maxOrNull() ?: 0}ch" } +
+                        " -> headphones=$headphones",
+                )
             }
             headphonesConnected.value = headphones
             atmosAudioProcessor.headphones = headphones
