@@ -3437,4 +3437,10 @@
     <string name="scxyt_error_timeout">Bu parçanın alınması çok uzun sürdü. Tekrar deneyin.</string>
     <string name="scxyt_error_failed">Bu parça %1$s üzerinden alınamadı.</string>
     <string name="scxyt_error_network">%1$s hizmetine ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin.</string>
+    <string name="whats_new_1952_reorder_title">Çalma listesindeki parçaları yeniden sırala</string>
+    <string name="whats_new_1952_reorder_body">Bir çalma listesinin ⋮ menüsündeki “Yeniden sırala”, her parçaya bir tutamaç ekler: parçayı yeni yerine sürükleyin. Her bırakma anında kaydedilir; “Bitti” veya “Geri” moddan çıkar.</string>
+    <string name="whats_new_1952_m3u_title">M3U çalma listelerini içe aktar</string>
+    <string name="whats_new_1952_m3u_body">Kitaplık › Çalma listeleri › Yeni çalma listesi › Dosya artık .m3u ve .m3u8 dosyalarını okuyor. Parçalar, liste bir bilgisayarda yazılmış olsa bile bu cihazdaki müzikte bulunur; burada olmayanlar atlanır.</string>
+    <string name="whats_new_1952_dac_tile_title">DAC’i Hızlı Ayarlar’dan serbest bırak</string>
+    <string name="whats_new_1952_dac_tile_body">Yeni bir kutu tek dokunuşla müziği duraklatır ve DAC’i diğer uygulamalara bırakır; bir dokunuş daha DAC’i geri alır. Ayarlar › Ses’te, Özel USB DAC’in altından ekleyin.</string>
 </resources>

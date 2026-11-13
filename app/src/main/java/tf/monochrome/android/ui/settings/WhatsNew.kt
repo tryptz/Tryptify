@@ -197,6 +197,36 @@ object WhatsNew {
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
+            versionCode = 197,
+            versionName = "1.9.52",
+            entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Reorder a playlist's songs",
+                    body = "Reorder, in a playlist's ⋮ menu, puts a handle on every song: drag one to its new place. Each drop is saved at once, and Done or Back leaves the mode.",
+                    titleRes = R.string.whats_new_1952_reorder_title,
+                    bodyRes = R.string.whats_new_1952_reorder_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Import M3U playlists",
+                    body = "Library › Playlists › New playlist › File now reads .m3u and .m3u8 files. Their songs are found in the music on this device, even if the list was written on a computer; songs that aren't here are left out.",
+                    titleRes = R.string.whats_new_1952_m3u_title,
+                    bodyRes = R.string.whats_new_1952_m3u_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Release the DAC from Quick Settings",
+                    body = "A new tile pauses the music and hands the DAC to other apps in one tap; another tap takes it back. Add it in Settings › Audio, under Exclusive USB DAC.",
+                    titleRes = R.string.whats_new_1952_dac_tile_title,
+                    bodyRes = R.string.whats_new_1952_dac_tile_body,
+                ),
+            ),
+        ),
+        WhatsNewRelease(
             versionCode = 196,
             versionName = "1.9.51",
             entries = listOf(

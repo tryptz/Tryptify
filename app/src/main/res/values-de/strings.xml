@@ -3437,4 +3437,10 @@
     <string name="scxyt_error_timeout">Das Abrufen dieses Titels hat zu lange gedauert. Versuche es noch einmal.</string>
     <string name="scxyt_error_failed">Dieser Titel konnte nicht von %1$s abgerufen werden.</string>
     <string name="scxyt_error_network">%1$s ist nicht erreichbar. Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="whats_new_1952_reorder_title">Titel einer Playlist neu anordnen</string>
+    <string name="whats_new_1952_reorder_body">„Neu anordnen“ im ⋮-Menü einer Playlist zeigt an jedem Titel einen Griff: Zieh einen Titel an seinen neuen Platz. Jedes Ablegen wird sofort gespeichert, und „Fertig“ oder „Zurück“ beendet den Modus.</string>
+    <string name="whats_new_1952_m3u_title">M3U-Playlists importieren</string>
+    <string name="whats_new_1952_m3u_body">Bibliothek › Playlists › Neue Playlist › Datei liest jetzt .m3u- und .m3u8-Dateien. Ihre Titel werden in der Musik auf diesem Gerät gefunden, auch wenn die Liste auf einem Computer geschrieben wurde; was hier fehlt, wird ausgelassen.</string>
+    <string name="whats_new_1952_dac_tile_title">DAC über die Schnelleinstellungen freigeben</string>
+    <string name="whats_new_1952_dac_tile_body">Eine neue Kachel pausiert mit einem Tipp die Musik und überlässt den DAC anderen Apps; ein weiterer Tipp holt ihn zurück. Füge sie unter Einstellungen › Audio hinzu, unter Exklusiver USB-DAC.</string>
 </resources>

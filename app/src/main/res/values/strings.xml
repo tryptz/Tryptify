@@ -3440,4 +3440,10 @@
     <string name="scxyt_error_timeout">Fetching this song took too long. Try again.</string>
     <string name="scxyt_error_failed">Couldn\'t get this song from %1$s.</string>
     <string name="scxyt_error_network">Couldn\'t reach %1$s. Check your connection and try again.</string>
+    <string name="whats_new_1952_reorder_title">Reorder a playlist\'s songs</string>
+    <string name="whats_new_1952_reorder_body">Reorder, in a playlist\'s ⋮ menu, puts a handle on every song: drag one to its new place. Each drop is saved at once, and Done or Back leaves the mode.</string>
+    <string name="whats_new_1952_m3u_title">Import M3U playlists</string>
+    <string name="whats_new_1952_m3u_body">Library › Playlists › New playlist › File now reads .m3u and .m3u8 files. Their songs are found in the music on this device, even if the list was written on a computer; songs that aren\'t here are left out.</string>
+    <string name="whats_new_1952_dac_tile_title">Release the DAC from Quick Settings</string>
+    <string name="whats_new_1952_dac_tile_body">A new tile pauses the music and hands the DAC to other apps in one tap; another tap takes it back. Add it in Settings › Audio, under Exclusive USB DAC.</string>
 </resources>

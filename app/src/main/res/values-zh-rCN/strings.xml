@@ -3359,4 +3359,10 @@
     <string name="scxyt_error_timeout">获取这首歌耗时过长。请重试。</string>
     <string name="scxyt_error_failed">无法从 %1$s 获取这首歌。</string>
     <string name="scxyt_error_network">无法连接 %1$s。请检查网络连接后重试。</string>
+    <string name="whats_new_1952_reorder_title">重新排列歌单中的歌曲</string>
+    <string name="whats_new_1952_reorder_body">歌单 ⋮ 菜单中的“重新排序”会为每首歌显示一个拖动手柄：将歌曲拖到新位置即可。每次放下都会立即保存，点按“完成”或“返回”即可退出该模式。</string>
+    <string name="whats_new_1952_m3u_title">导入 M3U 歌单</string>
+    <string name="whats_new_1952_m3u_body">“音乐库 › 歌单 › 新建歌单 › 文件”现在可以读取 .m3u 和 .m3u8 文件。其中的歌曲会在本机音乐中查找，即使列表是在电脑上生成的也能找到；本机没有的歌曲将被略过。</string>
+    <string name="whats_new_1952_dac_tile_title">从快捷设置释放 DAC</string>
+    <string name="whats_new_1952_dac_tile_body">新的功能块点一下即可暂停音乐并将 DAC 交给其他应用，再点一下即可重新占用。可在“设置 › 音频”的“独占 USB DAC”下方添加。</string>
 </resources>

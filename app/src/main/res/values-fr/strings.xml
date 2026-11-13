@@ -3515,4 +3515,10 @@
     <string name="scxyt_error_timeout">La récupération de ce titre a pris trop de temps. Réessayez.</string>
     <string name="scxyt_error_failed">Impossible de récupérer ce titre depuis %1$s.</string>
     <string name="scxyt_error_network">Impossible d’accéder à %1$s. Vérifiez votre connexion et réessayez.</string>
+    <string name="whats_new_1952_reorder_title">Réorganiser les titres d’une playlist</string>
+    <string name="whats_new_1952_reorder_body">« Réorganiser », dans le menu ⋮ d’une playlist, affiche une poignée sur chaque titre : faites-en glisser un vers sa nouvelle place. Chaque dépôt est enregistré aussitôt, et « Terminé » ou « Retour » quitte ce mode.</string>
+    <string name="whats_new_1952_m3u_title">Importer des playlists M3U</string>
+    <string name="whats_new_1952_m3u_body">Bibliothèque › Playlists › Nouvelle playlist › Fichier lit désormais les fichiers .m3u et .m3u8. Leurs titres sont retrouvés dans la musique de cet appareil, même si la liste a été écrite sur un ordinateur ; ceux qui n’y sont pas sont laissés de côté.</string>
+    <string name="whats_new_1952_dac_tile_title">Libérer le DAC depuis les Réglages rapides</string>
+    <string name="whats_new_1952_dac_tile_body">Un nouveau bloc met la musique en pause et confie le DAC aux autres apps d’un seul appui ; un autre appui le reprend. Ajoutez-le dans Paramètres › Audio, sous DAC USB exclusif.</string>
 </resources>

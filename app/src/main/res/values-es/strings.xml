@@ -3515,4 +3515,10 @@
     <string name="scxyt_error_timeout">Obtener esta canción ha tardado demasiado. Vuelve a intentarlo.</string>
     <string name="scxyt_error_failed">No se ha podido obtener esta canción de %1$s.</string>
     <string name="scxyt_error_network">No se ha podido acceder a %1$s. Comprueba tu conexión y vuelve a intentarlo.</string>
+    <string name="whats_new_1952_reorder_title">Reordenar las canciones de una playlist</string>
+    <string name="whats_new_1952_reorder_body">“Reordenar”, en el menú ⋮ de una playlist, muestra un tirador en cada canción: arrastra una hasta su nuevo lugar. Cada vez que sueltas se guarda al momento, y “Listo” o “Atrás” salen del modo.</string>
+    <string name="whats_new_1952_m3u_title">Importar playlists M3U</string>
+    <string name="whats_new_1952_m3u_body">Biblioteca › Playlists › Nueva playlist › Archivo ahora lee archivos .m3u y .m3u8. Sus canciones se buscan en la música de este dispositivo, aunque la lista se haya creado en un ordenador; las que no estén se omiten.</string>
+    <string name="whats_new_1952_dac_tile_title">Libera el DAC desde Ajustes rápidos</string>
+    <string name="whats_new_1952_dac_tile_body">Un nuevo recuadro pausa la música y cede el DAC a otras apps con un toque; otro toque lo recupera. Añádelo en Ajustes › Audio, debajo de DAC USB exclusivo.</string>
 </resources>

@@ -3359,4 +3359,10 @@
     <string name="scxyt_error_timeout">この曲の取得に時間がかかりすぎました。もう一度お試しください。</string>
     <string name="scxyt_error_failed">%1$s からこの曲を取得できませんでした。</string>
     <string name="scxyt_error_network">%1$s に接続できませんでした。接続を確認して、もう一度お試しください。</string>
+    <string name="whats_new_1952_reorder_title">プレイリストの曲を並べ替え</string>
+    <string name="whats_new_1952_reorder_body">プレイリストの ⋮ メニューの「並べ替え」で、各曲にハンドルが表示されます。ドラッグして新しい位置に移動してください。ドロップするたびにすぐ保存され、「完了」または「戻る」でモードを終了します。</string>
+    <string name="whats_new_1952_m3u_title">M3U プレイリストを読み込む</string>
+    <string name="whats_new_1952_m3u_body">「ライブラリ › プレイリスト › 新規プレイリスト › ファイル」で .m3u と .m3u8 ファイルを読み込めるようになりました。曲はこの端末内の音楽から探し、パソコンで作ったリストでも見つかります。端末にない曲は含まれません。</string>
+    <string name="whats_new_1952_dac_tile_title">クイック設定から DAC を解放</string>
+    <string name="whats_new_1952_dac_tile_body">新しいタイルを 1 回タップすると、音楽を一時停止して DAC をほかのアプリに渡します。もう一度タップすると DAC を再び確保します。「設定 › オーディオ」の「USB DAC の排他使用」の下から追加できます。</string>
 </resources>

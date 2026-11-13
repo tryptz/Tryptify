@@ -3515,4 +3515,10 @@
     <string name="scxyt_error_timeout">Il recupero di questo brano ha richiesto troppo tempo. Riprova.</string>
     <string name="scxyt_error_failed">Impossibile recuperare questo brano da %1$s.</string>
     <string name="scxyt_error_network">Impossibile raggiungere %1$s. Controlla la tua connessione e riprova.</string>
+    <string name="whats_new_1952_reorder_title">Riordina i brani di una playlist</string>
+    <string name="whats_new_1952_reorder_body">“Riordina”, nel menu ⋮ di una playlist, mostra una maniglia su ogni brano: trascinane uno nella nuova posizione. Ogni rilascio viene salvato subito, e “Fine” o “Indietro” escono dalla modalità.</string>
+    <string name="whats_new_1952_m3u_title">Importa playlist M3U</string>
+    <string name="whats_new_1952_m3u_body">Libreria › Playlist › Nuova playlist › File ora legge i file .m3u e .m3u8. I loro brani vengono trovati nella musica su questo dispositivo, anche se la lista è stata scritta su un computer; quelli che non ci sono vengono tralasciati.</string>
+    <string name="whats_new_1952_dac_tile_title">Rilascia il DAC dalle Impostazioni rapide</string>
+    <string name="whats_new_1952_dac_tile_body">Un nuovo riquadro mette in pausa la musica e cede il DAC alle altre app con un tocco; un altro tocco lo riprende. Aggiungilo in Impostazioni › Audio, sotto DAC USB esclusivo.</string>
 </resources>

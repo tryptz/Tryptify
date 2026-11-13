@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.9.52]
+
 ### Added
 
 #### Playlists
