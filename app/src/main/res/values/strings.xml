@@ -113,6 +113,10 @@
     <string name="import_format_unsupported">%1$s files aren’t supported yet — export as CSV instead.</string>
     <string name="action_choose_file">Choose a file</string>
     <string name="import_any_columns">Any column naming these exports use is understood, in any of the encodings they write.</string>
+    <string name="import_m3u_instructions">Choose an .m3u or .m3u8 playlist. Its songs are looked up in the music on this device; any that aren’t here are left out.</string>
+    <string name="import_m3u_empty">That file has no songs in it. It may not be an M3U playlist.</string>
+    <string name="import_m3u_no_local_music">There is no local music in the library yet. Scan this device’s music first, then import the playlist again.</string>
+    <string name="import_m3u_none_found">None of its songs were found in the music on this device.</string>
     <string name="strict_album_matching">Strict album matching</string>
     <string name="strict_album_matching_detail">Only accept a match from the same album. Off finds more, but sometimes the wrong recording.</string>
     <string name="action_collapse">Collapse</string>

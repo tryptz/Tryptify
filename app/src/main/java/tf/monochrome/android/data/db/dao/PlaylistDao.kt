@@ -135,6 +135,30 @@ interface PlaylistDao {
             updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
         }
     }
+
+    /**
+     * [addTrackToPlaylist] for a whole list (an imported playlist), in one
+     * transaction: [tracks] in their order, after whatever the playlist
+     * holds. A song the playlist already has, or that [tracks] names twice,
+     * is not added again (the key is playlist and track); it stays where it
+     * is. Returns the ids added, in order.
+     */
+    @Transaction
+    suspend fun addTracksToPlaylist(playlistId: String, tracks: List<PlaylistTrackEntity>): List<Long> {
+        var position = (lastTrackPosition(playlistId) ?: -1) + 1
+        val added = ArrayList<Long>(tracks.size)
+        for (track in tracks) {
+            if (getPlaylistTrack(playlistId, track.trackId) != null) continue
+            insertPlaylistTrack(track.copy(playlistId = playlistId, position = position++))
+            added += track.trackId
+        }
+        if (added.isNotEmpty()) {
+            getPlaylist(playlistId)?.let { playlist ->
+                updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
+            }
+        }
+        return added
+    }
 }
 
 /**

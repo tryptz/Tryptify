@@ -114,6 +114,10 @@
     <string name="import_format_unsupported">Los archivos %1$s aún no son compatibles; exporta en CSV.</string>
     <string name="action_choose_file">Elegir un archivo</string>
     <string name="import_any_columns">Se reconocen todos los nombres de columna y codificaciones que usan estas exportaciones.</string>
+    <string name="import_m3u_instructions">Elige una playlist .m3u o .m3u8. Sus canciones se buscan en la música de este dispositivo; las que no estén se omiten.</string>
+    <string name="import_m3u_empty">Ese archivo no contiene canciones. Puede que no sea una playlist M3U.</string>
+    <string name="import_m3u_no_local_music">Aún no hay música local en la biblioteca. Escanea primero la música de este dispositivo y vuelve a importar la playlist.</string>
+    <string name="import_m3u_none_found">No se ha encontrado ninguna de sus canciones en la música de este dispositivo.</string>
     <string name="strict_album_matching">Coincidencia estricta de álbum</string>
     <string name="strict_album_matching_detail">Solo acepta coincidencias del mismo álbum. Si lo desactivas, encontrarás más, pero a veces la grabación equivocada.</string>
     <string name="action_collapse">Contraer</string>

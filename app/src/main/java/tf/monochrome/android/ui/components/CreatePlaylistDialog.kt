@@ -70,13 +70,24 @@ private enum class ImportSource(val label: String, @androidx.annotation.StringRe
     ),
 }
 
-private val IMPORT_FORMATS = listOf("CSV", "JSPF", "XSPF", "XML")
+private const val FORMAT_CSV = "CSV"
+private const val FORMAT_M3U = "M3U"
+
+/** The formats offered; CSV and M3U are the ones that import. */
+private val IMPORT_FORMATS = listOf(FORMAT_CSV, FORMAT_M3U, "JSPF", "XSPF", "XML")
 
 @Composable
 fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onSubmit: (name: String, description: String) -> Unit,
     onImportCsv: ((uri: Uri, strictMatch: Boolean, name: String, description: String) -> Unit)? = null,
+    /**
+     * Import an .m3u or .m3u8 file, whose songs are files: they are looked up
+     * in the music on the device, not in a catalogue, so strict album
+     * matching does not apply. A blank name takes the file's own. Offered
+     * only where the file import is ([onImportCsv]).
+     */
+    onImportM3u: ((uri: Uri, name: String, description: String) -> Unit)? = null,
     /**
      * Import from a pasted Spotify playlist link. When given, Spotify's tab is
      * a link box rather than instructions for a third-party export: the app
@@ -102,7 +113,7 @@ fun CreatePlaylistDialog(
     // activity, and low-memory devices reclaim this one behind it).
     var name by rememberSaveable { mutableStateOf(initialName) }
     var description by rememberSaveable { mutableStateOf(initialDescription) }
-    var selectedFormat by rememberSaveable { mutableStateOf("CSV") }
+    var selectedFormat by rememberSaveable { mutableStateOf(FORMAT_CSV) }
     var selectedSource by rememberSaveable { mutableStateOf(ImportSource.SPOTIFY.name) }
     var selectedUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var strictAlbumMatch by rememberSaveable { mutableStateOf(false) }
@@ -178,17 +189,28 @@ fun CreatePlaylistDialog(
                     preview = preview,
                     onOpenExportify = onOpenExportify?.let { open -> { open(strictAlbumMatch); onDismiss() } },
                     selectedFormat = selectedFormat,
-                    onFormatChange = { selectedFormat = it },
+                    onFormatChange = { format ->
+                        // A file picked for one format is not a file of
+                        // another: kept, a CSV would be read as an M3U.
+                        if (format != selectedFormat) selectedUri = null
+                        selectedFormat = format
+                    },
+                    m3uAvailable = onImportM3u != null,
                     selectedSource = ImportSource.entries
                         .firstOrNull { it.name == selectedSource } ?: ImportSource.SPOTIFY,
                     onSourceChange = { selectedSource = it.name },
                     selectedUri = selectedUri,
                     onPickFile = {
+                        // An .m3u has no one type: audio/x-mpegurl from one
+                        // file manager, octet-stream or nothing from the
+                        // next. Every file is offered, so the playlist is
+                        // never the one greyed out.
+                        if (selectedFormat == FORMAT_M3U) filePickerLauncher.launch(arrayOf("*/*"))
                         // Apple Music writes a .txt and several exporters
                         // send octet-stream, so the picker cannot filter on
                         // the CSV types alone without hiding the files it is
                         // being asked to read.
-                        filePickerLauncher.launch(
+                        else filePickerLauncher.launch(
                             arrayOf(
                                 "text/csv",
                                 "text/comma-separated-values",
@@ -223,12 +245,16 @@ fun CreatePlaylistDialog(
                 // an unsupported format is selected must not silently run
                 // the CSV importer (it created garbage playlists).
                 val canImport = !linkTab && onImportCsv != null &&
-                    selectedUri != null && selectedFormat == "CSV"
+                    selectedUri != null && selectedFormat == FORMAT_CSV
+                // An M3U: the file's own songs, found on the device.
+                val canImportM3u = !linkTab && onImportCsv != null && onImportM3u != null &&
+                    selectedUri != null && selectedFormat == FORMAT_M3U
                 Button(
                     onClick = {
                         when {
                             linkReady -> onImportLink!!(spotifyLink.trim(), strictAlbumMatch, name, description)
                             canImport -> onImportCsv!!(selectedUri!!, strictAlbumMatch, name, description)
+                            canImportM3u -> onImportM3u!!(selectedUri!!, name, description)
                             else -> onSubmit(name, description)
                         }
                         onDismiss()
@@ -237,10 +263,10 @@ fun CreatePlaylistDialog(
                     // file is picked, otherwise creates a plain playlist. The
                     // old extra conditions left the button disabled for a
                     // plainly-named playlist in the default (upload) mode.
-                    // A link brings its own name.
-                    enabled = name.isNotBlank() || linkReady,
+                    // A link brings its own name, and so does an M3U file.
+                    enabled = name.isNotBlank() || linkReady || canImportM3u,
                 ) {
-                    Text(if (linkReady || canImport) stringResource(R.string.action_import) else confirmLabel)
+                    Text(if (linkReady || canImport || canImportM3u) stringResource(R.string.action_import) else confirmLabel)
                 }
             }
         }
@@ -288,6 +314,7 @@ private fun ImportPanel(
     onOpenExportify: (() -> Unit)?,
     selectedFormat: String,
     onFormatChange: (String) -> Unit,
+    m3uAvailable: Boolean,
     selectedSource: ImportSource,
     onSourceChange: (ImportSource) -> Unit,
     selectedUri: Uri?,
@@ -364,7 +391,7 @@ private fun ImportPanel(
                     )
                 }
             }
-            FileImport(selectedFormat, onFormatChange, selectedSource, selectedUri, onPickFile)
+            FileImport(selectedFormat, onFormatChange, m3uAvailable, selectedSource, selectedUri, onPickFile)
         }
 
         Row(
@@ -398,6 +425,7 @@ private const val TAB_FILE = "file"
 private fun FileImport(
     selectedFormat: String,
     onFormatChange: (String) -> Unit,
+    m3uAvailable: Boolean,
     selectedSource: ImportSource,
     selectedUri: Uri?,
     onPickFile: () -> Unit,
@@ -417,7 +445,8 @@ private fun FileImport(
             }
         }
 
-        if (selectedFormat != "CSV") {
+        val m3u = selectedFormat == FORMAT_M3U && m3uAvailable
+        if (selectedFormat != FORMAT_CSV && !m3u) {
             Text(
                 text = stringResource(R.string.import_format_unsupported, selectedFormat),
                 style = MaterialTheme.typography.bodySmall,
@@ -427,7 +456,8 @@ private fun FileImport(
         }
 
         Text(
-            text = stringResource(selectedSource.instructions),
+            // An M3U comes from no service: it lists files, and says so.
+            text = stringResource(if (m3u) R.string.import_m3u_instructions else selectedSource.instructions),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -449,7 +479,8 @@ private fun FileImport(
             )
         }
 
-        if (pickedName != null) {
+        // About a CSV's columns; an M3U has none.
+        if (pickedName != null && !m3u) {
             Text(
                 text = stringResource(R.string.import_any_columns),
                 style = MaterialTheme.typography.bodySmall,

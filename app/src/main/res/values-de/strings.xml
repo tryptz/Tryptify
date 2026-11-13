@@ -112,6 +112,10 @@
     <string name="import_format_unsupported">%1$s-Dateien werden noch nicht unterstützt – exportiere stattdessen als CSV.</string>
     <string name="action_choose_file">Datei auswählen</string>
     <string name="import_any_columns">Alle Spaltennamen und Zeichenkodierungen dieser Exporte werden erkannt.</string>
+    <string name="import_m3u_instructions">Wähle eine .m3u- oder .m3u8-Playlist. Ihre Titel werden in der Musik auf diesem Gerät gesucht; was hier fehlt, wird ausgelassen.</string>
+    <string name="import_m3u_empty">Diese Datei enthält keine Titel. Vielleicht ist sie keine M3U-Playlist.</string>
+    <string name="import_m3u_no_local_music">In der Bibliothek ist noch keine lokale Musik. Scanne zuerst die Musik auf diesem Gerät und importiere die Playlist dann erneut.</string>
+    <string name="import_m3u_none_found">Keiner ihrer Titel wurde in der Musik auf diesem Gerät gefunden.</string>
     <string name="strict_album_matching">Strenger Albumabgleich</string>
     <string name="strict_album_matching_detail">Nur Treffer aus demselben Album akzeptieren. Ausgeschaltet findet mehr, aber manchmal die falsche Aufnahme.</string>
     <string name="action_collapse">Einklappen</string>

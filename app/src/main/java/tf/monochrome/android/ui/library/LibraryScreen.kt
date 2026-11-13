@@ -275,6 +275,13 @@ fun LibraryScreen(
                 viewModel.importCsvPlaylist(uri, strict, name, description)
                 showCreatePlaylistDialog = false
             },
+            // An .m3u file: matched against the music on this device, and
+            // reported by the same toast below.
+            onImportM3u = { uri, name, description ->
+                viewModel.resetImportProgress()
+                viewModel.importM3uPlaylist(uri, name, description)
+                showCreatePlaylistDialog = false
+            },
             onOpenExportify = { strict ->
                 exportifyStrict = strict
                 showExportify = true

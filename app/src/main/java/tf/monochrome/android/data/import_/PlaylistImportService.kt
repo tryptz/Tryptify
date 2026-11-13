@@ -67,6 +67,14 @@ class PlaylistImportService @Inject constructor(
         _progress.value = ImportProgress.Failed(message)
     }
 
+    /**
+     * An import finished somewhere else: an M3U file, matched against the
+     * music on the device rather than a catalogue ([M3uPlaylistImporter]).
+     */
+    fun reportDone(done: ImportProgress.Done) {
+        _progress.value = done
+    }
+
     fun resetProgress() {
         _progress.value = ImportProgress.Idle
     }

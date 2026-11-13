@@ -110,6 +110,10 @@
     <string name="import_format_unsupported">暂不支持 %1$s 文件，请改为导出 CSV。</string>
     <string name="action_choose_file">选择文件</string>
     <string name="import_any_columns">这些导出文件所用的列名和编码均可识别。</string>
+    <string name="import_m3u_instructions">选择 .m3u 或 .m3u8 歌单。其中的歌曲会在本机音乐中查找，找不到的将被略过。</string>
+    <string name="import_m3u_empty">该文件中没有歌曲，可能不是 M3U 歌单。</string>
+    <string name="import_m3u_no_local_music">音乐库中还没有本地音乐。请先扫描本机音乐，然后重新导入歌单。</string>
+    <string name="import_m3u_none_found">在本机音乐中没有找到其中的任何歌曲。</string>
     <string name="strict_album_matching">严格匹配专辑</string>
     <string name="strict_album_matching_detail">只接受来自同一专辑的匹配。关闭后能找到更多歌曲，但有时会匹配到错误的录音版本。</string>
     <string name="action_collapse">收起</string>

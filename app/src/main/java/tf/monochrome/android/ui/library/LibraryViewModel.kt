@@ -31,6 +31,7 @@ class LibraryViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val csvPlaylistParser: CsvPlaylistParser,
     private val playlistImportService: PlaylistImportService,
+    private val m3uPlaylistImporter: tf.monochrome.android.data.import_.M3uPlaylistImporter,
     private val preferences: tf.monochrome.android.data.preferences.PreferencesManager,
 ) : ViewModel() {
 
@@ -61,6 +62,14 @@ class LibraryViewModel @Inject constructor(
             }
             playlistImportService.importTracks(name, description, parsedPlaylist.tracks, strictAlbumMatch)
         }
+    }
+
+    /**
+     * An .m3u or .m3u8 file as a playlist of the music on this device
+     * ([M3uPlaylistImporter]). A blank [name] takes the file's own.
+     */
+    fun importM3uPlaylist(uri: Uri, name: String, description: String?) {
+        m3uPlaylistImporter.import(uri, name, description)
     }
 
     /**

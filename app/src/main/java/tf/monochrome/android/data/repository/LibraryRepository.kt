@@ -350,6 +350,25 @@ class LibraryRepository @Inject constructor(
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, track.id), SyncOp.UPSERT)
     }
 
+    /**
+     * [addTrackToPlaylist] for many songs at once (an imported playlist):
+     * one write to the database and one to the sync queue, where a song at a
+     * time is one of each per song. Returns how many were added; a song
+     * already in the playlist is not added twice.
+     *
+     * [source] is the [TrackSource] of every one of them, for a caller that
+     * knows it (an M3U's songs are all local files); null works it out song
+     * by song, as [addTrackToPlaylist] does.
+     */
+    suspend fun addTracksToPlaylist(playlistId: String, tracks: List<Track>, source: String? = null): Int {
+        val added = playlistDao.addTracksToPlaylist(
+            playlistId,
+            tracks.map { it.toPlaylistTrackEntity(playlistId).copy(source = source ?: savedSourceOf(it)) },
+        )
+        supabaseSync.queueChanges(SyncKind.PLAYLIST_TRACK, added.map { playlistTrackKey(playlistId, it) }, SyncOp.UPSERT)
+        return added.size
+    }
+
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: Long) {
         playlistDao.removeTrackFromPlaylist(playlistId, trackId)
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, trackId), SyncOp.DELETE)

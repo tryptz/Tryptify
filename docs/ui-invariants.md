@@ -1035,6 +1035,28 @@ touching the user's exclusions: each chart made in the app is written there
 with a copy of its music, and the copy was its song a second time. Copied (ZIP)
 packs live in the app's own storage and are not in the library.
 
+**New playlist's File tab imports two formats, CSV and M3U**
+(`CreatePlaylistDialog`, `IMPORT_FORMATS`; the other chips still say they are
+not supported). They are different imports behind one button:
+
+- **A CSV is matched against the streaming catalogues**, as before.
+- **An M3U (`.m3u`, `.m3u8`) is matched against the music on the device**
+  (issue #155, `M3uPlaylistImporter`): it lists files, so each song is looked
+  up in the local library by its path, then by the end of its path, then by
+  its `#EXTINF` artist and title (`M3uLocalMatcher`). Songs that are not on
+  the device are left out and counted in the toast; a stream's address is
+  never matched. Where two files fit equally the song is left out, not
+  guessed.
+- **Its picker offers every file** (`*/*`). An `.m3u` has no one type across
+  file managers, and a filter greys the playlist out on some of them.
+- **Changing the format forgets the picked file**, so a CSV is never read as
+  an M3U. An M3U needs no name typed: blank takes the file's `#PLAYLIST`
+  name, else the file's own.
+- Strict album matching and the Spotify / Apple Music / YouTube Music chips
+  are about catalogue matching and do nothing for an M3U.
+
+`M3uTest` and `M3uLocalMatcherTest` hold the reading and the matching.
+
 **Playlist Import in Settings is the link import.** No account needed: the
 link is looked up as it is pasted (`rememberSpotifyLinkPreview`,
 `LinkPreviewCard`, the same pieces as Library › Playlists › New playlist),

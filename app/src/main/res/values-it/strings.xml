@@ -114,6 +114,10 @@
     <string name="import_format_unsupported">I file %1$s non sono ancora supportati: esporta invece in formato CSV.</string>
     <string name="action_choose_file">Scegli un file</string>
     <string name="import_any_columns">Tutte le denominazioni di colonna utilizzate da queste esportazioni sono supportate, in qualsiasi codifica.</string>
+    <string name="import_m3u_instructions">Scegli una playlist .m3u o .m3u8. I suoi brani vengono cercati nella musica su questo dispositivo; quelli che non ci sono vengono tralasciati.</string>
+    <string name="import_m3u_empty">Quel file non contiene brani. Forse non è una playlist M3U.</string>
+    <string name="import_m3u_no_local_music">Nella libreria non c’è ancora musica locale. Scansiona prima la musica di questo dispositivo, poi importa di nuovo la playlist.</string>
+    <string name="import_m3u_none_found">Nessuno dei suoi brani è stato trovato nella musica su questo dispositivo.</string>
     <string name="strict_album_matching">Corrispondenza esatta dell\'album</string>
     <string name="strict_album_matching_detail">Accetta solo corrispondenze dello stesso album. Se disattivata trova più risultati, ma a volte la registrazione sbagliata.</string>
     <string name="action_collapse">Comprimi</string>

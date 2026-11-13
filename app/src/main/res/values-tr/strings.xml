@@ -112,6 +112,10 @@
     <string name="import_format_unsupported">%1$s dosyaları henüz desteklenmiyor; bunun yerine CSV olarak dışa aktarın.</string>
     <string name="action_choose_file">Dosya seç</string>
     <string name="import_any_columns">Bu dışa aktarımların kullandığı tüm sütun adları ve karakter kodlamaları tanınır.</string>
+    <string name="import_m3u_instructions">Bir .m3u veya .m3u8 çalma listesi seçin. Parçaları bu cihazdaki müzikte aranır; burada olmayanlar atlanır.</string>
+    <string name="import_m3u_empty">Bu dosyada parça yok. Bir M3U çalma listesi olmayabilir.</string>
+    <string name="import_m3u_no_local_music">Kitaplıkta henüz yerel müzik yok. Önce bu cihazdaki müziği tarayın, sonra çalma listesini yeniden içe aktarın.</string>
+    <string name="import_m3u_none_found">Parçalarının hiçbiri bu cihazdaki müzikte bulunamadı.</string>
     <string name="strict_album_matching">Katı albüm eşleştirme</string>
     <string name="strict_album_matching_detail">Yalnızca aynı albümden gelen eşleşmeleri kabul et. Kapalıyken daha fazla parça bulunur ama bazen yanlış kayıt seçilir.</string>
     <string name="action_collapse">Daralt</string>

@@ -110,6 +110,10 @@
     <string name="import_format_unsupported">%1$s ファイルにはまだ対応していません。CSV で書き出してください。</string>
     <string name="action_choose_file">ファイルを選択</string>
     <string name="import_any_columns">これらの書き出しで使われる列名と文字コードはすべて認識されます。</string>
+    <string name="import_m3u_instructions">.m3u または .m3u8 のプレイリストを選択してください。曲はこの端末内の音楽から探し、見つからない曲は含まれません。</string>
+    <string name="import_m3u_empty">このファイルには曲がありません。M3U プレイリストではない可能性があります。</string>
+    <string name="import_m3u_no_local_music">ライブラリにまだ端末内の音楽がありません。先にこの端末の音楽をスキャンしてから、もう一度プレイリストを読み込んでください。</string>
+    <string name="import_m3u_none_found">この端末内の音楽に、その曲は 1 曲も見つかりませんでした。</string>
     <string name="strict_album_matching">アルバムを厳密に照合</string>
     <string name="strict_album_matching_detail">同じアルバムの曲だけを一致とみなします。オフにすると見つかる曲は増えますが、別の録音になることがあります。</string>
     <string name="action_collapse">閉じる</string>
