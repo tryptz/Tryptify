@@ -1360,6 +1360,8 @@
     <string name="atmos_binaural_auto">自動：ヘッドホンではオンになり、あなたを囲む 15.1.12 のバーチャルスピーカールームとして再生します。本体スピーカーでは Atmos をステレオにダウンミックスします。</string>
     <string name="atmos_room_amount">部屋の響き</string>
     <string name="atmos_live_objects">ライブ：Dolby Atmos · %2$s コア上の %1$d オブジェクト · %3$s。各ドットはオブジェクトで、ミックスが置いた位置にあります。</string>
+    <string name="atmos_live_not_rendering">ライブ：%1$s コア · %2$s。Atmos オブジェクトはレンダリングされていません：この出力ではバイノーラルレンダリング（下）がオフのため、コアだけがステレオにダウンミックスされて再生されています。</string>
+    <string name="atmos_live_no_objects">ライブ：%1$s · %2$s。このストリームには現在 Atmos オブジェクトがないため、チャンネルがそのまま再生されています。</string>
     <string name="atmos_sofa_rejected">⚠ %1$s は SOFA ローダーに拒否されました。代わりに内蔵の KEMAR HRTF でレンダリングしています。ファイルが途中で切れているか、未対応か、SOFA ではない可能性があります。</string>
     <string name="atmos_sofa_loaded">読み込み済み：%1$s</string>
     <string name="atmos_sofa_selected">選択済み：%1$s。再生を（再）開始すると適用されます。</string>

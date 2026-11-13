@@ -407,9 +407,17 @@ class AudioPipelineSnapshotTest {
                 chain = ChainInput(sampleRate = 48_000, channelCount = 6, layoutName = "5.1", isFloat = true),
                 atmos = AtmosStage.OBJECTS_ROOM,
                 atmosObjects = 16,
+                atmosMoving = 6,
+                atmosLfe = true,
             )
         )
-        assertEquals("6 (5.1 core) + 16 Atmos objects", snapshot.field(PipelineStage.TRACK, "Channels").display)
+        assertEquals(
+            "6 (5.1 core) + 16 Atmos objects (9 parked as the bed, 6 moving, LFE)",
+            snapshot.field(PipelineStage.TRACK, "Channels").display,
+        )
+        // A stream of bed channels alone, and no objects at all.
+        assertEquals("6 (5.1 core) + 10 Atmos objects (9 parked as the bed, LFE)", atmosChannels(6, "5.1", 10, 0, true))
+        assertEquals("6 (5.1 core)", atmosChannels(6, "5.1", 0))
         assertEquals(
             "Objects on 15.1.12 virtual speakers, binaural",
             snapshot.field(PipelineStage.DSP, "Atmos").display,

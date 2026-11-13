@@ -130,6 +130,10 @@ class AtmosRendererViewModel @Inject constructor(
     val objects: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.ObjectMeter?> =
         atmosProcessor.objects
 
+    /** What the Atmos stage did with the stream playing; null when it is out of the chain. */
+    val outcome: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome?> =
+        atmosProcessor.outcome
+
     /** Multichannel → stereo fold toggle (same preference as Settings). */
     val multichannelDownmixEnabled: StateFlow<Boolean> =
         preferences.multichannelDownmixEnabled.stateIn(
@@ -356,6 +360,7 @@ fun AtmosRendererScreen(
     val sofaPresets by viewModel.sofaPresets.collectAsStateWithLifecycle()
     val detected by viewModel.channelState.collectAsStateWithLifecycle()
     val objects by viewModel.objects.collectAsStateWithLifecycle()
+    val outcome by viewModel.outcome.collectAsStateWithLifecycle()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
     // and adds preset files behind this ViewModel's back, and navigating back
@@ -398,8 +403,16 @@ fun AtmosRendererScreen(
                     // An Atmos stream's decoder puts out its 5.1 core alone: "5.1 · 6 ch"
                     // read as if that were all of it. While objects render, say so.
                     val o = objects
-                    if (o != null) stringResource(R.string.atmos_live_objects, o.count, d.layoutName, rate)
-                    else stringResource(R.string.atmos_live_levels, d.layoutName, d.channelCount, rate)
+                    when {
+                        o != null -> stringResource(R.string.atmos_live_objects, o.count, d.layoutName, rate)
+                        // More than stereo and no objects on the map: say which
+                        // of the two reasons it is, instead of "6 ch" and nothing.
+                        d.channelCount > 2 && outcome == null ->
+                            stringResource(R.string.atmos_live_not_rendering, d.layoutName, rate)
+                        d.channelCount > 2 ->
+                            stringResource(R.string.atmos_live_no_objects, d.layoutName, rate)
+                        else -> stringResource(R.string.atmos_live_levels, d.layoutName, d.channelCount, rate)
+                    }
                 } else {
                     stringResource(R.string.atmos_speakers_idle)
                 },

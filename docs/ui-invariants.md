@@ -3326,6 +3326,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   headphones in: it is rendering.
 - There is one headphone render, the 15.1.12 room, and no switch for it:
   Room at 0% is the dry one.
+- **No objects on the map is explained.** A multichannel stream with none
+  rendering reads `atmos_live_not_rendering` (the Atmos stage is out of the
+  chain: Binaural render is off for this output) or `atmos_live_no_objects`
+  (it is in, and the stream carries none), never the bare "5.1 · 6 ch" line,
+  which the owner took, rightly, for the app playing Atmos as 5.1.
+- The pipeline sheet's Channels row splits the objects: "(9 parked as the
+  bed, 6 moving, LFE)". A music stream sends its bed as objects that stay at
+  speaker positions; counted as parked until one is seen to move.
 - The object meter runs only while the page is started
   (`acquireObjectMeter` beside the channel detector's `acquire`).
 

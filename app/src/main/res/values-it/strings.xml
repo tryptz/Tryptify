@@ -1444,6 +1444,8 @@
     <string name="atmos_binaural_auto">Automatico: attivo con le cuffie, come una stanza virtuale 15.1.12 di altoparlanti intorno a te. Sull\'altoparlante del telefono Atmos viene ridotto a stereo.</string>
     <string name="atmos_room_amount">Stanza</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d oggetti su un core %2$s · %3$s. Ogni punto è un oggetto, dove lo colloca il mix.</string>
+    <string name="atmos_live_not_rendering">Live: core %1$s · %2$s. Gli oggetti Atmos non vengono renderizzati: il rendering binaurale (sotto) è disattivato per questa uscita, quindi suona solo il core, ridotto a stereo.</string>
+    <string name="atmos_live_no_objects">Live: %1$s · %2$s. Questo stream non contiene oggetti Atmos in questo momento, quindi i suoi canali suonano così come sono.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s è stato RIFIUTATO dal caricatore SOFA. Il rendering utilizzerà l\'HRTF KEMAR integrato. Il file potrebbe essere corrotto, non supportato o non essere un SOFA.</string>
     <string name="atmos_sofa_loaded">Caricato: %1$s</string>
     <string name="atmos_sofa_selected">Selezionato: %1$s. Viene applicato all\'avvio/riavvio della riproduzione.</string>

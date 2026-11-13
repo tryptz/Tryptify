@@ -220,13 +220,63 @@ class AtmosAudioProcessor @Inject constructor(
         }
     }
 
+    /**
+     * What a stream's objects are: how many there are, how many of them have
+     * moved since it started, and whether one is the LFE. The ones that stay
+     * put are the mix's bed, which a music stream sends as objects parked at
+     * speaker positions rather than as bed channels.
+     */
+    data class ObjectMix(val count: Int, val moving: Int, val lfe: Boolean) {
+        val parked: Int get() = count - moving - (if (lfe) 1 else 0)
+    }
+
+    private val _objectMix = MutableStateFlow<ObjectMix?>(null)
+    val objectMix: StateFlow<ObjectMix?> = _objectMix.asStateFlow()
+    private var lastMix: ObjectMix? = null
+    private val firstPlace = FloatArray(MAX_OBJECTS * 3)
+    private val moved = BooleanArray(MAX_OBJECTS)
+    private var placed = 0
+
+    private fun noteMix(mix: ObjectMix?) {
+        if (mix == lastMix) return
+        lastMix = mix
+        _objectMix.value = mix
+    }
+
+    private fun forgetMix() {
+        placed = 0
+        java.util.Arrays.fill(moved, false)
+        noteMix(null)
+    }
+
     /** Audio thread, after a frame: what it rendered, and the meter if it is on. */
     private fun noteFrame(objects: Int) {
         noteObjects(objects)
-        if (!meterOn) return
         if (objects <= 0 || pipeline == 0L) { meterCount = 0; return }
         val count = AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS)
         val n = AtmosNative.OBJECT_METER_FIELDS
+        // Which objects move: against where each one was first seen.
+        var moving = 0
+        var lfe = false
+        for (i in 0 until count) {
+            val at = i * n
+            if (meterScratch[at + 4] == 2f) { lfe = true; continue }
+            if (i >= placed) {
+                firstPlace[i * 3] = meterScratch[at]
+                firstPlace[i * 3 + 1] = meterScratch[at + 1]
+                firstPlace[i * 3 + 2] = meterScratch[at + 2]
+            } else if (!moved[i] && (
+                    kotlin.math.abs(meterScratch[at] - firstPlace[i * 3]) > MOVED ||
+                    kotlin.math.abs(meterScratch[at + 1] - firstPlace[i * 3 + 1]) > MOVED ||
+                    kotlin.math.abs(meterScratch[at + 2] - firstPlace[i * 3 + 2]) > MOVED)
+            ) {
+                moved[i] = true
+            }
+            if (moved[i]) moving++
+        }
+        if (count > placed) placed = count
+        noteMix(ObjectMix(count, moving, lfe))
+        if (!meterOn) return
         for (i in 0 until count) {
             val at = i * n
             meterFields[at] = meterScratch[at]
@@ -531,6 +581,7 @@ class AtmosAudioProcessor @Inject constructor(
             noteOutcome(null)
             noteObjects(0)
             meterCount = 0
+            forgetMix()
         }
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
@@ -553,6 +604,7 @@ class AtmosAudioProcessor @Inject constructor(
             if (pipeline != 0L) AtmosNative.nativePipelineFlush(pipeline)
             return
         }
+        forgetMix()  // a new stream, or another part of this one: count afresh
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
         inputFormat = pendingFormat
@@ -835,6 +887,8 @@ class AtmosAudioProcessor @Inject constructor(
     private companion object {
         const val FRAME_SAMPLES = 1536   // 6 blocks * 256 samples per E-AC-3 frame
         const val MAX_OBJECTS = 16
+        // A step of the position's coding is 1/62 of the room: past this it moved.
+        const val MOVED = 0.02f
         const val TAG = "AtmosProcessor"
         const val STATS_EVERY = 300L     // ~9.6 s of frames
         // Anchored-clock vs tapped-timestamp divergence that forces a re-anchor.

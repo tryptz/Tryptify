@@ -86,7 +86,7 @@ class AudioPipelineViewModel @Inject constructor(
         val decoderName: String?,
         val chain: ChainInput?,
         val atmos: AtmosAudioProcessor.Outcome?,
-        val atmosObjects: Int,
+        val atmosMix: AtmosAudioProcessor.ObjectMix?,
     )
 
     private data class PolledValues(
@@ -203,9 +203,9 @@ class AudioPipelineViewModel @Inject constructor(
 
     private val chainInputs: Flow<AudioPipelineInputs> = combine(
         combine(
-            monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome, atmosProcessor.objectCount,
-        ) { stream, decoder, chainInput, atmos, objects ->
-            Live(stream, decoder, chainInput, atmos, objects)
+            monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome, atmosProcessor.objectMix,
+        ) { stream, decoder, chainInput, atmos, mix ->
+            Live(stream, decoder, chainInput, atmos, mix)
         },
         polled,
         combine(preferences.dspBlockSize, eqPresetName, stereoWidthDb) { block, eq, width ->
@@ -235,7 +235,9 @@ class AudioPipelineViewModel @Inject constructor(
             // from the tap after the Atmos and downmix stages.
             spatialAudio = outputProbe.spatialAudio(live.chain?.sampleRate, poll.outputChannels),
             atmos = atmosStage(live.chain?.channelCount, live.atmos),
-            atmosObjects = live.atmosObjects,
+            atmosObjects = live.atmosMix?.count ?: 0,
+            atmosMoving = live.atmosMix?.moving ?: 0,
+            atmosLfe = live.atmosMix?.lfe ?: false,
             outputChannels = poll.outputChannels,
         )
     }

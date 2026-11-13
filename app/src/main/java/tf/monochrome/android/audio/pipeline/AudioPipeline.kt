@@ -206,6 +206,9 @@ data class AudioPipelineInputs(
     val atmos: AtmosStage? = null,
     /** Atmos objects being rendered from the stream (the LFE counted); 0 for none. */
     val atmosObjects: Int = 0,
+    /** Of [atmosObjects], how many have moved; the rest (but the LFE) are the mix's bed. */
+    val atmosMoving: Int = 0,
+    val atmosLfe: Boolean = false,
     /** Channels leaving the chain for the platform; null before a stream. */
     val outputChannels: Int? = null,
     /** The EBU R128 meter at the end of the chain; null before it has measured anything. */
@@ -245,9 +248,24 @@ internal fun channels(count: Int?, layout: String?): String? {
  * (5.1 from every music service), and that alone reads as "this is just 5.1":
  * the objects ride inside it, so they are counted beside it.
  */
-internal fun atmosChannels(count: Int?, layout: String?, objects: Int): String? {
+internal fun atmosChannels(
+    count: Int?,
+    layout: String?,
+    objects: Int,
+    moving: Int = 0,
+    lfe: Boolean = false,
+): String? {
     val core = channels(count, layout?.takeIf { it.isNotBlank() }?.let { "$it core" }) ?: return null
-    return if (objects > 0) "$core + $objects Atmos objects" else core
+    if (objects <= 0) return core
+    // A music mix's bed (7.1.2 in the studio) comes as objects that stay at
+    // speaker positions: say how many do, so the bed can be seen for what it is.
+    val parked = objects - moving - (if (lfe) 1 else 0)
+    val parts = buildList {
+        if (parked > 0) add("$parked parked as the bed")
+        if (moving > 0) add("$moving moving")
+        if (lfe) add("LFE")
+    }
+    return "$core + $objects Atmos objects" + if (parts.isEmpty()) "" else " (${parts.joinToString(", ")})"
 }
 
 /**
@@ -347,7 +365,9 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
                 "Channels",
                 (input.chain?.channelCount ?: input.stream?.channelCount).let { count ->
                     if (input.atmosObjects > 0) {
-                        atmosChannels(count, input.chain?.layoutName, input.atmosObjects)
+                        atmosChannels(
+                            count, input.chain?.layoutName, input.atmosObjects, input.atmosMoving, input.atmosLfe,
+                        )
                     } else {
                         channels(count, input.chain?.layoutName)
                     }
