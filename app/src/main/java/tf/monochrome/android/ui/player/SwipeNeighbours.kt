@@ -56,6 +56,12 @@ internal data class SwipeNeighbours(val previous: Track?, val next: Track?) {
 }
 
 /**
+ * The space between the playing cover and a neighbour's riding in beside it.
+ * Edge to edge they read as one picture cut in two (seen on device).
+ */
+internal val NeighbourGap = 24.dp
+
+/**
  * A neighbouring song's cover, drawn where the playing cover is and in its
  * shape ([style]), with the playing cover's shading, so the one sliding in
  * is the one that stays.

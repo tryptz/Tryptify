@@ -936,11 +936,12 @@ fun MainPlayerRoute(
                             // carried the rest of the way in, it becomes the
                             // song.
                             dx < -skipThreshold && beside.next != null -> {
-                                heroOffset.animateTo(-width, tween(180))
+                                // A cover's width and the gap: where the next one is in place.
+                                heroOffset.animateTo(-(width + NeighbourGap.toPx()), tween(200))
                                 land(beside.next) { playerViewModel.skipToNext() }
                             }
                             dx > skipThreshold && beside.previous != null -> {
-                                heroOffset.animateTo(width, tween(180))
+                                heroOffset.animateTo(width + NeighbourGap.toPx(), tween(200))
                                 land(beside.previous) { playerViewModel.skipToPreviousTrack() }
                             }
                         // None to show (an end of the queue): carry the
@@ -1037,13 +1038,14 @@ fun MainPlayerRoute(
                                 track = track,
                                 style = neighbourStyle,
                                 modifier = artMod.graphicsLayer {
-                                    val w = size.width.coerceAtLeast(1f)
-                                    translationX = heroOffset.value + side * w
+                                    // A cover's width and a gap away, so the two read as two covers.
+                                    val step = size.width.coerceAtLeast(1f) + NeighbourGap.toPx()
+                                    translationX = heroOffset.value + side * step
                                     // Seen only from the side it comes in on, and
                                     // brighter the further it has come; at rest,
                                     // nothing (in landscape it would sit beside
                                     // the art).
-                                    val travelled = (heroOffset.value * -side / w).coerceIn(0f, 1f)
+                                    val travelled = (heroOffset.value * -side / step).coerceIn(0f, 1f)
                                     alpha = (1f - lyricsProgress) * ambientHideCoverAlpha * travelled
                                 },
                             )

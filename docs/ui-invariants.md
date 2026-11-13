@@ -1342,7 +1342,8 @@ all. The listener's quality setting is untouched for real plays.
 
 **Swiping the player's cover shows the song it goes to.** The next song's
 cover rides in from the right and the previous one's from the left, a
-cover's width from the playing one (`SwipeNeighbours`, `NeighbourCover`, in
+cover's width and a 24dp gap from the playing one (`NeighbourGap`; edge to
+edge the two read as one picture cut in two) (`SwipeNeighbours`, `NeighbourCover`, in
 `MainPlayerRoute`'s hero slot), brighter the further the finger has come
 and invisible at rest (in landscape they would sit beside the art). They
 are the queue's neighbours as a skip would move: wrapped under Repeat All,
