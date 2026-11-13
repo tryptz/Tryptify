@@ -7,6 +7,7 @@ import tf.monochrome.android.ui.navigation.trackAlbumAction
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +22,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
@@ -47,22 +51,28 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import tf.monochrome.android.data.playlistfix.PlaylistFixState
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.ui.mixer.fxchain.rememberFxChainDragState
 import tf.monochrome.android.ui.components.AddToPlaylistSheet
 import tf.monochrome.android.ui.components.CreatePlaylistDialog
 import tf.monochrome.android.ui.components.TrackContextMenu
@@ -138,6 +148,38 @@ fun PlaylistScreen(
     val rowKeys = remember(visibleTracks) { LibraryKeys.occurrences(visibleTracks.map { it.id }) }
     val selection = rememberTrackSelectionState<Long>()
     BackHandler(enabled = selection.active) { selection.clear() }
+
+    // Reorder (the 3-dot menu, the listener's own playlists): the playlist in
+    // its own order, whole, each row dragged by its handle. [arranged] is the
+    // copy the drag moves rows in; a drop writes it at once
+    // (PlaylistViewModel.reorderTracks), and the playlist's own flow then
+    // brings the same order back. Search and sort are closed on the way in:
+    // a row's place in a filtered or sorted list is not its place in the
+    // playlist. The drag itself is the mixer FX chain's (FxChainDragState),
+    // which only asks that the rows' keys are Longs.
+    var reordering by rememberSaveable { mutableStateOf(false) }
+    var arranged by remember { mutableStateOf(tracks) }
+    val listState = rememberLazyListState()
+    val reorderScope = rememberCoroutineScope()
+    val dragState = rememberFxChainDragState(
+        listState = listState,
+        scope = reorderScope,
+        indexOfKey = { key -> arranged.indexOfFirst { it.id == key }.takeIf { it >= 0 } },
+        onMove = { from, to -> arranged = arranged.toMutableList().apply { add(to, removeAt(from)) } },
+        onCommit = { _, _ -> viewModel.reorderTracks(arranged.map { it.id }) },
+    )
+    // The playlist as stored is the truth, except under a finger: a song
+    // added or removed elsewhere mid-drag waits for the drop (endDrag).
+    LaunchedEffect(tracks) { if (!dragState.isDragging) arranged = tracks }
+    val endDrag = {
+        dragState.onDragEnd()
+        // The same songs in a new order are the drop just written. Different
+        // songs mean the playlist changed during the drag: show it as it is.
+        if (arranged.mapTo(HashSet()) { it.id } != tracks.mapTo(HashSet()) { it.id }) arranged = tracks
+    }
+    // Nothing left to arrange (songs removed elsewhere, the playlist gone).
+    LaunchedEffect(isOwn, tracks.size) { if (reordering && (!isOwn || tracks.size < 2)) reordering = false }
+    BackHandler(enabled = reordering) { reordering = false }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -273,19 +315,23 @@ fun PlaylistScreen(
                 )
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStackSafe() }) {
+                // Back leaves Reorder first, as the system's back does.
+                IconButton(onClick = { if (reordering) reordering = false else navController.popBackStackSafe() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             actions = {
-                SearchAction(open = searchOpen, onToggle = {
+                // Arranging: one action, Done. Every drop is already saved.
+                if (reordering) IconButton(onClick = { reordering = false }) {
+                    Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_done))
+                } else SearchAction(open = searchOpen, onToggle = {
                     searchOpen = !searchOpen
                     // Closing clears the filter. A hidden query in place is how
                     // a list ends up looking like it has lost rows.
                     if (!searchOpen) listQuery = ""
                 })
 
-                if (isOwn) IconButton(onClick = { showMenu = true }) {
+                if (isOwn && !reordering) IconButton(onClick = { showMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.action_more))
                 }
                 DropdownMenu(
@@ -306,6 +352,20 @@ fun PlaylistScreen(
                         onClick = {
                             showMenu = false
                             showEditDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_reorder)) },
+                        leadingIcon = { Icon(Icons.Default.DragHandle, contentDescription = null) },
+                        // One song has no order to change.
+                        enabled = tracks.size > 1,
+                        onClick = {
+                            showMenu = false
+                            selection.clear()
+                            searchOpen = false
+                            listQuery = ""
+                            listSort = TrackSort()
+                            reordering = true
                         }
                     )
                     DropdownMenuItem(
@@ -355,13 +415,16 @@ fun PlaylistScreen(
             onClose = { searchOpen = false; listQuery = "" },
         ) { searchTopInset ->
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                         top = searchTopInset,
                         bottom = 80.dp + LocalBottomChromeInset.current,
                     )
         ) {
-            item {
+            // Arranging shows the songs and nothing else: no header to scroll
+            // past, and no sort bar, since the order on screen is the playlist's.
+            if (!reordering) item {
                 tf.monochrome.android.devedit.DevEditable("playlist_hero", Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
@@ -476,7 +539,7 @@ fun PlaylistScreen(
                 }
             }
 
-            if (tracks.isNotEmpty()) {
+            if (tracks.isNotEmpty() && !reordering) {
                 stickyHeader {
                     TrackListToolbar(
                         sort = listSort,
@@ -514,6 +577,36 @@ fun PlaylistScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(24.dp)
+                    )
+                }
+            } else if (reordering) {
+                // A listener's own playlist holds a song once (the table's
+                // key), so the id alone is the row's key, and a Long, which
+                // the drag needs.
+                itemsIndexed(arranged, key = { _, track -> track.id }) { _, track ->
+                    val dragged = dragState.draggingKey == track.id
+                    TrackItem(
+                        track = track,
+                        onClick = {},
+                        downloadState = activeDownloads[track.id],
+                        isDownloaded = track.id in downloadedTrackIds,
+                        // The row in hand wears the selection tint.
+                        selected = dragged,
+                        dragHandle = Modifier.pointerInput(track.id) {
+                            detectDragGestures(
+                                onDragStart = { dragState.onDragStart(track.id) },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    dragState.onDrag(amount.y)
+                                },
+                                onDragEnd = { endDrag() },
+                                onDragCancel = { endDrag() },
+                            )
+                        },
+                        modifier = Modifier
+                            .zIndex(if (dragged) 1f else 0f)
+                            .graphicsLayer { translationY = dragState.translationFor(track.id) }
+                            .then(if (!dragged) Modifier.animateItem() else Modifier),
                     )
                 }
             } else if (visibleTracks.isEmpty()) {

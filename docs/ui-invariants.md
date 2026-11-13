@@ -1259,6 +1259,39 @@ all. The listener's quality setting is untouched for real plays.
   every list that has a selection. Left out on purpose: the queue (hold there
   drags), Trypt Mania's wheel (it previews by itself) and Discover's cards.
 
+**A playlist is put in a new order in a mode of its own, by a handle**
+(issue #155). Reorder is in the ⋮ menu of the listener's own playlists
+(`PlaylistScreen`, off for a playlist of one song and for a catalogue's).
+While it is on the screen is the songs and nothing else: the header, the sort
+bar, search and the ⋮ menu are gone, the top bar's one action is Done, and
+Back leaves the mode before it leaves the screen.
+
+- **The row is `TrackItem` with `dragHandle`, and is only a handle.** A hold
+  on a song row is the preview and a tap plays it, so neither can also mean
+  "move": with `dragHandle` given the row has no tap, no hold, no ⋮ and no
+  artist or album link, and the drag is on the handle's 48dp target alone. It
+  is the same Material row at the same `MonoDimens.listRowHeight`.
+- **The order shown is the playlist's own, whole.** Entering the mode clears
+  the search and sets the sort back to the playlist's order: a row's place in
+  a filtered or sorted list is not its place in the playlist, and a drop there
+  would write the wrong order.
+- **Every drop is saved at once** (`PlaylistViewModel.reorderTracks`), so Done
+  has nothing to save and leaving mid-way loses nothing. The list under the
+  finger is a copy (`arranged`); a song added or removed elsewhere during a
+  drag appears when the finger lifts.
+- **The drag is the mixer FX chain's** (`FxChainDragState`): rows keyed by a
+  Long (the track id, which a listener's own playlist holds once), moved
+  within the copy during the gesture and committed once at its end, with the
+  list scrolling when the row nears an edge.
+
+Positions are written 0, 1, 2… by `PlaylistDao.reorderTracks`
+(`PlaylistOrder`), and a new song goes after the last position, not at the
+row count, which a removal had left pointing at a row that was already there.
+Each moved row is queued for the cloud. Another device that already has the
+playlist keeps its own order, by the pull's rule (rows already on a device are
+never overwritten); a device that gets the playlist fresh gets the new order.
+`PlaylistReorderTest` holds the arithmetic and the database.
+
 **Every song list has multi-select.** Begun from "Select" in a song's ⋮ menu;
 then a tap picks or unpicks a row and the bar acts on all of them. The lists
 over `UnifiedTrack` (the Local page's Songs and search, My server's songs,

@@ -98,13 +98,73 @@ interface PlaylistDao {
         return if (alreadyThere) PlaylistTrackReplacement.MERGED else PlaylistTrackReplacement.REPLACED
     }
 
+    @Query("SELECT MAX(position) FROM playlist_tracks WHERE playlistId = :playlistId")
+    suspend fun lastTrackPosition(playlistId: String): Int?
+
+    @Query("UPDATE playlist_tracks SET position = :position WHERE playlistId = :playlistId AND trackId = :trackId")
+    suspend fun setTrackPosition(playlistId: String, trackId: Long, position: Int)
+
+    /**
+     * Puts the playlist in the order of [orderedTrackIds] and numbers its rows
+     * 0, 1, 2… ([PlaylistOrder.renumbered] has the rules for ids that are
+     * missing or unknown). Returns the ids of the rows whose position changed,
+     * which are the ones the cloud has to hear about; empty when the playlist
+     * was already in that order, and then nothing is written.
+     */
+    @Transaction
+    suspend fun reorderTracks(playlistId: String, orderedTrackIds: List<Long>): List<Long> {
+        val rows = getPlaylistTracksSnapshot(playlistId)
+        val moved = PlaylistOrder.renumbered(rows.map { it.trackId to it.position }, orderedTrackIds)
+        if (moved.isEmpty()) return emptyList()
+        moved.forEach { (trackId, position) -> setTrackPosition(playlistId, trackId, position) }
+        getPlaylist(playlistId)?.let { playlist ->
+            updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
+        }
+        return moved.map { it.first }
+    }
+
     @Transaction
     suspend fun addTrackToPlaylist(playlistId: String, track: PlaylistTrackEntity) {
-        val count = getPlaylistTrackCount(playlistId)
-        insertPlaylistTrack(track.copy(position = count))
+        // After the last row, not at the row count: the count is one a row
+        // already has once a song has been removed from the middle, and two
+        // rows on one position have no order between them.
+        val position = (lastTrackPosition(playlistId) ?: -1) + 1
+        insertPlaylistTrack(track.copy(position = position))
         // Update playlist timestamp
         getPlaylist(playlistId)?.let { playlist ->
             updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
+        }
+    }
+}
+
+/**
+ * The arithmetic of [PlaylistDao.reorderTracks], kept free of the database so
+ * it has a plain unit test.
+ */
+object PlaylistOrder {
+    /**
+     * [rows] is the playlist as stored, in the order it is shown: each row's
+     * track id and position. [wanted] is the order asked for. The result is
+     * every row whose position has to change, with its new one.
+     *
+     * The new order is [wanted], then every row it does not name, in the
+     * order they were in: a song added while the list was being arranged
+     * (from the player, by a sync) stays at the end instead of being lost. An
+     * id in [wanted] that is no longer in the playlist is skipped, and one
+     * named twice counts where it is first.
+     *
+     * Positions come out as 0, 1, 2…, whatever they were: rows that shared a
+     * position, or left gaps after a removal, are put right by the first
+     * reorder.
+     */
+    fun renumbered(rows: List<Pair<Long, Int>>, wanted: List<Long>): List<Pair<Long, Int>> {
+        val present = rows.mapTo(LinkedHashSet()) { it.first }
+        val order = LinkedHashSet<Long>()
+        wanted.filterTo(order) { it in present }
+        order.addAll(present)
+        val positionOf = rows.toMap()
+        return order.mapIndexedNotNull { index, trackId ->
+            if (positionOf[trackId] == index) null else trackId to index
         }
     }
 }

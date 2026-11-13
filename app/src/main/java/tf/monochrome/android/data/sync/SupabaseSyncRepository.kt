@@ -776,6 +776,18 @@ class SupabaseSyncRepository @Inject constructor(
     }
 
     /**
+     * [queueChange] for many rows of one kind at once (a playlist put in a
+     * new order moves most of its rows): recorded in one write, sent by one
+     * flush.
+     */
+    suspend fun queueChanges(kind: SyncKind, keys: List<String>, op: SyncOp) {
+        if (keys.isEmpty()) return
+        val uid = userId() ?: return
+        outbox.recordAll(keys.map { PendingChange(userId = uid, kind = kind, key = it, op = op) })
+        flushScope.launch { flushOutbox() }
+    }
+
+    /**
      * Sends every pending edit for the signed-in account and keeps whatever the
      * cloud did not accept, for the next flush. Runs after each edit, before
      * every pull, and at the start of a manual sync.

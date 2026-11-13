@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Explicit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,14 +60,21 @@ fun TrackItem(
     downloadState: TrackDownloadState? = null,
     isDownloaded: Boolean = false,
     selectionMode: Boolean = false,
-    selected: Boolean = false
+    selected: Boolean = false,
+    // A list being put in a new order (a playlist's Reorder): the row grows a
+    // handle carrying this modifier's drag gesture, and is only that. A tap
+    // does not play, a hold does not preview, and the 3-dot menu and the
+    // artist and album links are gone, so a finger arranging the list can do
+    // nothing else by accident.
+    dragHandle: Modifier? = null,
 ) {
+    val arranging = dragHandle != null
     // While multi-selecting, per-row affordances (3-dot, inline artist/album
     // links) would steal taps meant for selection — hide them. Liking is in
     // the 3-dot menu, as in the Library's Local list.
-    val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode }
-    val effectiveOnAlbumClick = onAlbumClick.takeUnless { selectionMode }
-    val effectiveOnArtistClick = onArtistClick.takeUnless { selectionMode }
+    val effectiveOnMoreClick = onMoreClick.takeUnless { selectionMode || arranging }
+    val effectiveOnAlbumClick = onAlbumClick.takeUnless { selectionMode || arranging }
+    val effectiveOnArtistClick = onArtistClick.takeUnless { selectionMode || arranging }
 
     // The row for whatever is playing right now. Read here, not passed in: see
     // LocalNowPlayingTrackId. A track change recomposes the visible rows and
@@ -80,12 +89,15 @@ fun TrackItem(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = MonoDimens.listItemPaddingH, vertical = MonoDimens.spacingXs)
-            .bounceCombinedClick(
-                onClick = onClick,
-                onLongClick = holdToPreview ?: onLongClick
+            .then(
+                if (arranging) Modifier
+                else Modifier.bounceCombinedClick(
+                    onClick = onClick,
+                    onLongClick = holdToPreview ?: onLongClick
+                )
             )
             .materialSurface(shape = MonoDimens.shapeMd)
-            .songPreviewHold(SongPreview.keyOf(track), MonoDimens.shapeMd),
+            .then(if (arranging) Modifier else Modifier.songPreviewHold(SongPreview.keyOf(track), MonoDimens.shapeMd)),
         shape = MonoDimens.shapeMd,
         // Selection wins over now-playing: while multi-selecting, whether a row
         // is ticked is the only thing the colour is being asked to say.
@@ -288,6 +300,20 @@ fun TrackItem(
                     modifier = Modifier.size(20.dp)
                 )
             }
+        }
+
+        if (dragHandle != null) {
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = stringResource(R.string.action_reorder),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                // A 24dp glyph in the 48dp minimum touch target, which is what
+                // carries the drag: the handle is the row's only control here.
+                modifier = dragHandle
+                    .minimumInteractiveComponentSize()
+                    .padding(start = MonoDimens.spacingSm)
+                    .size(24.dp)
+            )
         }
     }
 }

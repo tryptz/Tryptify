@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+#### Playlists
+- **A playlist's songs can be put in a new order** ([#155](https://github.com/tryptz/Tryptify/issues/155)). Reorder, in a playlist's ⋮ menu, shows its songs with a handle on each: drag one to its new place. Every drop is saved at once, and Done or Back leaves the mode. Search and sort are closed while arranging, since the order on screen has to be the playlist's own. The new order is sent to the cloud; a device that already has the playlist keeps the order it has.
+
+### Fixed
+- **A song added to a playlist after one was removed goes last.** It took the playlist's song count as its place, which the last song already had, so the two had no order between them.
+
 ## [1.9.51]
 
 ### Added

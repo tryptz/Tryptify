@@ -355,6 +355,16 @@ class LibraryRepository @Inject constructor(
         supabaseSync.queueChange(SyncKind.PLAYLIST_TRACK, playlistTrackKey(playlistId, trackId), SyncOp.DELETE)
     }
 
+    /**
+     * Puts the playlist in the order of [orderedTrackIds] (see
+     * [PlaylistDao.reorderTracks]). Every row that moved is queued, since a
+     * row's position travels with the row; one flush sends them all.
+     */
+    suspend fun reorderPlaylist(playlistId: String, orderedTrackIds: List<Long>) {
+        val moved = playlistDao.reorderTracks(playlistId, orderedTrackIds)
+        supabaseSync.queueChanges(SyncKind.PLAYLIST_TRACK, moved.map { playlistTrackKey(playlistId, it) }, SyncOp.UPSERT)
+    }
+
     /** The playlist's rows as stored, in order — ids, positions and all. */
     suspend fun getPlaylistTrackRows(playlistId: String): List<PlaylistTrackEntity> =
         playlistDao.getPlaylistTracksSnapshot(playlistId)

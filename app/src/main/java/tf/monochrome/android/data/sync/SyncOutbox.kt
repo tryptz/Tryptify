@@ -147,6 +147,11 @@ class SyncOutbox @Inject constructor(
 
     suspend fun record(change: PendingChange) = update { Outbox.record(it, change) }
 
+    /** [record] for several edits, in one write. */
+    suspend fun recordAll(changes: List<PendingChange>) = update { pending ->
+        changes.fold(pending) { list, change -> Outbox.record(list, change) }
+    }
+
     suspend fun settle(change: PendingChange) = update { Outbox.settle(it, change) }
 
     suspend fun forUser(userId: String): List<PendingChange> = Outbox.forUser(read(), userId)

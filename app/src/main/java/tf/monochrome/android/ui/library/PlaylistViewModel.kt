@@ -146,6 +146,19 @@ class PlaylistViewModel @Inject constructor(
         }
     }
     
+    /**
+     * The playlist in a new order, as the listener has just dragged it:
+     * [orderedTrackIds] is every row, top to bottom. Written at once, so
+     * leaving the screen mid-edit loses nothing.
+     */
+    fun reorderTracks(orderedTrackIds: List<Long>) {
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                libraryRepository.reorderPlaylist(playlistId, orderedTrackIds)
+            }
+        }
+    }
+
     fun deletePlaylist() {
         viewModelScope.launch {
             // The screen pops the back stack right after calling this, which
