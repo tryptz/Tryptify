@@ -580,9 +580,21 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
     // everything feeding it; every other bus is silenced.
     if (anySoloed()) {
         bool down[TOTAL_BUSES] = {}, up[TOTAL_BUSES] = {};
+        // A multichannel song is spread one channel group a bus (fronts on
+        // bus 1, centre on 2, LFE on 3, surrounds on 4...). Those buses are
+        // one song: soloing one of them, as a stereo mix does with bus 1,
+        // must not silence the song's other channels. With FX on, an Atmos or
+        // 5.1 song lost its centre and surrounds until the next stereo one.
+        bool soloed[TOTAL_BUSES] = {};
+        bool groupSoloed = false;
+        for (int b = 0; b < active; b++) {
+            soloed[b] = buses_[b].soloed.load(std::memory_order_relaxed);
+            if (routedBus >= 0 && soloed[b] && busNumberForIndex(b) <= routedCount) groupSoloed = true;
+        }
+        if (groupSoloed) soloed[routedBus] = true;
         for (int k = 0; k < orderCount_; k++) {
             const int b = order_[k];
-            if (buses_[b].soloed.load(std::memory_order_relaxed)) down[b] = true;
+            if (soloed[b]) down[b] = true;
             if (!down[b]) continue;
             for (int d = 0; d < active; d++) {
                 if (d != MASTER_BUS && buses_[b].send[d].load(std::memory_order_relaxed) > 0.0f) down[d] = true;
@@ -590,7 +602,7 @@ void DspEngine::processMixBusesLocked(const float* left, const float* right, int
         }
         for (int k = orderCount_ - 1; k >= 0; k--) {
             const int b = order_[k];
-            if (buses_[b].soloed.load(std::memory_order_relaxed)) { up[b] = true; continue; }
+            if (soloed[b]) { up[b] = true; continue; }
             for (int d = 0; d < active; d++) {
                 if (d != MASTER_BUS && up[d] && buses_[b].send[d].load(std::memory_order_relaxed) > 0.0f) {
                     up[b] = true;

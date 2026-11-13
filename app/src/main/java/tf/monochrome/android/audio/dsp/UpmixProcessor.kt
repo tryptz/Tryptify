@@ -48,7 +48,15 @@ class UpmixProcessor @Inject constructor() : AudioProcessor {
     fun setEnabled(on: Boolean) {
         enabled = on
         upmixer?.enabled = on
+        if (on && pendingFormat == AudioFormat.NOT_SET) onNeedsConfigure?.invoke()
     }
+
+    /**
+     * Called when the upmix is turned on while it is out of the chain: it
+     * joins a stream only in configure(), so the song playing has to be
+     * configured again to get it (it used to wait for the next song).
+     */
+    @Volatile var onNeedsConfigure: (() -> Unit)? = null
 
     /**
      * Whether the fold after the mixer will run. The upmix makes sixteen

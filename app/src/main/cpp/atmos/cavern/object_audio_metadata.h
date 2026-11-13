@@ -140,8 +140,12 @@ class OAElementMD {
   }
 
   void block_update_info(BitReader& br, int blk) {
+    // In samples: block_offset_factor counts in units of 32 (clause 5.6.2;
+    // Dolby's 7.1.4 tones carry sample_offset 11 and factor 27, and their
+    // first ramp starts at 875 = 11 + 27 * 32). The factor used to be added
+    // as it was.
     block_offset_factor_[blk] =
-        static_cast<short>(br.read(6) + sample_offset_);
+        static_cast<short>(br.read(6) * 32 + sample_offset_);
     const int ramp_code = static_cast<int>(br.read(2));
     if (ramp_code == 3) {
       if (br.read_bit()) {
@@ -316,6 +320,20 @@ class ObjectAudioMetadata {
   // Render-space direction of a bed channel's nominal speaker (see
   // bed_channel_render) — shared with the speaker renderer's bed fallback.
   static Vec3 bed_render_position(ReferenceChannel ch) { return bed_channel_render(ch); }
+
+  // When the frame's last update takes hold: `offset` samples into the frame,
+  // reached over `ramp` samples (0 is a cut). False when no object element
+  // has been decoded.
+  bool update_timing(int& offset, int& ramp) const {
+    for (const auto& el : elements_) {
+      if (!el.is_object_element() || el.block_count() <= 0) continue;
+      const int blk = el.block_count() - 1;
+      offset = el.block_offset(blk) < 0 ? 0 : el.block_offset(blk);
+      ramp = el.ramp_duration(blk);
+      return true;
+    }
+    return false;
+  }
 
   // Per-object rendering state after the last decoded frame (see ObjectState).
   int state_count() const { return static_cast<int>(states_.size()); }

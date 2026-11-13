@@ -325,13 +325,23 @@ class AtmosAudioProcessor @Inject constructor(
     /** The layout the processor currently outputs; STEREO = binaural/fold path. */
     @Volatile var activeLayout: ChannelLayout = ChannelLayout.STEREO
         private set
-    private var pendingLayout: ChannelLayout = ChannelLayout.STEREO
+    @Volatile private var pendingLayout: ChannelLayout = ChannelLayout.STEREO
+
+    /**
+     * The layout the AudioTrack being built is for. A stream's first track is
+     * built before the flush that makes its layout the active one, so the
+     * configured layout counts while one is waiting: read as [activeLayout]
+     * alone, 5.1.2, 7.1.2 and 9.1.x got the mask Media3 derives from the
+     * channel count, the wrong speakers, until a seek.
+     */
+    val layoutForTrack: ChannelLayout
+        get() = if (pendingFormat != AudioFormat.NOT_SET) pendingLayout else activeLayout
     private var speakerOut = FloatArray(0)      // one frame, layout speaker order
     private var sinkFrame = FloatArray(0)       // one frame, sink slot order (padded)
     private var speakerSlots = IntArray(0)
 
     private var pipeline: Long = 0L
-    private var pendingFormat = AudioFormat.NOT_SET
+    @Volatile private var pendingFormat = AudioFormat.NOT_SET
     private var inputFormat = AudioFormat.NOT_SET
     private var outputBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var inputEnded = false

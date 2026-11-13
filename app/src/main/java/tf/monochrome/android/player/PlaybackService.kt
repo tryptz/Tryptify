@@ -183,16 +183,18 @@ class PlaybackService : MediaSessionService() {
     private val reconfigureGapMs = 150L
 
     /**
-     * Configures the audio chain again for the song that is playing, when it
-     * is a multichannel one (the settings this is for do nothing to stereo).
+     * Configures the audio chain again for the song that is playing: a
+     * multichannel one, or with [stereoToo] any (the Atmos settings do
+     * nothing to stereo; the mixer's upmix is for stereo alone).
      * Disabling the audio track resets the renderer and its sink; enabling it
      * again starts them on the same song at the same place, through
      * configure().
      */
-    private fun reconfigureAudioChain() {
+    private fun reconfigureAudioChain(stereoToo: Boolean = false) {
         if (!::player.isInitialized) return
         val channels = channelDetectorProcessor.state.value?.channelCount ?: return
-        if (channels <= 2 || player.playbackState == Player.STATE_IDLE || player.currentMediaItem == null) return
+        if (channels <= 2 && !stereoToo) return
+        if (player.playbackState == Player.STATE_IDLE || player.currentMediaItem == null) return
         val parameters = player.trackSelectionParameters
         if (C.TRACK_TYPE_AUDIO in parameters.disabledTrackTypes) return
         runCatching {
@@ -681,6 +683,7 @@ class PlaybackService : MediaSessionService() {
             }
         }
         upmixProcessor.afterAtmosRender = { atmosAudioProcessor.rendersConfiguredStream }
+        upmixProcessor.onNeedsConfigure = { serviceScope.launch { reconfigureAudioChain(stereoToo = true) } }
         // The Atmos stage, the fold and the upmix each decide in configure()
         // whether they are in the chain and how wide their output is, and
         // Media3 configures a chain once a stream: a seek only flushes it.
@@ -1085,7 +1088,7 @@ class PlaybackService : MediaSessionService() {
                         // the track (Media3 derives masks from the count only).
                         .setAudioTrackProvider(
                             tf.monochrome.android.audio.atmos.AtmosAudioTrackProvider {
-                                atmosAudioProcessor.activeLayout
+                                atmosAudioProcessor.layoutForTrack
                             }
                         )
                         // Float output: on, but DefaultAudioSink never gets to

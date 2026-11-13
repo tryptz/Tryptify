@@ -176,13 +176,16 @@ unchanged (`AtmosAudioTrackProvider` sets the exact mask; 9.1.x travels as a
 24-channel frame whose extra positions are silent, because Media3 1.5 only
 accepts 1-8, 10, 12 and 24 channels).
 
-- **Positions**: OAMD room-cube coordinates are warped onto the Dolby home
-  speaker angles (cube azimuth 45 -> 30 deg, 135 -> 150 deg; the top of a wall
-  lands on the 45-degree top speakers) before panning — raw cube angles would
-  put the front corners at 45 degrees, between L and the side.
-- **Panning**: VBAP over the precomputed convex hull of the layout, closed with
-  imaginary zenith/nadir speakers whose gain is shared out, so every direction
-  has a solution on every layout (the constant-power grid test checks this).
+- **Panning**: a sin/cos balance along each axis of the room between the
+  speakers either side of the object (`BalancePanner`): rows of speakers by
+  y, speakers in a row by x, layers by z. This is the law the stream's own 5.1
+  follows. It replaced a cube-to-angle warp and VBAP (1.9.52), which put an
+  overhead object evenly round the room and kept pans against L/R. A layout
+  with nothing overhead plays an object at its place on the floor.
+- **Timing**: an update takes hold `sample_offset + 32 x block_offset_factor`
+  samples into its frame, later by the core decoder's block (256) and the QMF
+  round trip (577), and is reached over its `ramp_duration`. The 256 was
+  swept against the core: the best of 0..512.
 - **Object properties (TS 103 420 clause 5.2)**: size (box sampling, power
   sum), divergence (power-preserving centre + two sides, BS.2127-style), zone
   constraints (one hull per constraint over the permitted speakers, speaker ->
@@ -273,24 +276,17 @@ what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
 - Bed objects take their channel's position (they used to sit at the cube
   origin, the front-left corner), in the binaural path as well.
 
-Still open / approximate (measured by an audit on 2026-11-13, not yet fixed):
+Still open / approximate:
 
-- **The panning law is not Dolby's.** With trims off, the stream's 5.1 core
-  matches a per-axis sin/cos balance on room coordinates (z dropped) to
-  +-0.01; the cube warp + VBAP here puts an overhead object more evenly
-  round the room and hugs L/R on a C-to-R pan. On the bundled clip 33% of
-  128-sample blocks differ from the core in speaker distribution against
-  0.9% with the cartesian law. Bed channels a layout lacks, and the
-  "interior spread" of `SpeakerRenderer::spread`, belong to the same fix.
-- **Metadata timing.** Each update is ramped across the frame it arrived in:
-  no account of the QMF latency (577), of `sample_offset + 32 x
-  block_offset_factor` (the code adds the factor unscaled), or of
-  `ramp_duration`. About 17 ms early on the bundled clip, 36 ms on Dolby's
-  tones.
-- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is skipped.
-- An OAMD frame that fails to decode loses the LFE slot for that frame and
-  shifts every object by one.
-
+- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is skipped: its maths
+  could not be read (the spec's text was out of reach) and no measurement
+  pins it. The bundled clip has trims off; on a clip with default trims an
+  untrimmed 5.1 render measured C +1.9, Ls/Rs +1.8..2.0 dB against the core.
+- Above 5.1 there is no Dolby render to compare with: the panner on height
+  layouts is the 5.1 law carried up, not a measured one. Overhead positions
+  on 5.1 are within 0.04 of the core, not 0.01.
+- The one-HRIR-an-object headphone render (virtual room off) still ramps
+  each update across the frame it arrived in.
 - ISF (stacked-ring) objects: the spec gives ring sizes and order but not the
   ring azimuths, so rings are spaced evenly from the front.
 - The obj_render_info[] bit order: the syntax (index 0 = position) and Table 31
@@ -326,11 +322,11 @@ present in the binaural path too:
   OAMD LFE slot (latency-matched), as Cavern's EnhancedAC3Renderer does.
 
 Results on the test clip (1.9.52): the moving objects' paths track the core at
-+0.985..+0.995; each 5.1 speaker tracks the core at +0.91..+0.97 (LFE +1.00);
-the per-window speaker-energy distribution matches with median similarity
-1.00. Levels are within 0.8 dB of the core on every channel (L/R +0.7, C
--0.8, Ls/Rs -0.4, LFE 0.0), and the check fails past 1.5 dB. The spread
-that is left is the panning law (see "Still open"). Before the fixes the same check
++0.985..+0.995; every 5.1 speaker tracks the core at +0.999 or better and
+within 0.1 dB; the per-window speaker-energy distribution matches with median
+and 10th-percentile similarity 1.000. The check fails under 0.98 or past
+0.5 dB. (With the hull panner the speakers were at +0.91..+0.97 and up to
+0.8 dB off.) Before the fixes the same check
 fails outright (everything out of L; similarity 0.02). It also picked the
 layout-aware cube warp in speaker_renderer.h over a fixed one (5.1 surrounds
 +0.86 -> +0.95).

@@ -318,6 +318,11 @@ class AtmosPipeline {
   // cross-correlation reports 577 samples (not the textbook 640-64=576) — the
   // fallback is delayed by the same amount so the paths stay sample-aligned.
   static constexpr int kQmfLatency = 577;
+  // An E-AC-3 block: how far the decoded core is behind the frame's metadata.
+#ifndef TF_ATMOS_CORE_DELAY
+#define TF_ATMOS_CORE_DELAY 256
+#endif
+  static constexpr int kCoreDelay = TF_ATMOS_CORE_DELAY;
   static constexpr float kHalfPi = 1.57079632679f;
   static constexpr float kDirectHeadroom = 0.707f;
   enum { kPathNone = 0, kPathRender = 1, kPathDownmix = 2 };
@@ -447,8 +452,13 @@ class AtmosPipeline {
       }
       p.states[o] = st;
     }
+    // When this frame's update takes hold: where its metadata says, counted
+    // from the frame the decoder is on, which the objects in hand are behind
+    // by the core decoder's overlap and the QMF round trip.
+    int offset = 0, ramp = samples;
+    if (!engine_.oamd().update_timing(offset, ramp)) { offset = 0; ramp = samples; }
     p.renderer.render(p.ptrs.data(), p.states.data(), objects, engine_.lfe_object_index(),
-                      lfe_gain_, samples, out);
+                      lfe_gain_, samples, out, kCoreDelay + kQmfLatency + offset, ramp);
   }
 
   // Pushes `in` (interleaved, the layout's width) through the kQmfLatency

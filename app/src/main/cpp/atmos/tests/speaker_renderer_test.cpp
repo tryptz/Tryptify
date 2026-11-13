@@ -111,7 +111,7 @@ void test_constant_power_grid() {
 }
 
 void test_overhead() {
-  std::printf("overhead: tops only on 7.1.4, spread over ear level on 5.1\n");
+  std::printf("overhead: tops only on 7.1.4, at its place on the floor on 5.1\n");
   {
     SpeakerRenderer r;
     r.configure(OutputLayout::k7_1_4, 16);
@@ -124,9 +124,39 @@ void test_overhead() {
     SpeakerRenderer r;
     r.configure(OutputLayout::k5_1, 16);
     std::vector<float> g(r.channels());
+    // No speakers overhead: the middle of the ceiling is the middle of the
+    // floor, half way between the centre speaker and the two surrounds.
     r.object_gains(at(0.5f, 0.5f, 1.0f), false, g.data());
-    for (int c : {0, 1, 2, 4, 5}) CHECK(g[c] > 0.3f);
+    CHECK_NEAR(g[0], 0.0f, 1e-4f);
+    CHECK_NEAR(g[1], 0.0f, 1e-4f);
+    CHECK_NEAR(g[2], 0.7071f, 1e-3f);
+    CHECK_NEAR(g[4], 0.5f, 1e-3f);
+    CHECK_NEAR(g[5], 0.5f, 1e-3f);
     CHECK_NEAR(power(g), 1.0f, 1e-3f);
+    // What Dolby's encoder puts in a stream's own 5.1 for these places
+    // (measured on real streams, trims off; README): L R C LFE Ls Rs.
+    const struct { float x, y, z, want[6]; } dolby[] = {
+        {0.242f, 0.242f, 1.0f, {0.70f, 0.00f, 0.60f, 0.0f, 0.35f, 0.13f}},
+        {0.758f, 0.758f, 1.0f, {0.00f, 0.27f, 0.26f, 0.0f, 0.35f, 0.87f}},
+        {0.75f, 0.0f, 0.0f, {0.00f, 0.70f, 0.71f, 0.0f, 0.00f, 0.00f}},
+    };
+    for (const auto& d : dolby) {
+      r.object_gains(at(d.x, d.y, d.z), false, g.data());
+      // (The overhead ones are within 0.04: the core leans a little more to
+      // L than a plain balance does there.)
+      for (int c = 0; c < 6; ++c) CHECK_NEAR(g[c], d.want[c], 0.045f);
+    }
+  }
+  {
+    // A floor object inside the room stays on the floor.
+    SpeakerRenderer r;
+    r.configure(OutputLayout::k7_1_4, 16);
+    std::vector<float> g(r.channels());
+    r.object_gains(at(0.25f, 0.25f, 0.0f), false, g.data());
+    for (int c = 8; c < 12; ++c) CHECK_NEAR(g[c], 0.0f, 1e-5f);
+    // And a top-front-left object is the top front left speaker.
+    r.object_gains(at(0.25f, 0.25f, 1.0f), false, g.data());
+    CHECK_NEAR(g[index_of(r, SpeakerRole::kLtf)], 1.0f, 1e-4f);
   }
 }
 
@@ -205,11 +235,20 @@ void test_beds_and_lfe() {
   SpeakerRenderer r;
   r.configure(OutputLayout::k7_1, 16);
   std::vector<float> g(r.channels());
-  // A 5.1 bed's surround (+-110 deg) falls between the 7.1 side and rear.
+  // A 5.1 bed's surround plays from a 7.1 room's side surround.
   r.bed_channel_gains(4, 6, g.data());
-  CHECK(g[index_of(r, SpeakerRole::kLss)] > 0.3f);
-  CHECK(g[index_of(r, SpeakerRole::kLrs)] > 0.3f);
+  CHECK_NEAR(g[index_of(r, SpeakerRole::kLss)], 1.0f, 1e-4f);
   CHECK_NEAR(power(g), 1.0f, 1e-3f);
+  // A 7.1 bed's rear left on 5.1 is its left surround alone, none of it on
+  // the right (the hull panner put 30% of its power there).
+  {
+    SpeakerRenderer five;
+    five.configure(OutputLayout::k5_1, 16);
+    std::vector<float> g5(five.channels());
+    five.bed_channel_gains(4, 8, g5.data());
+    CHECK_NEAR(g5[4], 1.0f, 1e-4f);
+    CHECK_NEAR(g5[5], 0.0f, 1e-5f);
+  }
   r.bed_channel_gains(0, 6, g.data());
   CHECK_NEAR(g[0], 1.0f, 1e-6f);
   r.bed_channel_gains(3, 6, g.data());
