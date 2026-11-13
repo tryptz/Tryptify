@@ -248,7 +248,7 @@ internal fun SpectrumOverlay(
                     // line's fill covers whatever of the older lines falls
                     // behind it. It fades with its line, so a line on its way
                     // out stops hiding the ones behind it as it goes.
-                    native.drawPath(draw.ridgeFill(offset, draw.meta[m + 2], alpha), draw.fillPaint)
+                    native.drawPath(draw.ridgeFill(offset, ridgeGroundBase(i, lines, draw.meta[m + 2], size.height), alpha), draw.fillPaint)
                 }
                 val front = i == lines - 1
                 paint.alpha = (alpha * LINE_ALPHA * 255f).toInt().coerceIn(0, 255)
@@ -560,7 +560,7 @@ private class WaterfallDrawState {
             val points = mesh.loadPoints(segs, offset, segments)
             if (ground) {
                 val a = (alpha * RIDGE_GROUND_ALPHA * 255f).toInt().coerceIn(0, 255)
-                mesh.addGround(points, meta[m + 2], (a shl 24) or (RIDGE_GROUND and 0x00FFFFFF))
+                mesh.addGround(points, ridgeGroundBase(i, lines, meta[m + 2], height), (a shl 24) or (RIDGE_GROUND and 0x00FFFFFF))
             }
             mesh.addRibbon(points, stroke * (0.45f + 0.55f * meta[m + 1]), alpha * LINE_ALPHA, gradient)
         }
@@ -816,3 +816,15 @@ private const val LINE_ALPHA = 0.92f
  * of a pixel, so the frame it stops on is the frame it would have kept drawing.
  */
 private const val SETTLED_DB = 0.005f
+
+/**
+ * How far down Ridgeline's ground under line [index] of [lines] (back to
+ * front) goes: to the line's own [baseline], except under the front line,
+ * whose ground goes on to the bottom of the box ([height]). The front
+ * baseline sits a little inside the bottom edge so its stroke is not cut
+ * (spectrum_waterfall.h, kBottom = 0.985), and its ground stopping there
+ * left a strip of the cover showing under the dark face, a few pixels high
+ * on a phone-sized cover.
+ */
+internal fun ridgeGroundBase(index: Int, lines: Int, baseline: Float, height: Float): Float =
+    if (index == lines - 1) maxOf(baseline, height) else baseline

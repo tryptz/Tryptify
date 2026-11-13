@@ -123,4 +123,14 @@ class WaterfallMeshTest {
         assertTrue(((mid ushr 16) and 0xFF) in 127..128)
         assertEquals("alpha scales", 64, g.argbAt(0f, 0.25f) ushr 24)
     }
+
+    @Test
+    fun `the front line's ground reaches the bottom of the box, the others stop at their own line`() {
+        // Five lines back to front in a 1000 px box; the front baseline sits at 98.5%.
+        org.junit.Assert.assertEquals(1000f, ridgeGroundBase(4, 5, 985f, 1000f), 0f)
+        org.junit.Assert.assertEquals(700f, ridgeGroundBase(3, 5, 700f, 1000f), 0f)
+        org.junit.Assert.assertEquals(420f, ridgeGroundBase(0, 5, 420f, 1000f), 0f)
+        // Never pulled up: a baseline already at or past the bottom stays.
+        org.junit.Assert.assertEquals(1002f, ridgeGroundBase(0, 1, 1002f, 1000f), 0f)
+    }
 }
