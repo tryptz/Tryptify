@@ -127,12 +127,18 @@ worth knowing when debugging:
 - **Metadata association is time-keyed.** The `AtmosAudioProcessor` matches
   raw frames to decoded PCM by presentation time against an anchored clock
   (re-anchoring on discontinuities), not by arrival order.
-- **JOC/OAMD hold until the next update, for as long as the stream is
-  Atmos.** Payloads are sparse — about a quarter of the frames of moving music,
-  2% of Dolby's channel-check tones (gaps up to ~20 s). Whether the stream is
-  still Atmos comes from each syncframe's addbsi `flag_ec3_extension_type_a`
-  (`cavern/enhanced_ac3.h`), which the encoder sets on every frame, payload or
-  not: a frame without it (a gapless change into plain E-AC-3) ends the hold at
+- **Every frame carries JOC and OAMD.** The EMDF container sits in an audio
+  block's skip field, so it starts at any bit of the frame. It is looked for
+  at every bit (`cavern/extensible_metadata_decoder.h`), and a candidate is
+  taken only when its payloads and protection fill its stated length to the
+  byte, because the syncword turns up by chance in audio data about once in
+  three frames. Looked for at whole bytes, as it was until 1.9.52, it was
+  found in a quarter of the frames (2% of Dolby's channel-check tones), which
+  this file used to describe as payloads being sparse.
+- **The last update holds while the stream is Atmos.** For a frame whose
+  container cannot be read, whether the stream is still Atmos comes from the
+  syncframe's addbsi `flag_ec3_extension_type_a` (`cavern/enhanced_ac3.h`): a
+  frame without it (a gapless change into plain E-AC-3) ends the hold at
   once, a seek drops it until the next payload, and only frames with no
   readable header fall back to a 32-frame expiry.
 - **Both output paths are latency-aligned.** The object render's bed passes
@@ -187,6 +193,62 @@ accepts 1-8, 10, 12 and 24 channels).
 
 Host tests: `speaker_renderer_test`, `atmos_speaker_pipeline_test`.
 
+## Headphone render: the 15.1.12 virtual room
+
+With the HRTF on, `AtmosPipeline::set_virtual_room` (the default from the app)
+renders headphones as a room of speakers instead of one HRIR an object:
+
+1. Objects and beds are panned onto `OutputLayout::k15_1_12` by the same
+   `SpeakerRenderer` as real speakers: fifteen at ear level (0, 15, 30, 60, 90,
+   110, 135 and 160 degrees each side), eight at 30 degrees up (30, 70, 110,
+   150) and four at 60 (45, 135), and an LFE. Size, divergence, zones and
+   channel lock therefore apply on headphones, which the one-HRIR-an-object
+   render ignores. The bed fallback and the crossfade into objects happen on
+   the speaker feeds, so both go through one binaural stage.
+2. `render/virtual_room.h` turns the 28 feeds into two ears: a fixed filter
+   pair a speaker with its interaural delay inside (windowed-sinc), summed as
+   spectra (27 forward FFTs, 2 inverse, a block of 256; a silent speaker is
+   skipped), the diffuse-field equalizer (`hrir_dfe.h`; a loaded SOFA set gets
+   one designed from itself), the LFE low-passed at 120 Hz at +10 dB to both
+   ears, early reflections sent out of other speakers and a shared FDN tail
+   (the Room amount; 0 is none), a 3 dB trim and a look-ahead limiter at
+   -0.5 dBFS. 39 samples of delay.
+
+`virtual_room_test` holds the convolution to a tap-by-tap one (-124 dB) and
+checks the layout, LFE, room, limiter, reset and a set swapped in while it
+renders; `atmos_room_pipeline_test` the pipeline's path through it. Nothing
+here has been judged by ear: the room's reflections and tail are starting
+values.
+
+The earlier render (`set_virtual_room(false)`: each object through the HRIR of
+its direction, no equalizer, no room) keeps its level with 3 dB taken off its
+sum, as it has no limiter.
+
+## JOC decode fixes
+
+Measured against the stream's own 5.1 with the reference check below, or on
+synthetic payloads (`cavern_joc_test`):
+
+- Downmix configurations 3 and 4 carry the surround pair turned 90 degrees.
+  The applier turns Ls/Rs back (every subband times -j) before mixing:
+  waveform correlation of the rendered L/R/C with the core 0.60/0.45/0.65 ->
+  0.92/0.92/0.95.
+- A steep-slope object's decoded matrix is expanded from parameter bands to
+  subbands (it was handed out band-indexed: silence above the band count),
+  and so is the first half of a two-point ramp; two-point steep uses both
+  offsets.
+- Sparse objects are decoded (they were silence): the channel index and the
+  coefficient each run as one chain along the bands.
+- Coefficients are walked on their ring in whole numbers, with steps of
+  820/4096 and 820/8192; in floats the lowest level could come out as the
+  highest.
+- `joc_seq_count` 0 (a stream's first frame, a splice) starts from a zero
+  matrix; after a seek the first payload starts on its own, and the filter
+  banks are emptied.
+- A 7.1 core's pairs are fed to JOC in its order (the decoder's is rears
+  first), and a 7.1 bed's sides and rears are no longer exchanged.
+- Cavern's 3 dB off every object's gain is gone.
+
 ## OAMD decode fixes against TS 103 420
 
 Cavern's decode (and this port) disagreed with the spec in places that change
@@ -211,7 +273,23 @@ what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
 - Bed objects take their channel's position (they used to sit at the cube
   origin, the front-left corner), in the binaural path as well.
 
-Still open / approximate:
+Still open / approximate (measured by an audit on 2026-11-13, not yet fixed):
+
+- **The panning law is not Dolby's.** With trims off, the stream's 5.1 core
+  matches a per-axis sin/cos balance on room coordinates (z dropped) to
+  +-0.01; the cube warp + VBAP here puts an overhead object more evenly
+  round the room and hugs L/R on a C-to-R pan. On the bundled clip 33% of
+  128-sample blocks differ from the core in speaker distribution against
+  0.9% with the cartesian law. Bed channels a layout lacks, and the
+  "interior spread" of `SpeakerRenderer::spread`, belong to the same fix.
+- **Metadata timing.** Each update is ramped across the frame it arrived in:
+  no account of the QMF latency (577), of `sample_offset + 32 x
+  block_offset_factor` (the code adds the factor unscaled), or of
+  `ramp_duration`. About 17 ms early on the bundled clip, 36 ms on Dolby's
+  tones.
+- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is skipped.
+- An OAMD frame that fails to decode loses the LFE slot for that frame and
+  shifts every object by one.
 
 - ISF (stacked-ring) objects: the spec gives ring sizes and order but not the
   ring azimuths, so rings are spaced evenly from the front.
@@ -247,12 +325,12 @@ present in the binaural path too:
   corner while the silent objects moved. The core LFE is now spliced in at the
   OAMD LFE slot (latency-matched), as Cavern's EnhancedAC3Renderer does.
 
-Results on the test clip after the fixes: the moving objects' paths track the
-core at +0.91..+0.99; each 5.1 speaker tracks the core at +0.88..+0.96 (LFE
-+1.00); the per-window speaker-energy distribution matches with median
-similarity 1.00; on 7.1.4, top-speaker energy follows object height at +0.999.
-Levels sit about 3 dB under the core on every channel — Cavern's anti-clip
-trim — with the centre about 1 dB lower still. Before the fixes the same check
+Results on the test clip (1.9.52): the moving objects' paths track the core at
++0.985..+0.995; each 5.1 speaker tracks the core at +0.91..+0.97 (LFE +1.00);
+the per-window speaker-energy distribution matches with median similarity
+1.00. Levels are within 0.8 dB of the core on every channel (L/R +0.7, C
+-0.8, Ls/Rs -0.4, LFE 0.0), and the check fails past 1.5 dB. The spread
+that is left is the panning law (see "Still open"). Before the fixes the same check
 fails outright (everything out of L; similarity 0.02). It also picked the
 layout-aware cube warp in speaker_renderer.h over a fixed one (5.1 surrounds
 +0.86 -> +0.95).
@@ -271,9 +349,9 @@ the frames put at least 90% of their energy on it. The clip (~190 MB, not
 committed) is mirrored with other Atmos demo files at
 https://www.peterpee.com/demo.
 
-It found the hold expiring mid-tone. The tones carry JOC in 2% of their frames,
-with gaps up to ~20 s, and the old fixed 32-frame hold dropped to the 5.1 bed
-for most of each gap: top-front tones played from L, rear tones from between
+It found the hold expiring mid-tone. The byte-aligned search then in use found
+JOC in 2% of the tones' frames, with gaps up to ~20 s, and the old fixed
+32-frame hold dropped to the 5.1 bed for most of each gap: top-front tones played from L, rear tones from between
 the side and rear speakers. Frames with 90% on target: 69% before the
 header-driven hold, 100% after, with every speaker, heights included, at 91%
 or more of its energy on target. Neither the TIDAL reference check nor the

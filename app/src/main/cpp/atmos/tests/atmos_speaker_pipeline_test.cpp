@@ -52,7 +52,7 @@ void write_emdf_joc_frame(BitWriter& bw) {
   const unsigned payload_bytes = (unsigned)((probe.count + 7) / 8);
   bw.put(8, 0x00); bw.put(8, 0x11);
   bw.put(8, 0x58); bw.put(8, 0x38);
-  bw.put(16, 3 + payload_bytes);
+  bw.put(16, 6 + payload_bytes);
   bw.put(2, 0); bw.put(3, 0);
   bw.put(5, 14);
   bw.bit(0);
@@ -62,6 +62,10 @@ void write_emdf_joc_frame(BitWriter& bw) {
   const size_t body_start = bw.count;
   write_joc(bw);
   while (bw.count < body_start + payload_bytes * 8) bw.bit(0);
+  // The end of the container: no more payloads, then emdf_protection (an
+  // 8-bit primary field, no secondary one), padded to the byte. The decoder
+  // takes a container only when it ends where its length says it does.
+  bw.put(5, 0); bw.put(2, 1); bw.put(2, 0); bw.put(8, 0xA5); bw.put(7, 0);
 }
 
 constexpr int kSamples = 1536;

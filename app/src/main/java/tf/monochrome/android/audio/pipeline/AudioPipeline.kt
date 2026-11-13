@@ -144,8 +144,14 @@ enum class SpatialAudio(val label: String) {
 /** What the Atmos stage did with a multichannel source. */
 enum class AtmosStage(val label: String) {
     OBJECTS_BINAURAL("Objects rendered to binaural stereo"),
+    OBJECTS_ROOM("Objects on 15.1.12 virtual speakers, binaural"),
+    OBJECTS_SPEAKERS("Objects rendered to the output's speakers"),
 
-    /** Multichannel without object data (or none arrived): a plain fold. */
+    /** Multichannel with no objects being rendered: the bed on the virtual room. */
+    BED_ROOM("Bed on 15.1.12 virtual speakers (no Atmos objects)"),
+    BED_SPEAKERS("Bed on the output's speakers (no Atmos objects)"),
+
+    /** Multichannel without object data, or the HRTF off: a plain fold. */
     BED_FOLDED("Bed folded to stereo (no Atmos objects)"),
 
     /** The renderer's Direct mode: the full bed goes on untouched. */
@@ -198,6 +204,8 @@ data class AudioPipelineInputs(
     val spatialAudio: SpatialAudio? = null,
     /** Null for mono and stereo sources, where there is no Atmos stage. */
     val atmos: AtmosStage? = null,
+    /** Atmos objects being rendered from the stream (the LFE counted); 0 for none. */
+    val atmosObjects: Int = 0,
     /** Channels leaving the chain for the platform; null before a stream. */
     val outputChannels: Int? = null,
     /** The EBU R128 meter at the end of the chain; null before it has measured anything. */
@@ -230,6 +238,16 @@ internal fun channels(count: Int?, layout: String?): String? {
     if (count == null || count <= 0) return null
     val name = layout?.takeIf { it.isNotBlank() }
     return if (name == null) "$count" else "$count ($name)"
+}
+
+/**
+ * The Channels row of an Atmos stream. Its decoder puts out only the core
+ * (5.1 from every music service), and that alone reads as "this is just 5.1":
+ * the objects ride inside it, so they are counted beside it.
+ */
+internal fun atmosChannels(count: Int?, layout: String?, objects: Int): String? {
+    val core = channels(count, layout?.takeIf { it.isNotBlank() }?.let { "$it core" }) ?: return null
+    return if (objects > 0) "$core + $objects Atmos objects" else core
 }
 
 /**
@@ -327,10 +345,13 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             ),
             PipelineField(
                 "Channels",
-                channels(
-                    input.chain?.channelCount ?: input.stream?.channelCount,
-                    input.chain?.layoutName,
-                ),
+                (input.chain?.channelCount ?: input.stream?.channelCount).let { count ->
+                    if (input.atmosObjects > 0) {
+                        atmosChannels(count, input.chain?.layoutName, input.atmosObjects)
+                    } else {
+                        channels(count, input.chain?.layoutName)
+                    }
+                },
             ),
         ),
     )

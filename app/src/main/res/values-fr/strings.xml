@@ -1440,6 +1440,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d canaux</string>
     <string name="atmos_binaural_on">Les objets Atmos sont placés autour de votre tête grâce à la HRTF ci-dessous.</string>
     <string name="atmos_binaural_off">Désactivé. Les titres Atmos utilisent le downmix par coefficients.</string>
+    <string name="atmos_virtual_room">Salle virtuelle 15.1.12</string>
+    <string name="atmos_virtual_room_on">Les objets et les lits sont joués par 27 enceintes virtuelles et un LFE autour de vous, dans une salle. La taille des objets, les zones et le verrouillage de canal s\'appliquent.</string>
+    <string name="atmos_virtual_room_off">Désactivé. Chaque objet passe par la HRTF de sa propre direction, sans salle.</string>
+    <string name="atmos_room_amount">Salle</string>
+    <string name="atmos_live_objects">En direct : Dolby Atmos · %1$d objets sur un cœur %2$s · %3$s. Chaque point est un objet, là où le mixage le place.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s a été REJETÉ par le chargeur SOFA. Le rendu utilise à la place la HRTF KEMAR intégrée. Le fichier est peut-être tronqué, non pris en charge ou pas au format SOFA.</string>
     <string name="atmos_sofa_loaded">Chargé : %1$s</string>
     <string name="atmos_sofa_selected">Sélectionné : %1$s. S’applique au (re)démarrage de la lecture.</string>
@@ -3537,4 +3542,10 @@
     <string name="whats_new_1952_system_eq_tile_body">Un nouveau bloc active ou désactive l’AutoEQ à l’échelle du système depuis n’importe quelle app, et affiche le casque qu’il corrige. Ajoutez-le dans Paramètres › Égaliseur, sous AutoEQ à l’échelle du système.</string>
     <string name="whats_new_1952_player_menu_title">Le menu du lecteur est celui des titres</string>
     <string name="whats_new_1952_player_menu_body">Le ⋮ du lecteur ouvre désormais le même menu qu’un titre dans n’importe quelle liste : on y trouve aussi les favoris, les infos du titre, Trypt Mania et la file d’attente. Les actions propres au lecteur (lecture aléatoire, répétition, paroles, visuels, paramètres) sont à la fin.</string>
+    <string name="whats_new_1952_atmos_room_title">Atmos au casque : une salle virtuelle 15.1.12</string>
+    <string name="whats_new_1952_atmos_room_body">Avec le rendu binaural activé, les objets et les lits Atmos sont désormais joués par 27 enceintes virtuelles et un LFE autour de vous, dans une salle, avec un limiteur au lieu d\'une baisse fixe du niveau. L\'interrupteur et la quantité de salle se trouvent dans Paramètres › Audio › Configuration du moteur de rendu Atmos.</string>
+    <string name="whats_new_1952_atmos_decode_title">Les mixages Atmos sont décodés tels qu\'ils ont été mixés</string>
+    <string name="whats_new_1952_atmos_decode_body">Trois mises à jour d\'objets sur quatre étaient manquées, si bien que les objets bougeaient en retard et bavaient les uns sur les autres. Chaque mise à jour est désormais lue, les canaux surround sont remis en phase et le rendu sur enceintes n\'est plus trop faible de 3 dB.</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos montre ses objets, pas « 6 ch »</string>
+    <string name="whats_new_1952_atmos_objects_body">Un flux Atmos est un cœur 5.1 qui contient les objets. Le panneau Chaîne audio et la page Configuration du moteur de rendu Atmos comptent désormais les objets et indiquent s\'ils sont joués, et le plan de la salle montre chacun là où le mixage le place.</string>
 </resources>

@@ -118,7 +118,7 @@ void test_frame_object_element() {
   CHECK_NEAR(e.info_block(1, 0).raw_position().x, 1.0f, 1e-3f);
   CHECK_NEAR(e.info_block(1, 0).raw_position().y, 0.0f, 1e-3f);
   CHECK_NEAR(e.info_block(1, 0).raw_position().z, 1.0f, 1e-3f);
-  CHECK_NEAR(e.info_block(1, 0).gain(), 0.707f, 1e-3f);
+  CHECK_NEAR(e.info_block(1, 0).gain(), 1.0f, 1e-3f);
 
   // Render-space map (x*2-1, z, y*-2+1): (1,0,1) -> (1, 1, 1).
   Vec3 r = oam.element(0).info_block(1, 0).resolved_position();

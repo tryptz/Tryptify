@@ -1356,6 +1356,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d 声道</string>
     <string name="atmos_binaural_on">通过下方的 HRTF，将 Atmos 声音对象放置在你的头部周围。</string>
     <string name="atmos_binaural_off">关闭。Atmos 歌曲使用系数缩混渲染器。</string>
+    <string name="atmos_virtual_room">15.1.12 虚拟房间</string>
+    <string name="atmos_virtual_room_on">声音对象和声床从你周围的 27 个虚拟扬声器和一个 LFE 播放，并带有房间感。对象大小、区域和声道锁定均生效。</string>
+    <string name="atmos_virtual_room_off">关闭。每个对象经由其自身方向的 HRTF 播放，没有房间感。</string>
+    <string name="atmos_room_amount">房间感</string>
+    <string name="atmos_live_objects">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是一个对象，位于混音放置它的位置。</string>
     <string name="atmos_sofa_rejected">⚠ %1$s 被 SOFA 加载器拒绝。渲染改用内置的 KEMAR HRTF。该文件可能不完整、不受支持，或不是 SOFA 文件。</string>
     <string name="atmos_sofa_loaded">已加载：%1$s</string>
     <string name="atmos_sofa_selected">已选择：%1$s。将在播放（重新）开始时生效。</string>
@@ -3381,4 +3386,10 @@
     <string name="whats_new_1952_system_eq_tile_body">新的功能块可在任何应用中开关全局 AutoEQ，并显示正在校正的耳机。可在“设置 › 均衡器”的“全局 AutoEQ”下方添加。</string>
     <string name="whats_new_1952_player_menu_title">播放器菜单与歌曲菜单一致</string>
     <string name="whats_new_1952_player_menu_body">播放器的 ⋮ 现在打开的菜单与各列表中歌曲的菜单相同，因此也能在这里点赞、查看歌曲信息、进入 Trypt Mania 和加入队列。播放器自己的操作（随机播放、循环、歌词、视觉效果、设置）排在最后。</string>
+    <string name="whats_new_1952_atmos_room_title">耳机上的 Atmos：15.1.12 虚拟房间</string>
+    <string name="whats_new_1952_atmos_room_body">开启双耳渲染后，Atmos 对象和声床现在从你周围的 27 个虚拟扬声器和一个 LFE 播放，带有房间感，并用限幅器取代固定的音量削减。开关和房间感的多少在“设置 › 音频 › Atmos 渲染器配置”中。</string>
+    <string name="whats_new_1952_atmos_decode_title">Atmos 混音按原样解码</string>
+    <string name="whats_new_1952_atmos_decode_body">此前流中四分之三的对象更新被漏掉，导致对象移动滞后并相互串音。现在每次更新都会读取，环绕声道的相位被转回，扬声器渲染也不再低 3 dB。</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos 显示它的对象，而不是“6 ch”</string>
+    <string name="whats_new_1952_atmos_objects_body">Atmos 流是一个内含对象的 5.1 核心。音频处理链面板和Atmos 渲染器配置页面现在会统计对象并说明它们是否在播放，房间图会在混音放置的位置显示每个对象。</string>
 </resources>

@@ -86,6 +86,7 @@ class AudioPipelineViewModel @Inject constructor(
         val decoderName: String?,
         val chain: ChainInput?,
         val atmos: AtmosAudioProcessor.Outcome?,
+        val atmosObjects: Int,
     )
 
     private data class PolledValues(
@@ -104,6 +105,10 @@ class AudioPipelineViewModel @Inject constructor(
         if (sourceChannels == null || sourceChannels <= 2) return null
         return when {
             outcome == AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL -> AtmosStage.OBJECTS_BINAURAL
+            outcome == AtmosAudioProcessor.Outcome.OBJECTS_ROOM -> AtmosStage.OBJECTS_ROOM
+            outcome == AtmosAudioProcessor.Outcome.OBJECTS_SPEAKERS -> AtmosStage.OBJECTS_SPEAKERS
+            outcome == AtmosAudioProcessor.Outcome.BED_ROOM -> AtmosStage.BED_ROOM
+            outcome == AtmosAudioProcessor.Outcome.BED_SPEAKERS -> AtmosStage.BED_SPEAKERS
             outcome == AtmosAudioProcessor.Outcome.BED_FOLDED -> AtmosStage.BED_FOLDED
             atmosProcessor.isPassthrough -> AtmosStage.PASSTHROUGH
             !atmosProcessor.isRendererAvailable -> AtmosStage.UNAVAILABLE
@@ -197,8 +202,10 @@ class AudioPipelineViewModel @Inject constructor(
     }
 
     private val chainInputs: Flow<AudioPipelineInputs> = combine(
-        combine(monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome) { stream, decoder, chainInput, atmos ->
-            Live(stream, decoder, chainInput, atmos)
+        combine(
+            monitor.stream, monitor.decoderName, chain, atmosProcessor.outcome, atmosProcessor.objectCount,
+        ) { stream, decoder, chainInput, atmos, objects ->
+            Live(stream, decoder, chainInput, atmos, objects)
         },
         polled,
         combine(preferences.dspBlockSize, eqPresetName, stereoWidthDb) { block, eq, width ->
@@ -228,6 +235,7 @@ class AudioPipelineViewModel @Inject constructor(
             // from the tap after the Atmos and downmix stages.
             spatialAudio = outputProbe.spatialAudio(live.chain?.sampleRate, poll.outputChannels),
             atmos = atmosStage(live.chain?.channelCount, live.atmos),
+            atmosObjects = live.atmosObjects,
             outputChannels = poll.outputChannels,
         )
     }

@@ -106,7 +106,7 @@ void write_emdf_joc_frame(BitWriter& bw) {
   const unsigned payload_bytes = (unsigned)((probe.count + 7) / 8);
   bw.put(8, 0x00); bw.put(8, 0x11);      // garbage prefix
   bw.put(8, 0x58); bw.put(8, 0x38);      // EMDF syncword
-  bw.put(16, 3 + payload_bytes);         // block length
+  bw.put(16, 6 + payload_bytes);         // block length
   bw.put(2, 0); bw.put(3, 0);            // version, key
   bw.put(5, 14);                         // payload id = JOC
   bw.put(1, 0);                          // has_sample_offset
@@ -116,6 +116,10 @@ void write_emdf_joc_frame(BitWriter& bw) {
   const size_t body_start = bw.count;
   write_joc(bw);
   while (bw.count < body_start + payload_bytes * 8) bw.put(1, 0);
+  // The end of the container: no more payloads, then emdf_protection (an
+  // 8-bit primary field, no secondary one), padded to the byte. The decoder
+  // takes a container only when it ends where its length says it does.
+  bw.put(5, 0); bw.put(2, 1); bw.put(2, 0); bw.put(8, 0xA5); bw.put(7, 0);
 }
 
 // JOC rides in only ~22% of E-AC-3 frames and is defined to hold until the next

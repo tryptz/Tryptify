@@ -170,7 +170,11 @@ class ObjectInfoBlock {
         }
         default: g = -1.0f; break;  // previous object's gain — resolved by the frame
       }
-      gain_ = g >= 0.0f ? g * 0.707f : g;  // 3 dB anti-clip attenuation
+      // The gain as coded. (Cavern takes 3 dB off every object here against
+      // clipping. The stream has its own tool for that, joc_clipgain, and the
+      // trim put every speaker 3 dB under the stream's own 5.1, the LFE
+      // included: headroom is the output stage's business.)
+      gain_ = g;
     }
     if ((blocks & 1) != 0 && !br.read_bit()) {  // priority (unused)
       br.skip(5);

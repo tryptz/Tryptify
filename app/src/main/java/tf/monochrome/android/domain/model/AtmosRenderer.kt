@@ -274,6 +274,14 @@ data class RendererProfile(
     val hrtfEnabled: Boolean = false,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
+    /**
+     * With the HRTF on: pan objects and beds onto a virtual 15.1.12 speaker
+     * room and render its speakers to the ears (true), or send each object
+     * through the HRTF of its own direction, with no room (false).
+     */
+    val virtualRoom: Boolean = true,
+    /** How much of the virtual room's reflections and tail there is, 0..1. */
+    val roomAmount: Float = DEFAULT_ROOM_AMOUNT,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
     val binauralStrength: Float = 1.0f,
     /** Virtualize height objects on layouts without physical top speakers. */
@@ -294,6 +302,7 @@ data class RendererProfile(
         fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
         return copy(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
+            roomAmount = roomAmount.c(0f, 1f, DEFAULT_ROOM_AMOUNT),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
             downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),
@@ -313,6 +322,8 @@ data class RendererProfile(
         if (!speakerRender) ChannelLayout.STEREO else effectiveLayout(dacChannelCount)
 
     companion object {
+        /** A quarter of the room: enough to place the sound outside the head. */
+        const val DEFAULT_ROOM_AMOUNT = 0.25f
         val DEFAULT = RendererProfile()
     }
 }

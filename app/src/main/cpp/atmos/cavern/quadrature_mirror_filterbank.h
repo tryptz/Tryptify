@@ -45,6 +45,14 @@ class QuadratureMirrorFilterBank {
 
   QuadratureMirrorFilterBank() : fft_(kSubbands) {}
 
+  // Empties both delay lines, as if nothing had been through it (a seek).
+  void reset() {
+    for (float& v : input_stream_forward_) v = 0.0f;
+    for (float& v : input_stream_inverse_) v = 0.0f;
+    head_forward_ = 0;
+    head_inverse_ = 0;
+  }
+
   // Transform a timeslot of 64 real input samples into kSubbands complex bands.
   //
   // Cavern: input_stream (640 samples, newest first) shifted by a timeslot,

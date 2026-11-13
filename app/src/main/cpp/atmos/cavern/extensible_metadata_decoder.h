@@ -39,20 +39,104 @@ class ExtensibleMetadataDecoder {
   const ObjectAudioMetadata& oamd() const { return oamd_; }
   ObjectAudioMetadata& oamd() { return oamd_; }
 
-  // Decodes the next EMDF frame from the bitstream, scanning for the syncword.
+  // Decodes the frame's EMDF container, looking for its syncword.
+  //
+  // Deviation from Cavern, which decodes the E-AC-3 audio blocks and so knows
+  // where the skip field that holds the container starts. Here only the raw
+  // frame is in hand, and the container begins wherever the audio blocks
+  // before it happened to end: at any bit. So the syncword is looked for at
+  // every bit, not every byte. (Byte by byte, this found one container in
+  // four, the ones that happened to start on a byte, and the objects of the
+  // other three frames were rebuilt with stale matrices and positions.)
+  //
+  // Sixteen bits of syncword turn up by chance in audio data about once in
+  // three frames, so a candidate is walked before anything is decoded from
+  // it: every payload must fit, and the container must end exactly where its
+  // own length says it does.
   void decode(BitReader& br) {
     has_objects_ = false;
-    uint32_t syncword = 0;
     const size_t back = br.size_bits();
-    // Cavern: `while (Position < BackPosition - 32)`. BackPosition - 32 is int
-    // arithmetic there; guard the size_t subtraction against underflow.
-    while (back >= 32 && br.position() < back - 32) {
-      syncword = ((syncword << 8) & 0xFFFFu) + br.read(8);  // syncwords are byte-padded
-      if (syncword == kSyncWord && decode_block(br)) break;
+    uint32_t window = 0;
+    size_t seen = 0;
+    while (br.position() + 32 < back) {
+      window = ((window << 1) | br.read_bit()) & 0xFFFFu;
+      if (++seen < 16 || window != kSyncWord) continue;
+      const size_t at = br.position();
+      const bool sound = well_formed(br);
+      br.seek(at);
+      if (sound && decode_block(br)) break;
+      br.seek(at);
     }
   }
 
  private:
+  // One payload's header: its id (0 ends the list) and config. False when it
+  // is not one this decoder knows how to pass over.
+  static bool read_payload_header(BitReader& br, int& payload_id, int& sample_offset) {
+    payload_id = static_cast<int>(br.read(5));
+    sample_offset = 0;
+    if (payload_id == 0) return true;
+    if (payload_id == 0x1F) payload_id += static_cast<int>(br.read_variable_bits(5));
+    if (payload_id > kJocPayloadId) return false;
+
+    const bool has_sample_offset = br.read_bit() != 0;
+    if (has_sample_offset) sample_offset = static_cast<int>(br.read(12)) >> 1;  // skip 1 bit
+    if (br.read_bit()) br.read_variable_bits(11);
+    if (br.read_bit()) br.read_variable_bits(2);
+    if (br.read_bit()) br.skip(8);
+    if (!br.read_bit()) {
+      bool frame_aligned = false;
+      if (!has_sample_offset) {
+        frame_aligned = br.read_bit() != 0;
+        if (frame_aligned) br.skip(2);
+      }
+      if (has_sample_offset || frame_aligned) br.skip(7);
+    }
+    return true;
+  }
+
+  // Walks a candidate container without decoding it: true when its payloads
+  // and its protection fields fill its stated length, to the byte. Assumes
+  // the syncword was already consumed.
+  static bool well_formed(BitReader& br) {
+    const size_t back = br.size_bits();
+    const uint32_t length = br.read(16);
+    const size_t start = br.position();
+    const size_t frame_end = start + static_cast<size_t>(length) * 8;
+    if (length == 0 || frame_end > back) return false;
+
+    int version = static_cast<int>(br.read(2));
+    if (version == 3) version += static_cast<int>(br.read_variable_bits(2));
+    int key = static_cast<int>(br.read(3));
+    if (key == 7) key += static_cast<int>(br.read_variable_bits(3));
+    if (version != 0 || key != 0) return false;
+
+    int payloads = 0;
+    for (;;) {
+      if (br.position() + 5 > frame_end) return false;
+      int payload_id, sample_offset;
+      if (!read_payload_header(br, payload_id, sample_offset)) return false;
+      if (payload_id == 0) break;
+      if (br.position() >= frame_end) return false;
+      const size_t payload_end =
+          static_cast<size_t>(br.read_variable_bits(8)) * 8 + br.position();
+      if (payload_end > frame_end) return false;
+      br.seek(payload_end);
+      ++payloads;
+    }
+    if (payloads == 0) return false;
+    // emdf_protection: two lengths, then that many bits of each, and the
+    // container is padded to its last byte.
+    if (br.position() + 4 > frame_end) return false;
+    static const int kPrimary[4] = {-1, 8, 32, 128};
+    static const int kSecondary[4] = {0, 8, 32, 128};
+    const int primary = kPrimary[br.read(2)];
+    const int secondary = kSecondary[br.read(2)];
+    if (primary < 0) return false;
+    const size_t end = br.position() + static_cast<size_t>(primary + secondary);
+    return end <= frame_end && frame_end - end < 8;
+  }
+
   // Decodes one EMDF block; returns whether it was a well-formed block. Assumes
   // the syncword was already consumed.
   bool decode_block(BitReader& br) {
@@ -67,39 +151,16 @@ class ExtensibleMetadataDecoder {
     if (key == 7) key += static_cast<int>(br.read_variable_bits(3));
     if (version != 0 || key != 0) return false;
 
-    int payload_id;
-    while (br.position() < frame_end &&
-           (payload_id = static_cast<int>(br.read(5))) != 0) {
-      if (payload_id == 0x1F) {
-        payload_id += static_cast<int>(br.read_variable_bits(5));
-      }
-      if (payload_id > kJocPayloadId) return false;
-
-      const bool has_sample_offset = br.read_bit() != 0;
-      int sample_offset = 0;
-      if (has_sample_offset) {
-        sample_offset = static_cast<int>(br.read(12)) >> 1;  // skip 1 bit
-      }
-
-      if (br.read_bit()) br.read_variable_bits(11);
-      if (br.read_bit()) br.read_variable_bits(2);
-      if (br.read_bit()) br.skip(8);
-
-      if (!br.read_bit()) {
-        bool frame_aligned = false;
-        if (!has_sample_offset) {
-          frame_aligned = br.read_bit() != 0;
-          if (frame_aligned) br.skip(2);
-        }
-        if (has_sample_offset || frame_aligned) br.skip(7);
-      }
-
+    while (br.position() < frame_end) {
+      int payload_id, sample_offset;
+      if (!read_payload_header(br, payload_id, sample_offset)) return false;
+      if (payload_id == 0) break;
       const size_t payload_end =
           static_cast<size_t>(br.read_variable_bits(8)) * 8 + br.position();
-      if (payload_end > back) return false;
+      if (payload_end > frame_end) return false;
       if (payload_id == kJocPayloadId) {
         joc_.decode(br);
-        has_objects_ = true;
+        if (joc_.valid()) has_objects_ = true;
       } else if (payload_id == kOamdPayloadId) {
         oamd_.decode(br, sample_offset);
       }

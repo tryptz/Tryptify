@@ -18,6 +18,7 @@
 #include "object_engine.h"
 #include "render/hrir_renderer.h"
 #include "render/sofa_loader.h"  // runtime SOFA HRTF (defined only in the JNI lib)
+#include "render/virtual_room.h"  // the 15.1.12 virtual room's binaural stage
 #include "speaker_renderer.h"     // multichannel object render (5.1 .. 9.1.6)
 #include "vbap.h"  // Vec3
 
@@ -43,6 +44,15 @@ class AtmosPipeline {
     max_objects_ = max_objects < 1 ? 1 : max_objects;
     // +8 slots so the bed-HRTF path can also render bed channels as sources.
     renderer_.configure(sample_rate, max_objects_ + 8);
+    // The virtual room: its panner, and the binaural stage its feeds go to.
+    configure_path(room_path_, OutputLayout::k15_1_12);
+    std::vector<render::RoomSpeaker> room;
+    for (const SpeakerDef& s : layout_speakers(OutputLayout::k15_1_12)) {
+      room.push_back({s.azimuth, s.elevation, is_lfe(s)});
+    }
+    room_.configure(sample_rate, room);
+    room_feeds_.assign(static_cast<size_t>(kFrameSamples) * room_path_.renderer.channels(), 0.0f);
+    flat_states_.assign(static_cast<size_t>(max_objects_), cavern::ObjectState{});
     dm_delay_l_.assign(kQmfLatency, 0.0f);
     dm_delay_r_.assign(kQmfLatency, 0.0f);
     dm_idx_ = 0;
@@ -60,11 +70,11 @@ class AtmosPipeline {
     last_path_ = kPathNone;
     drc_env_ = 0.0f;
     renderer_.reset_history();
-    speakers_.reset_history();
     engine_.flush_history();
-    std::fill(spk_delay_.begin(), spk_delay_.end(), 0.0f);
-    spk_idx_ = 0;
-    spk_last_path_ = kPathNone;
+    reset_path(spk_path_);
+    reset_path(room_path_);
+    room_.reset_history();
+    last_objects_ = 0;
   }
 
   // Selects the loudspeaker layout for process_frame_speakers (an OutputLayout
@@ -76,19 +86,10 @@ class AtmosPipeline {
         layout_id > static_cast<int>(OutputLayout::k9_1_6)) {
       layout_id = static_cast<int>(OutputLayout::k5_1);
     }
-    speakers_.configure(static_cast<OutputLayout>(layout_id), max_objects_);
-    const int ch = speakers_.channels();
-    spk_delay_.assign(static_cast<size_t>(kQmfLatency) * ch, 0.0f);
-    spk_idx_ = 0;
-    spk_last_path_ = kPathNone;
-    spk_ptrs_.assign(static_cast<size_t>(max_objects_), nullptr);
-    spk_states_.assign(static_cast<size_t>(max_objects_), nullptr);
-    // One E-AC-3 frame is 1536 samples; size the scratch for it up front.
-    spk_dm_.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
-    spk_bed_.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
-    return ch;
+    configure_path(spk_path_, static_cast<OutputLayout>(layout_id));
+    return spk_path_.renderer.channels();
   }
-  int output_channels() const { return speakers_.channels(); }
+  int output_channels() const { return spk_path_.renderer.channels(); }
 
   // Applies the user's RendererProfile. `lfe_gain_db` currently affects the
   // bed-HRTF path (in object render the objects carry their own OAMD gains).
@@ -101,16 +102,74 @@ class AtmosPipeline {
     lfe_gain_ = std::pow(10.0f, lfe_gain_db / 20.0f);
     drc_mode_ = drc_mode;
     dialog_norm_ = dialog_normalization;
+    height_ = height_virtualization;
+    strength_ = binaural_strength;
     renderer_.set_params(binaural_strength, height_virtualization);
     renderer_.set_bass_management(bass_management, crossover_hz);
+    room_.set_params(binaural_strength, room_amount_);
+    room_.set_bass_management(bass_management, crossover_hz);
+  }
+
+  // The headphone render's two ways of placing sound: with `enabled`, objects
+  // and beds are panned onto the 15.1.12 virtual room and its speakers are
+  // what the ears hear (render/virtual_room.h); without, each object goes
+  // through the HRIR of its own direction, with no room. `room` is how much
+  // of the room's reflections and tail there is, 0 to 1.
+  void set_virtual_room(bool enabled, float room) {
+    virtual_room_ = enabled;
+    room_amount_ = room < 0.0f ? 0.0f : (room > 1.0f ? 1.0f : room);
+    room_.set_params(strength_, room_amount_);
   }
 
   // Installs a runtime HRTF from a SOFA buffer (off the audio thread), or
   // reverts to the baked default. The load itself is defined in the JNI lib.
   bool load_sofa(const char* data, long size) {
-    return load_sofa_into_renderer(renderer_, data, size);
+    if (!load_sofa_into_renderer(renderer_, data, size)) return false;
+    const std::vector<float>* set = nullptr;
+    const std::vector<float>* delay = nullptr;
+    if (renderer_.runtime_hrir(set, delay)) room_.set_hrir(*set, *delay);
+    return true;
   }
-  void clear_sofa() { renderer_.clear_runtime_hrir(); }
+  void clear_sofa() {
+    renderer_.clear_runtime_hrir();
+    room_.set_hrir_baked();
+  }
+
+  // Objects rendered in the last frame (the LFE included), or 0 when it was
+  // the decoded bed that played: no JOC yet, a plain multichannel stream, or
+  // the bed mode. What the caller reports as "objects rendered".
+  int last_objects() const { return last_objects_; }
+
+  // The last frame's objects, for a meter: kMeterFields floats an object into
+  // `out`, room position (x 0..1 left to right, y 0..1 front to back, z -1..1
+  // floor to ceiling), the frame's peak after its gain, and what it is
+  // (0 an object, 1 a bed channel, 2 the LFE). Returns how many were written;
+  // 0 when no objects were rendered. Audio thread, allocation-free.
+  static constexpr int kMeterFields = 5;
+  int object_meter(float* out, int max_objects) const {
+    int count = last_objects_ < max_objects ? last_objects_ : max_objects;
+    if (count > max_objects_) count = max_objects_;
+    const int samples = engine_.frame_samples();
+    const int lfe = engine_.lfe_object_index();
+    for (int o = 0; o < count; ++o) {
+      float* f = out + static_cast<size_t>(o) * kMeterFields;
+      const cavern::ObjectState* st = engine_.object_state(o);
+      f[0] = st ? st->room.x : 0.5f;
+      f[1] = st ? st->room.y : 0.5f;
+      f[2] = st ? st->room.z : 0.0f;
+      float peak = 0.0f;
+      const float* pcm = engine_.object_channel(o);
+      if (pcm != nullptr) {
+        for (int i = 0; i < samples; ++i) {
+          const float a = pcm[i] < 0.0f ? -pcm[i] : pcm[i];
+          if (a > peak) peak = a;
+        }
+      }
+      f[3] = peak;
+      f[4] = o == lfe ? 2.0f : ((st && st->is_bed) ? 1.0f : 0.0f);
+    }
+    return count;
+  }
 
   // Objects beyond the configured cap in the last rendered frame (0 = none).
   int last_truncated() const { return last_truncated_; }
@@ -168,48 +227,12 @@ class AtmosPipeline {
   // Returns 1 when written, -1 when inactive (passthrough, or no layout set).
   int process_frame_speakers(const uint8_t* frame, size_t frame_size, const float* const* bed,
                              int bed_channels, int samples, float* out) {
-    const int ch = speakers_.channels();
+    const int ch = spk_path_.renderer.channels();
     if (mode_ == kPassthrough || ch <= 0 || bed_channels <= 0 || samples <= 0) return -1;
-    const size_t n = static_cast<size_t>(samples) * ch;
-    if (spk_dm_.size() < n) spk_dm_.assign(n, 0.0f);  // only for non-standard frame sizes
-    if (spk_bed_.size() < n) spk_bed_.assign(n, 0.0f);
     dialnorm_gain_ = 1.0f;
     frame_has_compr_ = false;
     if (dialog_norm_ || drc_mode_ == 3) parse_bsi(frame, frame_size);
-    if (mode_ == kBedHrtf) {
-      // "Bed" mode on speakers: the core bed on the layout, no object decode.
-      std::fill(out, out + n, 0.0f);
-      speakers_.render_bed(bed, bed_channels, lfe_gain_, samples, out);
-      apply_post(out, samples, ch);
-      return 1;
-    }
-
-    // The latency-matched bed fallback runs every frame (see process_frame).
-    std::fill(spk_bed_.begin(), spk_bed_.begin() + n, 0.0f);
-    speakers_.render_bed(bed, bed_channels, lfe_gain_, samples, spk_bed_.data());
-    delay_speakers(spk_bed_.data(), samples, spk_dm_.data());
-
-    const int objects = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
-    const int want = objects > 0 ? kPathRender : kPathDownmix;
-    if (want == kPathRender) render_speaker_objects(objects, samples, out);
-
-    if (spk_last_path_ == kPathNone) spk_last_path_ = want;
-    if (want != spk_last_path_) {
-      if (want == kPathDownmix) {
-        const int held = engine_.upmix_held(bed, bed_channels, samples);
-        if (held > 0) {
-          render_speaker_objects(held, samples, out);
-          crossfade(out, spk_dm_.data(), samples, out, ch);
-        } else {
-          std::copy(spk_dm_.data(), spk_dm_.data() + n, out);
-        }
-      } else {
-        crossfade(spk_dm_.data(), out, samples, out, ch);
-      }
-      spk_last_path_ = want;
-    } else if (want == kPathDownmix) {
-      std::copy(spk_dm_.data(), spk_dm_.data() + n, out);
-    }
+    render_layout(spk_path_, frame, frame_size, bed, bed_channels, samples, false, out);
     apply_post(out, samples, ch);
     return 1;
   }
@@ -232,7 +255,21 @@ class AtmosPipeline {
     dialnorm_gain_ = 1.0f;
     frame_has_compr_ = false;
     if (dialog_norm_ || drc_mode_ == 3) parse_bsi(frame, frame_size);
+    if (virtual_room_) {
+      // Onto the virtual room's speakers, as onto real ones (objects, the bed
+      // while there are none, the crossfade between them), then its speakers
+      // to the two ears.
+      if (bed_channels <= 0 || samples <= 0) return -1;
+      const size_t n = static_cast<size_t>(samples) * room_path_.renderer.channels();
+      if (room_feeds_.size() < n) room_feeds_.assign(n, 0.0f);
+      render_layout(room_path_, frame, frame_size, bed, bed_channels, samples, !height_,
+                    room_feeds_.data());
+      room_.render(room_feeds_.data(), samples, out);
+      apply_post(out, samples);
+      return 1;
+    }
     if (mode_ == kBedHrtf) {
+      last_objects_ = 0;
       const int rc = render_bed(bed, bed_channels, samples, out);
       if (rc == 1) apply_post(out, samples);
       return rc;
@@ -247,6 +284,7 @@ class AtmosPipeline {
 
     const int n = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
     const int want = n > 0 ? kPathRender : kPathDownmix;
+    last_objects_ = n > 0 ? n : 0;
     if (want == kPathRender) render_objects(n, samples, out);
 
     if (last_path_ == kPathNone) last_path_ = want;
@@ -281,6 +319,7 @@ class AtmosPipeline {
   // fallback is delayed by the same amount so the paths stay sample-aligned.
   static constexpr int kQmfLatency = 577;
   static constexpr float kHalfPi = 1.57079632679f;
+  static constexpr float kDirectHeadroom = 0.707f;
   enum { kPathNone = 0, kPathRender = 1, kPathDownmix = 2 };
 
   // The object render (JOC objects -> HRIR binaural + diffuse LFE) for the
@@ -304,30 +343,127 @@ class AtmosPipeline {
     return objects;
   }
 
-  // The object render to loudspeakers for the engine's current upmix.
-  void render_speaker_objects(int object_count, int samples, float* out) {
-    const int objects = apply_object_gains(object_count);
-    for (int o = 0; o < objects; ++o) {
-      spk_ptrs_[o] = engine_.object_channel(o);
-      spk_states_[o] = engine_.object_state(o);
-    }
-    speakers_.render(spk_ptrs_.data(), spk_states_.data(), objects, engine_.lfe_object_index(),
-                     lfe_gain_, samples, out);
+  // One layout the objects are panned onto: the output's speakers, or the
+  // virtual room's. Its renderer, the bed fallback's latency-matching delay
+  // line and scratch, and which of the two produced its previous frame.
+  struct LayoutPath {
+    SpeakerRenderer renderer;
+    std::vector<float> delay, dm, bed;
+    int idx = 0;
+    int last = kPathNone;
+    std::vector<const float*> ptrs;
+    std::vector<const cavern::ObjectState*> states;
+  };
+
+  // Allocates: never per frame.
+  void configure_path(LayoutPath& p, OutputLayout layout) {
+    p.renderer.configure(layout, max_objects_);
+    const int ch = p.renderer.channels();
+    p.delay.assign(static_cast<size_t>(kQmfLatency) * ch, 0.0f);
+    p.idx = 0;
+    p.last = kPathNone;
+    p.ptrs.assign(static_cast<size_t>(max_objects_), nullptr);
+    p.states.assign(static_cast<size_t>(max_objects_), nullptr);
+    // One E-AC-3 frame is 1536 samples; size the scratch for it up front.
+    p.dm.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
+    p.bed.assign(static_cast<size_t>(kFrameSamples) * ch, 0.0f);
   }
 
-  // Pushes `in` (interleaved, output_channels() wide) through the kQmfLatency
+  void reset_path(LayoutPath& p) {
+    p.renderer.reset_history();
+    std::fill(p.delay.begin(), p.delay.end(), 0.0f);
+    p.idx = 0;
+    p.last = kPathNone;
+  }
+
+  // One frame onto a layout's speakers, interleaved into `out`: the JOC
+  // objects, or, for frames without usable JOC, the decoded bed, delayed by
+  // the QMF round trip so the two stay sample-aligned and a switch between
+  // them is an equal-power crossfade. `flat` renders everything at ear level.
+  void render_layout(LayoutPath& p, const uint8_t* frame, size_t frame_size,
+                     const float* const* bed, int bed_channels, int samples, bool flat,
+                     float* out) {
+    const int ch = p.renderer.channels();
+    const size_t n = static_cast<size_t>(samples) * ch;
+    if (p.dm.size() < n) p.dm.assign(n, 0.0f);  // only for non-standard frame sizes
+    if (p.bed.size() < n) p.bed.assign(n, 0.0f);
+    if (mode_ == kBedHrtf) {
+      // "Bed" mode: the core bed on the layout, no object decode.
+      last_objects_ = 0;
+      std::fill(out, out + n, 0.0f);
+      p.renderer.render_bed(bed, bed_channels, lfe_gain_, samples, out);
+      return;
+    }
+
+    // The latency-matched bed fallback runs every frame (see process_frame).
+    std::fill(p.bed.begin(), p.bed.begin() + n, 0.0f);
+    p.renderer.render_bed(bed, bed_channels, lfe_gain_, samples, p.bed.data());
+    delay_layout(p, p.bed.data(), samples, p.dm.data());
+
+    // Objects are panned by their OAMD positions. JOC with no OAMD at all has
+    // nowhere to put them: the bed plays, as for a frame without JOC.
+    const int upmixed = engine_.upmix_frame(frame, frame_size, bed, bed_channels, samples);
+    const int objects = engine_.oamd().state_count() > 0 ? upmixed : -1;
+    const int want = objects > 0 ? kPathRender : kPathDownmix;
+    last_objects_ = objects > 0 ? objects : 0;
+    if (want == kPathRender) render_layout_objects(p, objects, samples, flat, out);
+
+    if (p.last == kPathNone) p.last = want;
+    if (want != p.last) {
+      if (want == kPathDownmix) {
+        const int held = engine_.oamd().state_count() > 0
+            ? engine_.upmix_held(bed, bed_channels, samples) : -1;
+        if (held > 0) {
+          render_layout_objects(p, held, samples, flat, out);
+          crossfade(out, p.dm.data(), samples, out, ch);
+        } else {
+          std::copy(p.dm.data(), p.dm.data() + n, out);
+        }
+      } else {
+        crossfade(p.dm.data(), out, samples, out, ch);
+      }
+      p.last = want;
+    } else if (want == kPathDownmix) {
+      std::copy(p.dm.data(), p.dm.data() + n, out);
+    }
+  }
+
+  // The object render onto a layout for the engine's current upmix.
+  void render_layout_objects(LayoutPath& p, int object_count, int samples, bool flat, float* out) {
+    const int objects = apply_object_gains(object_count);
+    for (int o = 0; o < objects; ++o) {
+      p.ptrs[o] = engine_.object_channel(o);
+      const cavern::ObjectState* st = engine_.object_state(o);
+      if (flat && st != nullptr) {
+        // Height off: the same object on the floor of the room, kept off the
+        // top speakers.
+        cavern::ObjectState& f = flat_states_[o];
+        f = *st;
+        f.room.z = 0.0f;
+        f.render.y = 0.0f;
+        f.height = 0.0f;
+        f.enable_elevation = false;
+        st = &f;
+      }
+      p.states[o] = st;
+    }
+    p.renderer.render(p.ptrs.data(), p.states.data(), objects, engine_.lfe_object_index(),
+                      lfe_gain_, samples, out);
+  }
+
+  // Pushes `in` (interleaved, the layout's width) through the kQmfLatency
   // delay line into `out`, like render_downmix does for stereo.
-  void delay_speakers(const float* in, int samples, float* out) {
-    const int ch = speakers_.channels();
+  void delay_layout(LayoutPath& p, const float* in, int samples, float* out) {
+    const int ch = p.renderer.channels();
     for (int i = 0; i < samples; ++i) {
-      float* slot = &spk_delay_[static_cast<size_t>(spk_idx_) * ch];
+      float* slot = &p.delay[static_cast<size_t>(p.idx) * ch];
       const float* src = in + static_cast<size_t>(i) * ch;
       float* dst = out + static_cast<size_t>(i) * ch;
       for (int c = 0; c < ch; ++c) {
         dst[c] = slot[c];
         slot[c] = src[c];
       }
-      if (++spk_idx_ == kQmfLatency) spk_idx_ = 0;
+      if (++p.idx == kQmfLatency) p.idx = 0;
     }
   }
 
@@ -384,9 +520,13 @@ class AtmosPipeline {
         }
       }
     }
+    // This path has no limiter: its headroom is 3 dB taken off the sum here
+    // (it used to be taken off every object's gain, which also put the
+    // speaker render 3 dB under the stream's own 5.1).
+    for (int i = 0; i < 2 * samples; ++i) out[i] *= kDirectHeadroom;
   }
 
-  // Fixed-matrix fold-down (FL FR FC LFE SL SR BL BR; sides/backs hard-panned
+  // Fixed-matrix fold-down (FL FR FC LFE and two or four surrounds; sides/backs hard-panned
   // at unity, FC at 0.70710678 to both, LFE at 2.26464431 to both), pushed
   // through the kQmfLatency delay line. Matches the Kotlin fallback's
   // coefficients so pipeline-off and pipeline-on fallbacks sound identical.
@@ -427,11 +567,15 @@ class AtmosPipeline {
     }
   }
 
-  // Canonical speaker azimuths (radians) for the decoder's channel order
-  // FL FR FC LFE SL SR BL BR. Used by the bed-HRTF mode, which spatializes the
-  // core bed directly instead of reconstructing objects.
+  // Speaker azimuths (radians) for the decoder's channel order. Used by the
+  // bed-HRTF mode, which spatializes the core bed directly instead of
+  // reconstructing objects. 5.1 is FL FR FC LFE SL SR, its surrounds at 110
+  // degrees; 7.1 is FL FR FC LFE BL BR SL SR, the rears (150) before the
+  // sides (90).
   static constexpr float kBedAzimuth[kMaxBedCh] = {
       -0.5236f, 0.5236f, 0.0f, 0.0f, -1.9199f, 1.9199f, -2.6180f, 2.6180f};
+  static constexpr float kBedAzimuth71[kMaxBedCh] = {
+      -0.5236f, 0.5236f, 0.0f, 0.0f, -2.6180f, 2.6180f, -1.5708f, 1.5708f};
 
   // Spatializes the decoded bed channels at their speaker positions (no JOC).
   // The LFE (channel 3 in a >=4ch bed) is non-directional bass and is summed
@@ -447,7 +591,7 @@ class AtmosPipeline {
     for (int c = 0; c < ch; ++c) {
       if (c == lfe_ch) continue;
       bed_ptrs_.push_back(bed[c]);
-      az_.push_back(kBedAzimuth[c]);
+      az_.push_back(ch >= 8 ? kBedAzimuth71[c] : kBedAzimuth[c]);
       el_.push_back(0.0f);
     }
     renderer_.render(bed_ptrs_.data(), az_.data(), el_.data(),
@@ -548,12 +692,18 @@ class AtmosPipeline {
   render::BinauralRenderer renderer_;
   // Loudspeaker path (process_frame_speakers): renderer, the bed fallback's
   // latency-matching delay line, scratch, and its own path memory.
-  SpeakerRenderer speakers_;
-  std::vector<float> spk_delay_, spk_dm_, spk_bed_;
-  int spk_idx_ = 0;
-  int spk_last_path_ = kPathNone;
-  std::vector<const float*> spk_ptrs_;
-  std::vector<const cavern::ObjectState*> spk_states_;
+  LayoutPath spk_path_;
+  // Headphone path through the virtual room: its panner, the room's speaker
+  // feeds for one frame, and the stage that turns them into two ears.
+  LayoutPath room_path_;
+  render::VirtualRoom room_;
+  std::vector<float> room_feeds_;
+  std::vector<cavern::ObjectState> flat_states_;  // objects at ear level (height off)
+  bool virtual_room_ = false;  // the caller turns it on (set_virtual_room)
+  float room_amount_ = 0.25f;
+  bool height_ = true;
+  float strength_ = 1.0f;
+  int last_objects_ = 0;
   int max_objects_ = 16;
   int mode_ = kObjectRender;
   int downmix_ = kBinaural;

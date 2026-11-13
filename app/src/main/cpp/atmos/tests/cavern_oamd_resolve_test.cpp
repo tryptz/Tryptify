@@ -146,7 +146,7 @@ void test_differential_and_hold() {
   CHECK(st.zone_constraints_idx == 4);      // held
   CHECK(!st.enable_elevation);              // held
   CHECK(!st.snap);                          // b_object_snap is re-sent every render info
-  CHECK_NEAR(st.gain, 0.707f, 1e-4f);       // basic info reused
+  CHECK_NEAR(st.gain, 1.0f, 1e-4f);         // basic info reused
   // render space = (2x-1, z, 1-2y)
   CHECK_NEAR(st.render.x, 2.0f * 34 / 62 - 1, 1e-5f);
   CHECK_NEAR(st.render.y, 7.0f / 15.0f, 1e-5f);
@@ -186,7 +186,7 @@ void test_gain_idx3_and_inactive() {
   ObjectAudioMetadata oam = decode(frame);
   CHECK(oam.valid());
   const float g0 = oam.state(0).gain;
-  CHECK_NEAR(g0, std::pow(10.0f, 15.0f / 20.0f) * 0.707f, 1e-3f);
+  CHECK_NEAR(g0, std::pow(10.0f, 15.0f / 20.0f), 1e-3f);
   CHECK_NEAR(oam.state(1).gain, g0, 1e-6f);
   CHECK(!oam.state(2).active);
   CHECK_NEAR(oam.state(2).gain, 0.0f, 1e-9f);

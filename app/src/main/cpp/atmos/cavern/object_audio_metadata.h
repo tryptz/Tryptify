@@ -233,7 +233,7 @@ struct ObjectState {
   bool is_bed = false;  // speaker-anchored bed object (position = its channel)
   bool is_isf = false;  // intermediate-spatial-format ring object
   ReferenceChannel bed_channel = ReferenceChannel::kFrontCenter;  // when is_bed
-  float gain = 0.0f;    // linear, including Cavern's 3 dB anti-clip trim
+  float gain = 0.0f;    // linear, as coded (Table 18)
 
   // Standard-precision coded position (X,Y in 0..62, Z in -15..15) and the
   // extended-precision refinement of the last block (0..3 fifths of a step).
@@ -466,7 +466,7 @@ class ObjectAudioMetadata {
         if (b.gain_idx() == 3) {
           // Table 18: the gain of the PREVIOUS OBJECT in this same block
           // (0 dB for the first object) — not a hold of this object's gain.
-          st.gain = obj > 0 ? states_[obj - 1].gain : 0.707f;
+          st.gain = obj > 0 ? states_[obj - 1].gain : 1.0f;
         } else {
           st.gain = b.gain();
         }

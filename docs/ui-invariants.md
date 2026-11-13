@@ -3293,6 +3293,25 @@ is plain and formal (the owner asked for both).
 - The step does not slide under "Disable animations".
 - The old Downloads and Audio output steps are gone; both live in Settings.
 
+### The spatial renderer's room map
+
+Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererScreen.kt`).
+
+- **An Atmos stream is never called "6 ch".** Its decoder puts out the 5.1
+  core alone, and "Live: 5.1 · 6 ch" read as "this is only 5.1" (the owner's
+  report). While objects render, the line is `atmos_live_objects` (the
+  object count on the core's layout) and the map draws every object as a
+  dot at its room position (x across, y front to back), a height object in
+  the tertiary tint and larger the higher it is, as bright as it is loud.
+  The LFE has no dot. The speakers under them still show the decoded core.
+- The same holds in the Audio pipeline sheet: Channels reads
+  "6 (5.1 core) + 16 Atmos objects", and the Atmos row says objects only
+  when `AtmosNative.nativeLastObjectCount` is above zero. The native
+  pipeline answers 1 for its bed fallback too, and that alone used to be
+  shown as "Objects rendered".
+- The object meter runs only while the page is started
+  (`acquireObjectMeter` beside the channel detector's `acquire`).
+
 ## The visualizer has two compositions, and only one at a time
 
 The hero visualizer (`ProjectMRendererView`, a `GLSurfaceView`) **replaces** the

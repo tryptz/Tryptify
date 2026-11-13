@@ -240,4 +240,41 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrameSpeakers(
   return rc;
 }
 
+// Chooses how the headphone render places sound: on the 15.1.12 virtual room
+// (render/virtual_room.h) or each object through its own direction's HRIR.
+// `room` is the amount of the room's reflections and tail, 0 to 1.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetVirtualRoom(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jboolean enabled, jfloat room) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) pipe->set_virtual_room(enabled == JNI_TRUE, room);
+}
+
+// Objects rendered in the last frame, or 0 when the decoded bed played
+// instead (no JOC in the stream, none yet after a seek, or the bed mode).
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLastObjectCount(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  return pipe != nullptr ? pipe->last_objects() : 0;
+}
+
+// The last frame's objects for the Atmos page's map: five floats an object
+// into `out` (room x, y, z, the frame's peak, and 0 object / 1 bed / 2 LFE).
+// Returns how many were written. Audio thread; allocation-free.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeObjectMeter(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jfloatArray out) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return 0;
+  constexpr int kFields = tf::atmos::AtmosPipeline::kMeterFields;
+  constexpr int kMax = 32;
+  float buf[kMax * kFields];
+  int room = env->GetArrayLength(out) / kFields;
+  if (room > kMax) room = kMax;
+  const int count = pipe->object_meter(buf, room);
+  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
+  return count;
+}
+
 }  // extern "C"

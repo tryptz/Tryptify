@@ -53,12 +53,29 @@ class JointObjectCoding {
     decode_data(br);
   }
 
+  // Whether the downmix the objects are rebuilt from has its surround pair
+  // turned 90 degrees (joc_dmx_config_idx 3 and 4, Table 47: "with 90-degree
+  // phase shift"): the applier turns it back before mixing.
+  bool surround_phase_shift() const { return downmix_config_ >= 3; }
+  int downmix_config() const { return downmix_config_; }
+  // joc_seq_count of the last payload: 0 on a stream's first frame and on the
+  // first after a splice.
+  int sequence() const { return sequence_; }
+
+  // Forgets the matrix the next frame would ramp from (a seek, a flush): the
+  // next payload starts on its own matrix instead of sliding in from one that
+  // belongs to another part of the stream.
+  void reset_history() { history_ = false; }
+
   // The interpolated mixing-matrix row for object/timeslot/channel:
-  // kSubbands floats. Valid after get_mixing_matrices(frame_size), for the
-  // frame it was called for. The row is worked out on demand: where it is an
-  // interpolation it is written to `scratch` (kSubbands floats) and that is
-  // returned; where it is a stored row it is returned as is. Either way the
-  // values are the ones Cavern's precomputed per-timeslot matrices held.
+  // kSubbands floats, written to `scratch` or returned as stored. Valid after
+  // get_mixing_matrices(frame_size), for the frame it was called for.
+  //
+  // A decoded matrix is in parameter bands and a row is in QMF subbands, so
+  // every use of one goes through the band mapping. (The steep branches and
+  // the first half of the two-point ramp used to hand out a band-indexed row
+  // as it was: with 12 bands, everything above 4.5 kHz of a steep object went
+  // silent after the switch.)
   const float* mixing_row(int obj, int ts, int ch, float* scratch) const {
     if (!object_active_[obj]) {
       for (int sb = 0; sb < kSubbands; ++sb) scratch[sb] = 0.0f;
@@ -66,44 +83,39 @@ class JointObjectCoding {
     }
     const int timeslots = timeslots_;
     const float* from = from_matrix_[obj][ch].data();
-    if (data_points_[obj] == 1) {
-      // One data point, steep: the frame's starting matrix up to the offset,
-      // then the decoded one (by Cavern's index, kept as it is).
-      if (steep_slope_[obj]) {
-        if (ts < timeslot_offsets_[obj][0]) return from;
-        return mix_matrix_[obj][ts < timeslot_offsets_[obj][1] ? 1 : 0][ch].data();
-      }
-      // Smooth: a ramp from the starting matrix to the decoded one.
-      const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
-      const float* mix = mix_matrix_[obj][0][ch].data();
-      const float lerp = static_cast<float>(ts + 1) / timeslots;
+    const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
+    const float* first = mix_matrix_[obj][0][ch].data();
+    auto expand = [&](const float* bands) {
+      for (int sb = 0; sb < kSubbands; ++sb) scratch[sb] = bands[pb_mapping[sb]];
+      return scratch;
+    };
+    auto ramp_to = [&](const float* bands, float lerp) {
       for (int sb = 0; sb < kSubbands; ++sb) {
-        scratch[sb] = from[sb] + (mix[pb_mapping[sb]] - from[sb]) * lerp;
+        scratch[sb] = from[sb] + (bands[pb_mapping[sb]] - from[sb]) * lerp;
       }
       return scratch;
+    };
+    if (data_points_[obj] == 1) {
+      // Steep: the frame's starting matrix up to the offset, then the decoded
+      // one. Smooth: a ramp from the one to the other across the frame.
+      if (steep_slope_[obj]) return ts < timeslot_offsets_[obj][0] ? from : expand(first);
+      return ramp_to(first, static_cast<float>(ts + 1) / timeslots);
     }
-    // Two data points, steep: the starting matrix up to the offset, then the
-    // first data point.
+    const float* second = mix_matrix_[obj][1][ch].data();
     if (steep_slope_[obj]) {
-      return ts + 1 < timeslot_offsets_[obj][0] ? from : mix_matrix_[obj][0][ch].data();
+      // Each data point takes over at its own offset.
+      if (ts < timeslot_offsets_[obj][0]) return from;
+      return expand(ts < timeslot_offsets_[obj][1] ? first : second);
     }
     // Smooth: the first half ramps to the first data point, the second from
     // it to the second.
     const int ts_2 = timeslots >> 1;
     const int next = ts + 1;
-    if (next <= ts_2) {
-      const float lerp = static_cast<float>(next) / ts_2;
-      const float* to = mix_matrix_[obj][0][ch].data();
-      for (int sb = 0; sb < kSubbands; ++sb) scratch[sb] = from[sb] + (to[sb] - from[sb]) * lerp;
-    } else {
-      const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
-      const float lerp = static_cast<float>(next - ts_2) / (timeslots - ts_2);
-      const float* cf = mix_matrix_[obj][0][ch].data();
-      const float* ct = mix_matrix_[obj][1][ch].data();
-      for (int sb = 0; sb < kSubbands; ++sb) {
-        const int pb = pb_mapping[sb];
-        scratch[sb] = cf[pb] + (ct[pb] - cf[pb]) * lerp;
-      }
+    if (next <= ts_2) return ramp_to(first, static_cast<float>(next) / ts_2);
+    const float lerp = static_cast<float>(next - ts_2) / (timeslots - ts_2);
+    for (int sb = 0; sb < kSubbands; ++sb) {
+      const int pb = pb_mapping[sb];
+      scratch[sb] = first[pb] + (second[pb] - first[pb]) * lerp;
     }
     return scratch;
   }
@@ -120,9 +132,15 @@ class JointObjectCoding {
   // count and wrote past its 24 rows; rows on demand have no such end.)
   void get_mixing_matrices(int frame_size) {
     timeslots_ = frame_size / kSubbands;
+    // A payload read since the last call is what can start afresh; a frame
+    // held from the last payload goes on from where that one ended.
+    const bool splice = fresh_ && sequence_ == 0;
+    const bool restart = fresh_ && !history_;
     for (int obj = 0; obj < object_count_; ++obj) {
-      prepare_object(obj);
+      prepare_object(obj, restart, splice);
     }
+    if (fresh_) history_ = true;
+    fresh_ = false;
   }
 
  private:
@@ -131,6 +149,7 @@ class JointObjectCoding {
   void decode_header(BitReader& br) {
     const int downmix_config = static_cast<int>(br.read(3));
     if (downmix_config > 4) { valid_ = false; return; }  // joc_dmx_config_idx
+    downmix_config_ = downmix_config;
     channel_count_ = (downmix_config == 0 || downmix_config == 3) ? 5 : 7;
     object_count_ = static_cast<int>(br.read(6)) + 1;
     update_cache();
@@ -140,7 +159,8 @@ class JointObjectCoding {
   void decode_info(BitReader& br) {
     const int gain_power = static_cast<int>(br.read(3));
     gain_ = 1.0f + (br.read(5) / 32.0f) * std::pow(2.0f, static_cast<float>(gain_power - 4));
-    br.skip(10);  // sequence counter
+    sequence_ = static_cast<int>(br.read(10));  // joc_seq_count
+    fresh_ = true;
     for (int obj = 0; obj < object_count_; ++obj) {
       object_active_[obj] = br.read_bit() ? 1 : 0;
       if (object_active_[obj]) {
@@ -196,70 +216,48 @@ class JointObjectCoding {
   }
 
   // ---- Dequantization ----------------------------------------------------
+  //
+  // A coefficient is an index on a ring of `levels` (96 coarse, 192 fine),
+  // each band's coded as its step from the band before, and the ring's centre
+  // is zero gain. The ring is walked in whole numbers: in floats (as Cavern
+  // has it) a sum that should land exactly on the modulus can fall just short
+  // of it, and the lowest coefficient, -9.6, came out as +9.6.
 
-  void decode_coarse(int obj, int quantized_center, float gain_step) {
-    const float center = quantized_center * gain_step;
-    const float max = center * 2.0f;
+  // Dense: every channel has its own chain along the bands, from the centre.
+  void decode_dense(int obj, int center, float gain_step) {
+    const int levels = center * 2;
     const int bands = bands_[obj];
     for (int dp = 0; dp < data_points_[obj]; ++dp) {
       for (int ch = 0; ch < channel_count_; ++ch) {
-        decode_coarse_channel(joc_matrix_[obj][dp][ch].data(),
-                              mix_matrix_[obj][dp][ch].data(), center, gain_step, max, bands);
-      }
-    }
-  }
-
-  static void decode_coarse_channel(const int* source, float* dest, float center,
-                                    float gain_step, float max, int bands) {
-    dest[0] = std::fmod(center + source[0] * gain_step, max);
-    int i = 0, s = 0, b = bands;
-    while (--b != 0) {
-      const float next = std::fmod(dest[i] + source[++s] * gain_step, max);
-      dest[i] -= center;
-      dest[++i] = next;
-    }
-    dest[i] -= center;
-  }
-
-  void dequantize(int obj, int center, float gain_step) {
-    for (int dp = 0; dp < data_points_[obj]; ++dp) {
-      for (int ch = 0; ch < channel_count_; ++ch) {
-        float* chan = mix_matrix_[obj][dp][ch].data();
-        for (int sb = 0; sb < bands_[obj]; ++sb) {
-          chan[sb] = (chan[sb] - center) * gain_step;
+        const int* source = joc_matrix_[obj][dp][ch].data();
+        float* dest = mix_matrix_[obj][dp][ch].data();
+        int index = center;
+        for (int pb = 0; pb < bands; ++pb) {
+          index = (index + source[pb]) % levels;
+          dest[pb] = static_cast<float>(index - center) * gain_step;
         }
       }
     }
   }
 
-  // Sparse decode (b_joc_sparse). Ported for parity but NOT called: upstream
-  // keeps it commented out ("revert 0 to gainStep when the standard
-  // documentation is fixed") and dequantizes with gainStep 0 instead, which is
-  // reproduced in prepare_object below.
-  void decode_sparse(int obj, int center) {
+  // Sparse (b_joc_sparse): one channel a band carries the object. Which one is
+  // a chain of its own along the bands; the coefficient's chain runs on
+  // unbroken when the channel changes, from 50 (coarse) or 100 (fine). Every
+  // other channel is at the centre: zero. As Cavern's DecodeSparse now is.
+  // (It used to be left undecoded, and a sparse object played as silence.)
+  void decode_sparse(int obj, int center, float gain_step) {
     had_sparse_ = true;
-    const int max = center * 2;
-    const int offset = quantization_table_[obj] * 50 + 50;
+    const int levels = center * 2;
     const int bands = bands_[obj];
     for (int dp = 0; dp < data_points_[obj]; ++dp) {
+      int channel = joc_channel_[obj][dp][0] % channel_count_;
+      int value = quantization_table_[obj] * 50 + 50;
       for (int pb = 0; pb < bands; ++pb) {
-        int channel;
-        if (pb == 0) {
-          channel = joc_channel_[obj][dp][0];
-        } else {
-          channel = (joc_channel_[obj][dp][pb - 1] + joc_channel_[obj][dp][pb]) % channel_count_;
-        }
+        if (pb != 0) channel = (channel + joc_channel_[obj][dp][pb]) % channel_count_;
+        value = (value + joc_vector_[obj][dp][pb]) % levels;
         for (int ch = 0; ch < channel_count_; ++ch) {
-          float* ch_matrix = mix_matrix_[obj][dp][ch].data();
-          if (ch == channel) {
-            if (pb == 0) {
-              ch_matrix[pb] = static_cast<float>((offset + joc_vector_[obj][dp][pb]) % max);
-            } else {
-              ch_matrix[pb] = std::fmod(ch_matrix[pb - 1] + joc_vector_[obj][dp][pb], static_cast<float>(max));
-            }
-          } else {
-            ch_matrix[pb] = static_cast<float>(offset);
-          }
+          mix_matrix_[obj][dp][ch][pb] =
+              ch == channel ? static_cast<float>(value - center) * gain_step : 0.0f;
         }
       }
     }
@@ -267,26 +265,32 @@ class JointObjectCoding {
 
   // ---- Matrix interpolation (per object) ---------------------------------
 
-  void prepare_object(int obj) {
+  void prepare_object(int obj, bool restart, bool splice) {
     const int center_value = quantization_table_[obj] * 48 + 48;
     // An inactive object's rows are all zero, and its history is left alone.
     if (!object_active_[obj]) return;
-    const float gain_step = 0.2f - quantization_table_[obj] * 0.1f;
+    // Clause 6.6.4's steps: 820/4096 coarse, 820/8192 fine (0.2 and 0.1, near
+    // enough, which is what Cavern uses).
+    const float gain_step = quantization_table_[obj] ? 820.0f / 8192.0f : 820.0f / 4096.0f;
     if (sparse_coded_[obj]) {
-      dequantize(obj, center_value, 0.0f);  // upstream: gainStep 0 (sparse WIP)
+      decode_sparse(obj, center_value, gain_step);
     } else {
-      decode_coarse(obj, center_value, gain_step);
+      decode_dense(obj, center_value, gain_step);
     }
 
     // This frame interpolates from the matrix the last frame ended on; carry
-    // the current one forward as history for the next frame.
+    // the current one forward as history for the next frame. A stream's first
+    // frame and the first after a splice start from nothing (clause 6.6.5);
+    // the first after a seek starts on its own matrix.
     const int* pb_mapping = joc_tables::pb_mapping(bands_index_[obj]);
+    const int first_point = 0, last_point = data_points_[obj] - 1;
     for (int ch = 0; ch < channel_count_; ++ch) {
       float* from = from_matrix_[obj][ch].data();
       float* prev = prev_matrix_[obj][ch].data();
-      const float* mix_src = mix_matrix_[obj][data_points_[obj] - 1][ch].data();
+      const float* start = mix_matrix_[obj][first_point][ch].data();
+      const float* mix_src = mix_matrix_[obj][last_point][ch].data();
       for (int sb = 0; sb < kSubbands; ++sb) {
-        from[sb] = prev[sb];
+        from[sb] = splice ? 0.0f : (restart ? start[pb_mapping[sb]] : prev[sb]);
         prev[sb] = mix_src[pb_mapping[sb]];
       }
     }
@@ -338,6 +342,10 @@ class JointObjectCoding {
 
   bool valid_ = false;
   bool had_sparse_ = false;
+  int downmix_config_ = 0;
+  int sequence_ = 0;
+  bool fresh_ = false;    // a payload was decoded since the last get_mixing_matrices()
+  bool history_ = false;  // prev_matrix_ is the matrix the last frame ended on
   int channel_count_ = 0;
   int object_count_ = 0;
   int matrix_channels_ = -1;

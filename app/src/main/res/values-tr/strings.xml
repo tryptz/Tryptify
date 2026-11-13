@@ -1398,6 +1398,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d kanal</string>
     <string name="atmos_binaural_on">Atmos nesneleri aşağıdaki HRTF ile başınızın çevresine yerleştirilir.</string>
     <string name="atmos_binaural_off">Kapalı. Atmos parçaları katsayılı downmix oluşturucusunu kullanır.</string>
+    <string name="atmos_virtual_room">15.1.12 sanal oda</string>
+    <string name="atmos_virtual_room_on">Nesneler ve yataklar, çevrenizdeki 27 sanal hoparlörden ve bir LFE\'den, bir oda içinde çalınır. Nesne boyutu, bölgeler ve kanal kilidi uygulanır.</string>
+    <string name="atmos_virtual_room_off">Kapalı. Her nesne kendi yönünün HRTF\'sinden geçer, oda yoktur.</string>
+    <string name="atmos_room_amount">Oda</string>
+    <string name="atmos_live_objects">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta bir nesnedir, miksin koyduğu yerde.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s, SOFA yükleyicisi tarafından REDDEDİLDİ. Oluşturma bunun yerine dahili KEMAR HRTF’yi kullanıyor. Dosya eksik, desteklenmeyen veya SOFA olmayan bir dosya olabilir.</string>
     <string name="atmos_sofa_loaded">Yüklendi: %1$s</string>
     <string name="atmos_sofa_selected">Seçildi: %1$s. Çalma (yeniden) başladığında uygulanır.</string>
@@ -3459,4 +3464,10 @@
     <string name="whats_new_1952_system_eq_tile_body">Yeni bir kutu, sistem genelinde AutoEQ’yu her uygulamanın üzerinden açıp kapatır ve düzelttiği kulaklığı gösterir. Ayarlar › Ekolayzer’de, Sistem genelinde AutoEQ’nun altından ekleyin.</string>
     <string name="whats_new_1952_player_menu_title">Oynatıcının menüsü artık parça menüsü</string>
     <string name="whats_new_1952_player_menu_body">Oynatıcının ⋮ düğmesi artık her listedeki bir parçanın menüsünün aynısını açıyor; beğenme, parça bilgisi, Trypt Mania ve sıra da burada. Oynatıcıya özgü işlemler (karıştır, tekrarla, şarkı sözleri, görseller, ayarlar) en sonda.</string>
+    <string name="whats_new_1952_atmos_room_title">Kulaklıkta Atmos: 15.1.12 sanal oda</string>
+    <string name="whats_new_1952_atmos_room_body">Binaural işleme açıkken Atmos nesneleri ve yatakları artık çevrenizdeki 27 sanal hoparlörden ve bir LFE\'den, bir oda içinde, sabit bir seviye kesintisi yerine sınırlayıcıyla çalınır. Anahtar ve oda miktarı Ayarlar › Ses › Atmos oluşturucu yapılandırması içindedir.</string>
+    <string name="whats_new_1952_atmos_decode_title">Atmos miksleri mikslendiği gibi çözülüyor</string>
+    <string name="whats_new_1952_atmos_decode_body">Bir akıştaki nesne güncellemelerinin dörtte üçü kaçırılıyordu; bu yüzden nesneler geç hareket ediyor ve birbirine karışıyordu. Artık her güncelleme okunuyor, surround kanalları yeniden faza getiriliyor ve hoparlör işlemesi 3 dB kısık değil.</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos “6 ch” değil, nesnelerini gösteriyor</string>
+    <string name="whats_new_1952_atmos_objects_body">Bir Atmos akışı, nesneleri içinde taşıyan bir 5.1 çekirdektir. Ses işlem hattı sayfası ve Atmos oluşturucu yapılandırması sayfası artık nesneleri sayıyor ve çalınıp çalınmadıklarını söylüyor; oda haritası her birini miksin koyduğu yerde gösteriyor.</string>
 </resources>

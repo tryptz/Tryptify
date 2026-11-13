@@ -55,6 +55,9 @@ namespace atmos {
 enum class OutputLayout : int {
   kStereo = 0, k5_1 = 1, k7_1 = 2, k5_1_2 = 3, k5_1_4 = 4, k7_1_2 = 5, k7_1_4 = 6,
   k9_1_4 = 7, k9_1_6 = 8,
+  // Not a physical layout: the virtual room the headphone render pans onto
+  // before its binaural stage (render/virtual_room.h). Never an AudioTrack's.
+  k15_1_12 = 9,
 };
 
 // Speaker roles, used for bed-channel routing and the Table A.7 zone map.
@@ -65,6 +68,7 @@ enum class SpeakerRole : uint8_t {
   kLtf, kRtf, kLtr, kRtr,      // top front / top rear
   kLts, kRts,                  // top side ("top middle")
   kLw, kRw,                    // front wides
+  kOther,                      // a virtual-room speaker no bed channel names
 };
 
 // Zone bits (TS 103 420 clause 5.2.6 / Table A.7).
@@ -111,6 +115,26 @@ inline std::vector<SpeakerDef> layout_speakers(OutputLayout layout) {
       return {L, Rr, C, LFE, Lrs, Rrs, Lss, Rss, Ltf, Rtf, Ltr, Rtr, Lw, Rw};
     case OutputLayout::k9_1_6:
       return {L, Rr, C, LFE, Lrs, Rrs, Lss, Rss, Ltf, Rtf, Ltr, Rtr, Lts, Rts, Lw, Rw};
+    case OutputLayout::k15_1_12: {
+      // Fifteen at ear level, closest together ahead, where hearing places
+      // sounds most exactly; a lower ring of eight at 30 degrees up and an
+      // upper ring of four at 60. The speakers a bed channel names keep its
+      // role, so a 5.1 or 7.1 bed plays from speakers of its own: L/R at 30,
+      // the wides at 60, side surrounds at 90, a 5.1 bed's surrounds at 110
+      // and the rears at 135.
+      auto ear = [](R role, float az, uint8_t zones) { return SpeakerDef{role, az, 0, zones}; };
+      auto top = [](float az, float el) { return SpeakerDef{R::kOther, az, el, kZoneTop}; };
+      const uint8_t side = kZoneSurround | kZoneSide;
+      return {C, ear(R::kOther, -15, kZoneScreen), ear(R::kOther, 15, kZoneScreen), L, Rr,
+              ear(R::kLw, -60, kZoneSide), ear(R::kRw, 60, kZoneSide),
+              ear(R::kLss, -90, side), ear(R::kRss, 90, side),
+              ear(R::kLs, -110, side), ear(R::kRs, 110, side),
+              ear(R::kLrs, -135, kZoneBack), ear(R::kRrs, 135, kZoneBack),
+              ear(R::kOther, -160, kZoneBack), ear(R::kOther, 160, kZoneBack), LFE,
+              top(-30, 30), top(30, 30), top(-70, 30), top(70, 30),
+              top(-110, 30), top(110, 30), top(-150, 30), top(150, 30),
+              top(-45, 60), top(45, 60), top(-135, 60), top(135, 60)};
+    }
   }
   return {L, Rr};
 }
@@ -324,10 +348,16 @@ class SpeakerRenderer {
     lfe_ = -1;
     for (int i = 0; i < channels_; ++i) if (is_lfe(speakers_[i])) lfe_ = i;
     // 5.x layouts have their surrounds at 110 deg and no side/rear pair.
-    bool five = false;
-    for (const SpeakerDef& sp : speakers_) if (sp.role == SpeakerRole::kLs) five = true;
+    bool five = false, sides = false;
+    for (const SpeakerDef& sp : speakers_) {
+      if (sp.role == SpeakerRole::kLs) five = true;
+      if (sp.role == SpeakerRole::kLss) sides = true;
+    }
+    five = five && !sides;
     side_az_ = five ? 70.0f : 90.0f;
     rear_az_ = five ? 110.0f : 150.0f;
+    // The virtual room's rear speakers are at 135: a rear corner lands on one.
+    if (layout == OutputLayout::k15_1_12) rear_az_ = 135.0f;
     for (int v = 0; v < kZoneVariants; ++v) {
       zone_panners_[v].configure(speakers_, allowed_for(v / 2, (v & 1) != 0));
       if (zone_panners_[v].empty()) zone_panners_[v].configure(speakers_, all_speakers());
@@ -412,9 +442,12 @@ class SpeakerRenderer {
     }
   }
 
-  // Plays a decoded channel bed (decoder order FL FR FC LFE SL SR BL BR) on the
-  // layout: each bed channel to its own speaker when present, panned from its
-  // nominal position when not. ADDS into `out`. The frames-without-JOC path.
+  // Plays a decoded channel bed on the layout: each bed channel to its own
+  // speaker when present, panned from its nominal position when not. ADDS
+  // into `out`. The frames-without-JOC path. Decoder order: FL FR FC LFE SL SR
+  // for 5.1, and FL FR FC LFE BL BR SL SR for 7.1, the rears before the sides
+  // (FFmpeg's order and Android's; this had them the other way round, and a
+  // 7.1 bed's side and rear surrounds changed places).
   void render_bed(const float* const* bed, int bed_channels, float lfe_gain, int samples, float* out) {
     const int ch = std::min(bed_channels, 8);
     const float inv = 1.0f / static_cast<float>(samples);
@@ -435,8 +468,8 @@ class SpeakerRenderer {
     std::fill(gains, gains + channels_, 0.0f);
     static const ReferenceChannel k71[8] = {
         ReferenceChannel::kFrontLeft, ReferenceChannel::kFrontRight, ReferenceChannel::kFrontCenter,
-        ReferenceChannel::kScreenLFE, ReferenceChannel::kSideLeft,   ReferenceChannel::kSideRight,
-        ReferenceChannel::kRearLeft,  ReferenceChannel::kRearRight};
+        ReferenceChannel::kScreenLFE, ReferenceChannel::kRearLeft,   ReferenceChannel::kRearRight,
+        ReferenceChannel::kSideLeft,  ReferenceChannel::kSideRight};
     if (c == 3 && bed_channels >= 4) { if (lfe_ >= 0) gains[lfe_] = 1.0f; return; }
     // A 5.1 bed's surrounds sit at +-110 degrees; a 7.1 bed's SL/SR are sides.
     const bool bed51 = bed_channels < 8;

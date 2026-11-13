@@ -77,7 +77,7 @@ void test_absolute_position() {
 
   CHECK(blk.valid_position());
   CHECK(!blk.is_bed());
-  CHECK_NEAR(blk.gain(), 0.707f, 1e-3f);          // 1.0 * 0.707 anti-clip
+  CHECK_NEAR(blk.gain(), 1.0f, 1e-3f);            // 0 dB, as coded
   CHECK_NEAR(blk.raw_position().x, 0.5f, 1e-3f);
   CHECK_NEAR(blk.raw_position().y, 0.5f, 1e-3f);
   CHECK_NEAR(blk.raw_position().z, 0.0f, 1e-3f);
@@ -103,7 +103,7 @@ void test_bed_object() {
   ObjectInfoBlock blk;
   blk.update(br, /*blk=*/0, /*bed_or_isf=*/true);
   CHECK(blk.is_bed());
-  CHECK_NEAR(blk.gain(), 0.0f, 1e-6f);  // gain_helper 1 -> 0 * 0.707
+  CHECK_NEAR(blk.gain(), 0.0f, 1e-6f);  // gain_helper 1 -> silent
 }
 
 }  // namespace

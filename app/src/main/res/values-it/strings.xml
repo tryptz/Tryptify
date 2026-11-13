@@ -1440,6 +1440,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d ch</string>
     <string name="atmos_binaural_on">Gli oggetti Atmos sono posizionati intorno alla tua testa tramite l\'HRTF sottostante.</string>
     <string name="atmos_binaural_off">Disattivato. I brani Atmos utilizzano il renderer di downmix a coefficienti.</string>
+    <string name="atmos_virtual_room">Stanza virtuale 15.1.12</string>
+    <string name="atmos_virtual_room_on">Oggetti e letti suonano da 27 altoparlanti virtuali e un LFE intorno a te, in una stanza. Si applicano dimensione degli oggetti, zone e blocco del canale.</string>
+    <string name="atmos_virtual_room_off">Disattivato. Ogni oggetto passa per l\'HRTF della propria direzione, senza stanza.</string>
+    <string name="atmos_room_amount">Stanza</string>
+    <string name="atmos_live_objects">Live: Dolby Atmos · %1$d oggetti su un core %2$s · %3$s. Ogni punto è un oggetto, dove lo colloca il mix.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s è stato RIFIUTATO dal caricatore SOFA. Il rendering utilizzerà l\'HRTF KEMAR integrato. Il file potrebbe essere corrotto, non supportato o non essere un SOFA.</string>
     <string name="atmos_sofa_loaded">Caricato: %1$s</string>
     <string name="atmos_sofa_selected">Selezionato: %1$s. Viene applicato all\'avvio/riavvio della riproduzione.</string>
@@ -3537,4 +3542,10 @@
     <string name="whats_new_1952_system_eq_tile_body">Un nuovo riquadro attiva e disattiva l’AutoEQ di sistema sopra qualsiasi app e mostra le cuffie che corregge. Aggiungilo in Impostazioni › Equalizzatore, sotto AutoEQ di sistema.</string>
     <string name="whats_new_1952_player_menu_title">Il menu del lettore è quello dei brani</string>
     <string name="whats_new_1952_player_menu_body">Il ⋮ del lettore ora apre lo stesso menu che un brano ha in ogni elenco, quindi ci sono anche i preferiti, le info del brano, Trypt Mania e la coda. Le azioni proprie del lettore (casuale, ripeti, testi, effetti visivi, impostazioni) sono alla fine.</string>
+    <string name="whats_new_1952_atmos_room_title">Atmos in cuffia: una stanza virtuale 15.1.12</string>
+    <string name="whats_new_1952_atmos_room_body">Con il rendering binaurale attivo, oggetti e letti Atmos ora suonano da 27 altoparlanti virtuali e un LFE intorno a te, in una stanza, con un limitatore al posto di un taglio fisso del livello. L\'interruttore e la quantità di stanza sono in Impostazioni › Audio › Configurazione del renderer Atmos.</string>
+    <string name="whats_new_1952_atmos_decode_title">I mix Atmos sono decodificati come sono stati mixati</string>
+    <string name="whats_new_1952_atmos_decode_body">Tre aggiornamenti degli oggetti su quattro andavano persi, così gli oggetti si muovevano in ritardo e si mescolavano tra loro. Ora ogni aggiornamento viene letto, i canali surround tornano in fase e il rendering sugli altoparlanti non è più 3 dB più basso.</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos mostra i suoi oggetti, non «6 ch»</string>
+    <string name="whats_new_1952_atmos_objects_body">Uno stream Atmos è un core 5.1 con gli oggetti al suo interno. Il pannello Catena audio e la pagina Configurazione del renderer Atmos ora contano gli oggetti e dicono se stanno suonando, e la mappa della stanza mostra ciascuno dove lo colloca il mix.</string>
 </resources>

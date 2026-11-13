@@ -4,10 +4,11 @@
 //
 // Validates the pieces that are deterministic without reference Atmos content:
 //  - Huffman tables + decode (encode a symbol via the table, decode it back)
-//  - coarse dequantization math (hand-computed)
+//  - dense and sparse dequantization (hand-computed, through real Huffman codes)
+//  - steep-slope rows and the surround pair's 90-degree turn
 //  - an end-to-end decode -> mixing matrices -> applier smoke run
-//  - the on-demand mixing rows against Cavern's precomputed per-timeslot
-//    matrices, bit for bit, over random payloads in every interpolation mode
+//  - the on-demand mixing rows against the same rows worked out as a table
+//    ahead of the frame, over random payloads in every interpolation mode
 //
 // Note: full numeric correctness of JOC needs A/B against reference content;
 // these tests prove the port is self-consistent and runs, not bit-exactness vs
@@ -25,13 +26,14 @@ namespace tf {
 namespace atmos {
 namespace cavern {
 
-// Cavern's GetMixingMatrices as the port first ran it: every object x
-// timeslot x channel row worked out ahead of the frame. Reads the decoder's
-// state; `from` is the matrix the frame starts from (Cavern's prev before it
-// is carried forward).
+// The frame's mixing matrices as a table, every object x timeslot x channel
+// row worked out ahead of the frame the way Cavern's GetMixingMatrices does,
+// with every decoded (parameter-band) matrix expanded to subbands. Reads the
+// decoder's state; `from` is the matrix the frame starts from (Cavern's prev
+// before it is carried forward).
 struct JointObjectCodingProbe {
   using Table = std::vector<std::vector<std::vector<float>>>;  // [ts][ch][sb]
-  static Table cavern_rows(const JointObjectCoding& j, int obj, int timeslots) {
+  static Table table_rows(const JointObjectCoding& j, int obj, int timeslots) {
     const int channels = j.channel_count_;
     constexpr int kSb = JointObjectCoding::kSubbands;
     Table rows(timeslots, std::vector<std::vector<float>>(channels, std::vector<float>(kSb, 0.0f)));
@@ -42,11 +44,15 @@ struct JointObjectCodingProbe {
     auto copy = [&](int ts, const std::vector<std::vector<float>>& src) {
       for (int ch = 0; ch < channels; ++ch) rows[ts][ch] = std::vector<float>(src[ch].begin(), src[ch].begin() + kSb);
     };
+    auto expand = [&](int ts, const std::vector<std::vector<float>>& src) {
+      for (int ch = 0; ch < channels; ++ch)
+        for (int sb = 0; sb < kSb; ++sb) rows[ts][ch][sb] = src[ch][pb_mapping[sb]];
+    };
     if (j.data_points_[obj] == 1) {
       if (j.steep_slope_[obj]) {
         const int split = j.timeslot_offsets_[obj][0];
         for (int ts = 0; ts < split && ts < timeslots; ++ts) copy(ts, prev);
-        for (int ts = split; ts < timeslots; ++ts) copy(ts, mix[ts < j.timeslot_offsets_[obj][1] ? 1 : 0]);
+        for (int ts = split; ts < timeslots; ++ts) expand(ts, mix[0]);
       } else {
         for (int ch = 0; ch < channels; ++ch) {
           const float* p = prev[ch].data();
@@ -59,9 +65,9 @@ struct JointObjectCodingProbe {
         }
       }
     } else if (j.steep_slope_[obj]) {
-      for (int ts = 0; ts < timeslots;) {
-        const int cur = ts++;
-        copy(cur, ts < j.timeslot_offsets_[obj][0] ? prev : mix[0]);
+      for (int ts = 0; ts < timeslots; ++ts) {
+        if (ts < j.timeslot_offsets_[obj][0]) copy(ts, prev);
+        else expand(ts, mix[ts < j.timeslot_offsets_[obj][1] ? 0 : 1]);
       }
     } else {
       const int ts_2 = timeslots >> 1;
@@ -75,7 +81,7 @@ struct JointObjectCodingProbe {
           if (first_half) {
             const float* cf = prev[ch].data();
             const float* ct = mix[0][ch].data();
-            for (int sb = 0; sb < kSb; ++sb) interp[sb] = cf[sb] + (ct[sb] - cf[sb]) * lerp;
+            for (int sb = 0; sb < kSb; ++sb) interp[sb] = cf[sb] + (ct[pb_mapping[sb]] - cf[sb]) * lerp;
           } else {
             const float* cf = mix[0][ch].data();
             const float* ct = mix[1][ch].data();
@@ -88,6 +94,18 @@ struct JointObjectCodingProbe {
       }
     }
     return rows;
+  }
+  // A decoded coefficient, in its parameter band.
+  static float band(const JointObjectCoding& j, int obj, int dp, int ch, int pb) {
+    return j.mix_matrix_[obj][dp][ch][pb];
+  }
+  // Makes object `obj` exactly channel `ch` for the frame in hand.
+  static void set_passes(JointObjectCoding& j, int obj, int ch) {
+    for (int c = 0; c < j.channel_count_; ++c) {
+      const float v = c == ch ? 1.0f : 0.0f;
+      for (float& x : j.from_matrix_[obj][c]) x = v;
+      for (float& x : j.mix_matrix_[obj][0][c]) x = v;
+    }
   }
 };
 
@@ -193,25 +211,214 @@ void test_pb_mapping() {
   CHECK(m1[0] == 0 && m1[2] == 0 && m1[3] == 1 && m1[13] == 1 && m1[14] == 2 && m1[63] == 2);
 }
 
-// The coarse-channel dequant recurrence is private; re-derive it here with the
-// exact same steps the port uses and assert the hand-computed result.
-void test_coarse_math() {
-  std::printf("coarse dequant recurrence\n");
-  // Mirror decode_coarse_channel for source {10,-5,3}, center 9.6, step .2.
-  const float center = 9.6f, step = 0.2f, max = 19.2f;
-  const int src[3] = {10, -5, 3};
-  float dest[3];
-  dest[0] = std::fmod(center + src[0] * step, max);
-  int i = 0, s = 0, b = 3;
-  while (--b != 0) {
-    float next = std::fmod(dest[i] + src[++s] * step, max);
-    dest[i] -= center;
-    dest[++i] = next;
+void put_symbol(BitWriter& bw, const int (*table)[2], int symbol) {
+  std::vector<int> bits;
+  const bool found = huff_path(table, symbol, bits);
+  CHECK(found);
+  for (int b : bits) bw.put_bit(b);
+}
+
+// One active object's header and info: `config` channels, fine or coarse.
+void put_object_header(BitWriter& bw, int config, int bands_index, bool sparse, bool fine, bool steep,
+                       int points, int offset0 = 0, int offset1 = 0, int sequence = 1) {
+  bw.put(3, config);
+  bw.put(6, 0);   // one object
+  bw.put(3, 0);   // joc_ext_config_idx
+  bw.put(3, 4);   // clip gain 1
+  bw.put(5, 0);
+  bw.put(10, sequence);
+  bw.put_bit(1);  // active
+  bw.put(3, bands_index);
+  bw.put_bit(sparse);
+  bw.put(1, fine ? 1 : 0);
+  bw.put_bit(steep);
+  bw.put(1, points - 1);
+  if (steep) {
+    bw.put(5, offset0 - 1);
+    if (points == 2) bw.put(5, offset1 - 1);
   }
-  dest[i] -= center;
-  CHECK_NEAR(dest[0], 2.0f, 1e-4f);
-  CHECK_NEAR(dest[1], 1.0f, 1e-4f);
-  CHECK_NEAR(dest[2], 1.6f, 1e-4f);
+}
+
+// Coefficients are steps along the bands on a ring of 96 (coarse) or 192
+// (fine) levels, the centre being zero gain.
+void test_dense_decode() {
+  std::printf("dense decode: whole-number ring, steps of 820/4096 and 820/8192\n");
+  const float coarse = 820.0f / 4096.0f, fine = 820.0f / 8192.0f;
+  {
+    BitWriter bw;
+    put_object_header(bw, 0, 1, false, false, false, 1);  // 5 channels, 3 bands, coarse
+    const auto* table = joc_tables::get_huff_code_table(0, HuffmanType::MTX);
+    // Channel 0: +10, then -5 (91 on the ring), then +3. Channel 1: straight
+    // to the bottom of the ring, 48 below the centre, and back up one.
+    const int symbols[5][3] = {{10, 91, 3}, {48, 1, 0}, {0, 0, 0}, {0, 0, 0}, {95, 95, 2}};
+    for (int ch = 0; ch < 5; ++ch) for (int pb = 0; pb < 3; ++pb) put_symbol(bw, table, symbols[ch][pb]);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    JointObjectCoding joc;
+    joc.decode(br);
+    CHECK(joc.valid());
+    joc.get_mixing_matrices(1536);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 0, 0), 10 * coarse, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 0, 1), 5 * coarse, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 0, 2), 8 * coarse, 1e-6f);
+    // The lowest level is -9.6, not +9.6 (which float modulo made of it).
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 1, 0), -48 * coarse, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 1, 1), -47 * coarse, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 2, 2), 0.0f, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 4, 0), -1 * coarse, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 4, 2), 0.0f, 1e-6f);
+  }
+  {
+    BitWriter bw;
+    put_object_header(bw, 0, 0, false, true, false, 1);  // 1 band, fine
+    const auto* table = joc_tables::get_huff_code_table(1, HuffmanType::MTX);
+    const int symbols[5] = {96, 191, 7, 0, 100};
+    for (int ch = 0; ch < 5; ++ch) put_symbol(bw, table, symbols[ch]);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    JointObjectCoding joc;
+    joc.decode(br);
+    joc.get_mixing_matrices(1536);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 0, 0), -96 * fine, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 1, 0), -1 * fine, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 2, 0), 7 * fine, 1e-6f);
+    CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, 4, 0), -92 * fine, 1e-6f);
+  }
+}
+
+// Sparse: one channel a band, chosen by a chain of its own; the coefficient's
+// chain runs on through a change of channel, from 50.
+void test_sparse_decode() {
+  std::printf("sparse decode: one channel a band\n");
+  const float coarse = 820.0f / 4096.0f;
+  BitWriter bw;
+  put_object_header(bw, 0, 1, true, false, false, 1);  // 5 channels, 3 bands, sparse
+  bw.put(3, 2);  // the first band's channel
+  const auto* idx = joc_tables::get_huff_code_table(5, HuffmanType::IDX);
+  put_symbol(bw, idx, 1);  // 2 -> 3
+  put_symbol(bw, idx, 4);  // 3 -> 2
+  const auto* vec = joc_tables::get_huff_code_table(0, HuffmanType::VEC);
+  put_symbol(bw, vec, 3);   // 50 -> 53
+  put_symbol(bw, vec, 10);  // 63
+  put_symbol(bw, vec, 94);  // 61
+  BitReader br(bw.bytes.data(), bw.bytes.size());
+  JointObjectCoding joc;
+  joc.decode(br);
+  CHECK(joc.valid());
+  joc.get_mixing_matrices(1536);
+  const int channel[3] = {2, 3, 2};
+  const int level[3] = {53 - 48, 63 - 48, 61 - 48};
+  for (int pb = 0; pb < 3; ++pb) {
+    for (int ch = 0; ch < 5; ++ch) {
+      const float want = ch == channel[pb] ? level[pb] * coarse : 0.0f;
+      CHECK_NEAR(JointObjectCodingProbe::band(joc, 0, 0, ch, pb), want, 1e-6f);
+    }
+  }
+  // And it is heard: the last timeslot's row is the decoded matrix.
+  float scratch[JointObjectCoding::kSubbands];
+  const float* row = joc.mixing_row(0, 23, 2, scratch);
+  CHECK_NEAR(row[0], 5 * coarse, 1e-5f);
+}
+
+// A steep object switches to its decoded matrix in every subband, not only
+// in the first few (as many as it has parameter bands).
+void test_steep_rows() {
+  std::printf("steep slope: the decoded matrix in every subband\n");
+  const float coarse = 820.0f / 4096.0f;
+  const auto* table = joc_tables::get_huff_code_table(0, HuffmanType::MTX);
+  float scratch[JointObjectCoding::kSubbands];
+  {
+    BitWriter bw;
+    put_object_header(bw, 0, 5, false, false, true, 1, /*offset0=*/7);  // 12 bands
+    for (int ch = 0; ch < 5; ++ch) for (int pb = 0; pb < 12; ++pb) put_symbol(bw, table, pb == 0 ? 4 + ch : 1);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    JointObjectCoding joc;
+    joc.decode(br);
+    CHECK(joc.valid());
+    joc.get_mixing_matrices(1536);
+    const int* pb_mapping = joc_tables::pb_mapping(5);
+    for (int ch = 0; ch < 5; ++ch) {
+      // Before the offset: where the frame started (a seek's first frame
+      // starts on its own matrix, so both sides are the decoded one here).
+      const float* after = joc.mixing_row(0, 7, ch, scratch);
+      for (int sb = 0; sb < JointObjectCoding::kSubbands; ++sb) {
+        CHECK_NEAR(after[sb], (4 + ch + pb_mapping[sb]) * coarse, 1e-5f);
+      }
+      CHECK(after[63] != 0.0f);  // the top of the band is there
+    }
+  }
+  {
+    // Two data points, each from its own offset.
+    BitWriter bw;
+    put_object_header(bw, 0, 0, false, false, true, 2, /*offset0=*/4, /*offset1=*/15, /*sequence=*/0);
+    for (int dp = 0; dp < 2; ++dp) for (int ch = 0; ch < 5; ++ch) put_symbol(bw, table, dp == 0 ? 10 : 20);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    JointObjectCoding joc;
+    joc.decode(br);
+    joc.get_mixing_matrices(1536);
+    // A stream's first frame (sequence 0) starts from nothing.
+    CHECK_NEAR(joc.mixing_row(0, 3, 0, scratch)[30], 0.0f, 1e-6f);
+    CHECK_NEAR(joc.mixing_row(0, 4, 0, scratch)[30], 10 * coarse, 1e-5f);
+    CHECK_NEAR(joc.mixing_row(0, 14, 0, scratch)[30], 10 * coarse, 1e-5f);
+    CHECK_NEAR(joc.mixing_row(0, 15, 0, scratch)[30], 20 * coarse, 1e-5f);
+    CHECK_NEAR(joc.mixing_row(0, 23, 0, scratch)[30], 20 * coarse, 1e-5f);
+  }
+}
+
+// Downmix configurations 3 and 4 carry the surrounds turned 90 degrees; the
+// objects are made from them turned back.
+void test_surround_phase() {
+  std::printf("surround pair turned back 90 degrees for configurations 3 and 4\n");
+  const int samples = 1536 * 4;
+  const double w = 2.0 * 3.14159265358979 * 1000.0 / 48000.0;
+  auto run = [&](int config, int channel, double& in_phase, double& quadrature) {
+    BitWriter bw;
+    put_object_header(bw, config, 0, false, false, false, 1);
+    const auto* table = joc_tables::get_huff_code_table(0, HuffmanType::MTX);
+    const int channels = (config == 0 || config == 3) ? 5 : 7;
+    for (int ch = 0; ch < channels; ++ch) put_symbol(bw, table, 0);
+    BitReader br(bw.bytes.data(), bw.bytes.size());
+    JointObjectCoding joc;
+    joc.decode(br);
+    CHECK(joc.valid());
+    CHECK(joc.surround_phase_shift() == (config >= 3));
+    JointObjectCodingApplier applier(joc);
+    std::vector<std::vector<float>> input(channels, std::vector<float>(64, 0.0f));
+    std::vector<float> out(samples);
+    for (int ts = 0; ts < samples / 64; ++ts) {
+      if (ts % 24 == 0) {
+        joc.get_mixing_matrices(1536);
+        JointObjectCodingProbe::set_passes(joc, 0, channel);
+      }
+      for (int i = 0; i < 64; ++i) input[channel][i] = static_cast<float>(std::sin(w * (ts * 64 + i)));
+      const auto& o = applier.apply(input, joc, ts % 24);
+      for (int i = 0; i < 64; ++i) out[ts * 64 + i] = o[0][i];
+    }
+    // Against the input 577 samples late (the filter bank's delay), and
+    // against that a quarter turn behind.
+    in_phase = quadrature = 0.0;
+    double power = 0.0;
+    for (int n = 2048; n < samples; ++n) {
+      in_phase += out[n] * std::sin(w * (n - 577));
+      quadrature += out[n] * -std::cos(w * (n - 577));
+      power += out[n] * out[n];
+    }
+    in_phase /= power;
+    quadrature /= power;
+  };
+  double same, turned;
+  run(0, 3, same, turned);   // plain 5.x: Ls as it comes
+  CHECK_NEAR(static_cast<float>(same), 1.0f, 0.02f);
+  CHECK_NEAR(static_cast<float>(turned), 0.0f, 0.02f);
+  run(3, 3, same, turned);   // 5.x with the phase shift: Ls a quarter turn back
+  CHECK_NEAR(static_cast<float>(same), 0.0f, 0.02f);
+  CHECK_NEAR(static_cast<float>(turned), 1.0f, 0.02f);
+  run(3, 4, same, turned);   // and Rs
+  CHECK_NEAR(static_cast<float>(turned), 1.0f, 0.02f);
+  run(3, 0, same, turned);   // the fronts are left alone
+  CHECK_NEAR(static_cast<float>(same), 1.0f, 0.02f);
+  run(4, 3, same, turned);   // 5.x+2 with the phase shift
+  CHECK_NEAR(static_cast<float>(turned), 1.0f, 0.02f);
+  run(4, 5, same, turned);   // its height pair is left alone
+  CHECK_NEAR(static_cast<float>(same), 1.0f, 0.02f);
 }
 
 void test_end_to_end() {
@@ -274,7 +481,7 @@ void random_payload(JointObjectCoding& joc, uint32_t& seed, int objects) {
   bw.put(3, 0);
   bw.put(3, 4);
   bw.put(5, rnd(32));
-  bw.put(10, 0);
+  bw.put(10, 1 + rnd(1023));
   for (int o = 0; o < objects; ++o) {
     const bool active = rnd(8) != 0;
     bw.put_bit(active);
@@ -293,8 +500,8 @@ void random_payload(JointObjectCoding& joc, uint32_t& seed, int objects) {
   joc.decode(br);
 }
 
-void test_rows_match_cavern() {
-  std::printf("mixing rows on demand == Cavern's precomputed matrices\n");
+void test_rows_match_table() {
+  std::printf("mixing rows on demand == the table worked out ahead of the frame\n");
   JointObjectCoding joc;
   uint32_t seed = 7;
   float scratch[JointObjectCoding::kSubbands];
@@ -309,7 +516,7 @@ void test_rows_match_cavern() {
     const int timeslots = frame_size / JointObjectCoding::kSubbands;
     joc.get_mixing_matrices(frame_size);
     for (int obj = 0; obj < joc.object_count(); ++obj) {
-      const auto rows = JointObjectCodingProbe::cavern_rows(joc, obj, timeslots);
+      const auto rows = JointObjectCodingProbe::table_rows(joc, obj, timeslots);
       for (int ts = 0; ts < timeslots; ++ts) {
         for (int ch = 0; ch < joc.channel_count(); ++ch) {
           const float* got = joc.mixing_row(obj, ts, ch, scratch);
@@ -338,9 +545,12 @@ int main() {
   std::printf("=== Cavern JOC tests ===\n");
   test_huffman();
   test_pb_mapping();
-  test_coarse_math();
+  test_dense_decode();
+  test_sparse_decode();
+  test_steep_rows();
+  test_surround_phase();
   test_end_to_end();
-  test_rows_match_cavern();
+  test_rows_match_table();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }

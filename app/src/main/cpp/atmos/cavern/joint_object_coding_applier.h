@@ -56,6 +56,12 @@ class JointObjectCodingApplier {
     object_out_.assign(objects, std::vector<float>(kSubbands, 0.0f));
   }
 
+  // Empties every filter bank's delay lines (a seek): without it the first
+  // 12 ms after one came out of audio from before it. Allocation-free.
+  void reset() {
+    for (QuadratureMirrorFilterBank& c : converters_) c.reset();
+  }
+
   JointObjectCodingApplier(const JointObjectCodingApplier&) = delete;
   JointObjectCodingApplier& operator=(const JointObjectCodingApplier&) = delete;
 
@@ -68,10 +74,26 @@ class JointObjectCodingApplier {
     const float gain = joc.gain();
 
     // Forward transform every input channel, copying the result out.
+    //
+    // Deviation from Cavern (which has only a placeholder for it): downmix
+    // configurations 3 and 4 carry the surround pair turned 90 degrees, as
+    // Dolby's encoders do for a matrix-compatible core, and the mixing
+    // matrices are for the pair turned back. Channels 3 and 4 are Ls and Rs;
+    // every subband times -j. Measured on a real stream, the objects rendered
+    // to 5.1 then follow the stream's own 5.1 at 0.92 where they were at 0.60
+    // (README, "Real-content reference check").
+    const bool turn = joc.surround_phase_shift() && channels >= 5;
     for (int ch = 0; ch < channels; ++ch) {
       converters_[ch].process_forward(input[ch].data());
       const float* re = converters_[ch].out_real();
       const float* im = converters_[ch].out_imaginary();
+      if (turn && (ch == 3 || ch == 4)) {
+        for (int sb = 0; sb < kSubbands; ++sb) {
+          result_real_[ch][sb] = im[sb];
+          result_imag_[ch][sb] = -re[sb];
+        }
+        continue;
+      }
       for (int sb = 0; sb < kSubbands; ++sb) {
         result_real_[ch][sb] = re[sb];
         result_imag_[ch][sb] = im[sb];

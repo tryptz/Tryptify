@@ -9,7 +9,7 @@ Checks, and exits non-zero when one fails:
      and front/back balance (catches audio/metadata misalignment and decode bugs);
   2. each 5.1 speaker of our render tracks the same speaker of the core;
   3. the distribution of energy across the speakers matches window by window.
-Levels are reported, not checked: the port applies Cavern's 3 dB anti-clip trim.
+Levels are checked too: every speaker within 1.5 dB of the core's.
 """
 import array, collections, csv, math, sys
 
@@ -66,6 +66,7 @@ for c, name in enumerate(['L', 'R', 'C', 'LFE', 'Ls', 'Rs']):
     k = corr(r, o)
     print(f"speaker {name:>3}: corr {k:+.3f}   level {lvl:+.1f} dB vs core")
     if k < 0.85: failures.append(f"speaker {name} does not track the core")
+    if abs(lvl) > 1.5: failures.append(f"speaker {name} is {lvl:+.1f} dB off the core's level")
 sims = []
 for rw, ow in zip(R, O):
     a = [rw[c] ** 2 for c in (0, 1, 2, 4, 5)]; b = [ow[c] ** 2 for c in (0, 1, 2, 4, 5)]

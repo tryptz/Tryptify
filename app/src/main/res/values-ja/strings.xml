@@ -1356,6 +1356,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d ch</string>
     <string name="atmos_binaural_on">下の HRTF を使って、Atmos のオブジェクトを頭のまわりに配置します。</string>
     <string name="atmos_binaural_off">オフ。Atmos の曲は係数ダウンミックスのレンダラーを使います。</string>
+    <string name="atmos_virtual_room">15.1.12 バーチャルルーム</string>
+    <string name="atmos_virtual_room_on">オブジェクトとベッドは、あなたを囲む 27 個のバーチャルスピーカーと LFE から、部屋の響きとともに再生されます。オブジェクトのサイズ、ゾーン、チャンネルロックが反映されます。</string>
+    <string name="atmos_virtual_room_off">オフ。各オブジェクトはその方向の HRTF を通り、部屋の響きはありません。</string>
+    <string name="atmos_room_amount">部屋の響き</string>
+    <string name="atmos_live_objects">ライブ：Dolby Atmos · %2$s コア上の %1$d オブジェクト · %3$s。各ドットはオブジェクトで、ミックスが置いた位置にあります。</string>
     <string name="atmos_sofa_rejected">⚠ %1$s は SOFA ローダーに拒否されました。代わりに内蔵の KEMAR HRTF でレンダリングしています。ファイルが途中で切れているか、未対応か、SOFA ではない可能性があります。</string>
     <string name="atmos_sofa_loaded">読み込み済み：%1$s</string>
     <string name="atmos_sofa_selected">選択済み：%1$s。再生を（再）開始すると適用されます。</string>
@@ -3381,4 +3386,10 @@
     <string name="whats_new_1952_system_eq_tile_body">新しいタイルで、どのアプリの上からでもシステム全体の AutoEQ をオン・オフでき、補正中のヘッドホンも表示されます。「設定 › イコライザ」の「システム全体の AutoEQ」の下から追加できます。</string>
     <string name="whats_new_1952_player_menu_title">プレーヤーのメニューが曲のメニューに</string>
     <string name="whats_new_1952_player_menu_body">プレーヤーの ⋮ で、どのリストの曲にもあるのと同じメニューが開くようになりました。お気に入り、曲情報、Trypt Mania、キューもここから使えます。プレーヤー独自の操作（シャッフル、リピート、歌詞、ビジュアル、設定）は末尾にあります。</string>
+    <string name="whats_new_1952_atmos_room_title">ヘッドホンでの Atmos：15.1.12 バーチャルルーム</string>
+    <string name="whats_new_1952_atmos_room_body">バイノーラルレンダリングをオンにすると、Atmos のオブジェクトとベッドが、あなたを囲む 27 個のバーチャルスピーカーと LFE から部屋の響きとともに再生され、固定の音量カットの代わりにリミッターが働きます。スイッチと部屋の響きの量は「設定 › オーディオ › Atmos レンダラーの設定」にあります。</string>
+    <string name="whats_new_1952_atmos_decode_title">Atmos ミックスをミックスされた通りにデコード</string>
+    <string name="whats_new_1952_atmos_decode_body">これまでストリームのオブジェクト更新の 4 分の 3 が見落とされ、オブジェクトの動きが遅れ、互いににじんでいました。すべての更新を読み取るようになり、サラウンドチャンネルの位相を戻し、スピーカーレンダリングが 3 dB 小さくなることもなくなりました。</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos は「6 ch」ではなくオブジェクトを表示</string>
+    <string name="whats_new_1952_atmos_objects_body">Atmos ストリームは、オブジェクトを内包した 5.1 コアです。オーディオパイプラインのシートとAtmos レンダラーの設定のページがオブジェクトを数え、再生されているかどうかを示すようになり、ルームマップには各オブジェクトがミックスの置いた位置に表示されます。</string>
 </resources>

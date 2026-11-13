@@ -39,25 +39,21 @@ class ObjectEngine {
                   int bed_channels, int frame_samples) {
     BitReader reader(frame, frame_size);
     emdf_.decode(reader);
-    // JOC/OAMD are transmitted sparsely and are defined to hold until the next
-    // update: about a quarter of the frames of moving music carry a payload,
-    // and static content far fewer — Dolby's 7.1.4 channel-check tones carry
-    // one in 2% of frames, with gaps of up to 20 s. The EMDF decoder overwrites
-    // joc_/oamd_ only when a payload is actually present, so a frame without
-    // one still has the previous frame's matrices and positions, and re-running
-    // the interpolation below holds them steady (prev_matrix_ already equals
-    // the decoded endpoint, so the lerp collapses to a constant).
+    // Every frame of a JOC stream carries a payload, and the EMDF decoder
+    // overwrites joc_/oamd_ only when it reads one. A frame whose container
+    // cannot be read (or for which the caller had no raw frame) therefore
+    // still has the last one's matrices and positions, and re-running the
+    // interpolation below holds them steady (prev_matrix_ already equals the
+    // decoded endpoint, so the lerp collapses to a constant).
     //
-    // Returning -1 for those frames instead makes the caller fall back to its
-    // bed render or downmix. Every 32 ms that is audible as chopping (what
-    // "micro-stutter" turned out to be); for seconds at a time it drops every
-    // height and rear object onto the 5.1 bed's speakers.
+    // Returning -1 for such a frame instead makes the caller fall back to its
+    // bed render or downmix: audible as chopping every 32 ms.
     //
     // How long to hold is decided by the syncframe header, not a timer: the
-    // encoder flags every frame of a JOC stream as Atmos in addbsi, payload or
-    // not. A frame flagged as not Atmos (a gapless change into plain E-AC-3)
-    // ends the hold at once; a frame whose header can't be read (the caller
-    // had no raw frame for this chunk) counts toward kMaxHeldFrames.
+    // encoder flags every frame of a JOC stream as Atmos in addbsi. A frame
+    // flagged as not Atmos (a gapless change into plain E-AC-3) ends the hold
+    // at once; a frame whose header can't be read counts toward
+    // kMaxHeldFrames.
     if (emdf_.has_objects()) {
       held_frames_ = 0;
     } else if (held_frames_ < kMaxHeldFrames) {
@@ -95,12 +91,23 @@ class ObjectEngine {
     const int timeslots = frame_samples / kTimeslot;
     // JOC's input channels are FL FR FC SL SR [RL RR] (Cavern's
     // JointObjectCodingTables.inputMatrix) — no LFE. The decoded bed is in
-    // decoder order FL FR FC LFE SL SR [BL BR], so for a bed that carries an
-    // LFE (4+ channels) JOC channel ch reads decoder channel ch, skipping index
-    // 3. Feeding the bed straight through (as this did) handed JOC the LFE as
-    // its left surround and the left surround as its right surround.
+    // decoder order, FL FR FC LFE SL SR for a 5.1 core, so for a bed that
+    // carries an LFE (4+ channels) JOC channel ch reads decoder channel ch,
+    // skipping index 3. Feeding the bed straight through (as this did) handed
+    // JOC the LFE as its left surround and the left surround as its right
+    // surround.
+    //
+    // A 7.1 core (joc_dmx_config_idx 1) comes out of the decoder as FL FR FC
+    // LFE BL BR SL SR, the rears before the sides (FFmpeg's order, and
+    // Android's; ChannelDetectorProcessor has the same table), where JOC
+    // wants the sides first: its two pairs are crossed over.
     const bool bed_has_lfe = bed_channels >= 4;
-    auto bed_index = [&](int ch) { return (bed_has_lfe && ch >= 3) ? ch + 1 : ch; };
+    const bool rears_first = joc.downmix_config() == 1 && bed_channels >= 8;
+    auto bed_index = [&](int ch) {
+      if (!bed_has_lfe || ch < 3) return ch;
+      if (rears_first) return ch < 5 ? ch + 3 : ch - 1;  // 3,4 <- 6,7 and 5,6 <- 4,5
+      return ch + 1;
+    };
 
     ensure_capacity(joc, channels, objects, frame_samples);
     joc.get_mixing_matrices(frame_samples);
@@ -131,7 +138,11 @@ class ObjectEngine {
     // Cavern's EnhancedAC3Renderer, splice the bed LFE in at OAMD's LFE slot so
     // object index o means OAMD object o everywhere downstream. It is delayed
     // by the QMF round trip so it stays aligned with the JOC objects.
-    const int lfe = emdf_.oamd().valid() ? emdf_.oamd().get_lfe_position() : -1;
+    // An OAMD frame that fails to decode keeps the slot of the last one that
+    // did: without it every object moved down one for that frame (the centre
+    // voice played from the left) and the LFE dropped out.
+    if (emdf_.oamd().valid()) known_lfe_ = emdf_.oamd().get_lfe_position();
+    const int lfe = known_lfe_;
     lfe_slot_ = (lfe >= 0 && lfe <= objects && bed_has_lfe) ? lfe : -1;
     if (lfe_slot_ >= 0) {
       if (static_cast<int>(lfe_pcm_.size()) != frame_samples) lfe_pcm_.assign(frame_samples, 0.0f);
@@ -164,7 +175,7 @@ class ObjectEngine {
 
   // OAMD gain of object `obj`: the resolved state after the last frame's final
   // info block (ObjectAudioMetadata::resolve — hold, gain_idx 3 and inactive
-  // rules applied), including Cavern's 3 dB anti-clip attenuation. Returns a
+  // rules applied), as coded. Returns a
   // negative value ("hold the previous gain") only when no OAMD state exists
   // for the object yet; the caller keeps the last applied gain and ramps.
   float object_gain(int obj) const {
@@ -210,6 +221,10 @@ class ObjectEngine {
     std::fill(lfe_delay_.begin(), lfe_delay_.end(), 0.0f);
     lfe_delay_idx_ = 0;
     held_frames_ = kMaxHeldFrames;
+    // Neither the matrix the next frame ramps from nor what is still inside
+    // the filter banks belongs to where playback goes on.
+    emdf_.joc().reset_history();
+    if (applier_) applier_->reset();
   }
 
   // Render-space position of object `obj` (x = left..right, y = down..up,
@@ -268,6 +283,7 @@ class ObjectEngine {
   int object_count_ = 0;
   int joc_objects_ = 0;
   int lfe_slot_ = -1;                 // OAMD index of the spliced bed LFE, or -1
+  int known_lfe_ = -1;                // the last valid OAMD frame's LFE position
   std::vector<float> lfe_pcm_;        // [frame_samples], delayed bed LFE
   std::vector<float> lfe_delay_;      // [kQmfLatency] ring
   int lfe_delay_idx_ = 0;

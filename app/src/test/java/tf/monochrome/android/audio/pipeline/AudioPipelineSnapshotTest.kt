@@ -401,6 +401,38 @@ class AudioPipelineSnapshotTest {
     }
 
     @Test
+    fun `an Atmos stream is its core and its objects, not six channels`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48_000, channelCount = 6, layoutName = "5.1", isFloat = true),
+                atmos = AtmosStage.OBJECTS_ROOM,
+                atmosObjects = 16,
+            )
+        )
+        assertEquals("6 (5.1 core) + 16 Atmos objects", snapshot.field(PipelineStage.TRACK, "Channels").display)
+        assertEquals(
+            "Objects on 15.1.12 virtual speakers, binaural",
+            snapshot.field(PipelineStage.DSP, "Atmos").display,
+        )
+    }
+
+    @Test
+    fun `plain 5_1 and an Atmos stream whose bed is playing stay plain`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48_000, channelCount = 6, layoutName = "5.1", isFloat = true),
+                atmos = AtmosStage.BED_ROOM,
+                atmosObjects = 0,
+            )
+        )
+        assertEquals("6 (5.1)", snapshot.field(PipelineStage.TRACK, "Channels").display)
+        assertEquals(
+            "Bed on 15.1.12 virtual speakers (no Atmos objects)",
+            snapshot.field(PipelineStage.DSP, "Atmos").display,
+        )
+    }
+
+    @Test
     fun `a stereo track has no Atmos row at all`() {
         val snapshot = buildAudioPipelineSnapshot(
             AudioPipelineInputs(

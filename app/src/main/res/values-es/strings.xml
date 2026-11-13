@@ -1440,6 +1440,11 @@
     <string name="atmos_layout_option">%1$s  ·  %2$d canales</string>
     <string name="atmos_binaural_on">Los objetos Atmos se colocan alrededor de tu cabeza mediante la HRTF de abajo.</string>
     <string name="atmos_binaural_off">Desactivado. Las canciones Atmos usan el renderizador de downmix por coeficientes.</string>
+    <string name="atmos_virtual_room">Sala virtual 15.1.12</string>
+    <string name="atmos_virtual_room_on">Los objetos y las camas suenan desde 27 altavoces virtuales y un LFE a tu alrededor, en una sala. Se aplican el tamaño de los objetos, las zonas y el bloqueo de canal.</string>
+    <string name="atmos_virtual_room_off">Desactivado. Cada objeto pasa por la HRTF de su propia dirección, sin sala.</string>
+    <string name="atmos_room_amount">Sala</string>
+    <string name="atmos_live_objects">En directo: Dolby Atmos · %1$d objetos sobre un núcleo %2$s · %3$s. Cada punto es un objeto, donde lo coloca la mezcla.</string>
     <string name="atmos_sofa_rejected">⚠ El cargador SOFA RECHAZÓ %1$s. El renderizado usa en su lugar la HRTF KEMAR integrada. Puede que el archivo esté truncado, no sea compatible o no sea SOFA.</string>
     <string name="atmos_sofa_loaded">Cargado: %1$s</string>
     <string name="atmos_sofa_selected">Seleccionado: %1$s. Se aplica cuando la reproducción (re)comienza.</string>
@@ -3537,4 +3542,10 @@
     <string name="whats_new_1952_system_eq_tile_body">Un nuevo recuadro activa o desactiva el AutoEQ en todo el sistema desde cualquier app y muestra los auriculares que corrige. Añádelo en Ajustes › Ecualizador, debajo de AutoEQ en todo el sistema.</string>
     <string name="whats_new_1952_player_menu_title">El menú del reproductor es el de las canciones</string>
     <string name="whats_new_1952_player_menu_body">El ⋮ del reproductor abre ahora el mismo menú que tiene una canción en cualquier lista, así que también están los favoritos, la información de la canción, Trypt Mania y la cola. Las acciones propias del reproductor (aleatorio, repetición, letras, visuales, ajustes) van al final.</string>
+    <string name="whats_new_1952_atmos_room_title">Atmos con auriculares: una sala virtual 15.1.12</string>
+    <string name="whats_new_1952_atmos_room_body">Con el renderizado binaural activado, los objetos y las camas Atmos suenan ahora desde 27 altavoces virtuales y un LFE a tu alrededor, en una sala, con un limitador en lugar de un recorte fijo de nivel. El interruptor y la cantidad de sala están en Ajustes › Audio › Configuración del renderizador Atmos.</string>
+    <string name="whats_new_1952_atmos_decode_title">Las mezclas Atmos se decodifican tal como se mezclaron</string>
+    <string name="whats_new_1952_atmos_decode_body">Se perdían tres de cada cuatro actualizaciones de objetos de una transmisión, por lo que los objetos se movían tarde y se mezclaban entre sí. Ahora se lee cada actualización, los canales envolventes vuelven a su fase y el renderizado en altavoces ya no suena 3 dB más bajo.</string>
+    <string name="whats_new_1952_atmos_objects_title">Atmos muestra sus objetos, no «6 ch»</string>
+    <string name="whats_new_1952_atmos_objects_body">Una transmisión Atmos es un núcleo 5.1 con los objetos dentro. El panel Cadena de audio y la página Configuración del renderizador Atmos ahora cuentan los objetos y dicen si están sonando, y el mapa de la sala muestra cada uno donde lo coloca la mezcla.</string>
 </resources>

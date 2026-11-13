@@ -148,6 +148,18 @@ class BinauralRenderer {
     return set_slot(active_rt_.load(std::memory_order_acquire)) >= 0;
   }
 
+  // The loaded set, for another renderer to build its filters from
+  // (render/virtual_room.h); false when the baked table is in use. Loader
+  // thread only: it is the one thread that writes the sets, and never the one
+  // published.
+  bool runtime_hrir(const std::vector<float>*& data, const std::vector<float>*& delay) const {
+    const int slot = set_slot(active_rt_.load(std::memory_order_acquire));
+    if (slot < 0) return false;
+    data = &rt_data_[slot];
+    delay = &rt_delay_[slot];
+    return true;
+  }
+
   void render(const float* const* objects, const float* obj_az, const float* obj_el,
               int num_objects, const float* const* bed, const float* bed_az,
               const float* bed_el, int bed_channels, int n, float* out) {

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.onEach
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.ChannelLayout
@@ -79,11 +80,37 @@ class AtmosAudioProcessor @Inject constructor(
 
     /** What the last frames of a multichannel stream actually got. */
     enum class Outcome {
-        /** JOC objects reconstructed and rendered to binaural stereo. */
+        /** JOC objects reconstructed, each through the HRTF of its own direction. */
         OBJECTS_BINAURAL,
 
-        /** No objects to render (plain multichannel, or no raw frame): the bed folded to stereo. */
+        /** JOC objects panned onto the 15.1.12 virtual room, its speakers to the ears. */
+        OBJECTS_ROOM,
+
+        /** JOC objects panned onto the output's own speakers. */
+        OBJECTS_SPEAKERS,
+
+        /** No objects (plain multichannel, or none yet): the bed on the virtual room. */
+        BED_ROOM,
+
+        /** No objects: the bed on the output's speakers. */
+        BED_SPEAKERS,
+
+        /** No objects to render, or the HRTF is off: the bed folded to stereo. */
         BED_FOLDED,
+    }
+
+    /**
+     * The objects of the frames being played, for the Atmos page's map: for
+     * each of [count], [AtmosNative.OBJECT_METER_FIELDS] floats in [fields]
+     * (see [AtmosNative.nativeObjectMeter]; the level is a decaying peak).
+     */
+    class ObjectMeter(val count: Int, val fields: FloatArray) {
+        fun x(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS]
+        fun y(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 1]
+        fun z(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 2]
+        fun level(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 3]
+        fun isBed(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 1f
+        fun isLfe(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 2f
     }
 
     /**
@@ -105,6 +132,88 @@ class AtmosAudioProcessor @Inject constructor(
         if (outcome == lastOutcome) return
         lastOutcome = outcome
         _outcome.value = outcome
+    }
+
+    /**
+     * How many objects the stream's frames are rendering (the LFE counted),
+     * 0 when it is the bed that plays. Published when it changes.
+     */
+    private val _objectCount = MutableStateFlow(0)
+    val objectCount: StateFlow<Int> = _objectCount.asStateFlow()
+    private var lastObjectCount = 0
+
+    private fun noteObjects(count: Int) {
+        if (count == lastObjectCount) return
+        lastObjectCount = count
+        _objectCount.value = count
+    }
+
+    // The object meter, read only while something shows it (the Atmos page).
+    // The audio thread writes positions and holds each object's peak in
+    // meterFields; a publisher reads them ten times a second and lets the
+    // peaks fall. The unguarded float races are harmless for a meter.
+    private val meterSubscribers = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile private var meterOn = false
+    private val meterScratch = FloatArray(MAX_OBJECTS * AtmosNative.OBJECT_METER_FIELDS)
+    private val meterFields = FloatArray(MAX_OBJECTS * AtmosNative.OBJECT_METER_FIELDS)
+    @Volatile private var meterCount = 0
+    private var meterJob: kotlinx.coroutines.Job? = null
+    private val _objects = MutableStateFlow<ObjectMeter?>(null)
+
+    /** The objects being rendered, while [acquireObjectMeter] is held; null when none are. */
+    val objects: StateFlow<ObjectMeter?> = _objects.asStateFlow()
+
+    /** Pair each call with one [releaseObjectMeter]. */
+    fun acquireObjectMeter() {
+        if (meterSubscribers.incrementAndGet() != 1) return
+        synchronized(meterSubscribers) {
+            meterOn = true
+            meterJob?.cancel()
+            meterJob = scope.launch {
+                while (true) {
+                    val count = meterCount
+                    _objects.value = if (count > 0) {
+                        ObjectMeter(count, meterFields.copyOf(count * AtmosNative.OBJECT_METER_FIELDS))
+                    } else {
+                        null
+                    }
+                    // About 14 dB a second, as the channel meter falls.
+                    for (i in 0 until count) {
+                        meterFields[i * AtmosNative.OBJECT_METER_FIELDS + 3] *= 0.72f
+                    }
+                    kotlinx.coroutines.delay(100)
+                }
+            }
+        }
+    }
+
+    fun releaseObjectMeter() {
+        if (meterSubscribers.updateAndGet { (it - 1).coerceAtLeast(0) } != 0) return
+        synchronized(meterSubscribers) {
+            if (meterSubscribers.get() != 0) return
+            meterOn = false
+            meterJob?.cancel()
+            meterJob = null
+            _objects.value = null
+        }
+    }
+
+    /** Audio thread, after a frame: what it rendered, and the meter if it is on. */
+    private fun noteFrame(objects: Int) {
+        noteObjects(objects)
+        if (!meterOn) return
+        if (objects <= 0 || pipeline == 0L) { meterCount = 0; return }
+        val count = AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS)
+        val n = AtmosNative.OBJECT_METER_FIELDS
+        for (i in 0 until count) {
+            val at = i * n
+            meterFields[at] = meterScratch[at]
+            meterFields[at + 1] = meterScratch[at + 1]
+            meterFields[at + 2] = meterScratch[at + 2]
+            if (i >= meterCount || meterScratch[at + 3] > meterFields[at + 3]) meterFields[at + 3] = meterScratch[at + 3]
+            meterFields[at + 4] = meterScratch[at + 4]
+        }
+        meterCount = count
     }
 
     init {
@@ -177,6 +286,8 @@ class AtmosAudioProcessor @Inject constructor(
         } else {
             cur.mode
         }
+        // The room first: the render params below hand it the strength as well.
+        AtmosNative.nativeSetVirtualRoom(p, cur.virtualRoom, cur.roomAmount)
         AtmosNative.nativeSetRenderParams(
             p,
             mode.ordinal,
@@ -200,7 +311,7 @@ class AtmosAudioProcessor @Inject constructor(
                     !cur.hrtfEnabled -> "off (AutoEQ only)"
                     sofaBytes != null -> "custom"
                     else -> "built-in"
-                }}",
+                }} room=${if (cur.virtualRoom) "15.1.12 @ ${cur.roomAmount}" else "off"}",
         )
     }
 
@@ -313,10 +424,22 @@ class AtmosAudioProcessor @Inject constructor(
             val rc = if (pipeline != 0L) {
                 AtmosNative.nativeProcessFrame(pipeline, raw, frameScratch, channels, FRAME_SAMPLES, stereo)
             } else -1
-            noteOutcome(if (rc == 1) Outcome.OBJECTS_BINAURAL else Outcome.BED_FOLDED)
+            // The native side answers 1 for its bed fallback too (a stream
+            // with no JOC, or none yet): only its object count says which it
+            // was. This used to report "objects rendered" for both.
+            val objects = if (rc == 1) AtmosNative.nativeLastObjectCount(pipeline) else 0
+            val room = profile.virtualRoom
+            noteOutcome(
+                when {
+                    rc != 1 -> Outcome.BED_FOLDED
+                    objects > 0 -> if (room) Outcome.OBJECTS_ROOM else Outcome.OBJECTS_BINAURAL
+                    else -> if (room) Outcome.BED_ROOM else Outcome.BED_FOLDED
+                }
+            )
+            noteFrame(objects)
             if (rc == 1) {
                 if (renderedFrames == 0L) {
-                    android.util.Log.i(TAG, "Atmos render ACTIVE — objects binauralized (${channels}ch bed)")
+                    android.util.Log.i(TAG, "Atmos render ACTIVE (${channels}ch bed, $objects objects)")
                 }
                 renderedFrames++
             } else {
@@ -358,7 +481,11 @@ class AtmosAudioProcessor @Inject constructor(
     override fun flush() {
         // Out of the chain for this stream (stereo, Direct mode, no
         // renderer): nothing to report until frames say otherwise.
-        if (pendingFormat == AudioFormat.NOT_SET && inputFormat == AudioFormat.NOT_SET) noteOutcome(null)
+        if (pendingFormat == AudioFormat.NOT_SET && inputFormat == AudioFormat.NOT_SET) {
+            noteOutcome(null)
+            noteObjects(0)
+            meterCount = 0
+        }
         outputBuffer = AudioProcessor.EMPTY_BUFFER
         inputEnded = false
         bedSamples = 0
@@ -481,9 +608,12 @@ class AtmosAudioProcessor @Inject constructor(
                     pipeline, raw, frameScratch, channels, FRAME_SAMPLES, speakerOut, layout.channelCount,
                 )
             } else -1
+            val objects = if (rc == 1) AtmosNative.nativeLastObjectCount(pipeline) else 0
+            noteOutcome(if (objects > 0) Outcome.OBJECTS_SPEAKERS else Outcome.BED_SPEAKERS)
+            noteFrame(objects)
             if (rc == 1) {
                 if (renderedFrames == 0L) {
-                    android.util.Log.i(TAG, "Atmos render ACTIVE — objects to ${layout.label} speakers (${channels}ch bed)")
+                    android.util.Log.i(TAG, "Atmos render ACTIVE — ${layout.label} speakers (${channels}ch bed, $objects objects)")
                 }
                 renderedFrames++
             } else {
@@ -519,16 +649,23 @@ class AtmosAudioProcessor @Inject constructor(
     }
 
     /**
-     * Pipeline-less fallback: the decoded bed (FL FR FC LFE SL SR BL BR) placed
-     * on the layout's matching speakers — 7.1 rears onto a 5.x layout's
-     * surrounds, a 5.1 bed's surrounds onto a 7.x layout's sides.
+     * Pipeline-less fallback: the decoded bed placed on the layout's matching
+     * speakers. A 5.1 bed is FL FR FC LFE SL SR: its surrounds go onto a 7.x
+     * layout's sides. A 7.1 bed is FL FR FC LFE BL BR SL SR, the rears before
+     * the sides (the decoder's order, and [ChannelDetectorProcessor]'s): on a
+     * 5.x layout both pairs share its surrounds.
      */
     private fun bedToSpeakers(frame: FloatArray, channels: Int, layout: ChannelLayout) {
         val speakers = layout.channelCount
         java.util.Arrays.fill(speakerOut, 0, speakers * FRAME_SAMPLES, 0f)
         val fiveX = layout.speakers().getOrNull(4)?.label == "Ls"
         // Speaker-order index for each decoder bed channel.
-        val target = intArrayOf(0, 1, 2, 3, if (fiveX) 4 else 6, if (fiveX) 5 else 7, 4, 5)
+        // 7.x layouts are L R C LFE Lrs Rrs Lss Rss, 5.x ones L R C LFE Ls Rs.
+        val target = when {
+            fiveX -> intArrayOf(0, 1, 2, 3, 4, 5, 4, 5)
+            channels >= 8 -> intArrayOf(0, 1, 2, 3, 4, 5, 6, 7)
+            else -> intArrayOf(0, 1, 2, 3, 6, 7, 4, 5)
+        }
         for (i in 0 until FRAME_SAMPLES) {
             val b = i * channels
             val o = i * speakers

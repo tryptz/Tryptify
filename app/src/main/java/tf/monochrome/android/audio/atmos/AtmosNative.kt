@@ -153,4 +153,29 @@ object AtmosNative {
         out: FloatArray,
         outChannels: Int,
     ): Int
+
+    /**
+     * How the headphone render places sound. [enabled]: objects and beds are
+     * panned onto a virtual 15.1.12 speaker room, and its speakers are what
+     * the ears hear, with [room] (0..1) of the room's reflections and tail.
+     * Off: every object through the HRIR of its own direction, no room.
+     */
+    external fun nativeSetVirtualRoom(pipeline: Long, enabled: Boolean, room: Float)
+
+    /**
+     * Objects rendered in the last frame (the LFE included), or 0 when the
+     * decoded bed played instead: no JOC in the stream, none yet after a seek,
+     * or the bed mode.
+     */
+    external fun nativeLastObjectCount(pipeline: Long): Int
+
+    /**
+     * The last frame's objects: [OBJECT_METER_FIELDS] floats each into [out],
+     * the room position (x 0..1 left to right, y 0..1 front to back, z -1..1
+     * floor to ceiling), the frame's peak, and what it is (0 an object, 1 a
+     * bed channel, 2 the LFE). Returns how many were written.
+     */
+    external fun nativeObjectMeter(pipeline: Long, out: FloatArray): Int
+
+    const val OBJECT_METER_FIELDS = 5
 }

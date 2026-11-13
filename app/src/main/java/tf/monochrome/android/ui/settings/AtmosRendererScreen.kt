@@ -100,7 +100,7 @@ import tf.monochrome.android.R
 class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
-    atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
+    private val atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -117,8 +117,18 @@ class AtmosRendererViewModel @Inject constructor(
         channelDetector.state
 
     /** Reference-counted metering stake — held only while this screen shows. */
-    fun acquireDetector() = channelDetector.acquire()
-    fun releaseDetector() = channelDetector.release()
+    fun acquireDetector() {
+        channelDetector.acquire()
+        atmosProcessor.acquireObjectMeter()
+    }
+    fun releaseDetector() {
+        channelDetector.release()
+        atmosProcessor.releaseObjectMeter()
+    }
+
+    /** The Atmos objects being rendered, with their room positions and levels; null when none. */
+    val objects: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.ObjectMeter?> =
+        atmosProcessor.objects
 
     /** Multichannel → stereo fold toggle (same preference as Settings). */
     val multichannelDownmixEnabled: StateFlow<Boolean> =
@@ -343,6 +353,7 @@ fun AtmosRendererScreen(
     val profile by viewModel.profile.collectAsStateWithLifecycle()
     val sofaPresets by viewModel.sofaPresets.collectAsStateWithLifecycle()
     val detected by viewModel.channelState.collectAsStateWithLifecycle()
+    val objects by viewModel.objects.collectAsStateWithLifecycle()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
     // and adds preset files behind this ViewModel's back, and navigating back
@@ -382,7 +393,11 @@ fun AtmosRendererScreen(
                 if (d != null) {
                     val rate = if (d.sampleRate % 1000 == 0) "${d.sampleRate / 1000} kHz"
                     else "${d.sampleRate} Hz"
-                    stringResource(R.string.atmos_live_levels, d.layoutName, d.channelCount, rate)
+                    // An Atmos stream's decoder puts out its 5.1 core alone: "5.1 · 6 ch"
+                    // read as if that were all of it. While objects render, say so.
+                    val o = objects
+                    if (o != null) stringResource(R.string.atmos_live_objects, o.count, d.layoutName, rate)
+                    else stringResource(R.string.atmos_live_levels, d.layoutName, d.channelCount, rate)
                 } else {
                     stringResource(R.string.atmos_speakers_idle)
                 },
@@ -393,6 +408,7 @@ fun AtmosRendererScreen(
             SpeakerLayoutMap(
                 layout = if (profile.speakerRender) profile.layout else ChannelLayout.STEREO,
                 detected = d,
+                objects = objects,
                 accent = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -541,6 +557,25 @@ fun AtmosRendererScreen(
                 onCheckedChange = { viewModel.setSpatial(it) },
             )
             if (profile.hrtfEnabled) {
+                SettingSwitchItem(
+                    title = stringResource(R.string.atmos_virtual_room),
+                    subtitle = if (profile.virtualRoom) {
+                        stringResource(R.string.atmos_virtual_room_on)
+                    } else {
+                        stringResource(R.string.atmos_virtual_room_off)
+                    },
+                    checked = profile.virtualRoom,
+                    onCheckedChange = { viewModel.update(profile.copy(virtualRoom = it)) },
+                )
+                if (profile.virtualRoom) {
+                    LabeledSlider(
+                        title = stringResource(R.string.atmos_room_amount),
+                        valueText = "${(profile.roomAmount * 100).toInt()}%",
+                        value = profile.roomAmount,
+                        range = 0f..1f,
+                        onValueChange = { viewModel.update(profile.copy(roomAmount = it)) },
+                    )
+                }
                 if (profile.hrtfProfileId == null) Text(
                     stringResource(R.string.atmos_using_the_built_in_mit_kemar_set_pick_a_sofa),
                     style = MaterialTheme.typography.bodySmall,
@@ -688,9 +723,11 @@ private fun LabeledSlider(
 private fun SpeakerLayoutMap(
     layout: ChannelLayout,
     detected: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor.ChannelState?,
+    objects: tf.monochrome.android.audio.atmos.AtmosAudioProcessor.ObjectMeter?,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
+    val liveObjects by rememberUpdatedState(objects)
     // The speakers change with the stream or the setting; the levels arrive
     // ten times a second, and only those are read per frame below.
     val names = detected?.channelNames
@@ -784,6 +821,27 @@ private fun SpeakerLayoutMap(
                                 a.rest
                             }
                             drawSpeaker(a, glow, glowAlpha, dotAlpha, labels[i])
+                        }
+                        // The Atmos objects, where the mix puts them: left to
+                        // right and front to back across the room, a height
+                        // object in the warmer tint and larger the higher it
+                        // is, each as bright as it is loud. The LFE has no place.
+                        liveObjects?.let { o ->
+                            for (i in 0 until o.count) {
+                                if (o.isLfe(i)) continue
+                                val level = ((20f * kotlin.math.log10(o.level(i).coerceAtLeast(1e-6f)) + 60f) / 60f)
+                                    .coerceIn(0f, 1f)
+                                if (level <= 0.02f) continue
+                                val up = o.z(i).coerceIn(0f, 1f)
+                                val pos = Offset(
+                                    cx + (o.x(i).coerceIn(0f, 1f) * 2f - 1f) * half * 0.92f,
+                                    cy + (o.y(i).coerceIn(0f, 1f) * 2f - 1f) * half * 0.92f,
+                                )
+                                val tint = if (up > 0.25f) heightTint else onSurface
+                                val r = half * (0.035f + 0.03f * up)
+                                drawCircle(tint.copy(alpha = 0.18f * level), r * 2.4f, pos)
+                                drawCircle(tint.copy(alpha = 0.35f + 0.65f * level), r, pos)
+                            }
                         }
                     }
                 },

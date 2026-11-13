@@ -82,7 +82,7 @@ void test_emdf_locates_oamd() {
   BitWriter bw;
   bw.put(8, 0x00); bw.put(8, 0x11);   // garbage prefix (scan must skip it)
   bw.put(8, 0x58); bw.put(8, 0x38);   // EMDF syncword
-  bw.put(16, 3 + payload_bytes);      // block length in bytes
+  bw.put(16, 6 + payload_bytes);      // block length in bytes
   bw.put(2, 0);                       // version 0
   bw.put(3, 0);                       // key 0
   bw.put(5, 11);                      // payload id = OAMD
@@ -93,6 +93,10 @@ void test_emdf_locates_oamd() {
   const size_t body_start = bw.count;
   write_oamd_body(bw);
   while (bw.count < body_start + payload_bytes * 8) bw.bit(0);  // pad to payload end
+  // The end of the container: no more payloads, then emdf_protection (an
+  // 8-bit primary field, no secondary one), padded to the byte. The decoder
+  // takes a container only when it ends where its length says it does.
+  bw.put(5, 0); bw.put(2, 1); bw.put(2, 0); bw.put(8, 0xA5); bw.put(7, 0);
 
   BitReader br(bw.bytes.data(), bw.bytes.size());
   ExtensibleMetadataDecoder emdf;
