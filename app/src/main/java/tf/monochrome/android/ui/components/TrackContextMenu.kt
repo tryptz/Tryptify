@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -98,6 +99,18 @@ fun TrackContextMenu(
      * begins; once it has, taps add and remove songs as before.
      */
     onSelect: (() -> Unit)? = null,
+    /**
+     * What Download says, for a caller that knows how the download stands
+     * (the player: its progress, done, failed). Null is plain "Download".
+     */
+    downloadLabel: String? = null,
+    /**
+     * Actions that belong to where the menu was opened rather than to the
+     * song, under a divider at the end: the player's shuffle, repeat, Edit
+     * lyrics, Player Visuals Studio and Settings. Rows are [SongMenuItem]s;
+     * the lambda's argument closes the menu.
+     */
+    extraActions: (@Composable ColumnScope.(dismiss: () -> Unit) -> Unit)? = null,
 ) {
     // Outside the overlay's content, which is composed in the overlay host:
     // state there would not survive the caller's recompositions.
@@ -283,7 +296,7 @@ fun TrackContextMenu(
                     if (onDownloadTrack != null) {
                         ContextMenuItem(
                             icon = Icons.Default.Download,
-                            label = stringResource(R.string.action_download),
+                            label = downloadLabel ?: stringResource(R.string.action_download),
                             onClick = { onDownloadTrack(); onDismiss() }
                         )
                     }
@@ -338,6 +351,13 @@ fun TrackContextMenu(
                         label = stringResource(R.string.action_track_info),
                         onClick = { page = MenuPage.INFO }
                     )
+                    if (extraActions != null) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant
+                        )
+                        extraActions(onDismiss)
+                    }
                 }
             }
         }
@@ -349,6 +369,18 @@ private const val PAGE_MS = 280
 
 /** What the song menu's pane shows. */
 private enum class MenuPage { ACTIONS, INFO, EDIT }
+
+/**
+ * One row of the song menu, for a caller's [TrackContextMenu] `extraActions`:
+ * the same row the menu's own actions are.
+ */
+@Composable
+fun SongMenuItem(
+    icon: ImageVector,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color? = null,
+    onClick: () -> Unit
+) = ContextMenuItem(icon, label, tint, onClick)
 
 @Composable
 private fun ContextMenuItem(

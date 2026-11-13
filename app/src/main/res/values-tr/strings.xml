@@ -3450,4 +3450,6 @@
     <string name="whats_new_1952_m3u_export_body">Bir çalma listesinin ⋮ menüsündeki “M3U olarak dışa aktar”, listeyi seçtiğiniz yere .m3u dosyası olarak kaydeder; başka oynatıcılar veya başka bir cihaz için. Bu cihazda dosya olan parçalar listelenir; yalnızca akışla çalınanlar atlanır.</string>
     <string name="whats_new_1952_dac_tile_title">DAC’i Hızlı Ayarlar’dan serbest bırak</string>
     <string name="whats_new_1952_dac_tile_body">Yeni bir kutu tek dokunuşla müziği duraklatır ve DAC’i diğer uygulamalara bırakır; bir dokunuş daha DAC’i geri alır. Ayarlar › Ses’te, Özel USB DAC’in altından ekleyin.</string>
+    <string name="whats_new_1952_player_menu_title">Oynatıcının menüsü artık parça menüsü</string>
+    <string name="whats_new_1952_player_menu_body">Oynatıcının ⋮ düğmesi artık her listedeki bir parçanın menüsünün aynısını açıyor; beğenme, parça bilgisi, Trypt Mania ve sıra da burada. Oynatıcıya özgü işlemler (karıştır, tekrarla, şarkı sözleri, görseller, ayarlar) en sonda.</string>
 </resources>

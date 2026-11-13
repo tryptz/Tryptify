@@ -232,6 +232,14 @@ object WhatsNew {
                     titleRes = R.string.whats_new_1952_dac_tile_title,
                     bodyRes = R.string.whats_new_1952_dac_tile_body,
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "The player's menu is the song menu",
+                    body = "The player's ⋮ now opens the same menu a song has in every list, so liking, Track info, Trypt Mania and the queue are there too. The player's own actions (shuffle, repeat, lyrics, visuals, settings) are at the end.",
+                    titleRes = R.string.whats_new_1952_player_menu_title,
+                    bodyRes = R.string.whats_new_1952_player_menu_body,
+                ),
             ),
         ),
         WhatsNewRelease(

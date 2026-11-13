@@ -14,6 +14,9 @@
 #### Exclusive USB DAC
 - **A Quick Settings tile releases the DAC** ([#157](https://github.com/tryptz/Tryptify/issues/157)). One tap pauses the music and hands the DAC to other apps; another takes it back. It is the Settings › Audio switch, reachable from the notification shade over any app. Settings › Audio has a row that adds the tile (Android 13 and later; before that it is added from the Quick Settings editor).
 
+### Changed
+- **The player's ⋮ opens the song menu.** It was a Material dropdown of its own with part of a song's actions. It is now the glass pane a song row opens (`TrackContextMenu`), for the playing song: Play next, Add to queue, Play in Trypt Mania, Like, Add to playlist, Download (which says how the download stands), Share file, Share link, Go to album, Go to artist, Track info, and for a library file Find album art and Edit info. Under a divider come the actions that are the player's own: Shuffle, Repeat, Add to library for a song opened from another app, Edit lyrics, Player Visuals Studio and Settings. "Send file" is "Share file" there, as in every list.
+
 ### Fixed
 - **A song added to a playlist after one was removed goes last.** It took the playlist's song count as its place, which the last song already had, so the two had no order between them.
 

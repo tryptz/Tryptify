@@ -52,6 +52,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.LibraryAdd
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -101,6 +108,7 @@ import tf.monochrome.android.domain.model.NowPlayingViewMode
 import tf.monochrome.android.domain.model.VisualLinkTargets
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
+import tf.monochrome.android.domain.model.RepeatMode
 import tf.monochrome.android.ui.navigation.Screen
 import tf.monochrome.android.ui.navigation.openArtist
 import tf.monochrome.android.ui.theme.ColorBlend
@@ -222,6 +230,7 @@ fun MainPlayerRoute(
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.
     var addToPlaylistFor by remember { mutableStateOf<Track?>(null) }
+    var showSongMenu by remember { mutableStateOf(false) }
     var createPlaylistFor by remember { mutableStateOf<Track?>(null) }
     // Sleep timer lives in PlayerViewModel (shared, nav-host-scoped) so the
     // countdown keeps running when this destination leaves composition.
@@ -704,39 +713,97 @@ fun MainPlayerRoute(
     val topBarSlot: @Composable () -> Unit = {
         PlayerTopBar(
             speedLabel = state.speedLabel,
-            shuffleEnabled = shuffleEnabled,
-            repeatMode = repeatMode,
-            isDownloaded = isDownloaded,
-            downloadState = downloadState,
             onCollapse = { navController.popBackStackSafe() },
             onOutputClick = { showPipelineSheet = true },
             onDevicesClick = { showConnectSheet = true },
             devicesOnline = connectState.devices.any { it.id != connectViewModel.myId },
             onSpeedClick = { showSpeedSheet = true },
-            onToggleShuffle = playerViewModel::toggleShuffle,
-            onCycleRepeat = playerViewModel::cycleRepeatMode,
-            onDownload = { currentTrack?.let { playerViewModel.downloadTrack(it) } },
-            onAddToPlaylist = { currentTrack?.let { addToPlaylistFor = it } },
-            onSendFile = { currentTrack?.let { playerViewModel.shareTrack(it) } },
-            onShareLink = { currentTrack?.let { playerViewModel.shareLink(it) } },
-            onOpenLyricsStudio = { navController.navigateTool(Screen.LyricsFxStudio) },
-            onOpenSettings = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()) },
-            onEditLyrics = { navController.navigateTool(Screen.LyricsEditor) },
-            onGoToArtist = navController.trackArtistAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
-            onGoToAlbum = navController.trackAlbumAction(currentTrack, playerViewModel.unifiedFor(currentTrack)),
-            onAddToLibrary = openedUnified?.takeIf { it.id !in openedSaved }?.let { track ->
-                {
-                    playerViewModel.addOpenedToLibrary(track) { outcome ->
-                        val message = when (outcome) {
-                            is tf.monochrome.android.data.opened.OpenedAudioRepository.Added.Saved ->
-                                context.getString(R.string.opened_added_where, outcome.folder)
-                            is tf.monochrome.android.data.opened.OpenedAudioRepository.Added.Failed ->
-                                context.getString(R.string.opened_add_failed) + " · " +
-                                    context.getString(tf.monochrome.android.ui.opened.reasonFor(outcome.failure))
-                        }
-                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+            onMoreClick = { showSongMenu = true },
+        )
+    }
+
+    // The ⋮: the playing song's menu, the same glass pane a song row opens
+    // (TrackContextMenu), with the same actions. Under them, what belongs to
+    // the player rather than the song. It used to be a Material dropdown of
+    // its own with half the actions, and no Like, Track info or Trypt Mania.
+    val menuTrack = currentTrack
+    if (showSongMenu && menuTrack != null) {
+        val menuUnified = playerViewModel.unifiedFor(menuTrack)
+        // "Add to library", while a song opened from another app plays and is not in the library yet.
+        val addOpenedToLibrary: (() -> Unit)? = openedUnified?.takeIf { it.id !in openedSaved }?.let { track ->
+            {
+                playerViewModel.addOpenedToLibrary(track) { outcome ->
+                    val message = when (outcome) {
+                        is tf.monochrome.android.data.opened.OpenedAudioRepository.Added.Saved ->
+                            context.getString(R.string.opened_added_where, outcome.folder)
+                        is tf.monochrome.android.data.opened.OpenedAudioRepository.Added.Failed ->
+                            context.getString(R.string.opened_add_failed) + " · " +
+                                context.getString(tf.monochrome.android.ui.opened.reasonFor(outcome.failure))
                     }
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
                 }
+            }
+        }
+        tf.monochrome.android.ui.components.TrackContextMenu(
+            track = menuTrack,
+            isLiked = isLiked,
+            onDismiss = { showSongMenu = false },
+            onPlayNext = { playerViewModel.playNext(menuTrack) },
+            onAddToQueue = { playerViewModel.addToQueue(listOf(menuTrack)) },
+            onToggleLike = playerViewModel::toggleLikeCurrentTrack,
+            onAddToPlaylist = { addToPlaylistFor = menuTrack },
+            // A file on the phone has nothing to download, as in every list.
+            onDownloadTrack = if (isLocalTrack) null else ({ playerViewModel.downloadTrack(menuTrack) }),
+            // How the download stands: its progress, done, or failed.
+            downloadLabel = playerDownloadLabel(downloadState, isDownloaded),
+            onShareFile = { playerViewModel.shareTrack(menuTrack) },
+            onShareLink = { playerViewModel.shareLink(menuTrack) },
+            onGoToAlbum = navController.trackAlbumAction(menuTrack, menuUnified),
+            onGoToArtist = navController.trackArtistAction(menuTrack, menuUnified),
+            // A library file's own path: Track info reads its tags from it.
+            filePath = (menuUnified?.source as? tf.monochrome.android.domain.model.PlaybackSource.LocalFile)?.filePath,
+            extraActions = { dismiss ->
+                val on = MaterialTheme.colorScheme.primary
+                tf.monochrome.android.ui.components.SongMenuItem(
+                    icon = Icons.Default.Shuffle,
+                    label = stringResource(if (shuffleEnabled) R.string.shuffle_on else R.string.shuffle_off),
+                    tint = on.takeIf { shuffleEnabled },
+                    onClick = { playerViewModel.toggleShuffle(); dismiss() },
+                )
+                tf.monochrome.android.ui.components.SongMenuItem(
+                    icon = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                    label = stringResource(
+                        when (repeatMode) {
+                            RepeatMode.OFF -> R.string.repeat_off
+                            RepeatMode.ONE -> R.string.repeat_one
+                            RepeatMode.ALL -> R.string.repeat_all
+                        }
+                    ),
+                    tint = on.takeIf { repeatMode != RepeatMode.OFF },
+                    onClick = { playerViewModel.cycleRepeatMode(); dismiss() },
+                )
+                if (addOpenedToLibrary != null) {
+                    tf.monochrome.android.ui.components.SongMenuItem(
+                        icon = Icons.Default.LibraryAdd,
+                        label = stringResource(R.string.opened_add),
+                        onClick = { addOpenedToLibrary(); dismiss() },
+                    )
+                }
+                tf.monochrome.android.ui.components.SongMenuItem(
+                    icon = Icons.Default.EditNote,
+                    label = stringResource(R.string.action_edit_lyrics),
+                    onClick = { navController.navigateTool(Screen.LyricsEditor); dismiss() },
+                )
+                tf.monochrome.android.ui.components.SongMenuItem(
+                    icon = Icons.Default.AutoAwesome,
+                    label = stringResource(R.string.player_visuals_studio),
+                    onClick = { navController.navigateTool(Screen.LyricsFxStudio); dismiss() },
+                )
+                tf.monochrome.android.ui.components.SongMenuItem(
+                    icon = Icons.Default.Settings,
+                    label = stringResource(R.string.settings),
+                    onClick = { navController.navigateTool(Screen.Settings, Screen.Settings.createRoute()); dismiss() },
+                )
             },
         )
     }

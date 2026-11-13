@@ -3372,4 +3372,6 @@
     <string name="whats_new_1952_m3u_export_body">プレイリストの ⋮ メニューの「M3U として書き出す」で、好きな場所に .m3u ファイルとして保存できます。ほかのプレーヤーや別の端末で使えます。この端末上のファイルである曲が記載され、ストリーミングのみの曲は含まれません。</string>
     <string name="whats_new_1952_dac_tile_title">クイック設定から DAC を解放</string>
     <string name="whats_new_1952_dac_tile_body">新しいタイルを 1 回タップすると、音楽を一時停止して DAC をほかのアプリに渡します。もう一度タップすると DAC を再び確保します。「設定 › オーディオ」の「USB DAC の排他使用」の下から追加できます。</string>
+    <string name="whats_new_1952_player_menu_title">プレーヤーのメニューが曲のメニューに</string>
+    <string name="whats_new_1952_player_menu_body">プレーヤーの ⋮ で、どのリストの曲にもあるのと同じメニューが開くようになりました。お気に入り、曲情報、Trypt Mania、キューもここから使えます。プレーヤー独自の操作（シャッフル、リピート、歌詞、ビジュアル、設定）は末尾にあります。</string>
 </resources>

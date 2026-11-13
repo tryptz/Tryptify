@@ -3450,4 +3450,6 @@
     <string name="whats_new_1952_m3u_export_body">„Als M3U exportieren“ im ⋮-Menü einer Playlist speichert sie als .m3u-Datei an einem Ort deiner Wahl, für andere Player oder ein anderes Gerät. Aufgeführt werden die Titel, die Dateien auf diesem Gerät sind; reine Streaming-Titel werden ausgelassen.</string>
     <string name="whats_new_1952_dac_tile_title">DAC über die Schnelleinstellungen freigeben</string>
     <string name="whats_new_1952_dac_tile_body">Eine neue Kachel pausiert mit einem Tipp die Musik und überlässt den DAC anderen Apps; ein weiterer Tipp holt ihn zurück. Füge sie unter Einstellungen › Audio hinzu, unter Exklusiver USB-DAC.</string>
+    <string name="whats_new_1952_player_menu_title">Das Player-Menü ist das Titelmenü</string>
+    <string name="whats_new_1952_player_menu_body">Das ⋮ im Player öffnet jetzt dasselbe Menü, das ein Titel in jeder Liste hat: Favoriten, Titelinfo, Trypt Mania und die Warteschlange sind auch dabei. Die eigenen Aktionen des Players (Zufall, Wiederholen, Songtext, Visuals, Einstellungen) stehen am Ende.</string>
 </resources>

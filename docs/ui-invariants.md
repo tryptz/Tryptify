@@ -200,6 +200,19 @@ tags the same way (`TrackEditPane`, `imePadding` so the fields stay above the
 keyboard), and closes the menu once saved. Put back in a `ModalBottomSheet` it is a solid slab, for the reason
 above; outside the nav host it falls back to a plain dialog, never to nothing.
 
+**The player's ⋮ is the song menu too.** `PlayerTopBar`'s ⋮ opens
+`TrackContextMenu` for the playing song (`MainPlayerRoute`), the same pane with
+the same actions a row's ⋮ has, so a song is liked, queued, sent to Trypt
+Mania and looked up (Track info) the same way wherever it is met. It was a
+Material `DropdownMenu` of its own: a flat grey slab over the player's glass,
+with half the actions. What is the player's rather than the song's goes in
+the menu's `extraActions`, under a divider at the end, as `SongMenuItem`
+rows: Shuffle and Repeat (tinted while on), Add to library for a song opened
+from another app, Edit lyrics, Player Visuals Studio, Settings. Download
+carries the player's wording for how the download stands (`downloadLabel`),
+and is left out for a file on the phone, as in every list. There is no
+Select: the player has no list to select in.
+
 **An overlay pane animates in its own layer, and a bottom one clears the bar.**
 `GlassOverlayLayer` fades the scrim and slides the pane up, and plays both
 backwards on the way out: it holds the withdrawn pane until it has left, and a

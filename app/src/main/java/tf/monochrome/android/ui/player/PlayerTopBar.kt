@@ -1,89 +1,49 @@
 package tf.monochrome.android.ui.player
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.DevicesOther
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.LibraryAdd
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.data.downloads.DownloadStatus
 import tf.monochrome.android.data.downloads.TrackDownloadState
-import tf.monochrome.android.domain.model.RepeatMode
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
 /**
- * Utility top bar for the main player: collapse handle on the left, then an
- * output-device button, a speed chip and an overflow menu on the right. The
- * overflow hosts the secondary controls (shuffle, repeat, download, add to
- * playlist, send file) that no longer live on the main transport row.
+ * Utility top bar for the main player: collapse handle on the left, then the
+ * devices and output buttons, a speed chip and the ⋮ on the right. The ⋮ opens
+ * the playing song's menu, the one a song row has ([onMoreClick]; the route
+ * shows it, since the menu is drawn in the app's overlay slot, not here).
  */
 @Composable
 fun PlayerTopBar(
     speedLabel: String,
-    shuffleEnabled: Boolean,
-    repeatMode: RepeatMode,
-    isDownloaded: Boolean,
-    downloadState: TrackDownloadState,
     onCollapse: () -> Unit,
     onOutputClick: () -> Unit,
     onSpeedClick: () -> Unit,
-    onToggleShuffle: () -> Unit,
-    onCycleRepeat: () -> Unit,
-    onDownload: () -> Unit,
-    onAddToPlaylist: () -> Unit,
-    onSendFile: () -> Unit,
-    onShareLink: () -> Unit,
-    onOpenLyricsStudio: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onEditLyrics: (() -> Unit)? = null,
-    onGoToArtist: (() -> Unit)? = null,
-    onGoToAlbum: (() -> Unit)? = null,
-    /** Shown while a song opened from another app plays, until it is in the library. */
-    onAddToLibrary: (() -> Unit)? = null,
+    onMoreClick: () -> Unit,
     /** Tryptify Connect's Devices panel; null hides the button. */
     onDevicesClick: (() -> Unit)? = null,
     /** Another of the listener's devices is online (the icon says so). */
     devicesOnline: Boolean = false,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -139,125 +99,20 @@ fun PlayerTopBar(
                 )
             }
 
-            Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.action_more),
-                        tint = Color.White,
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                ) {
-                    if (onGoToArtist != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_go_to_artist)) },
-                            onClick = { onGoToArtist(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                        )
-                    }
-                    if (onGoToAlbum != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_go_to_album)) },
-                            onClick = { onGoToAlbum(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.Album, contentDescription = null) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_add_to_playlist)) },
-                        onClick = { onAddToPlaylist(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (shuffleEnabled) stringResource(R.string.shuffle_on) else stringResource(R.string.shuffle_off)) },
-                        onClick = { onToggleShuffle(); menuExpanded = false },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Shuffle,
-                                contentDescription = null,
-                                tint = if (shuffleEnabled) PlayerGlowMint else Color.Unspecified,
-                            )
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                when (repeatMode) {
-                                    RepeatMode.OFF -> stringResource(R.string.repeat_off)
-                                    RepeatMode.ONE -> stringResource(R.string.repeat_one)
-                                    RepeatMode.ALL -> stringResource(R.string.repeat_all)
-                                }
-                            )
-                        },
-                        onClick = { onCycleRepeat(); menuExpanded = false },
-                        leadingIcon = {
-                            Icon(
-                                if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                                contentDescription = null,
-                                tint = if (repeatMode != RepeatMode.OFF) PlayerGlowMint else Color.Unspecified,
-                            )
-                        },
-                    )
-                    if (onAddToLibrary != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.opened_add)) },
-                            onClick = { onAddToLibrary(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.LibraryAdd, contentDescription = null) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(downloadMenuLabel(downloadState, isDownloaded)) },
-                        onClick = { onDownload(); menuExpanded = false },
-                        leadingIcon = {
-                            val completed = isDownloaded || downloadState.status == DownloadStatus.COMPLETED
-                            Icon(
-                                when {
-                                    downloadState.status == DownloadStatus.FAILED -> Icons.Default.ErrorOutline
-                                    completed -> Icons.Default.DownloadDone
-                                    else -> Icons.Default.Download
-                                },
-                                contentDescription = null,
-                                tint = if (completed) PlayerGlowMint else Color.Unspecified,
-                            )
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_send_file)) },
-                        onClick = { onSendFile(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.share_link)) },
-                        onClick = { onShareLink(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
-                    )
-                    if (onEditLyrics != null) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_edit_lyrics)) },
-                            onClick = { onEditLyrics(); menuExpanded = false },
-                            leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.player_visuals_studio)) },
-                        onClick = { onOpenLyricsStudio(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.settings)) },
-                        onClick = { onOpenSettings(); menuExpanded = false },
-                        leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    )
-                }
+            IconButton(onClick = onMoreClick) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = stringResource(R.string.action_more),
+                    tint = Color.White,
+                )
             }
         }
     }
 }
 
+/** What the player's song menu calls Download: how the playing song's download stands. */
 @androidx.compose.runtime.Composable
-private fun downloadMenuLabel(state: TrackDownloadState, isDownloaded: Boolean): String = when {
+fun playerDownloadLabel(state: TrackDownloadState, isDownloaded: Boolean): String = when {
     isDownloaded || state.status == DownloadStatus.COMPLETED -> stringResource(R.string.download_done)
     state.status == DownloadStatus.DOWNLOADING -> stringResource(R.string.download_progress, (state.progress.coerceIn(0f, 1f) * 100f).toInt())
     state.status == DownloadStatus.QUEUED -> stringResource(R.string.download_queued)
