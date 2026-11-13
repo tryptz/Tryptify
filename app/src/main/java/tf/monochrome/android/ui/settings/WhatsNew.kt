@@ -252,7 +252,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "Atmos on headphones: a 15.1.12 virtual room",
-                    body = "With the binaural render on, Atmos objects and beds now play from 27 virtual speakers and an LFE around you, in a room, with a limiter instead of a fixed cut in level. Settings › Audio › Atmos Renderer Configuration has the switch and how much room there is.",
+                    body = "On headphones, Atmos objects and beds now play from 27 virtual speakers and an LFE around you, in a room, with a limiter instead of a fixed cut in level. Settings › Audio › Atmos Renderer Configuration has how much room there is, and the switch.",
                     titleRes = R.string.whats_new_1952_atmos_room_title,
                     bodyRes = R.string.whats_new_1952_atmos_room_body,
                 ),

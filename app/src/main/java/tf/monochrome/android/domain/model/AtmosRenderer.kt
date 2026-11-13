@@ -272,6 +272,13 @@ data class RendererProfile(
      * OBJECT_RENDER when on.
      */
     val hrtfEnabled: Boolean = false,
+    /**
+     * Until the listener sets the switch themselves: the binaural render is
+     * on while headphones are the output, and off (the fold) on a speaker.
+     * Off by default an Atmos mix was only ever its 5.1 bed folded to stereo,
+     * and nothing said so. Cleared by the first use of the switch.
+     */
+    val hrtfAuto: Boolean = true,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
     /**
@@ -308,6 +315,17 @@ data class RendererProfile(
             downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),
         )
     }
+
+    /**
+     * The profile as it applies to the output in use: with [hrtfAuto] still
+     * set and headphones connected, the binaural render is on.
+     */
+    fun effective(headphones: Boolean): RendererProfile =
+        if (hrtfAuto && headphones && !hrtfEnabled) {
+            copy(hrtfEnabled = true, mode = RendererMode.OBJECT_RENDER)
+        } else {
+            this
+        }
 
     /** The layout the renderer will actually target given the auto-detect flag. */
     fun effectiveLayout(dacChannelCount: Int?): ChannelLayout =

@@ -1398,11 +1398,9 @@
     <string name="atmos_speakers_on">Objects are placed on your speaker layout (up to 9.1.6) over HDMI or a multichannel USB interface. DSP/EQ are bypassed.</string>
     <string name="atmos_speakers_off">Off. Atmos plays binaural or folded to stereo (below).</string>
     <string name="atmos_layout_option">%1$s  ·  %2$d ch</string>
-    <string name="atmos_binaural_on">Atmos objects are placed around your head via the HRTF below.</string>
+    <string name="atmos_binaural_on">Atmos objects and beds play from a 15.1.12 virtual room of speakers around your head, through the HRTF below.</string>
     <string name="atmos_binaural_off">Off. Atmos tracks use the coefficient downmix renderer.</string>
-    <string name="atmos_virtual_room">15.1.12 virtual room</string>
-    <string name="atmos_virtual_room_on">Objects and beds play from 27 virtual speakers and an LFE around you, in a room. Object size, zones and channel lock apply.</string>
-    <string name="atmos_virtual_room_off">Off. Each object goes through the HRTF of its own direction, with no room.</string>
+    <string name="atmos_binaural_auto">Automatic: on with headphones, as a 15.1.12 virtual room of speakers around you. On the phone\'s speaker Atmos is folded to stereo.</string>
     <string name="atmos_room_amount">Room</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d objects on a %2$s core · %3$s. Each dot is an object, where the mix puts it.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s was REJECTED by the SOFA loader. The render is using the built-in KEMAR HRTF instead. The file may be truncated, unsupported, or not a SOFA.</string>
@@ -3469,7 +3467,7 @@
     <string name="whats_new_1952_player_menu_title">The player\'s menu is the song menu</string>
     <string name="whats_new_1952_player_menu_body">The player\'s ⋮ now opens the same menu a song has in every list, so liking, Track info, Trypt Mania and the queue are there too. The player\'s own actions (shuffle, repeat, lyrics, visuals, settings) are at the end.</string>
     <string name="whats_new_1952_atmos_room_title">Atmos on headphones: a 15.1.12 virtual room</string>
-    <string name="whats_new_1952_atmos_room_body">With the binaural render on, Atmos objects and beds now play from 27 virtual speakers and an LFE around you, in a room, with a limiter instead of a fixed cut in level. Settings › Audio › Atmos Renderer Configuration has the switch and how much room there is.</string>
+    <string name="whats_new_1952_atmos_room_body">On headphones, Atmos objects and beds now play from 27 virtual speakers and an LFE around you, in a room, with a limiter instead of a fixed cut in level. Settings › Audio › Atmos Renderer Configuration has how much room there is, and the switch.</string>
     <string name="whats_new_1952_atmos_decode_title">Atmos mixes are decoded as they were mixed</string>
     <string name="whats_new_1952_atmos_decode_body">Three in four of a stream\'s object updates were being missed, so objects moved late and bled into each other. Every update is read now, the surround channels are turned back into phase, and the speaker render is no longer 3 dB quiet.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos shows its objects, not “6 ch”</string>

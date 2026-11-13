@@ -63,6 +63,21 @@ class OAElementMD {
   }
 
   bool is_extended_element() const { return is_extended_element_; }
+  bool is_trim_element() const { return is_trim_element_; }
+  int warp_mode() const { return warp_mode_; }
+  // The surround trim of trim configuration `config` for object `obj`, in dB:
+  // 0 when trims are disabled for the configuration or the object, the
+  // transmitted value for a custom trim (0 when it sends none), and
+  // `default_db` when the configuration is on default_trim.
+  float surround_trim_db(int config, int obj, float default_db) const {
+    if (config < 0 || config >= kTrimConfigs) return 0.0f;
+    if (obj >= 0 && obj < static_cast<int>(trim_off_.size()) && trim_off_[obj]) return 0.0f;
+    switch (trim_mode_[config]) {
+      case kTrimDefault: return default_db;
+      case kTrimCustom: return trim_surround_[config];
+      default: return 0.0f;
+    }
+  }
 
   // Decodes an element. Returns false on an unsupported feature (mirrors Cavern
   // throwing UnsupportedFeatureException — here it degrades to a valid() flag).
@@ -71,7 +86,7 @@ class OAElementMD {
   bool read(BitReader& br, bool alternate_object_present, int object_count,
             int bed_or_isf_objects, OAElementMD* object_md = nullptr) {
     valid_ = true;
-    is_object_element_ = is_extended_element_ = false;
+    is_object_element_ = is_extended_element_ = is_trim_element_ = false;
     const int element_index = static_cast<int>(br.read(4));
     // TS 103 420 clause 5.6.4.3: oa_element_size = oa_element_size_bits + 1 is
     // the length in BYTES of everything that follows the size field
@@ -91,7 +106,14 @@ class OAElementMD {
       is_extended_element_ = true;
       block_offset_factor_.assign(1, static_cast<short>(-1 - element_index));
       extended_object_element(br, *object_md, bed_or_isf_objects);
-    } else {  // Trim elements and reserved types don't affect rendering.
+    } else if (element_index == kTrimElementIndex) {
+      // trim_element (clause 5.5.12): warp_mode, an adjustment of every
+      // object's position (Table 32), and the trims, levels taken off
+      // out-of-screen sound on small layouts.
+      is_trim_element_ = true;
+      trim_element(br, object_count);
+      block_offset_factor_.assign(1, static_cast<short>(-1 - element_index));
+    } else {  // Reserved types don't affect rendering.
       block_offset_factor_.assign(1, static_cast<short>(-1 - element_index));
     }
     // Skip padding to the element boundary — forward only, so an understated
@@ -106,6 +128,35 @@ class OAElementMD {
   int block_offset(int blk) const { return block_offset_factor_[blk]; }
 
  private:
+  // Clause 5.5.12 / 5.6.5. Nine trim configurations, each on the default
+  // trim, with trims disabled, or with its own.
+  void trim_element(BitReader& br, int object_count) {
+    warp_mode_ = static_cast<int>(br.read(2));
+    br.skip(2);  // reserved
+    const int global = static_cast<int>(br.read(2));
+    for (int cfg = 0; cfg < kTrimConfigs; ++cfg) {
+      trim_mode_[cfg] = global == 1 ? kTrimDisabled : kTrimDefault;
+      trim_surround_[cfg] = 0.0f;
+    }
+    if (global == 2) {
+      for (int cfg = 0; cfg < kTrimConfigs; ++cfg) {
+        if (br.read_bit()) { trim_mode_[cfg] = kTrimDefault; continue; }   // b_default_trim
+        if (br.read_bit()) { trim_mode_[cfg] = kTrimDisabled; continue; }  // b_disable_trim
+        trim_mode_[cfg] = kTrimCustom;
+        const uint32_t present = br.read(5);  // trim_balance_presence[4..0], first bit is [4]
+        if (present & 16u) br.skip(4);                                  // trim_centre
+        if (present & 8u) trim_surround_[cfg] = kTrimDb[br.read(4)];    // Table 36
+        if (present & 4u) br.skip(4);                                   // trim_height
+        if (present & 2u) br.skip(5);                                   // bal3D_Y, top and bottom
+        if (present & 1u) br.skip(5);                                   // bal3D_Y, listener plane
+      }
+    }
+    trim_off_.assign(object_count > 0 ? object_count : 0, 0);
+    if (br.read_bit()) {  // b_disable_trim_per_obj
+      for (int obj = 0; obj < object_count; ++obj) trim_off_[obj] = br.read_bit() ? 1 : 0;
+    }
+  }
+
   void object_element(BitReader& br, int object_count, int bed_or_isf_objects) {
     md_update_info(br);
     if (!valid_) return;
@@ -200,6 +251,12 @@ class OAElementMD {
 
   static constexpr int kObjectElementIndex = 1;
   static constexpr int kExtendedObjectElementIndex = 5;
+  static constexpr int kTrimElementIndex = 2;
+  static constexpr int kTrimConfigs = 9;
+  enum { kTrimDefault = 0, kTrimDisabled = 1, kTrimCustom = 2 };
+  // Table 36 (trim_surround; 0-3 are reserved there and read as no trim).
+  static constexpr float kTrimDb[16] = {0.0f, 0.0f, 0.0f, 0.0f, -0.75f, -1.5f, -3.0f, -4.5f,
+                                        -6.0f, -7.5f, -9.0f, -10.5f, -12.0f, -13.5f, -16.0f, -36.0f};
   // Tables 41 and 42 (object_div_table / object_div_code); code 0 is reserved.
   static inline const float kDivergenceTable[4] = {0.500755f, 0.608529f, 0.704833f, 1.0f};
   static inline const float kDivergenceCode[64] = {
@@ -220,6 +277,11 @@ class OAElementMD {
   bool valid_ = true;
   bool is_object_element_ = false;
   bool is_extended_element_ = false;
+  bool is_trim_element_ = false;
+  int warp_mode_ = 0;
+  int trim_mode_[kTrimConfigs] = {};
+  float trim_surround_[kTrimConfigs] = {};
+  std::vector<char> trim_off_;
   uint8_t sample_offset_ = 0;
   std::vector<short> block_offset_factor_;
   std::vector<short> ramp_duration_;
@@ -320,6 +382,32 @@ class ObjectAudioMetadata {
   // Render-space direction of a bed channel's nominal speaker (see
   // bed_channel_render) — shared with the speaker renderer's bed fallback.
   static Vec3 bed_render_position(ReferenceChannel ch) { return bed_channel_render(ch); }
+
+  // warp_mode of the last trim element decoded (Table 32): 1 means every
+  // object's Y is to be doubled before rendering. 0 when none was sent.
+  int warp_mode() const {
+    for (const auto& el : elements_) if (el.is_trim_element()) return el.warp_mode();
+    return 0;
+  }
+
+  // The surround trim, in dB, for object `obj` rendered to 5.1 (trim
+  // configuration 1), 0 when the stream sends no trim element.
+  //
+  // The specification transmits a default-or-custom choice and the custom
+  // values, not what "default" is. For 5.1 it is measured: a stream on
+  // default trims has its surrounds 3.3 dB under an untrimmed render in its
+  // own 5.1 core, and one with trims disabled for this configuration has
+  // them level (README, "Real-content reference check"). -3 dB, a step of
+  // Table 36. The other configurations have no such reference and are not
+  // applied.
+  static constexpr int kTrimConfig51 = 1;
+  static constexpr float kDefaultSurroundTrim51 = -3.0f;
+  float surround_trim_db_51(int obj) const {
+    for (const auto& el : elements_) {
+      if (el.is_trim_element()) return el.surround_trim_db(kTrimConfig51, obj, kDefaultSurroundTrim51);
+    }
+    return 0.0f;
+  }
 
   // When the frame's last update takes hold: `offset` samples into the frame,
   // reached over `ramp` samples (0 is a cut). False when no object element

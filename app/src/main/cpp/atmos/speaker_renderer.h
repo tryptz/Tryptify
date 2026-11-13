@@ -322,6 +322,11 @@ class SpeakerRenderer {
     channels_ = static_cast<int>(speakers_.size());
     lfe_ = -1;
     for (int i = 0; i < channels_; ++i) if (is_lfe(speakers_[i])) lfe_ = i;
+    mid_room_speakers_ = false;
+    for (const SpeakerDef& sp : speakers_) {
+      if (!is_lfe(sp) && sp.z < 0.25f && sp.y > 0.01f && sp.y < 0.99f) mid_room_speakers_ = true;
+    }
+    warp_ = false;
     for (int v = 0; v < kZoneVariants; ++v) {
       zone_panners_[v].configure(speakers_, allowed_for(v / 2, (v & 1) != 0));
       if (zone_panners_[v].empty()) zone_panners_[v].configure(speakers_, all_speakers());
@@ -341,6 +346,23 @@ class SpeakerRenderer {
 
   int channels() const { return channels_; }
   OutputLayout layout() const { return layout_; }
+
+  // warp_mode 1 (clause 5.6.5.1, Table 32): an object's Y is doubled before
+  // it is rendered, so everything from half way back is at the back wall.
+  // It is the "room balance" way of rendering to 5.1, whose only surrounds
+  // are there: an object at the side of the room plays from them, not half
+  // from the front. Applied on layouts with no speaker between the front and
+  // back walls at ear level; with side speakers the object has its own.
+  void set_warp(bool warp) { warp_ = warp && !mid_room_speakers_; }
+
+  // The stream's surround trim for the objects of the next render(), linear,
+  // one an object (null for none). It is taken off what each object sends to
+  // the back wall's speakers, on the layouts warp applies to: 5.x, the one
+  // trim configuration there is a reference render for.
+  void set_surround_trims(const float* trims, int count) {
+    trims_ = mid_room_speakers_ ? nullptr : trims;
+    trim_count_ = count;
+  }
   int lfe_channel() const { return lfe_; }
 
   // Forgets gain history (seek / flush): the next frame starts at its target.
@@ -376,19 +398,21 @@ class SpeakerRenderer {
     int zone = st.zone_constraints_idx;
     if (zone < 0 || zone > 5) zone = 0;  // 6, 7 reserved: no constraint
     const BalancePanner& panner = zone_panners_[zone * 2 + (st.enable_elevation ? 1 : 0)];
+    Vec3 room = st.room;
+    if (warp_) room.y = std::fmin(1.0f, 2.0f * room.y);
     if (st.snap) {
-      const int ch = panner.nearest(st.room);
+      const int ch = panner.nearest(room);
       if (ch >= 0) gains[ch] = 1.0f;
       return;
     }
     // Divergence: centre + two sources along X (power-preserving split).
     const float v = std::fmin(std::fmax(st.divergence, 0.0f), 1.0f);
     const float pc = (1.0f - v) / (1.0f + v), ps = v / (1.0f + v);
-    spread(panner, st, st.room, pc, gains);
+    spread(panner, st, room, pc, gains);
     if (ps > 0.0f) {
       const float off = 0.5f * v;
-      spread(panner, st, {std::fmax(0.0f, st.room.x - off), st.room.y, st.room.z}, ps, gains);
-      spread(panner, st, {std::fmin(1.0f, st.room.x + off), st.room.y, st.room.z}, ps, gains);
+      spread(panner, st, {std::fmax(0.0f, room.x - off), room.y, room.z}, ps, gains);
+      spread(panner, st, {std::fmin(1.0f, room.x + off), room.y, room.z}, ps, gains);
     }
     to_amplitude(gains);
   }
@@ -424,6 +448,11 @@ class SpeakerRenderer {
       const bool lfe_obj = o == lfe_index;
       object_gains(*states[o], lfe_obj, g);
       if (lfe_obj) for (int c = 0; c < channels_; ++c) g[c] *= lfe_gain;
+      if (trims_ != nullptr && o < trim_count_ && !lfe_obj && !states[o]->is_bed) {
+        for (int c = 0; c < channels_; ++c) {
+          if (speakers_[c].y > 0.99f && speakers_[c].z < 0.25f && !is_lfe(speakers_[c])) g[c] *= trims_[o];
+        }
+      }
     }
     if (!has_state_) {
       // Nothing to come from: start there.
@@ -623,6 +652,10 @@ class SpeakerRenderer {
   }
 
   OutputLayout layout_ = OutputLayout::k5_1;
+  bool mid_room_speakers_ = false;
+  bool warp_ = false;
+  const float* trims_ = nullptr;
+  int trim_count_ = 0;
   std::vector<SpeakerDef> speakers_;
   int channels_ = 0;
   int lfe_ = -1;

@@ -697,8 +697,9 @@ class PlaybackService : MediaSessionService() {
                 preferences.multichannelDownmixEnabled,
                 preferences.rendererProfile,
                 outputChannelCount,
-            ) { fold, profile, channels ->
-                listOf(fold, atmosAudioProcessor.configurationKey(profile, channels))
+                headphonesConnected,
+            ) { fold, profile, channels, headphones ->
+                listOf(fold, atmosAudioProcessor.configurationKey(profile, channels, headphones))
             }.distinctUntilChanged().drop(1).collect {
                 // After the collectors above have handed the processors the change.
                 kotlinx.coroutines.yield()
@@ -1384,6 +1385,7 @@ class PlaybackService : MediaSessionService() {
     // Largest channel count an attached HDMI / USB output reports (null: none,
     // or it lists no counts), for the Atmos speaker layout auto-detect.
     private val outputChannelCount = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+    private val headphonesConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
     private var outputDeviceCallback: android.media.AudioDeviceCallback? = null
 
     private fun registerOutputChannelTracking() {
@@ -1405,6 +1407,26 @@ class PlaybackService : MediaSessionService() {
                 .maxOrNull()
             outputChannelCount.value = channels
             atmosAudioProcessor.deviceChannelCount = channels
+            // Headphones, for the binaural render's automatic setting: a
+            // wired or Bluetooth pair, or a USB output of two channels (a
+            // DAC; a wider one is a speaker interface).
+            val headphoneTypes = setOf(
+                android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+                android.media.AudioDeviceInfo.TYPE_HEARING_AID,
+            ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
+                setOf(android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)
+            } else {
+                emptySet()
+            }
+            val headphones = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any {
+                it.type in headphoneTypes ||
+                    (it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE && (it.channelCounts.maxOrNull() ?: 2) <= 2)
+            }
+            headphonesConnected.value = headphones
+            atmosAudioProcessor.headphones = headphones
         }
         val callback = object : android.media.AudioDeviceCallback() {
             override fun onAudioDevicesAdded(added: Array<out android.media.AudioDeviceInfo>?) = refresh()

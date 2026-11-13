@@ -267,6 +267,69 @@ void test_beds_and_lfe() {
   CHECK_NEAR(g[3], 1.0f, 1e-6f);
 }
 
+// warp_mode 1 doubles Y on layouts with no speakers part way back (5.x), and
+// the stream's surround trim comes off what an object sends to the back wall.
+void test_warp_and_trim() {
+  std::printf("warp and the surround trim, on 5.x only\n");
+  const int n = 64;
+  std::vector<float> x(n, 1.0f);
+  const float* pcm[2] = {x.data(), x.data()};
+  ObjectState side = at(0.0f, 0.5f, 0.0f);   // the left wall, half way back
+  ObjectState bed = at(0.0f, 1.0f, 0.0f);
+  bed.is_bed = true;
+  bed.bed_channel = ReferenceChannel::kRearLeft;
+  const ObjectState* st[2] = {&side, &bed};
+  {
+    SpeakerRenderer r;
+    r.configure(OutputLayout::k5_1, 16);
+    std::vector<float> g(r.channels()), out(static_cast<size_t>(n) * r.channels());
+    r.object_gains(side, false, g.data());
+    CHECK_NEAR(g[0], 0.7071f, 1e-3f);     // unwarped: half front, half back
+    CHECK_NEAR(g[4], 0.7071f, 1e-3f);
+    r.set_warp(true);
+    r.object_gains(side, false, g.data());
+    CHECK_NEAR(g[0], 0.0f, 1e-4f);        // warped: at the back wall
+    CHECK_NEAR(g[4], 1.0f, 1e-4f);
+    r.object_gains(at(0.0f, 0.25f, 0.0f), false, g.data());
+    CHECK_NEAR(g[0], 0.7071f, 1e-3f);     // a quarter back is now half way
+    // -3 dB of surround trim: off the object's surround feed, not the bed's.
+    const float trims[2] = {0.7079f, 0.7079f};
+    r.set_surround_trims(trims, 2);
+    r.render(pcm, st, 2, -1, 1.0f, n, out.data());
+    CHECK_NEAR(out[4], 0.7079f + 1.0f, 1e-3f);  // object trimmed, bed channel whole
+    r.set_surround_trims(nullptr, 0);
+    r.reset_history();
+    r.render(pcm, st, 2, -1, 1.0f, n, out.data());
+    CHECK_NEAR(out[4], 2.0f, 1e-3f);
+  }
+  {
+    // A room with side speakers: the object has one of its own, and neither
+    // the warp nor the 5.1 trim applies.
+    SpeakerRenderer r;
+    r.configure(OutputLayout::k7_1_4, 16);
+    std::vector<float> g(r.channels()), out(static_cast<size_t>(n) * r.channels());
+    r.set_warp(true);
+    const float trims[2] = {0.5f, 0.5f};
+    r.set_surround_trims(trims, 2);
+    r.object_gains(side, false, g.data());
+    CHECK_NEAR(g[index_of(r, SpeakerRole::kLss)], 1.0f, 1e-4f);
+    ObjectState rear = at(0.0f, 1.0f, 0.0f);
+    const ObjectState* one[1] = {&rear};
+    r.render(pcm, one, 1, -1, 1.0f, n, out.data());
+    CHECK_NEAR(out[index_of(r, SpeakerRole::kLrs)], 1.0f, 1e-3f);
+  }
+  {
+    SpeakerRenderer r;
+    r.configure(OutputLayout::k15_1_12, 16);
+    std::vector<float> g(r.channels());
+    r.set_warp(true);
+    r.object_gains(side, false, g.data());
+    float peak = 0.0f;
+    for (float v : g) peak = std::fmax(peak, v);
+    CHECK_NEAR(peak, 1.0f, 1e-4f);  // the virtual room's own side speaker
+  }
+}
+
 void test_render_ramp() {
   std::printf("render: gains ramp from the previous frame\n");
   SpeakerRenderer r;
@@ -297,6 +360,7 @@ int main() {
   test_zones();
   test_snap_size_divergence();
   test_beds_and_lfe();
+  test_warp_and_trim();
   test_render_ramp();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;

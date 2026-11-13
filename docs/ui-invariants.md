@@ -3318,6 +3318,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   when `AtmosNative.nativeLastObjectCount` is above zero. The native
   pipeline answers 1 for its bed fallback too, and that alone used to be
   shown as "Objects rendered".
+- **Binaural render reads on while it is automatic.** A profile nobody has
+  set (`hrtfAuto`) is on with headphones and off on a speaker; the switch
+  shows on with `atmos_binaural_auto` under it, and its settings (Room, the
+  HRTF presets) are shown. The first tap of the switch ends the automatic
+  setting (`setSpatial` clears `hrtfAuto`). Do not show it off with
+  headphones in: it is rendering.
+- There is one headphone render, the 15.1.12 room, and no switch for it:
+  Room at 0% is the dry one.
 - The object meter runs only while the page is started
   (`acquireObjectMeter` beside the channel detector's `acquire`).
 

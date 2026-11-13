@@ -240,4 +240,25 @@ class AtmosRendererTest {
         assertEquals(0f, old.copy(roomAmount = -1f).clamped().roomAmount, 0f)
         assertEquals(0.25f, old.copy(roomAmount = Float.NaN).clamped().roomAmount, 0f)
     }
+
+    @Test
+    fun `until the listener chooses, the binaural render follows the headphones`() {
+        val fresh = RendererProfile.DEFAULT
+        assertTrue(fresh.hrtfAuto)
+        assertFalse(fresh.hrtfEnabled)
+        // Headphones: on, as an object render. A speaker: the fold, as saved.
+        val on = fresh.effective(headphones = true)
+        assertTrue(on.hrtfEnabled)
+        assertEquals(RendererMode.OBJECT_RENDER, on.mode)
+        assertEquals(fresh, fresh.effective(headphones = false))
+        // Chosen off: off whatever is plugged in.
+        val off = fresh.copy(hrtfEnabled = false, hrtfAuto = false)
+        assertEquals(off, off.effective(headphones = true))
+        // Chosen on: on everywhere, as it always was.
+        val chosen = fresh.copy(hrtfEnabled = true, hrtfAuto = false, mode = RendererMode.OBJECT_RENDER)
+        assertEquals(chosen, chosen.effective(headphones = false))
+        // A profile saved before the setting existed is on the automatic one.
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        assertTrue(json.decodeFromString<RendererProfile>("""{"lfeGainDb":2.0}""").hrtfAuto)
+    }
 }

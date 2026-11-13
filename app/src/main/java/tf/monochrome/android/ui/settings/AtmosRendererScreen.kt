@@ -236,6 +236,8 @@ class AtmosRendererViewModel @Inject constructor(
         update(
             _profile.value.copy(
                 hrtfEnabled = enabled,
+                // The listener has chosen: no longer by what is plugged in.
+                hrtfAuto = false,
                 mode = if (enabled) RendererMode.OBJECT_RENDER else RendererMode.PASSTHROUGH,
             )
         )
@@ -546,36 +548,29 @@ fun AtmosRendererScreen(
             // .sofa has no registered MIME type, so accept any file and let the
             // native loader reject non-SOFA input.
             val sofaMimes = arrayOf("*/*")
+            val spatial = profile.hrtfEnabled || profile.hrtfAuto
             SettingSwitchItem(
                 title = stringResource(R.string.atmos_binaural_render_sofa_hrtf),
-                subtitle = if (profile.hrtfEnabled) {
-                    stringResource(R.string.atmos_binaural_on)
-                } else {
-                    stringResource(R.string.atmos_binaural_off)
+                // Until the switch is used it follows the output: on with
+                // headphones, the fold on a speaker. Shown on, and said so.
+                subtitle = when {
+                    profile.hrtfAuto && !profile.hrtfEnabled -> stringResource(R.string.atmos_binaural_auto)
+                    profile.hrtfEnabled -> stringResource(R.string.atmos_binaural_on)
+                    else -> stringResource(R.string.atmos_binaural_off)
                 },
-                checked = profile.hrtfEnabled,
+                checked = spatial,
                 onCheckedChange = { viewModel.setSpatial(it) },
             )
-            if (profile.hrtfEnabled) {
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_virtual_room),
-                    subtitle = if (profile.virtualRoom) {
-                        stringResource(R.string.atmos_virtual_room_on)
-                    } else {
-                        stringResource(R.string.atmos_virtual_room_off)
-                    },
-                    checked = profile.virtualRoom,
-                    onCheckedChange = { viewModel.update(profile.copy(virtualRoom = it)) },
+            if (spatial) {
+                // The headphone render is the 15.1.12 virtual room; Room at 0
+                // is the room's speakers with no reflections or tail.
+                LabeledSlider(
+                    title = stringResource(R.string.atmos_room_amount),
+                    valueText = "${(profile.roomAmount * 100).toInt()}%",
+                    value = profile.roomAmount,
+                    range = 0f..1f,
+                    onValueChange = { viewModel.update(profile.copy(roomAmount = it)) },
                 )
-                if (profile.virtualRoom) {
-                    LabeledSlider(
-                        title = stringResource(R.string.atmos_room_amount),
-                        valueText = "${(profile.roomAmount * 100).toInt()}%",
-                        value = profile.roomAmount,
-                        range = 0f..1f,
-                        onValueChange = { viewModel.update(profile.copy(roomAmount = it)) },
-                    )
-                }
                 if (profile.hrtfProfileId == null) Text(
                     stringResource(R.string.atmos_using_the_built_in_mit_kemar_set_pick_a_sofa),
                     style = MaterialTheme.typography.bodySmall,

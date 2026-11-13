@@ -53,6 +53,7 @@ class AtmosPipeline {
     room_.configure(sample_rate, room);
     room_feeds_.assign(static_cast<size_t>(kFrameSamples) * room_path_.renderer.channels(), 0.0f);
     flat_states_.assign(static_cast<size_t>(max_objects_), cavern::ObjectState{});
+    trims_.assign(static_cast<size_t>(max_objects_), 1.0f);
     dm_delay_l_.assign(kQmfLatency, 0.0f);
     dm_delay_r_.assign(kQmfLatency, 0.0f);
     dm_idx_ = 0;
@@ -457,6 +458,12 @@ class AtmosPipeline {
     // by the core decoder's overlap and the QMF round trip.
     int offset = 0, ramp = samples;
     if (!engine_.oamd().update_timing(offset, ramp)) { offset = 0; ramp = samples; }
+    p.renderer.set_warp(engine_.oamd().warp_mode() == 1);
+    if (static_cast<int>(trims_.size()) < objects) trims_.resize(objects, 1.0f);
+    for (int o = 0; o < objects; ++o) {
+      trims_[o] = std::pow(10.0f, engine_.oamd().surround_trim_db_51(o) / 20.0f);
+    }
+    p.renderer.set_surround_trims(trims_.data(), objects);
     p.renderer.render(p.ptrs.data(), p.states.data(), objects, engine_.lfe_object_index(),
                       lfe_gain_, samples, out, kCoreDelay + kQmfLatency + offset, ramp);
   }
@@ -708,6 +715,7 @@ class AtmosPipeline {
   LayoutPath room_path_;
   render::VirtualRoom room_;
   std::vector<float> room_feeds_;
+  std::vector<float> trims_;  // the stream's surround trim, linear, an object
   std::vector<cavern::ObjectState> flat_states_;  // objects at ear level (height off)
   bool virtual_room_ = false;  // the caller turns it on (set_virtual_room)
   float room_amount_ = 0.25f;

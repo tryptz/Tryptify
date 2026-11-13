@@ -174,11 +174,60 @@ void test_unsupported_version() {
 
 }  // namespace
 
+// trim_element (clause 5.5.12): warp_mode, then nine trim configurations each
+// on the default trim, disabled, or with trims of their own, then the
+// per-object switch.
+void test_trim_element() {
+  std::printf("OAMD: trim element (warp mode, trim configurations)\n");
+  BitWriter bw;
+  bw.put(4, 2);   // element_index = trim element
+  bw.put(4, 3);   // oa_element_size: 3 + 1 = 4 bytes follow
+  bw.bit(0);
+  bw.bit(0);      // b_discard_unknown_element
+  bw.put(2, 1);   // warp_mode 1: Y doubled
+  bw.put(2, 0);   // reserved
+  bw.put(2, 2);   // global_trim_mode: custom
+  bw.bit(1);      // cfg 0: default
+  bw.bit(0); bw.bit(1);                    // cfg 1: disabled
+  bw.bit(0); bw.bit(0); bw.put(5, 0x08);   // cfg 2: its own, a surround trim only
+  bw.put(4, 7);                            //        -4.5 dB (Table 36)
+  for (int cfg = 3; cfg < 9; ++cfg) bw.bit(1);  // the rest: default
+  bw.bit(1);      // b_disable_trim_per_obj
+  bw.bit(0); bw.bit(1); bw.bit(0);
+  bw.put(8, 0);   // padding
+  BitReader br(bw.bytes.data(), bw.bytes.size());
+  OAElementMD el;
+  CHECK(el.read(br, false, 3, 1));
+  CHECK(el.is_trim_element());
+  CHECK(el.warp_mode() == 1);
+  CHECK_NEAR(el.surround_trim_db(0, 0, -3.0f), -3.0f, 1e-6f);  // default: the renderer's own
+  CHECK_NEAR(el.surround_trim_db(1, 0, -3.0f), 0.0f, 1e-6f);   // disabled
+  CHECK_NEAR(el.surround_trim_db(2, 0, -3.0f), -4.5f, 1e-6f);  // transmitted
+  CHECK_NEAR(el.surround_trim_db(8, 2, -3.0f), -3.0f, 1e-6f);
+  CHECK_NEAR(el.surround_trim_db(0, 1, -3.0f), 0.0f, 1e-6f);   // off for object 1
+  CHECK_NEAR(el.surround_trim_db(9, 0, -3.0f), 0.0f, 1e-6f);   // no such configuration
+  CHECK(br.position() == 9 + 32);  // left at the element's end
+
+  // Global modes with nothing per configuration.
+  for (int mode = 0; mode < 2; ++mode) {
+    BitWriter g;
+    g.put(4, 2); g.put(4, 0); g.bit(0); g.bit(0);
+    g.put(2, 0); g.put(2, 0); g.put(2, mode); g.bit(0);
+    g.put(8, 0);
+    BitReader gr(g.bytes.data(), g.bytes.size());
+    OAElementMD e2;
+    CHECK(e2.read(gr, false, 2, 1));
+    CHECK(e2.warp_mode() == 0);
+    CHECK_NEAR(e2.surround_trim_db(1, 0, -3.0f), mode == 0 ? -3.0f : 0.0f, 1e-6f);
+  }
+}
+
 int main() {
   std::printf("=== Cavern OAMD frame (ObjectAudioMetadata) tests ===\n");
   test_frame_object_element();
   test_standard_bed_assignment();
   test_unsupported_version();
+  test_trim_element();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }

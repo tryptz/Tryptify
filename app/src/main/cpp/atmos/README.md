@@ -278,16 +278,17 @@ what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
 
 Still open / approximate:
 
-- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is parsed nowhere and
-  not applied. Its syntax is known (nine output configurations, each
-  default, disabled, or centre / surround / height trims and two balances),
-  its maths is not: the spec's text was out of reach, and the one stream
-  with default trims to hand (warp_mode 1) does not pin it. Untrimmed, its
-  5.1 render is C +1.9, Ls +1.8, Rs +2.0 dB against the core. Fitting a
-  surround, height and centre trim from the trim table brings the levels
-  within 0.4 dB with several different combinations, and none brings the
-  centre's waveform past 0.90 correlation, so something else (the warp, I
-  think) is in it too. Not guessed at.
+- **Trims beyond 5.1's surround trim.** The trim element is read
+  (`OAElementMD::trim_element`): `warp_mode` 1 doubles Y on 5.x layouts, and
+  trim configuration 1 (5.1; the bundled clip disables exactly that one and
+  matches its core untrimmed) takes its surround trim off what objects send
+  to the surrounds: the transmitted value, or -3 dB on default_trim. The
+  -3 dB is measured, not specified: the specification gives the choice and
+  the custom values, not the default's, nor how a renderer applies any of
+  them. On a second real stream (warp 1, default trims) C went from +1.9 dB
+  / 0.93 to +0.4 dB / 0.994 against the core and Ls/Rs from +3.3 dB to
+  +0.3. Centre and height trims, the two balances, and the eight other
+  configurations are read past: nothing to measure them against.
 - Above 5.1 there is no Dolby render to compare with: the panner on height
   layouts is the 5.1 law carried up, not a measured one. Overhead positions
   on 5.1 are within 0.04 of the core, not 0.01.

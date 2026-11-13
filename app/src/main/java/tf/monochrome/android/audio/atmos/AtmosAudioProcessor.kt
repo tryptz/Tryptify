@@ -57,6 +57,28 @@ class AtmosAudioProcessor @Inject constructor(
     // volatile snapshot so the audio thread never touches DataStore, and pushed
     // into the native pipeline whenever it changes.
     @Volatile private var profile: RendererProfile = RendererProfile.DEFAULT
+    // As the listener saved it; [profile] is this for the output in use.
+    @Volatile private var savedProfile: RendererProfile = RendererProfile.DEFAULT
+
+    /**
+     * Whether headphones are the output (wired, USB or Bluetooth). Set by
+     * PlaybackService from its device callback; decides the binaural render
+     * while the listener has not chosen ([RendererProfile.hrtfAuto]).
+     */
+    var headphones: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            applyProfile(savedProfile)
+        }
+
+    private fun applyProfile(saved: RendererProfile) {
+        savedProfile = saved
+        val updated = saved.effective(headphones)
+        profile = updated
+        refreshSofa(updated.hrtfProfileId)
+        pushParams()
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Custom HRTF (a user .sofa copied into app storage; its path is the
@@ -218,11 +240,7 @@ class AtmosAudioProcessor @Inject constructor(
 
     init {
         preferences.rendererProfile
-            .onEach { updated ->
-                profile = updated
-                refreshSofa(updated.hrtfProfileId)
-                pushParams()
-            }
+            .onEach { updated -> applyProfile(updated) }
             .launchIn(scope)
     }
 
@@ -287,7 +305,9 @@ class AtmosAudioProcessor @Inject constructor(
             cur.mode
         }
         // The room first: the render params below hand it the strength as well.
-        AtmosNative.nativeSetVirtualRoom(p, cur.virtualRoom, cur.roomAmount)
+        // It is the headphone render; the one-HRIR-an-object render it
+        // replaced stays in the native code, unused from here.
+        AtmosNative.nativeSetVirtualRoom(p, true, cur.roomAmount)
         AtmosNative.nativeSetRenderParams(
             p,
             mode.ordinal,
@@ -311,7 +331,7 @@ class AtmosAudioProcessor @Inject constructor(
                     !cur.hrtfEnabled -> "off (AutoEQ only)"
                     sofaBytes != null -> "custom"
                     else -> "built-in"
-                }} room=${if (cur.virtualRoom) "15.1.12 @ ${cur.roomAmount}" else "off"}",
+                }} room=15.1.12 @ ${cur.roomAmount}",
         )
     }
 
@@ -406,8 +426,10 @@ class AtmosAudioProcessor @Inject constructor(
      * chain and what it puts out. A change to it means nothing to a stream
      * already playing until the chain is configured again.
      */
-    fun configurationKey(profile: RendererProfile, deviceChannels: Int?): Any =
-        listOf(profile.mode == RendererMode.PASSTHROUGH, profile.speakerLayout(deviceChannels))
+    fun configurationKey(profile: RendererProfile, deviceChannels: Int?, headphones: Boolean): Any =
+        profile.effective(headphones).let {
+            listOf(it.mode == RendererMode.PASSTHROUGH, it.speakerLayout(deviceChannels))
+        }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (inputFormat == AudioFormat.NOT_SET) return
@@ -452,7 +474,7 @@ class AtmosAudioProcessor @Inject constructor(
             // with no JOC, or none yet): only its object count says which it
             // was. This used to report "objects rendered" for both.
             val objects = if (rc == 1) AtmosNative.nativeLastObjectCount(pipeline) else 0
-            val room = profile.virtualRoom
+            val room = true
             noteOutcome(
                 when {
                     rc != 1 -> Outcome.BED_FOLDED
