@@ -1158,6 +1158,11 @@
     <string name="settings_dac_tile_detail">Toca para añadir un recuadro a Ajustes rápidos. Un toque en él pausa la música y libera el DAC para que lo usen otras apps; otro toque lo recupera.</string>
     <string name="settings_dac_tile_detail_manual">Edita tus Ajustes rápidos y añade el recuadro “DAC USB exclusivo”. Un toque en él pausa la música y libera el DAC para que lo usen otras apps; otro toque lo recupera.</string>
     <string name="settings_dac_tile_already">El recuadro ya está en tus Ajustes rápidos.</string>
+    <string name="tile_system_eq_on">Activado</string>
+    <string name="tile_system_eq_off">Desactivado</string>
+    <string name="tile_system_eq_no_correction">Sin corrección de auriculares</string>
+    <string name="settings_system_eq_tile_detail">Toca para añadir un recuadro de “AutoEQ en todo el sistema” a Ajustes rápidos y activarlo o desactivarlo desde cualquier app.</string>
+    <string name="settings_system_eq_tile_detail_manual">Edita tus Ajustes rápidos y añade el recuadro “AutoEQ en todo el sistema” para activarlo o desactivarlo desde cualquier app.</string>
     <string name="settings_custom_folder">Carpeta personalizada</string>
     <string name="settings_internal_storage_default">Almacenamiento interno de la app (predeterminado)</string>
     <string name="settings_discord_not_set">Sin configurar. Necesario para mostrar lo que escuchas</string>
@@ -3528,6 +3533,8 @@
     <string name="whats_new_1952_m3u_export_body">“Exportar como M3U”, en el menú ⋮ de una playlist, la guarda como archivo .m3u donde tú elijas, para otros reproductores u otro dispositivo. Incluye las canciones que son archivos de este dispositivo; las que solo se reproducen en streaming se omiten.</string>
     <string name="whats_new_1952_dac_tile_title">Libera el DAC desde Ajustes rápidos</string>
     <string name="whats_new_1952_dac_tile_body">Un nuevo recuadro pausa la música y cede el DAC a otras apps con un toque; otro toque lo recupera. Añádelo en Ajustes › Audio, debajo de DAC USB exclusivo.</string>
+    <string name="whats_new_1952_system_eq_tile_title">AutoEQ en todo el sistema desde Ajustes rápidos</string>
+    <string name="whats_new_1952_system_eq_tile_body">Un nuevo recuadro activa o desactiva el AutoEQ en todo el sistema desde cualquier app y muestra los auriculares que corrige. Añádelo en Ajustes › Ecualizador, debajo de AutoEQ en todo el sistema.</string>
     <string name="whats_new_1952_player_menu_title">El menú del reproductor es el de las canciones</string>
     <string name="whats_new_1952_player_menu_body">El ⋮ del reproductor abre ahora el mismo menú que tiene una canción en cualquier lista, así que también están los favoritos, la información de la canción, Trypt Mania y la cola. Las acciones propias del reproductor (aleatorio, repetición, letras, visuales, ajustes) van al final.</string>
 </resources>

@@ -1082,6 +1082,11 @@
     <string name="settings_dac_tile_detail">点按即可将功能块添加到快捷设置。点一下该功能块会暂停音乐并释放 DAC，供其他应用使用；再点一下即可重新占用 DAC。</string>
     <string name="settings_dac_tile_detail_manual">编辑快捷设置并添加“独占 USB DAC”功能块。点一下该功能块会暂停音乐并释放 DAC，供其他应用使用；再点一下即可重新占用 DAC。</string>
     <string name="settings_dac_tile_already">该功能块已在快捷设置中。</string>
+    <string name="tile_system_eq_on">已开启</string>
+    <string name="tile_system_eq_off">已关闭</string>
+    <string name="tile_system_eq_no_correction">未设置耳机校正</string>
+    <string name="settings_system_eq_tile_detail">点按即可将“全局 AutoEQ”功能块添加到快捷设置，在任何应用中都能开关。</string>
+    <string name="settings_system_eq_tile_detail_manual">编辑快捷设置并添加“全局 AutoEQ”功能块，在任何应用中都能开关。</string>
     <string name="settings_custom_folder">自定义文件夹</string>
     <string name="settings_internal_storage_default">应用内部存储（默认）</string>
     <string name="settings_discord_not_set">未设置。显示你正在播放的内容需要它</string>
@@ -3372,6 +3377,8 @@
     <string name="whats_new_1952_m3u_export_body">歌单 ⋮ 菜单中的“导出为 M3U”可将歌单保存为 .m3u 文件，位置由你选择，供其他播放器或其他设备使用。文件中列出的是本机上的歌曲文件；只能在线播放的歌曲会被略过。</string>
     <string name="whats_new_1952_dac_tile_title">从快捷设置释放 DAC</string>
     <string name="whats_new_1952_dac_tile_body">新的功能块点一下即可暂停音乐并将 DAC 交给其他应用，再点一下即可重新占用。可在“设置 › 音频”的“独占 USB DAC”下方添加。</string>
+    <string name="whats_new_1952_system_eq_tile_title">从快捷设置开关全局 AutoEQ</string>
+    <string name="whats_new_1952_system_eq_tile_body">新的功能块可在任何应用中开关全局 AutoEQ，并显示正在校正的耳机。可在“设置 › 均衡器”的“全局 AutoEQ”下方添加。</string>
     <string name="whats_new_1952_player_menu_title">播放器菜单与歌曲菜单一致</string>
     <string name="whats_new_1952_player_menu_body">播放器的 ⋮ 现在打开的菜单与各列表中歌曲的菜单相同，因此也能在这里点赞、查看歌曲信息、进入 Trypt Mania 和加入队列。播放器自己的操作（随机播放、循环、歌词、视觉效果、设置）排在最后。</string>
 </resources>

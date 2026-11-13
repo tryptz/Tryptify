@@ -1158,6 +1158,11 @@
     <string name="settings_dac_tile_detail">Tocca per aggiungere un riquadro alle Impostazioni rapide. Un tocco mette in pausa la musica e rilascia il DAC per le altre app; un altro lo riprende.</string>
     <string name="settings_dac_tile_detail_manual">Modifica le Impostazioni rapide e aggiungi il riquadro “DAC USB esclusivo”. Un tocco mette in pausa la musica e rilascia il DAC per le altre app; un altro lo riprende.</string>
     <string name="settings_dac_tile_already">Il riquadro è già nelle Impostazioni rapide.</string>
+    <string name="tile_system_eq_on">Attivo</string>
+    <string name="tile_system_eq_off">Disattivato</string>
+    <string name="tile_system_eq_no_correction">Nessuna correzione cuffie</string>
+    <string name="settings_system_eq_tile_detail">Tocca per aggiungere un riquadro “AutoEQ di sistema” alle Impostazioni rapide, per attivarlo e disattivarlo sopra qualsiasi app.</string>
+    <string name="settings_system_eq_tile_detail_manual">Modifica le Impostazioni rapide e aggiungi il riquadro “AutoEQ di sistema”, per attivarlo e disattivarlo sopra qualsiasi app.</string>
     <string name="settings_custom_folder">Cartella personalizzata</string>
     <string name="settings_internal_storage_default">Memoria interna dell\'app (predefinita)</string>
     <string name="settings_discord_not_set">Non impostato. Necessario per mostrare cosa stai ascoltando</string>
@@ -3528,6 +3533,8 @@
     <string name="whats_new_1952_m3u_export_body">“Esporta come M3U”, nel menu ⋮ di una playlist, la salva come file .m3u dove preferisci, per altri lettori o un altro dispositivo. Elenca i brani che sono file su questo dispositivo; quelli solo in streaming vengono tralasciati.</string>
     <string name="whats_new_1952_dac_tile_title">Rilascia il DAC dalle Impostazioni rapide</string>
     <string name="whats_new_1952_dac_tile_body">Un nuovo riquadro mette in pausa la musica e cede il DAC alle altre app con un tocco; un altro tocco lo riprende. Aggiungilo in Impostazioni › Audio, sotto DAC USB esclusivo.</string>
+    <string name="whats_new_1952_system_eq_tile_title">AutoEQ di sistema dalle Impostazioni rapide</string>
+    <string name="whats_new_1952_system_eq_tile_body">Un nuovo riquadro attiva e disattiva l’AutoEQ di sistema sopra qualsiasi app e mostra le cuffie che corregge. Aggiungilo in Impostazioni › Equalizzatore, sotto AutoEQ di sistema.</string>
     <string name="whats_new_1952_player_menu_title">Il menu del lettore è quello dei brani</string>
     <string name="whats_new_1952_player_menu_body">Il ⋮ del lettore ora apre lo stesso menu che un brano ha in ogni elenco, quindi ci sono anche i preferiti, le info del brano, Trypt Mania e la coda. Le azioni proprie del lettore (casuale, ripeti, testi, effetti visivi, impostazioni) sono alla fine.</string>
 </resources>

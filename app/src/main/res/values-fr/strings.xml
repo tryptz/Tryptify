@@ -1158,6 +1158,11 @@
     <string name="settings_dac_tile_detail">Touchez pour ajouter un bloc aux Réglages rapides. Un appui dessus met la musique en pause et libère le DAC pour les autres apps ; un autre le reprend.</string>
     <string name="settings_dac_tile_detail_manual">Modifiez vos Réglages rapides et ajoutez le bloc « DAC USB exclusif ». Un appui dessus met la musique en pause et libère le DAC pour les autres apps ; un autre le reprend.</string>
     <string name="settings_dac_tile_already">Le bloc est déjà dans vos Réglages rapides.</string>
+    <string name="tile_system_eq_on">Activé</string>
+    <string name="tile_system_eq_off">Désactivé</string>
+    <string name="tile_system_eq_no_correction">Aucune correction de casque</string>
+    <string name="settings_system_eq_tile_detail">Touchez pour ajouter un bloc « AutoEQ à l’échelle du système » aux Réglages rapides, et l’activer ou le désactiver depuis n’importe quelle app.</string>
+    <string name="settings_system_eq_tile_detail_manual">Modifiez vos Réglages rapides et ajoutez le bloc « AutoEQ à l’échelle du système », pour l’activer ou le désactiver depuis n’importe quelle app.</string>
     <string name="settings_custom_folder">Dossier personnalisé</string>
     <string name="settings_internal_storage_default">Stockage interne de l’app (par défaut)</string>
     <string name="settings_discord_not_set">Non défini. Nécessaire pour montrer ce que vous écoutez</string>
@@ -3528,6 +3533,8 @@
     <string name="whats_new_1952_m3u_export_body">« Exporter en M3U », dans le menu ⋮ d’une playlist, l’enregistre en fichier .m3u là où vous le choisissez, pour d’autres lecteurs ou un autre appareil. Il liste les titres qui sont des fichiers sur cet appareil ; ceux qui ne sont qu’en streaming sont laissés de côté.</string>
     <string name="whats_new_1952_dac_tile_title">Libérer le DAC depuis les Réglages rapides</string>
     <string name="whats_new_1952_dac_tile_body">Un nouveau bloc met la musique en pause et confie le DAC aux autres apps d’un seul appui ; un autre appui le reprend. Ajoutez-le dans Paramètres › Audio, sous DAC USB exclusif.</string>
+    <string name="whats_new_1952_system_eq_tile_title">L’AutoEQ système depuis les Réglages rapides</string>
+    <string name="whats_new_1952_system_eq_tile_body">Un nouveau bloc active ou désactive l’AutoEQ à l’échelle du système depuis n’importe quelle app, et affiche le casque qu’il corrige. Ajoutez-le dans Paramètres › Égaliseur, sous AutoEQ à l’échelle du système.</string>
     <string name="whats_new_1952_player_menu_title">Le menu du lecteur est celui des titres</string>
     <string name="whats_new_1952_player_menu_body">Le ⋮ du lecteur ouvre désormais le même menu qu’un titre dans n’importe quelle liste : on y trouve aussi les favoris, les infos du titre, Trypt Mania et la file d’attente. Les actions propres au lecteur (lecture aléatoire, répétition, paroles, visuels, paramètres) sont à la fin.</string>
 </resources>

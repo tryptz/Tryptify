@@ -2326,6 +2326,17 @@ music left paused.
   tap asks the system to add the tile; before that the system has no such
   request, so the row is not a button and says where the tile is.
 
+**System-wide AutoEQ has a Quick Settings tile too**
+(`SystemEqQuickTileService`), for the switch under AutoEQ. System-wide is a
+part of the equalizer, so the tile follows the switch's rule: on only while
+the equalizer and system-wide are both on; turned on it turns the equalizer
+on as well, and turned off it leaves the equalizer correcting the app's own
+music. Under its name it shows the headphones the correction is for, or "No
+headphone correction set" when the curve is flat (the effect then stays
+detached and nothing changes). Its row in Settings › Equalizer sits under the
+System-wide switch, shown with it (`SystemEqTileLook`,
+`SystemEqQuickTileTest`).
+
 **Trypt Mania plays through the exclusive USB DAC, and the DAC has one
 stream.** Its transport and its preview stay plain ExoPlayers, kept out of
 the shared player on purpose, but each gets a `LibusbAudioSink` of its own

@@ -1121,6 +1121,11 @@
     <string name="settings_dac_tile_detail">Tap to add a tile to Quick Settings. One tap on it pauses the music and releases the DAC so other apps can use it; another takes the DAC back.</string>
     <string name="settings_dac_tile_detail_manual">Edit your Quick Settings and add the Exclusive USB DAC tile. One tap on it pauses the music and releases the DAC so other apps can use it; another takes the DAC back.</string>
     <string name="settings_dac_tile_already">The tile is already in your Quick Settings.</string>
+    <string name="tile_system_eq_on">On</string>
+    <string name="tile_system_eq_off">Off</string>
+    <string name="tile_system_eq_no_correction">No headphone correction set</string>
+    <string name="settings_system_eq_tile_detail">Tap to add a System-wide AutoEQ tile to Quick Settings, to turn it on and off over any app.</string>
+    <string name="settings_system_eq_tile_detail_manual">Edit your Quick Settings and add the System-wide AutoEQ tile, to turn it on and off over any app.</string>
     <string name="settings_custom_folder">Custom folder</string>
     <string name="settings_internal_storage_default">Internal app storage (default)</string>
     <string name="settings_discord_not_set">Not set. Needed to show what you\'re playing</string>
@@ -3453,6 +3458,8 @@
     <string name="whats_new_1952_m3u_export_body">Export as M3U, in a playlist\'s ⋮ menu, saves it as an .m3u file wherever you choose, for other players or another device. It lists the songs that are files on this device; songs that only stream are left out.</string>
     <string name="whats_new_1952_dac_tile_title">Release the DAC from Quick Settings</string>
     <string name="whats_new_1952_dac_tile_body">A new tile pauses the music and hands the DAC to other apps in one tap; another tap takes it back. Add it in Settings › Audio, under Exclusive USB DAC.</string>
+    <string name="whats_new_1952_system_eq_tile_title">System-wide AutoEQ from Quick Settings</string>
+    <string name="whats_new_1952_system_eq_tile_body">A new tile turns System-wide AutoEQ on and off over any app, and shows the headphones it corrects for. Add it in Settings › Equalizer, under System-wide AutoEQ.</string>
     <string name="whats_new_1952_player_menu_title">The player\'s menu is the song menu</string>
     <string name="whats_new_1952_player_menu_body">The player\'s ⋮ now opens the same menu a song has in every list, so liking, Track info, Trypt Mania and the queue are there too. The player\'s own actions (shuffle, repeat, lyrics, visuals, settings) are at the end.</string>
 </resources>

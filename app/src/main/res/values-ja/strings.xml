@@ -1082,6 +1082,11 @@
     <string name="settings_dac_tile_detail">タップするとクイック設定にタイルを追加します。タイルを 1 回タップすると音楽を一時停止して DAC を解放し、ほかのアプリが使えるようにします。もう一度タップすると DAC を再び確保します。</string>
     <string name="settings_dac_tile_detail_manual">クイック設定を編集して「USB DAC の排他使用」タイルを追加してください。タイルを 1 回タップすると音楽を一時停止して DAC を解放し、ほかのアプリが使えるようにします。もう一度タップすると DAC を再び確保します。</string>
     <string name="settings_dac_tile_already">タイルはすでにクイック設定にあります。</string>
+    <string name="tile_system_eq_on">オン</string>
+    <string name="tile_system_eq_off">オフ</string>
+    <string name="tile_system_eq_no_correction">ヘッドホン補正が未設定</string>
+    <string name="settings_system_eq_tile_detail">タップすると「システム全体の AutoEQ」タイルをクイック設定に追加し、どのアプリの上からでもオン・オフできます。</string>
+    <string name="settings_system_eq_tile_detail_manual">クイック設定を編集して「システム全体の AutoEQ」タイルを追加すると、どのアプリの上からでもオン・オフできます。</string>
     <string name="settings_custom_folder">カスタムフォルダ</string>
     <string name="settings_internal_storage_default">アプリの内部ストレージ（既定）</string>
     <string name="settings_discord_not_set">未設定。再生中の曲を表示するのに必要です</string>
@@ -3372,6 +3377,8 @@
     <string name="whats_new_1952_m3u_export_body">プレイリストの ⋮ メニューの「M3U として書き出す」で、好きな場所に .m3u ファイルとして保存できます。ほかのプレーヤーや別の端末で使えます。この端末上のファイルである曲が記載され、ストリーミングのみの曲は含まれません。</string>
     <string name="whats_new_1952_dac_tile_title">クイック設定から DAC を解放</string>
     <string name="whats_new_1952_dac_tile_body">新しいタイルを 1 回タップすると、音楽を一時停止して DAC をほかのアプリに渡します。もう一度タップすると DAC を再び確保します。「設定 › オーディオ」の「USB DAC の排他使用」の下から追加できます。</string>
+    <string name="whats_new_1952_system_eq_tile_title">クイック設定からシステム全体の AutoEQ</string>
+    <string name="whats_new_1952_system_eq_tile_body">新しいタイルで、どのアプリの上からでもシステム全体の AutoEQ をオン・オフでき、補正中のヘッドホンも表示されます。「設定 › イコライザ」の「システム全体の AutoEQ」の下から追加できます。</string>
     <string name="whats_new_1952_player_menu_title">プレーヤーのメニューが曲のメニューに</string>
     <string name="whats_new_1952_player_menu_body">プレーヤーの ⋮ で、どのリストの曲にもあるのと同じメニューが開くようになりました。お気に入り、曲情報、Trypt Mania、キューもここから使えます。プレーヤー独自の操作（シャッフル、リピート、歌詞、ビジュアル、設定）は末尾にあります。</string>
 </resources>

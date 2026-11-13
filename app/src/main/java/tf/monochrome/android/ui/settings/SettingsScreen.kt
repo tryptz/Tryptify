@@ -549,6 +549,7 @@ private fun EqualizerTab(
                     badge = stringResource(R.string.settings_beta),
                     caution = stringResource(R.string.settings_swaps_the_app_s_exact_correction_for_a_coarser),
                 )
+                SystemEqTileSetting()
             }
         }
 
@@ -2243,13 +2244,43 @@ private fun DacTileSetting() {
     )
 }
 
+/**
+ * System-wide AutoEQ as a Quick Settings tile
+ * ([tf.monochrome.android.audio.eq.SystemEqQuickTileService]), under its
+ * switch: from Android 13 a tap asks the system to add it; before that the
+ * row says where the tile is found.
+ */
+@Composable
+private fun SystemEqTileSetting() {
+    val context = LocalContext.current
+    val canAsk = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    SettingItem(
+        title = stringResource(R.string.settings_dac_tile),
+        subtitle = stringResource(
+            if (canAsk) R.string.settings_system_eq_tile_detail else R.string.settings_system_eq_tile_detail_manual
+        ),
+        onClick = if (canAsk) ({
+            requestTile(
+                context,
+                tf.monochrome.android.audio.eq.SystemEqQuickTileService::class.java,
+                R.string.settings_system_wide_autoeq,
+                R.drawable.ic_qs_system_eq,
+            )
+        }) else null,
+    )
+}
+
 @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
-private fun requestDacTile(context: Context) {
+private fun requestDacTile(context: Context) =
+    requestTile(context, tf.monochrome.android.audio.usb.DacQuickTileService::class.java, R.string.tile_exclusive_dac, R.drawable.ic_qs_usb_dac)
+
+@androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+private fun requestTile(context: Context, service: Class<*>, @androidx.annotation.StringRes label: Int, @androidx.annotation.DrawableRes icon: Int) {
     val statusBar = context.getSystemService(android.app.StatusBarManager::class.java) ?: return
     statusBar.requestAddTileService(
-        android.content.ComponentName(context, tf.monochrome.android.audio.usb.DacQuickTileService::class.java),
-        context.getString(R.string.tile_exclusive_dac),
-        android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_qs_usb_dac),
+        android.content.ComponentName(context, service),
+        context.getString(label),
+        android.graphics.drawable.Icon.createWithResource(context, icon),
         context.mainExecutor,
     ) { result ->
         // Already there, the system shows nothing at all: say why.

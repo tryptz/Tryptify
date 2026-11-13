@@ -233,6 +233,14 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_1952_dac_tile_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "System-wide AutoEQ from Quick Settings",
+                    body = "A new tile turns System-wide AutoEQ on and off over any app, and shows the headphones it corrects for. Add it in Settings › Equalizer, under System-wide AutoEQ.",
+                    titleRes = R.string.whats_new_1952_system_eq_tile_title,
+                    bodyRes = R.string.whats_new_1952_system_eq_tile_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "The player's menu is the song menu",

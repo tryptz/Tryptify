@@ -1120,6 +1120,11 @@
     <string name="settings_dac_tile_detail">Tippe, um den Schnelleinstellungen eine Kachel hinzuzufügen. Ein Tipp darauf pausiert die Musik und gibt den DAC für andere Apps frei; ein weiterer holt ihn zurück.</string>
     <string name="settings_dac_tile_detail_manual">Bearbeite deine Schnelleinstellungen und füge die Kachel „Exklusiver USB-DAC“ hinzu. Ein Tipp darauf pausiert die Musik und gibt den DAC für andere Apps frei; ein weiterer holt ihn zurück.</string>
     <string name="settings_dac_tile_already">Die Kachel ist bereits in deinen Schnelleinstellungen.</string>
+    <string name="tile_system_eq_on">An</string>
+    <string name="tile_system_eq_off">Aus</string>
+    <string name="tile_system_eq_no_correction">Keine Kopfhörerkorrektur</string>
+    <string name="settings_system_eq_tile_detail">Tippe, um den Schnelleinstellungen eine Kachel „Systemweites AutoEQ“ hinzuzufügen und es über jeder App ein- und auszuschalten.</string>
+    <string name="settings_system_eq_tile_detail_manual">Bearbeite deine Schnelleinstellungen und füge die Kachel „Systemweites AutoEQ“ hinzu, um es über jeder App ein- und auszuschalten.</string>
     <string name="settings_custom_folder">Eigener Ordner</string>
     <string name="settings_internal_storage_default">Interner App-Speicher (Standard)</string>
     <string name="settings_discord_not_set">Nicht gesetzt. Nötig, um zu zeigen, was du hörst</string>
@@ -3450,6 +3455,8 @@
     <string name="whats_new_1952_m3u_export_body">„Als M3U exportieren“ im ⋮-Menü einer Playlist speichert sie als .m3u-Datei an einem Ort deiner Wahl, für andere Player oder ein anderes Gerät. Aufgeführt werden die Titel, die Dateien auf diesem Gerät sind; reine Streaming-Titel werden ausgelassen.</string>
     <string name="whats_new_1952_dac_tile_title">DAC über die Schnelleinstellungen freigeben</string>
     <string name="whats_new_1952_dac_tile_body">Eine neue Kachel pausiert mit einem Tipp die Musik und überlässt den DAC anderen Apps; ein weiterer Tipp holt ihn zurück. Füge sie unter Einstellungen › Audio hinzu, unter Exklusiver USB-DAC.</string>
+    <string name="whats_new_1952_system_eq_tile_title">Systemweites AutoEQ in den Schnelleinstellungen</string>
+    <string name="whats_new_1952_system_eq_tile_body">Eine neue Kachel schaltet systemweites AutoEQ über jeder App ein und aus und zeigt den Kopfhörer, für den es korrigiert. Füge sie unter Einstellungen › Equalizer hinzu, unter Systemweites AutoEQ.</string>
     <string name="whats_new_1952_player_menu_title">Das Player-Menü ist das Titelmenü</string>
     <string name="whats_new_1952_player_menu_body">Das ⋮ im Player öffnet jetzt dasselbe Menü, das ein Titel in jeder Liste hat: Favoriten, Titelinfo, Trypt Mania und die Warteschlange sind auch dabei. Die eigenen Aktionen des Players (Zufall, Wiederholen, Songtext, Visuals, Einstellungen) stehen am Ende.</string>
 </resources>

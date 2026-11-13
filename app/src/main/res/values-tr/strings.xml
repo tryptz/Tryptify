@@ -1120,6 +1120,11 @@
     <string name="settings_dac_tile_detail">Hızlı Ayarlar’a bir kutu eklemek için dokunun. Kutuya bir kez dokunmak müziği duraklatır ve DAC’i diğer uygulamalar için serbest bırakır; bir kez daha dokunmak DAC’i geri alır.</string>
     <string name="settings_dac_tile_detail_manual">Hızlı Ayarlar’ı düzenleyip “Özel USB DAC” kutusunu ekleyin. Kutuya bir kez dokunmak müziği duraklatır ve DAC’i diğer uygulamalar için serbest bırakır; bir kez daha dokunmak DAC’i geri alır.</string>
     <string name="settings_dac_tile_already">Kutu zaten Hızlı Ayarlar’da.</string>
+    <string name="tile_system_eq_on">Açık</string>
+    <string name="tile_system_eq_off">Kapalı</string>
+    <string name="tile_system_eq_no_correction">Kulaklık düzeltmesi yok</string>
+    <string name="settings_system_eq_tile_detail">Hızlı Ayarlar’a “Sistem genelinde AutoEQ” kutusu eklemek için dokunun; her uygulamanın üzerinden açıp kapatabilirsiniz.</string>
+    <string name="settings_system_eq_tile_detail_manual">Hızlı Ayarlar’ı düzenleyip “Sistem genelinde AutoEQ” kutusunu ekleyin; her uygulamanın üzerinden açıp kapatabilirsiniz.</string>
     <string name="settings_custom_folder">Özel klasör</string>
     <string name="settings_internal_storage_default">Uygulamanın dahili depolama alanı (varsayılan)</string>
     <string name="settings_discord_not_set">Ayarlanmadı. Ne çaldığınızı göstermek için gerekir</string>
@@ -3450,6 +3455,8 @@
     <string name="whats_new_1952_m3u_export_body">Bir çalma listesinin ⋮ menüsündeki “M3U olarak dışa aktar”, listeyi seçtiğiniz yere .m3u dosyası olarak kaydeder; başka oynatıcılar veya başka bir cihaz için. Bu cihazda dosya olan parçalar listelenir; yalnızca akışla çalınanlar atlanır.</string>
     <string name="whats_new_1952_dac_tile_title">DAC’i Hızlı Ayarlar’dan serbest bırak</string>
     <string name="whats_new_1952_dac_tile_body">Yeni bir kutu tek dokunuşla müziği duraklatır ve DAC’i diğer uygulamalara bırakır; bir dokunuş daha DAC’i geri alır. Ayarlar › Ses’te, Özel USB DAC’in altından ekleyin.</string>
+    <string name="whats_new_1952_system_eq_tile_title">Hızlı Ayarlar’dan sistem genelinde AutoEQ</string>
+    <string name="whats_new_1952_system_eq_tile_body">Yeni bir kutu, sistem genelinde AutoEQ’yu her uygulamanın üzerinden açıp kapatır ve düzelttiği kulaklığı gösterir. Ayarlar › Ekolayzer’de, Sistem genelinde AutoEQ’nun altından ekleyin.</string>
     <string name="whats_new_1952_player_menu_title">Oynatıcının menüsü artık parça menüsü</string>
     <string name="whats_new_1952_player_menu_body">Oynatıcının ⋮ düğmesi artık her listedeki bir parçanın menüsünün aynısını açıyor; beğenme, parça bilgisi, Trypt Mania ve sıra da burada. Oynatıcıya özgü işlemler (karıştır, tekrarla, şarkı sözleri, görseller, ayarlar) en sonda.</string>
 </resources>

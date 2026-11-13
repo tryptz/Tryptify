@@ -215,6 +215,22 @@
                 android:value="true" />
         </service>
 
+        <!-- System-wide AutoEQ's Quick Settings tile: the switch under AutoEQ,
+             over any app. Bound by the system only, as the DAC tile is. -->
+        <service
+            android:name=".audio.eq.SystemEqQuickTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_system_eq"
+            android:label="@string/settings_system_wide_autoeq"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
         <service
             android:name=".party.PartyService"
             android:exported="false"
