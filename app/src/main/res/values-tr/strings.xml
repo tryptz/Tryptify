@@ -1006,6 +1006,7 @@
     <string name="settings_updates">Güncellemeler</string>
     <string name="settings_about_tryptify">Tryptify hakkında</string>
     <string name="settings_support_the_app">Uygulamayı destekle</string>
+    <string name="settings_join_discord">Discord’a katıl</string>
     <string name="settings_local_media_scanning">Yerel medya taraması</string>
     <string name="settings_tab_bar">Gezinme çubuğu</string>
     <string name="settings_home_library_and_search_are_always_there_turn">Ana Sayfa, Kitaplık ve Ara her zaman görünür. Ortaya en fazla iki sayfa seçin.</string>

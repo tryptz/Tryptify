@@ -132,7 +132,11 @@ private class TapMediaPeriod(
     override fun discardBuffer(positionUs: Long, toKeyframe: Boolean) =
         delegate.discardBuffer(positionUs, toKeyframe)
     override fun readDiscontinuity(): Long = delegate.readDiscontinuity()
-    override fun seekToUs(positionUs: Long): Long = delegate.seekToUs(positionUs)
+    override fun seekToUs(positionUs: Long): Long {
+        // Frames tapped before a seek are for audio the decoder is about to drop.
+        frameBuffer.clear()
+        return delegate.seekToUs(positionUs)
+    }
     override fun getAdjustedSeekPositionUs(positionUs: Long, seekParameters: SeekParameters): Long =
         delegate.getAdjustedSeekPositionUs(positionUs, seekParameters)
     override fun getBufferedPositionUs(): Long = delegate.bufferedPositionUs

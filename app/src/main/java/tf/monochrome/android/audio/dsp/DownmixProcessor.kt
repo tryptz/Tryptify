@@ -220,9 +220,16 @@ class DownmixProcessor @Inject constructor(
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (inputAudioFormat.channelCount < 1 ||
-            inputAudioFormat.channelCount > MAX_INPUT_CHANNELS) {
+        if (inputAudioFormat.channelCount < 1) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+        }
+        if (inputAudioFormat.channelCount > MAX_INPUT_CHANNELS) {
+            // Wider than anything folded here (a 9.1.x speaker render travels
+            // as 24 channels): step out of the chain, as the mixer and the
+            // equalizers do. Throwing stopped playback on the 16-bit path.
+            pendingFormat = AudioFormat.NOT_SET
+            inputFormat = AudioFormat.NOT_SET
+            return AudioFormat.NOT_SET
         }
         // 5.1.4 and 7.1.4 have no fixed fold here — they go to Android whole —
         // but with the spatial map on they are placed and folded like the rest.

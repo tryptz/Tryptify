@@ -3293,6 +3293,15 @@ is plain and formal (the owner asked for both).
 - The step does not slide under "Disable animations".
 - The old Downloads and Audio output steps are gone; both live in Settings.
 
+### About: the support section
+
+`SupportSection` in `ui/settings/SettingsScreen.kt`: Ko-fi and Patreon side
+by side, outlined and equal (neither is recommended), then **Join the
+Discord** under them at the row's full width (the owner's placing, "below
+donation"). It is the same `SupportButton`, tinted mark and all, so it reads
+as another place to go and not a third tip jar; it is not a filled button
+and not a list row. The invite is `SupportLinks.DISCORD`.
+
 ### The spatial renderer's room map
 
 Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererScreen.kt`).

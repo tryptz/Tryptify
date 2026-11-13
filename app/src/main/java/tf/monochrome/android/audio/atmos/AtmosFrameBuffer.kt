@@ -27,6 +27,10 @@ class AtmosFrameBuffer @Inject constructor() {
     /** Records a raw E-AC-3 access unit at its presentation time. */
     fun put(timeUs: Long, bytes: ByteArray) {
         synchronized(lock) {
+            // A frame that does not follow the last one (a seek, another
+            // song) starts afresh: what is buffered belongs to somewhere else.
+            val last = frames.lastOrNull()
+            if (last != null && (timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US)) frames.clear()
             frames.addLast(TappedFrame(timeUs, bytes))
             while (frames.size > MAX_FRAMES) frames.removeFirst()
         }
@@ -68,5 +72,7 @@ class AtmosFrameBuffer @Inject constructor() {
         // ~128 frames * 1536 samples / 48 kHz ≈ 4 s of lookahead; far more than
         // the decoder's latency, and each frame is a few hundred bytes.
         const val MAX_FRAMES = 128
+        // Frames are 32 ms apart; past a quarter of a second it is a jump.
+        const val CONTINUOUS_US = 250_000L
     }
 }

@@ -968,6 +968,7 @@
     <string name="settings_updates">アップデート</string>
     <string name="settings_about_tryptify">Tryptify について</string>
     <string name="settings_support_the_app">アプリを支援</string>
+    <string name="settings_join_discord">Discord に参加</string>
     <string name="settings_local_media_scanning">ローカルメディアのスキャン</string>
     <string name="settings_tab_bar">ナビゲーションバー</string>
     <string name="settings_home_library_and_search_are_always_there_turn">ホーム、ライブラリ、検索は常に表示されます。中央に置くページを最大 2 つ選べます。</string>

@@ -40,6 +40,7 @@ import tf.monochrome.android.audio.dsp.seed
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -177,6 +178,38 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private lateinit var player: ExoPlayer
+
+    /** How long the audio track stays off while the chain is configured again. */
+    private val reconfigureGapMs = 150L
+
+    /**
+     * Configures the audio chain again for the song that is playing, when it
+     * is a multichannel one (the settings this is for do nothing to stereo).
+     * Disabling the audio track resets the renderer and its sink; enabling it
+     * again starts them on the same song at the same place, through
+     * configure().
+     */
+    private fun reconfigureAudioChain() {
+        if (!::player.isInitialized) return
+        val channels = channelDetectorProcessor.state.value?.channelCount ?: return
+        if (channels <= 2 || player.playbackState == Player.STATE_IDLE || player.currentMediaItem == null) return
+        val parameters = player.trackSelectionParameters
+        if (C.TRACK_TYPE_AUDIO in parameters.disabledTrackTypes) return
+        runCatching {
+            player.trackSelectionParameters =
+                parameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
+        }.onFailure { android.util.Log.w("PlaybackService", "audio chain reconfigure failed", it); return }
+        // Put back a moment later, not at once: the selector takes its
+        // parameters on this thread and the player acts on them on its own,
+        // so off-and-on in one go is seen there as no change at all.
+        serviceScope.launch {
+            kotlinx.coroutines.delay(reconfigureGapMs)
+            runCatching {
+                player.trackSelectionParameters = player.trackSelectionParameters
+                    .buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).build()
+            }.onFailure { android.util.Log.w("PlaybackService", "audio track not re-enabled", it) }
+        }
+    }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** When the play under way has been heard long enough to scrobble. */
@@ -644,6 +677,29 @@ class PlaybackService : MediaSessionService() {
                 enabled && !profile.speakerLayout(channels).isMultichannel
             }.distinctUntilChanged().collect { enabled ->
                 downmixProcessor.setEnabled(enabled)
+                upmixProcessor.foldEnabled = enabled
+            }
+        }
+        upmixProcessor.afterAtmosRender = { atmosAudioProcessor.rendersConfiguredStream }
+        // The Atmos stage, the fold and the upmix each decide in configure()
+        // whether they are in the chain and how wide their output is, and
+        // Media3 configures a chain once a stream: a seek only flushes it.
+        // So turning the binaural render on, or changing the speaker layout
+        // or the fold, did nothing to the song playing; it took a skip to the
+        // next one to hear it. When such a setting changes under a
+        // multichannel song, the audio renderer is taken out and put back,
+        // which configures the chain again where the song is (a short gap).
+        serviceScope.launch {
+            combine(
+                preferences.multichannelDownmixEnabled,
+                preferences.rendererProfile,
+                outputChannelCount,
+            ) { fold, profile, channels ->
+                listOf(fold, atmosAudioProcessor.configurationKey(profile, channels))
+            }.distinctUntilChanged().drop(1).collect {
+                // After the collectors above have handed the processors the change.
+                kotlinx.coroutines.yield()
+                reconfigureAudioChain()
             }
         }
         // Preamp + LFE path follow the Atmos page's Downmix settings, so

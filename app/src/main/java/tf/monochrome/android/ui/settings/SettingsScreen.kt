@@ -3221,6 +3221,7 @@ private fun AboutTab(viewModel: SettingsViewModel) {
         SupportSection(
             onKofi = { openDonationUrl(context, SupportLinks.KO_FI) },
             onPatreon = { openDonationUrl(context, SupportLinks.PATREON) },
+            onDiscord = { openDonationUrl(context, SupportLinks.DISCORD) },
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -3259,7 +3260,7 @@ private fun AboutTab(viewModel: SettingsViewModel) {
 
 /** The tip jar, and who's asking. */
 @Composable
-private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
+private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit, onDiscord: () -> Unit) {
     SettingsGroupHeader(stringResource(R.string.settings_support_the_app))
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -3305,6 +3306,16 @@ private fun SupportSection(onKofi: () -> Unit, onPatreon: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
         }
+        // The community, under the two ways to give (the owner's placing):
+        // the same outlined button at the row's full width, so it reads as
+        // another place to go, not a third tip jar.
+        Spacer(modifier = Modifier.height(12.dp))
+        SupportButton(
+            label = stringResource(R.string.settings_join_discord),
+            logo = R.drawable.logo_discord,
+            onClick = onDiscord,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

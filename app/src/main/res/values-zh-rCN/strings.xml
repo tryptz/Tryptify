@@ -968,6 +968,7 @@
     <string name="settings_updates">更新</string>
     <string name="settings_about_tryptify">关于 Tryptify</string>
     <string name="settings_support_the_app">支持本应用</string>
+    <string name="settings_join_discord">加入 Discord</string>
     <string name="settings_local_media_scanning">本地媒体扫描</string>
     <string name="settings_tab_bar">导航栏</string>
     <string name="settings_home_library_and_search_are_always_there_turn">首页、音乐库和搜索始终保留。最多可再选两个页面放在中间。</string>

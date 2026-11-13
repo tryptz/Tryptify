@@ -385,6 +385,20 @@ class AtmosAudioProcessor @Inject constructor(
     override fun isActive(): Boolean =
         pendingFormat != AudioFormat.NOT_SET || inputFormat != AudioFormat.NOT_SET
 
+    /**
+     * Whether the stream just configured goes through this stage, for the
+     * stages after it (read in their own configure, which follows this one's).
+     */
+    val rendersConfiguredStream: Boolean get() = pendingFormat != AudioFormat.NOT_SET
+
+    /**
+     * What decides, when a stream is configured, whether this stage is in the
+     * chain and what it puts out. A change to it means nothing to a stream
+     * already playing until the chain is configured again.
+     */
+    fun configurationKey(profile: RendererProfile, deviceChannels: Int?): Any =
+        listOf(profile.mode == RendererMode.PASSTHROUGH, profile.speakerLayout(deviceChannels))
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (inputFormat == AudioFormat.NOT_SET) return
         val channels = inputFormat.channelCount
@@ -490,7 +504,13 @@ class AtmosAudioProcessor @Inject constructor(
         inputEnded = false
         bedSamples = 0
         lfeFold.reset()  // no pre-seek audio in the LFE filter / dry delay
-        frameBuffer.clear()
+        // The tapped frames are NOT dropped here. This flush also runs when a
+        // stream is first configured, at its first decoded buffer, by when
+        // the decoder has been handed frames ahead: dropping them anchored
+        // the clock on a later frame, and every object's metadata ran that
+        // far ahead of its audio for the rest of the song. The tap drops its
+        // own frames when playback really jumps (AtmosFrameBuffer.put, and a
+        // seek in the tapped period).
         anchorUs = Long.MIN_VALUE
         anchorSamples = 0L
         lastRaw = null

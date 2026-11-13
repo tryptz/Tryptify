@@ -238,9 +238,15 @@ class DownmixProcessorTest {
         assertFalse(p.isActive)
     }
 
-    @Test(expected = AudioProcessor.UnhandledAudioFormatException::class)
-    fun `17 channels throws`() {
-        processor().configure(AudioFormat(48000, 17, C.ENCODING_PCM_FLOAT))
+    @Test
+    fun `wider than anything folded here steps out of the chain instead of stopping playback`() {
+        // A 9.1.x speaker render travels as 24 channels; throwing here ended
+        // playback on the 16-bit path.
+        val p = processor()
+        for (channels in intArrayOf(17, 24)) {
+            assertEquals(AudioFormat.NOT_SET, p.configure(AudioFormat(48000, channels, C.ENCODING_PCM_FLOAT)))
+            assertFalse(p.isActive)
+        }
     }
 
     // ── Output format mapping ────────────────────────────────────────────

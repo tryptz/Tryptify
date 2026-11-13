@@ -18,6 +18,8 @@ import tf.monochrome.android.R
 object SupportLinks {
     const val KO_FI = "https://ko-fi.com/trypt"
     const val PATREON = "https://www.patreon.com/tryptz"
+    /** The community server's invite. */
+    const val DISCORD = "https://discord.gg/a9uqQu5wy7"
 }
 
 /**

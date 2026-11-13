@@ -1044,6 +1044,7 @@
     <string name="settings_updates">Aggiornamenti</string>
     <string name="settings_about_tryptify">Informazioni su Tryptify</string>
     <string name="settings_support_the_app">Sostieni l\'app</string>
+    <string name="settings_join_discord">Unisciti al Discord</string>
     <string name="settings_local_media_scanning">Scansione dei file multimediali locali</string>
     <string name="settings_tab_bar">Barra di navigazione</string>
     <string name="settings_home_library_and_search_are_always_there_turn">Home, Libreria e Cerca sono sempre visibili. Scegli fino a due pagine per la parte centrale.</string>

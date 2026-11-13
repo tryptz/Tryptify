@@ -50,12 +50,27 @@ class UpmixProcessor @Inject constructor() : AudioProcessor {
         upmixer?.enabled = on
     }
 
+    /**
+     * Whether the fold after the mixer will run. The upmix makes sixteen
+     * channels that only the fold brings back to two, and Android has no
+     * AudioTrack of sixteen: with the fold off (the listener's toggle, or the
+     * Atmos speaker render), every stereo song failed to start.
+     */
+    @Volatile var foldEnabled: Boolean = true
+
+    /**
+     * True while the Atmos stage ahead of this one renders the stream being
+     * configured. Its stereo is a finished binaural render: upmixed again it
+     * went round nine channel groups and a second fold.
+     */
+    @Volatile var afterAtmosRender: () -> Boolean = { false }
+
     override fun configure(inputAudioFormat: AudioFormat): AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT &&
             inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
         }
-        if (!enabled || inputAudioFormat.channelCount != 2) {
+        if (!enabled || inputAudioFormat.channelCount != 2 || !foldEnabled || afterAtmosRender()) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             return AudioFormat.NOT_SET

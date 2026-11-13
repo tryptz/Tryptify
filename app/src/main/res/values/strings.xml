@@ -1007,6 +1007,7 @@
     <string name="settings_updates">Updates</string>
     <string name="settings_about_tryptify">About Tryptify</string>
     <string name="settings_support_the_app">Support the app</string>
+    <string name="settings_join_discord">Join the Discord</string>
     <string name="settings_local_media_scanning">Local Media Scanning</string>
     <string name="settings_tab_bar">Nav Bar</string>
     <string name="settings_home_library_and_search_are_always_there_turn">Home, Library and Search are always there. Pick up to two pages for the middle.</string>
