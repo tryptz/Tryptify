@@ -2207,6 +2207,7 @@ private fun OutputToggles(viewModel: SettingsViewModel) {
         checked = exclusiveEnabled,
         onCheckedChange = { viewModel.setUsbExclusiveBitPerfectEnabled(it) },
     )
+    DacTileSetting()
     // Only render the diagnostic card when the toggle is on AND we
     // have something honest to say — either an active stream, a
     // categorised failure, a known rate inventory, or a DAC we can
@@ -2220,6 +2221,41 @@ private fun OutputToggles(viewModel: SettingsViewModel) {
             supportedRates = supportedRates,
             dacInfo = dacInfo,
         )
+    }
+}
+
+/**
+ * The switch above as a Quick Settings tile (issue #157,
+ * [tf.monochrome.android.audio.usb.DacQuickTileService]): from Android 13 a
+ * tap here asks the system to add it; before that the system has no such
+ * request, and the row says where the tile is found.
+ */
+@Composable
+private fun DacTileSetting() {
+    val context = LocalContext.current
+    val canAsk = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+    SettingItem(
+        title = stringResource(R.string.settings_dac_tile),
+        subtitle = stringResource(
+            if (canAsk) R.string.settings_dac_tile_detail else R.string.settings_dac_tile_detail_manual
+        ),
+        onClick = if (canAsk) ({ requestDacTile(context) }) else null,
+    )
+}
+
+@androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)
+private fun requestDacTile(context: Context) {
+    val statusBar = context.getSystemService(android.app.StatusBarManager::class.java) ?: return
+    statusBar.requestAddTileService(
+        android.content.ComponentName(context, tf.monochrome.android.audio.usb.DacQuickTileService::class.java),
+        context.getString(R.string.tile_exclusive_dac),
+        android.graphics.drawable.Icon.createWithResource(context, R.drawable.ic_qs_usb_dac),
+        context.mainExecutor,
+    ) { result ->
+        // Already there, the system shows nothing at all: say why.
+        if (result == android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) {
+            Toast.makeText(context, R.string.settings_dac_tile_already, Toast.LENGTH_SHORT).show()
+        }
     }
 }
 

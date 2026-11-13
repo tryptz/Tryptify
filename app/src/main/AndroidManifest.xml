@@ -197,6 +197,24 @@
              the whole playlist is matched. -->
         <!-- Keeps the phone at a listening party while the app is in the
              background, playing or not (PartyService). -->
+        <!-- The exclusive USB DAC's Quick Settings tile (issue #157): one tap
+             pauses and releases the DAC for other apps, another takes it back.
+             Exported because the system binds it; the permission is one only
+             the system holds, so nothing else can. -->
+        <service
+            android:name=".audio.usb.DacQuickTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_usb_dac"
+            android:label="@string/tile_exclusive_dac"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
         <service
             android:name=".party.PartyService"
             android:exported="false"

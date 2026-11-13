@@ -81,6 +81,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var spatialPlacement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore
     /** Trypt Mania's players run copies of the chain, kept in step by [publishGameSeed]. */
     @Inject lateinit var gameAudio: tf.monochrome.android.audio.usb.UsbGameAudio
+    @Inject lateinit var usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController
     @Inject lateinit var mixBusProcessor: MixBusProcessor
     // The mixer's Atmos upmix: stereo → 9.1.6 ahead of the mixer, off unless a mix turns it on.
     @Inject lateinit var upmixProcessor: tf.monochrome.android.audio.dsp.UpmixProcessor
@@ -553,6 +554,13 @@ class PlaybackService : MediaSessionService() {
                     player.pause()
                 }
             }
+        }
+
+        // The DAC is being handed to other apps (the Quick Settings tile,
+        // UsbExclusiveController.releaseForOtherApps): paused before it
+        // closes, so the song does not carry on from the phone's speaker.
+        serviceScope.launch {
+            usbExclusiveController.pauseForRelease.collect { if (player.playWhenReady) player.pause() }
         }
 
         // Scrobbles by time heard, checked every couple of seconds: see

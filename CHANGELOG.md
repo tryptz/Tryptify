@@ -8,6 +8,9 @@
 - **A playlist's songs can be put in a new order** ([#155](https://github.com/tryptz/Tryptify/issues/155)). Reorder, in a playlist's ⋮ menu, shows its songs with a handle on each: drag one to its new place. Every drop is saved at once, and Done or Back leaves the mode. Search and sort are closed while arranging, since the order on screen has to be the playlist's own. The new order is sent to the cloud; a device that already has the playlist keeps the order it has.
 - **M3U playlists import as playlists of your own music** ([#155](https://github.com/tryptz/Tryptify/issues/155)). Library › Playlists › New playlist › File has an M3U choice next to CSV, for `.m3u` and `.m3u8` files. Each song is looked up in the music on the device: by its path (relative to the playlist's folder, under any of the storage's names, in either case), then by the end of its path, so a list written on a computer or for another format's copy still finds its files, then by its `#EXTINF` artist and title. Songs that are not on the device are left out and counted; where two files fit equally the song is left out rather than guessed. Old Windows-encoded lists keep their accents.
 
+#### Exclusive USB DAC
+- **A Quick Settings tile releases the DAC** ([#157](https://github.com/tryptz/Tryptify/issues/157)). One tap pauses the music and hands the DAC to other apps; another takes it back. It is the Settings › Audio switch, reachable from the notification shade over any app. Settings › Audio has a row that adds the tile (Android 13 and later; before that it is added from the Quick Settings editor).
+
 ### Fixed
 - **A song added to a playlist after one was removed goes last.** It took the playlist's song count as its place, which the last song already had, so the two had no order between them.
 

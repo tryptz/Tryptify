@@ -1069,6 +1069,14 @@
     <string name="settings_exclusive_claimed">已占用流式接口 ✓</string>
     <string name="settings_exclusive_streaming">比特级精确：已绕过 Android 音频 ✓（EQ / DSP 仍然生效）</string>
     <string name="settings_exclusive_error">无法启用绕过。详情请查看标记为“LibusbUacDriver”的 logcat。</string>
+    <string name="tile_exclusive_dac">独占 USB DAC</string>
+    <string name="tile_dac_released">已释放</string>
+    <string name="tile_dac_no_device">未连接 DAC</string>
+    <string name="tile_dac_held">Tryptify 正在使用</string>
+    <string name="settings_dac_tile">快捷设置功能块</string>
+    <string name="settings_dac_tile_detail">点按即可将功能块添加到快捷设置。点一下该功能块会暂停音乐并释放 DAC，供其他应用使用；再点一下即可重新占用 DAC。</string>
+    <string name="settings_dac_tile_detail_manual">编辑快捷设置并添加“独占 USB DAC”功能块。点一下该功能块会暂停音乐并释放 DAC，供其他应用使用；再点一下即可重新占用 DAC。</string>
+    <string name="settings_dac_tile_already">该功能块已在快捷设置中。</string>
     <string name="settings_custom_folder">自定义文件夹</string>
     <string name="settings_internal_storage_default">应用内部存储（默认）</string>
     <string name="settings_discord_not_set">未设置。显示你正在播放的内容需要它</string>

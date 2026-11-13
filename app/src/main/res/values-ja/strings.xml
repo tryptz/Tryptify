@@ -1069,6 +1069,14 @@
     <string name="settings_exclusive_claimed">ストリーミングインターフェースを確保しました ✓</string>
     <string name="settings_exclusive_streaming">ビットパーフェクト：Android のオーディオをバイパス中 ✓（EQ / DSP は有効）</string>
     <string name="settings_exclusive_error">バイパスを有効にできませんでした。詳細は「LibusbUacDriver」タグの logcat を確認してください。</string>
+    <string name="tile_exclusive_dac">USB DAC の排他使用</string>
+    <string name="tile_dac_released">解放済み</string>
+    <string name="tile_dac_no_device">DAC 未接続</string>
+    <string name="tile_dac_held">Tryptify が使用中</string>
+    <string name="settings_dac_tile">クイック設定タイル</string>
+    <string name="settings_dac_tile_detail">タップするとクイック設定にタイルを追加します。タイルを 1 回タップすると音楽を一時停止して DAC を解放し、ほかのアプリが使えるようにします。もう一度タップすると DAC を再び確保します。</string>
+    <string name="settings_dac_tile_detail_manual">クイック設定を編集して「USB DAC の排他使用」タイルを追加してください。タイルを 1 回タップすると音楽を一時停止して DAC を解放し、ほかのアプリが使えるようにします。もう一度タップすると DAC を再び確保します。</string>
+    <string name="settings_dac_tile_already">タイルはすでにクイック設定にあります。</string>
     <string name="settings_custom_folder">カスタムフォルダ</string>
     <string name="settings_internal_storage_default">アプリの内部ストレージ（既定）</string>
     <string name="settings_discord_not_set">未設定。再生中の曲を表示するのに必要です</string>

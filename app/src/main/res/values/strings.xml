@@ -1108,6 +1108,14 @@
     <string name="settings_exclusive_claimed">Streaming interface claimed ✓</string>
     <string name="settings_exclusive_streaming">Bit-perfect: bypassing Android audio ✓ (EQ / DSP still active)</string>
     <string name="settings_exclusive_error">Bypass couldn\'t engage. See logcat tagged \'LibusbUacDriver\' for details.</string>
+    <string name="tile_exclusive_dac">Exclusive USB DAC</string>
+    <string name="tile_dac_released">Released</string>
+    <string name="tile_dac_no_device">No DAC connected</string>
+    <string name="tile_dac_held">In use by Tryptify</string>
+    <string name="settings_dac_tile">Quick Settings tile</string>
+    <string name="settings_dac_tile_detail">Tap to add a tile to Quick Settings. One tap on it pauses the music and releases the DAC so other apps can use it; another takes the DAC back.</string>
+    <string name="settings_dac_tile_detail_manual">Edit your Quick Settings and add the Exclusive USB DAC tile. One tap on it pauses the music and releases the DAC so other apps can use it; another takes the DAC back.</string>
+    <string name="settings_dac_tile_already">The tile is already in your Quick Settings.</string>
     <string name="settings_custom_folder">Custom folder</string>
     <string name="settings_internal_storage_default">Internal app storage (default)</string>
     <string name="settings_discord_not_set">Not set. Needed to show what you\'re playing</string>

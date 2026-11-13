@@ -206,6 +206,11 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         listOf("usb", "dac", "exclusive", "bit perfect", "bitperfect", "libusb", "uapp", "output"),
     ),
     entry(
+        "Quick Settings tile", R.string.settings_dac_tile,
+        "Audio",
+        listOf("usb", "dac", "release", "other apps", "tile", "shade", "pause", "exclusive"),
+    ),
+    entry(
         "Bluetooth sync", R.string.settings_bluetooth_sync,
         "Audio",
         listOf("bluetooth", "latency", "delay", "lag", "offset", "lyrics", "visualizer", "headphones", "calibrate", "trypt mania"),

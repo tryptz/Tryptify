@@ -1145,6 +1145,14 @@
     <string name="settings_exclusive_claimed">Interfaccia di streaming acquisita ✓</string>
     <string name="settings_exclusive_streaming">Bit-perfect: bypass dell\'audio Android attivo ✓ (EQ / DSP ancora attivi)</string>
     <string name="settings_exclusive_error">Impossibile attivare il bypass. Consulta il logcat con tag \'LibusbUacDriver\' per i dettagli.</string>
+    <string name="tile_exclusive_dac">DAC USB esclusivo</string>
+    <string name="tile_dac_released">Rilasciato</string>
+    <string name="tile_dac_no_device">Nessun DAC collegato</string>
+    <string name="tile_dac_held">In uso da Tryptify</string>
+    <string name="settings_dac_tile">Riquadro Impostazioni rapide</string>
+    <string name="settings_dac_tile_detail">Tocca per aggiungere un riquadro alle Impostazioni rapide. Un tocco mette in pausa la musica e rilascia il DAC per le altre app; un altro lo riprende.</string>
+    <string name="settings_dac_tile_detail_manual">Modifica le Impostazioni rapide e aggiungi il riquadro “DAC USB esclusivo”. Un tocco mette in pausa la musica e rilascia il DAC per le altre app; un altro lo riprende.</string>
+    <string name="settings_dac_tile_already">Il riquadro è già nelle Impostazioni rapide.</string>
     <string name="settings_custom_folder">Cartella personalizzata</string>
     <string name="settings_internal_storage_default">Memoria interna dell\'app (predefinita)</string>
     <string name="settings_discord_not_set">Non impostato. Necessario per mostrare cosa stai ascoltando</string>

@@ -14,8 +14,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -86,6 +90,46 @@ class UsbExclusiveController @Inject constructor(
      *  VID:PID, USB version) — read from the USB descriptors, available the
      *  moment the device is opened, even before any stream is negotiated. */
     val dacInfo: StateFlow<DacInfo?> = driver.dacInfo
+
+    /** Whether the driver holds a DAC right now, whatever it is doing with it. */
+    val holdsDac: StateFlow<Boolean> = driver.isOpen
+
+    private val _pauseForRelease = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * The DAC is about to be let go ([releaseForOtherApps]): whatever plays
+     * on it pauses now. PlaybackService listens.
+     */
+    val pauseForRelease: SharedFlow<Unit> = _pauseForRelease.asSharedFlow()
+
+    /**
+     * Pauses the music and hands the DAC to other apps (issue #157): the
+     * Quick Settings tile's one tap, for what used to be a pause and then a
+     * trip to Settings › Audio.
+     *
+     * Letting go is the switch going off, nothing new: the driver closes,
+     * which releases the DAC's interfaces and its connection, and
+     * [takeBack] is the switch going on again. The pause comes first and is
+     * given [RELEASE_PAUSE_MS] to reach the audio thread, because a player
+     * still running when its DAC closes carries on through Android's own
+     * output ([LibusbAudioSink]'s hand-over), which with USB audio routing
+     * off is the phone's speaker.
+     *
+     * With no DAC held there is nothing playing on one, so nothing is
+     * paused: music on Bluetooth is left alone.
+     */
+    suspend fun releaseForOtherApps() {
+        if (driver.isOpen.value) {
+            _pauseForRelease.emit(Unit)
+            delay(RELEASE_PAUSE_MS)
+        }
+        preferences.setUsbExclusiveBitPerfectEnabled(false)
+    }
+
+    /** Claims the DAC again after [releaseForOtherApps]. Playback stays paused until the listener plays. */
+    suspend fun takeBack() {
+        preferences.setUsbExclusiveBitPerfectEnabled(true)
+    }
 
     private val usbManager = appContext.getSystemService(Context.USB_SERVICE) as UsbManager
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -219,5 +263,12 @@ class UsbExclusiveController @Inject constructor(
 
     companion object {
         private const val TAG = "UsbExclusiveCtl"
+
+        /**
+         * From the pause to the DAC closing. The pause is a message to the
+         * player's own thread, handled within one of its work cycles (10 ms
+         * while playing); this is many of those.
+         */
+        const val RELEASE_PAUSE_MS = 250L
     }
 }

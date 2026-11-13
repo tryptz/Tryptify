@@ -2247,6 +2247,26 @@ flight with its stage verbatim from the service, the waiting ones dimmed
 list's generation panel shows, read from the same `ChartQueueState`, never a
 second count.
 
+**The exclusive USB DAC has a Quick Settings tile** (issue #157,
+`DacQuickTileService`). In exclusive mode the app holds the DAC through every
+pause, so no other app can play on it. The tile is the Settings › Audio switch
+from the notification shade: tapped while on, it pauses the music and then
+turns the switch off, which closes the driver and releases the DAC; tapped
+while off, it turns the switch on and the DAC is claimed again, with the
+music left paused.
+
+- **The pause comes first, by a quarter of a second**
+  (`UsbExclusiveController.releaseForOtherApps`). A player still running when
+  its DAC closes carries on through Android's own output, which with USB audio
+  routing off is the phone's speaker. With no DAC held nothing is paused:
+  music on Bluetooth is left alone.
+- **The tile and the switch are one setting**, so they always agree. The tile
+  shows on or off, and under its name the DAC held, "No DAC connected" or
+  "Released" (`TileLook`, `DacQuickTileTest`).
+- **Settings › Audio has a row for it** under the switch. From Android 13 a
+  tap asks the system to add the tile; before that the system has no such
+  request, so the row is not a button and says where the tile is.
+
 **Trypt Mania plays through the exclusive USB DAC, and the DAC has one
 stream.** Its transport and its preview stay plain ExoPlayers, kept out of
 the shared player on purpose, but each gets a `LibusbAudioSink` of its own

@@ -1107,6 +1107,14 @@
     <string name="settings_exclusive_claimed">Akış arabirimi alındı ✓</string>
     <string name="settings_exclusive_streaming">Bit-perfect: Android sesi atlanıyor ✓ (EQ / DSP hâlâ etkin)</string>
     <string name="settings_exclusive_error">Atlatma devreye giremedi. Ayrıntılar için “LibusbUacDriver” etiketli logcat’e bakın.</string>
+    <string name="tile_exclusive_dac">Özel USB DAC</string>
+    <string name="tile_dac_released">Serbest bırakıldı</string>
+    <string name="tile_dac_no_device">DAC bağlı değil</string>
+    <string name="tile_dac_held">Tryptify kullanıyor</string>
+    <string name="settings_dac_tile">Hızlı Ayarlar kutusu</string>
+    <string name="settings_dac_tile_detail">Hızlı Ayarlar’a bir kutu eklemek için dokunun. Kutuya bir kez dokunmak müziği duraklatır ve DAC’i diğer uygulamalar için serbest bırakır; bir kez daha dokunmak DAC’i geri alır.</string>
+    <string name="settings_dac_tile_detail_manual">Hızlı Ayarlar’ı düzenleyip “Özel USB DAC” kutusunu ekleyin. Kutuya bir kez dokunmak müziği duraklatır ve DAC’i diğer uygulamalar için serbest bırakır; bir kez daha dokunmak DAC’i geri alır.</string>
+    <string name="settings_dac_tile_already">Kutu zaten Hızlı Ayarlar’da.</string>
     <string name="settings_custom_folder">Özel klasör</string>
     <string name="settings_internal_storage_default">Uygulamanın dahili depolama alanı (varsayılan)</string>
     <string name="settings_discord_not_set">Ayarlanmadı. Ne çaldığınızı göstermek için gerekir</string>

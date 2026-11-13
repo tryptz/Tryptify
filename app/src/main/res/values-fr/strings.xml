@@ -1145,6 +1145,14 @@
     <string name="settings_exclusive_claimed">Interface de streaming réservée ✓</string>
     <string name="settings_exclusive_streaming">Bit-perfect : audio d’Android contourné ✓ (égaliseur / DSP toujours actifs)</string>
     <string name="settings_exclusive_error">Le contournement n’a pas pu s’activer. Consultez le logcat avec l’étiquette « LibusbUacDriver » pour en savoir plus.</string>
+    <string name="tile_exclusive_dac">DAC USB exclusif</string>
+    <string name="tile_dac_released">Libéré</string>
+    <string name="tile_dac_no_device">Aucun DAC connecté</string>
+    <string name="tile_dac_held">Utilisé par Tryptify</string>
+    <string name="settings_dac_tile">Bloc Réglages rapides</string>
+    <string name="settings_dac_tile_detail">Touchez pour ajouter un bloc aux Réglages rapides. Un appui dessus met la musique en pause et libère le DAC pour les autres apps ; un autre le reprend.</string>
+    <string name="settings_dac_tile_detail_manual">Modifiez vos Réglages rapides et ajoutez le bloc « DAC USB exclusif ». Un appui dessus met la musique en pause et libère le DAC pour les autres apps ; un autre le reprend.</string>
+    <string name="settings_dac_tile_already">Le bloc est déjà dans vos Réglages rapides.</string>
     <string name="settings_custom_folder">Dossier personnalisé</string>
     <string name="settings_internal_storage_default">Stockage interne de l’app (par défaut)</string>
     <string name="settings_discord_not_set">Non défini. Nécessaire pour montrer ce que vous écoutez</string>

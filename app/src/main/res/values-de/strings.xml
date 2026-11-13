@@ -1107,6 +1107,14 @@
     <string name="settings_exclusive_claimed">Streaming-Schnittstelle belegt ✓</string>
     <string name="settings_exclusive_streaming">Bit-perfekt: Android-Audio wird umgangen ✓ (EQ / DSP weiter aktiv)</string>
     <string name="settings_exclusive_error">Umgehung konnte nicht aktiviert werden. Details im Logcat mit dem Tag „LibusbUacDriver“.</string>
+    <string name="tile_exclusive_dac">Exklusiver USB-DAC</string>
+    <string name="tile_dac_released">Freigegeben</string>
+    <string name="tile_dac_no_device">Kein DAC verbunden</string>
+    <string name="tile_dac_held">Von Tryptify verwendet</string>
+    <string name="settings_dac_tile">Schnelleinstellungs-Kachel</string>
+    <string name="settings_dac_tile_detail">Tippe, um den Schnelleinstellungen eine Kachel hinzuzufügen. Ein Tipp darauf pausiert die Musik und gibt den DAC für andere Apps frei; ein weiterer holt ihn zurück.</string>
+    <string name="settings_dac_tile_detail_manual">Bearbeite deine Schnelleinstellungen und füge die Kachel „Exklusiver USB-DAC“ hinzu. Ein Tipp darauf pausiert die Musik und gibt den DAC für andere Apps frei; ein weiterer holt ihn zurück.</string>
+    <string name="settings_dac_tile_already">Die Kachel ist bereits in deinen Schnelleinstellungen.</string>
     <string name="settings_custom_folder">Eigener Ordner</string>
     <string name="settings_internal_storage_default">Interner App-Speicher (Standard)</string>
     <string name="settings_discord_not_set">Nicht gesetzt. Nötig, um zu zeigen, was du hörst</string>
