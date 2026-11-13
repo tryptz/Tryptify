@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import tf.monochrome.android.data.api.ApiService
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.api.InstanceManager
 import tf.monochrome.android.data.api.QobuzIdRegistry
 import tf.monochrome.android.data.preferences.PreferencesManager
@@ -59,13 +60,29 @@ internal fun discoveryMemoKey(service: ApiService, key: String): String =
  * * **Deezer tracks play from Qobuz when Qobuz has the recording**, and as the
  *   30-second preview when it does not. The page says so when Deezer is chosen.
  */
+/** Every kind of result a Discover screen shows from a search: never its playlists. */
+private val EVERYTHING = setOf(HifiPayload.Kind.TRACKS, HifiPayload.Kind.ALBUMS, HifiPayload.Kind.ARTISTS)
+
 class DiscoveryCatalog internal constructor(
     val service: ApiService,
     private val music: MusicRepository,
     private val registry: QobuzIdRegistry,
 ) {
-    suspend fun search(query: String, offset: Int = 0): Result<SearchResult> = when (service) {
-        ApiService.TIDAL -> music.search(query, offset)
+    /**
+     * A search of this catalogue for the kinds of result the caller will use
+     * ([want]). Qobuz and Deezer answer every kind in one request, so there it
+     * changes nothing. TIDAL answers one kind per request, and each request
+     * counts against the server account's daily allowance, shared by everyone
+     * on that server: a chart of 200 records resolved with every kind asked
+     * for was 800 searches where 200 were used, and spent the day's allowance.
+     * Nothing on Discover shows a search's playlists.
+     */
+    suspend fun search(
+        query: String,
+        offset: Int = 0,
+        want: Set<HifiPayload.Kind> = EVERYTHING,
+    ): Result<SearchResult> = when (service) {
+        ApiService.TIDAL -> music.search(query, offset, want)
         ApiService.DEEZER -> music.searchDeezer(query, offset)
         else -> music.searchQobuz(query, offset)
     }

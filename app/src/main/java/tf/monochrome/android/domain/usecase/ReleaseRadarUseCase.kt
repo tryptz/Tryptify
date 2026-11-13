@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.RadarRelease
@@ -79,7 +80,7 @@ class ReleaseRadarUseCase @Inject constructor(
      * answer. An artist it answered for but does not carry is an empty list.
      */
     private suspend fun discography(catalog: DiscoveryCatalog, name: String): List<Album>? {
-        val search = catalog.search(name).getOrNull() ?: return null
+        val search = catalog.search(name, want = setOf(HifiPayload.Kind.ARTISTS)).getOrNull() ?: return null
         val artist = search.artists.firstOrNull { matchesArtistName(it.name, name) } ?: return emptyList()
         val detail = catalog.artist(artist.id).getOrNull() ?: return null
         catalog.registerArtists(listOf(artist.id))

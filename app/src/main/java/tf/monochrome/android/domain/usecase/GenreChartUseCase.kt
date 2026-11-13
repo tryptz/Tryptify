@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.charts.ChartEntry
 import tf.monochrome.android.data.charts.ChartSource
 import tf.monochrome.android.data.charts.ChartWindow
@@ -733,7 +734,7 @@ class GenreChartUseCase @Inject constructor(
             memoisedArtistTracks(key)?.let { return@run it }
 
             val tracks = resolveGate.withPermit {
-                val search = catalog.search(artistName).getOrNull()
+                val search = catalog.search(artistName, want = setOf(HifiPayload.Kind.TRACKS, HifiPayload.Kind.ARTISTS)).getOrNull()
                 val credited = search?.tracks.orEmpty()
                     .filter { matchesArtistName(it.displayArtist, artistName) }
                 val seed = search?.artists?.firstOrNull { matchesArtistName(it.name, artistName) }
@@ -825,7 +826,9 @@ class GenreChartUseCase @Inject constructor(
 
             // Behind the gate, and only past the memo: an answer already in hand
             // must never queue behind six shelves' worth of network.
-            val answered = resolveGate.withPermit { catalog.search(entry.matchQuery) }
+            // Only its tracks are read, so only tracks are asked for: on TIDAL
+            // every other kind was a search of its own, per record on the chart.
+            val answered = resolveGate.withPermit { catalog.search(entry.matchQuery, want = setOf(HifiPayload.Kind.TRACKS)) }
             val track = answered.getOrNull()?.tracks
                 ?.firstOrNull { agrees(entry, it.artists.firstOrNull()?.name ?: "", it.title) }
                 ?.let { catalog.unified(it) }

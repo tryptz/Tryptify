@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.repository.LibraryRepository
 import tf.monochrome.android.data.repository.RecommendationSeed
 import tf.monochrome.android.data.repository.GenreGraphRepository
@@ -488,7 +489,7 @@ class DiscoveryFeedUseCase @Inject constructor(
         // MusicRepository and HiFiApiClient all along and was never passed.
         val offset = page * limit * SHELF_OVERFETCH
         val catalog = catalogs.current()
-        val result = catalog.search(query, offset).getOrNull() ?: return null
+        val result = catalog.search(query, offset, want = setOf(HifiPayload.Kind.TRACKS)).getOrNull() ?: return null
         catalog.registerArtists(result.tracks.flatMap { it.artists }.map { it.id })
 
         // Verification is by artist rather than per track because it is cached
@@ -681,7 +682,7 @@ class DiscoveryFeedUseCase @Inject constructor(
             // QobuzIdRegistry as a side effect, so the newest album below is
             // resolvable by id; the other catalogues fetch albums by id alone.
             val catalog = catalogs.current()
-            val result = catalog.search(name).getOrNull() ?: return@withTimeoutOrNull null
+            val result = catalog.search(name, want = setOf(HifiPayload.Kind.ALBUMS)).getOrNull() ?: return@withTimeoutOrNull null
 
             // Newest release attributed to this artist, by release date.
             val newest = result.albums
@@ -721,7 +722,7 @@ class DiscoveryFeedUseCase @Inject constructor(
     private suspend fun similarArtistShelf(name: String, limit: Int): DiscoveryShelf? =
         withTimeoutOrNull(QOBUZ_BUDGET_MS) {
             val catalog = catalogs.current()
-            val search = catalog.search(name).getOrNull() ?: return@withTimeoutOrNull null
+            val search = catalog.search(name, want = setOf(HifiPayload.Kind.ARTISTS)).getOrNull() ?: return@withTimeoutOrNull null
             val seed = search.artists.firstOrNull { matchesArtistName(it.name, name) }
                 ?: search.artists.firstOrNull()
                 ?: return@withTimeoutOrNull null

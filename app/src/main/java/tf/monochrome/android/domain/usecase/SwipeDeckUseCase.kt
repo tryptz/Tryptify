@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.charts.normalizeForMatch
 import tf.monochrome.android.data.repository.GenreGraphRepository
 import tf.monochrome.android.data.repository.LibraryRepository
@@ -95,7 +96,7 @@ class SwipeDeckUseCase @Inject constructor(
             val perSeed = seeds.map { played ->
                 async {
                     val similar = gate.withPermit {
-                        val found = catalog.search(played).getOrNull()?.artists
+                        val found = catalog.search(played, want = setOf(HifiPayload.Kind.ARTISTS)).getOrNull()?.artists
                             ?.firstOrNull { matchesArtistName(it.name, played) }
                             ?: return@withPermit emptyList()
                         catalog.artist(found.id).getOrNull()?.similarArtists.orEmpty()

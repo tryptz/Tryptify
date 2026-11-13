@@ -96,6 +96,9 @@ class HiFiApiClient @Inject constructor(
 ) {
     private val cache = LruCache<String, CacheEntry>(200)
 
+    // Every TIDAL search goes through this, and nothing else does.
+    private val searchGate = SearchGate()
+
     companion object {
         // Hard ceiling per Qobuz sub-request so a slow or unreachable Qobuz
         // instance can't stall the search UI behind coroutineScope's
@@ -114,6 +117,8 @@ class HiFiApiClient @Inject constructor(
         // and how many of the remaining pages are fetched at once.
         private const val PLAYLIST_PAGE_LIMIT = 500
         private const val PLAYLIST_PAGE_CONCURRENCY = 4
+
+        private val ALL_KINDS: Set<HifiPayload.Kind> = HifiPayload.Kind.entries.toSet()
     }
 
     private data class CacheEntry(
@@ -125,10 +130,14 @@ class HiFiApiClient @Inject constructor(
         }
     }
 
+    // [search]: the request is a TIDAL search, which the server's account has
+    // a daily allowance of. A 429 or a failure is then not tried again here:
+    // the second try used to double what a struggling server was sent.
     private suspend fun fetchWithRetry(
         path: String,
         instanceType: InstanceType = InstanceType.API,
-        minVersion: String? = null
+        minVersion: String? = null,
+        search: Boolean = false,
     ): String {
         val instances = instanceManager.getInstances(instanceType)
             .let { list ->
@@ -143,7 +152,7 @@ class HiFiApiClient @Inject constructor(
         if (instances.isEmpty()) throw NoInstancesConfiguredException()
 
         var lastError: Throwable? = null
-        val maxAttempts = instances.size * 2
+        val maxAttempts = if (search) instances.size else instances.size * 2
         var instanceIndex = Random.nextInt(instances.size)
 
         repeat(maxAttempts) {
@@ -154,6 +163,8 @@ class HiFiApiClient @Inject constructor(
                 val response = httpClient.get(url)
                 when {
                     response.status.value == 429 -> {
+                        // Searching pauses for the wait the server names (SearchGate).
+                        if (search) throw searchGate.refused(response.headers["Retry-After"]?.trim()?.toLongOrNull())
                         instanceIndex++
                         delay(500)
                     }
@@ -195,6 +206,8 @@ class HiFiApiClient @Inject constructor(
                         instanceIndex++
                     }
                 }
+            } catch (e: SearchGate.Refused) {
+                throw e
             } catch (e: Exception) {
                 lastError = e
                 instanceIndex++
@@ -204,6 +217,11 @@ class HiFiApiClient @Inject constructor(
 
         throw lastError ?: Exception("All instances failed for $path")
     }
+
+    // A TIDAL search: one request per question, a few at a time, none while
+    // the server refuses them (SearchGate).
+    private suspend fun fetchSearch(path: String): String =
+        searchGate.run(path) { fetchWithRetry(path, search = true) }
 
     // --- Search ---
 
@@ -232,7 +250,7 @@ class HiFiApiClient @Inject constructor(
             }
         }
 
-        val body = fetchWithRetry(pagedQuery("s", query, offset, limit))
+        val body = fetchSearch(pagedQuery("s", query, offset, limit))
         val response = parseSearchResponse(body, HifiPayload.Kind.TRACKS)
         val tracks = response.items.map { it.toTrack() }
         cache.put(cacheKey, CacheEntry(tracks))
@@ -251,7 +269,7 @@ class HiFiApiClient @Inject constructor(
             }
         }
 
-        val body = fetchWithRetry(pagedQuery("al", query, offset, limit))
+        val body = fetchSearch(pagedQuery("al", query, offset, limit))
         val response = parseSearchResponse(body, HifiPayload.Kind.ALBUMS)
         val albums = response.items.map { it.toAlbum() }
         cache.put(cacheKey, CacheEntry(albums))
@@ -270,7 +288,7 @@ class HiFiApiClient @Inject constructor(
             }
         }
 
-        val body = fetchWithRetry(pagedQuery("a", query, offset, limit))
+        val body = fetchSearch(pagedQuery("a", query, offset, limit))
         val response = parseSearchResponse(body, HifiPayload.Kind.ARTISTS)
         val artists = response.items.map { it.toArtist() }
         cache.put(cacheKey, CacheEntry(artists))
@@ -281,17 +299,48 @@ class HiFiApiClient @Inject constructor(
         withContext(Dispatchers.Default) { fetchSearchPlaylists(query, offset, limit) }
 
     private suspend fun fetchSearchPlaylists(query: String, offset: Int, limit: Int): List<Playlist> {
-        val body = fetchWithRetry(pagedQuery("p", query, offset, limit))
+        val cacheKey = "search_playlists_${query}_${offset}_${limit}"
+        cache.get(cacheKey)?.let { entry ->
+            if (entry.isValid()) {
+                @Suppress("UNCHECKED_CAST")
+                return entry.data as List<Playlist>
+            }
+        }
+
+        val body = fetchSearch(pagedQuery("p", query, offset, limit))
         val response = parseSearchResponse(body, HifiPayload.Kind.PLAYLISTS)
-        return response.items.map { it.toPlaylist() }
+        val playlists = response.items.map { it.toPlaylist() }
+        cache.put(cacheKey, CacheEntry(playlists))
+        return playlists
     }
 
-    suspend fun search(query: String, offset: Int = 0, limit: Int = 50): SearchResult {
+    /**
+     * A TIDAL search. Each kind of result is a request of its own, and each
+     * one counts against the server account's daily allowance, so a caller
+     * that uses only the tracks asks for only the tracks ([kinds]): Discover
+     * resolving a chart asked for all four per row and kept one.
+     *
+     * Asked for several kinds, one that fails comes back empty and the rest
+     * are still shown. Asked for one, its failure is thrown: the caller then
+     * knows the server did not answer, and does not take a refused search for
+     * "TIDAL has no such record" (Discover keeps that answer for a week).
+     */
+    suspend fun search(
+        query: String,
+        offset: Int = 0,
+        limit: Int = 50,
+        kinds: Set<HifiPayload.Kind> = ALL_KINDS,
+    ): SearchResult {
+        suspend fun <T> wanted(kind: HifiPayload.Kind, fetch: suspend () -> List<T>): List<T> = when {
+            kind !in kinds -> emptyList()
+            kinds.size == 1 -> fetch()
+            else -> runCatching { fetch() }.getOrDefault(emptyList())
+        }
         return SearchResult(
-            tracks = runCatching { searchTracks(query, offset, limit) }.getOrDefault(emptyList()),
-            albums = runCatching { searchAlbums(query, offset, limit) }.getOrDefault(emptyList()),
-            artists = runCatching { searchArtists(query, offset, limit) }.getOrDefault(emptyList()),
-            playlists = runCatching { searchPlaylists(query, offset, limit) }.getOrDefault(emptyList())
+            tracks = wanted(HifiPayload.Kind.TRACKS) { searchTracks(query, offset, limit) },
+            albums = wanted(HifiPayload.Kind.ALBUMS) { searchAlbums(query, offset, limit) },
+            artists = wanted(HifiPayload.Kind.ARTISTS) { searchArtists(query, offset, limit) },
+            playlists = wanted(HifiPayload.Kind.PLAYLISTS) { searchPlaylists(query, offset, limit) },
         )
     }
 

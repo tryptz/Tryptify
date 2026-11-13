@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import tf.monochrome.android.data.api.ApiService
 import tf.monochrome.android.data.api.HiFiApiClient
+import tf.monochrome.android.data.api.HifiPayload
 import tf.monochrome.android.data.api.ServiceQuality
 import tf.monochrome.android.data.api.LyricsQuery
 import tf.monochrome.android.data.api.LyricsText
@@ -42,6 +43,11 @@ class MusicRepository @Inject constructor(
 
     suspend fun search(query: String, offset: Int = 0, limit: Int = 50): Result<SearchResult> = runCatching {
         apiClient.search(query, offset, limit)
+    }
+
+    /** A TIDAL search for only [kinds]: one request per kind, so ask for no more than is used. */
+    suspend fun search(query: String, offset: Int, kinds: Set<HifiPayload.Kind>): Result<SearchResult> = runCatching {
+        apiClient.search(query, offset, kinds = kinds)
     }
 
     suspend fun searchQobuz(query: String, offset: Int = 0): Result<SearchResult> = runCatching {
@@ -299,8 +305,10 @@ class MusicRepository @Inject constructor(
         // Qobuz appends the version with an em dash ("Song — Radio Edit"); drop
         // it so the search matches the base track.
         val title = rawTitle.substringBefore(" — ").trim().ifBlank { rawTitle }
-        val results = runCatching { apiClient.search("$title $artistName", 0, 5) }
-            .getOrNull()?.tracks?.takeIf { it.isNotEmpty() } ?: return null
+        // Tracks only: this runs on every song that is not TIDAL's own, and
+        // asking for albums, artists and playlists too made it four searches.
+        val results = runCatching { apiClient.searchTracks("$title $artistName", 0, 5) }
+            .getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
         val artistMatches = { c: Track ->
             c.artist?.name?.contains(artistName, ignoreCase = true) == true ||
                 c.artists.any { it.name.contains(artistName, ignoreCase = true) }
