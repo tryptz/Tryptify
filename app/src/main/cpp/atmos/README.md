@@ -278,10 +278,16 @@ what is heard. Fixed, with tests in `cavern_oamd_resolve_test`:
 
 Still open / approximate:
 
-- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is skipped: its maths
-  could not be read (the spec's text was out of reach) and no measurement
-  pins it. The bundled clip has trims off; on a clip with default trims an
-  untrimmed 5.1 render measured C +1.9, Ls/Rs +1.8..2.0 dB against the core.
+- **The trim element** (clauses 5.2.8, 5.5.12, 5.6.5) is parsed nowhere and
+  not applied. Its syntax is known (nine output configurations, each
+  default, disabled, or centre / surround / height trims and two balances),
+  its maths is not: the spec's text was out of reach, and the one stream
+  with default trims to hand (warp_mode 1) does not pin it. Untrimmed, its
+  5.1 render is C +1.9, Ls +1.8, Rs +2.0 dB against the core. Fitting a
+  surround, height and centre trim from the trim table brings the levels
+  within 0.4 dB with several different combinations, and none brings the
+  centre's waveform past 0.90 correlation, so something else (the warp, I
+  think) is in it too. Not guessed at.
 - Above 5.1 there is no Dolby render to compare with: the panner on height
   layouts is the 5.1 law carried up, not a measured one. Overhead positions
   on 5.1 are within 0.04 of the core, not 0.01.

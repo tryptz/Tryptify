@@ -324,6 +324,30 @@ void atmosSpreadsAcrossTheMixer() {
     check(!m.primary().removeBus(7), "a bus a channel group feeds cannot be removed");
 }
 
+// A solo left on bus 1 by a stereo mix must not take a multichannel song's
+// other channels away: the spread buses are one song.
+void aSoloOnOneSpreadBusKeepsTheSong() {
+    MultiLaneEngine m(kRate, kBlock);
+    m.configureLanes(k714First, k714Second, k714Lanes);
+    m.forEach([](DspEngine& e) { e.setBusSolo(0, true); });
+    Planar p(k714Channels);
+    long n = 0;
+    for (int b = 0; b < 20; b++) {
+        fill714(p, n);
+        m.processPlanar(p.ptr.data(), k714Channels, kBlock);
+    }
+    bool allAlive = true;
+    for (int c = 0; c < k714Channels; c++) allAlive = allAlive && rms(p.ch[c]) > 0.01;
+    check(allAlive, "a solo on the fronts' bus leaves every channel of the song playing");
+    // A mute is still each bus's own.
+    m.forEach([](DspEngine& e) { e.setBusMute(1, true); });
+    for (int b = 0; b < 20; b++) {
+        fill714(p, n);
+        m.processPlanar(p.ptr.data(), k714Channels, kBlock);
+    }
+    check(rms(p.ch[2]) < 1e-6 && rms(p.ch[0]) > 0.01, "and a mute still silences its own channel");
+}
+
 void grownBusesLeaveWithTheStream() {
     MultiLaneEngine m(kRate, kBlock);
     const std::string before = m.primary().getStateJson();
@@ -441,6 +465,7 @@ int main() {
     stateRoundTripsBusCount();
     anAddedBusCarriesAudio();
     atmosSpreadsAcrossTheMixer();
+    aSoloOnOneSpreadBusKeepsTheSong();
     grownBusesLeaveWithTheStream();
     aSavedMixKeepsItsBusesThroughAnAtmosTrack();
     spreadCanBeSwitchedOffAndOnMidStream();
