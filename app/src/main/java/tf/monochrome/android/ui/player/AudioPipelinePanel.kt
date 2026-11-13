@@ -416,6 +416,10 @@ internal fun BoxScope.AudioPipelinePanel(
                 hazeState = LocalPlayerHaze.current,
                 glass = LocalMiniPlayerGlass.current,
                 avoidNavigationBar = false,
+                // Frosted, as the audio-tools sheet beside it is: under the
+                // live lens the song's title, the transport and the dock read
+                // through the pipeline's own rows.
+                frosted = true,
             ) {
                 Column(
                     modifier = Modifier

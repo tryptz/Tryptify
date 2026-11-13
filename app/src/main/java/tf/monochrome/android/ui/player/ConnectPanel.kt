@@ -130,7 +130,13 @@ internal fun BoxScope.ConnectPanel(
                 .onSizeChanged { panelHeight = it.height.toFloat() }
                 .graphicsLayer { translationY = dragY.value },
         ) {
-            GlassPanel(hazeState = LocalPlayerHaze.current, glass = LocalMiniPlayerGlass.current, avoidNavigationBar = false) {
+            // Frosted, as the audio-tools sheet is: a sheet of text over the player.
+            GlassPanel(
+                hazeState = LocalPlayerHaze.current,
+                glass = LocalMiniPlayerGlass.current,
+                avoidNavigationBar = false,
+                frosted = true,
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

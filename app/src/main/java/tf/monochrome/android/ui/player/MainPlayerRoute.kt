@@ -1525,6 +1525,8 @@ private fun BoxScope.SpeedPanel(
             // app that isn't the transport itself.
             glass = LocalMiniPlayerGlass.current,
             avoidNavigationBar = false,
+            // Frosted, as the audio-tools sheet is: a sheet of text over the player.
+            frosted = true,
         ) {
         Column(
             modifier = Modifier

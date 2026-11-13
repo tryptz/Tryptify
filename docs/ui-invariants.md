@@ -97,7 +97,7 @@ through them (seen on device). `materialSurface` always draws.
 `materialSurface`.** The player hero's badges and buttons and the
 visualizer's: a container fill is light on a light theme, under white text.
 
-**The mini player, the tab bar, `GlassPanel` and the full player's disc and dock bend the live screen**
+**The mini player, the tab bar, a plain `GlassPanel` and the full player's disc and dock bend the live screen**
 (`LiveGlassLens.kt`, behind `LIVE_LENS_GLASS`, on since 1.9.3). **The mini player and the tab bar are one
 material and must match exactly:** same lens, same blur share
 (`LIVE_LENS_CHROME_BLUR_SHARE`, now the same share as every other pane's, kept
@@ -128,6 +128,30 @@ smear. For the same reason the slab over a live lens is told so
 (`playerGlass(liveUnder = true)`): it drops its stand-in refraction and draws its
 body as plain tint at half the body opacity, leaving the rim, reflection and
 glint to carry the glass. With `liveUnder` false the slab is bit-identical.
+
+**A pane of text over a page is frosted, not a live lens.** The live lens is
+for chrome: bars and buttons with a few marks on them, where bending the page
+is the point. A pane that is rows of text of its own, opened over a page that
+is rows of text too, takes `GlassPanel(frosted = true)`, the audio-tools
+sheet's recipe (`glassFrost`: the whole of "Backdrop blur" and its tint, then
+the slab at its full body with its stand-in refraction). These do:
+
+- `GlassOverlayLayer`, so every `GlassOverlay`: the song menu, New playlist
+  and the other dialogs drawn in the overlay slot;
+- the player's Audio pipeline, Speed and Devices sheets (`AudioPipelinePanel`,
+  `SpeedPanel`, `ConnectPanel`), which open beside the audio-tools sheet over
+  the same player;
+- Trypt Mania's song card, as before.
+
+As plain `GlassPanel`s they got a fifth of the blur, clear glass and the slab
+at half its body: the list's rows read through the song menu's own rows, and
+the song's title, the transport and the dock through the pipeline's (seen on
+device, next to the audio-tools sheet, which frosts). The visualizer's preset
+sheet stays a live lens on purpose: the visualizer moves under it, and frost
+re-blurs at the full radius on every frame. Away from the player the pane has
+no album art behind it and takes none, so it is the page blurred to soft
+colour under the theme's tint, not the player's colours. `FrostedPaneTest`
+reads each call.
 
 **The mini player and the tab bar cast their shadow from outside their clip.**
 Both clip to their rounded shape, so a shadow drawn inside is cut away. Each

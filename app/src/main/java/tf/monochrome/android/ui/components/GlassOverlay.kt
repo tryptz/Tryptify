@@ -265,6 +265,12 @@ fun BoxScope.GlassOverlayLayer(
                 // Without glass, a near-solid pane: the list it opened over
                 // must not read through the menu's own rows.
                 fallbackMinAlpha = FLOATING_FALLBACK_MIN_ALPHA,
+                // Frosted, as the player's audio-tools sheet is: the whole of
+                // "Backdrop blur" and the slab at its full body. A menu or a
+                // dialog is rows of text laid over a page of text; under the
+                // live lens (a fifth of the blur, clear glass, half the body)
+                // the list behind stayed legible through the menu's own rows.
+                frosted = true,
             ) {
                 entry.content(this)
             }

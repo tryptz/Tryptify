@@ -16,6 +16,7 @@
 
 ### Changed
 - **The player's ⋮ opens the song menu.** It was a Material dropdown of its own with part of a song's actions. It is now the glass pane a song row opens (`TrackContextMenu`), for the playing song: Play next, Add to queue, Play in Trypt Mania, Like, Add to playlist, Download (which says how the download stands), Share file, Share link, Go to album, Go to artist, Track info, and for a library file Find album art and Edit info. Under a divider come the actions that are the player's own: Shuffle, Repeat, Add to library for a song opened from another app, Edit lyrics, Player Visuals Studio and Settings. "Send file" is "Share file" there, as in every list.
+- **Menus and the player's sheets are frosted glass.** The song menu, New playlist and the other panes drawn in the overlay slot, and the player's Audio pipeline, Speed and Devices sheets, were live-lens glass: a fifth of "Backdrop blur", clear, with the slab at half its body, so the rows behind stayed legible through the pane's own rows. They now take the audio-tools sheet's recipe (`GlassPanel(frosted = true)`): the whole of "Backdrop blur" and its tint, and the slab at its full body. The bars and buttons keep the live lens, and so does the visualizer's preset sheet, where frost would re-blur a moving picture at the full radius on every frame.
 
 ### Fixed
 - **A song added to a playlist after one was removed goes last.** It took the playlist's song count as its place, which the last song already had, so the two had no order between them.
