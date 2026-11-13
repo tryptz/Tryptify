@@ -116,6 +116,11 @@
     <string name="import_m3u_empty">Diese Datei enthält keine Titel. Vielleicht ist sie keine M3U-Playlist.</string>
     <string name="import_m3u_no_local_music">In der Bibliothek ist noch keine lokale Musik. Scanne zuerst die Musik auf diesem Gerät und importiere die Playlist dann erneut.</string>
     <string name="import_m3u_none_found">Keiner ihrer Titel wurde in der Musik auf diesem Gerät gefunden.</string>
+    <string name="export_m3u">Als M3U exportieren</string>
+    <string name="export_m3u_done">%1$s in die M3U-Datei exportiert</string>
+    <string name="export_m3u_left_out">Titel, die keine Dateien auf diesem Gerät sind, wurden ausgelassen.</string>
+    <string name="export_m3u_none">Kein Titel dieser Playlist ist eine Datei auf diesem Gerät, es gibt also nichts zu exportieren.</string>
+    <string name="export_m3u_failed">Die M3U-Datei konnte nicht geschrieben werden.</string>
     <string name="strict_album_matching">Strenger Albumabgleich</string>
     <string name="strict_album_matching_detail">Nur Treffer aus demselben Album akzeptieren. Ausgeschaltet findet mehr, aber manchmal die falsche Aufnahme.</string>
     <string name="action_collapse">Einklappen</string>
@@ -3441,6 +3446,8 @@
     <string name="whats_new_1952_reorder_body">„Neu anordnen“ im ⋮-Menü einer Playlist zeigt an jedem Titel einen Griff: Zieh einen Titel an seinen neuen Platz. Jedes Ablegen wird sofort gespeichert, und „Fertig“ oder „Zurück“ beendet den Modus.</string>
     <string name="whats_new_1952_m3u_title">M3U-Playlists importieren</string>
     <string name="whats_new_1952_m3u_body">Bibliothek › Playlists › Neue Playlist › Datei liest jetzt .m3u- und .m3u8-Dateien. Ihre Titel werden in der Musik auf diesem Gerät gefunden, auch wenn die Liste auf einem Computer geschrieben wurde; was hier fehlt, wird ausgelassen.</string>
+    <string name="whats_new_1952_m3u_export_title">Playlist als M3U exportieren</string>
+    <string name="whats_new_1952_m3u_export_body">„Als M3U exportieren“ im ⋮-Menü einer Playlist speichert sie als .m3u-Datei an einem Ort deiner Wahl, für andere Player oder ein anderes Gerät. Aufgeführt werden die Titel, die Dateien auf diesem Gerät sind; reine Streaming-Titel werden ausgelassen.</string>
     <string name="whats_new_1952_dac_tile_title">DAC über die Schnelleinstellungen freigeben</string>
     <string name="whats_new_1952_dac_tile_body">Eine neue Kachel pausiert mit einem Tipp die Musik und überlässt den DAC anderen Apps; ein weiterer Tipp holt ihn zurück. Füge sie unter Einstellungen › Audio hinzu, unter Exklusiver USB-DAC.</string>
 </resources>

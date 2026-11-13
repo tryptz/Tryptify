@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -180,6 +181,40 @@ fun PlaylistScreen(
     // Nothing left to arrange (songs removed elsewhere, the playlist gone).
     LaunchedEffect(isOwn, tracks.size) { if (reordering && (!isOwn || tracks.size < 2)) reordering = false }
     BackHandler(enabled = reordering) { reordering = false }
+
+    // Export as M3U (the 3-dot menu): the view model works out which songs
+    // are files, then the system's picker asks where the file goes. Only
+    // then is anything written, so a playlist with no files makes no file.
+    val exportContext = androidx.compose.ui.platform.LocalContext.current
+    val m3uExportReady by viewModel.m3uExportReady.collectAsStateWithLifecycle()
+    val m3uSaver = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
+            tf.monochrome.android.data.import_.M3uPlaylistExporter.MIME_TYPE
+        )
+    ) { uri -> if (uri != null) viewModel.saveM3uExport(uri) else viewModel.cancelM3uExport() }
+    LaunchedEffect(m3uExportReady) {
+        m3uExportReady?.let { export ->
+            // No app to pick a place with: nothing can be saved.
+            runCatching { m3uSaver.launch(export.fileName) }.onFailure { viewModel.cancelM3uExport() }
+        }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.m3uExportResults.collect { result ->
+            val message = when (result) {
+                is PlaylistViewModel.M3uExportResult.Saved -> {
+                    val done = exportContext.getString(
+                        R.string.export_m3u_done,
+                        exportContext.resources.getQuantityString(R.plurals.tracks_of_total, result.total, result.written, result.total),
+                    )
+                    // Some left out: say which kind, so the count is not a puzzle.
+                    if (result.written < result.total) done + "\n" + exportContext.getString(R.string.export_m3u_left_out) else done
+                }
+                PlaylistViewModel.M3uExportResult.NothingToExport -> exportContext.getString(R.string.export_m3u_none)
+                PlaylistViewModel.M3uExportResult.Failed -> exportContext.getString(R.string.export_m3u_failed)
+            }
+            android.widget.Toast.makeText(exportContext, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     showContextMenuForTrack?.let { track ->
         TrackContextMenu(
@@ -366,6 +401,16 @@ fun PlaylistScreen(
                             listQuery = ""
                             listSort = TrackSort()
                             reordering = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.export_m3u)) },
+                        // The mixer's export mark; Download here means fetching the songs.
+                        leadingIcon = { Icon(Icons.Default.IosShare, contentDescription = null) },
+                        enabled = tracks.isNotEmpty(),
+                        onClick = {
+                            showMenu = false
+                            viewModel.prepareM3uExport()
                         }
                     )
                     DropdownMenuItem(

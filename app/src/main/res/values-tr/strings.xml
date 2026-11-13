@@ -116,6 +116,11 @@
     <string name="import_m3u_empty">Bu dosyada parça yok. Bir M3U çalma listesi olmayabilir.</string>
     <string name="import_m3u_no_local_music">Kitaplıkta henüz yerel müzik yok. Önce bu cihazdaki müziği tarayın, sonra çalma listesini yeniden içe aktarın.</string>
     <string name="import_m3u_none_found">Parçalarının hiçbiri bu cihazdaki müzikte bulunamadı.</string>
+    <string name="export_m3u">M3U olarak dışa aktar</string>
+    <string name="export_m3u_done">%1$s M3U dosyasına aktarıldı</string>
+    <string name="export_m3u_left_out">Bu cihazda dosya olmayan parçalar atlandı.</string>
+    <string name="export_m3u_none">Bu çalma listesindeki parçaların hiçbiri bu cihazda dosya değil; dışa aktarılacak bir şey yok.</string>
+    <string name="export_m3u_failed">M3U dosyası yazılamadı.</string>
     <string name="strict_album_matching">Katı albüm eşleştirme</string>
     <string name="strict_album_matching_detail">Yalnızca aynı albümden gelen eşleşmeleri kabul et. Kapalıyken daha fazla parça bulunur ama bazen yanlış kayıt seçilir.</string>
     <string name="action_collapse">Daralt</string>
@@ -3441,6 +3446,8 @@
     <string name="whats_new_1952_reorder_body">Bir çalma listesinin ⋮ menüsündeki “Yeniden sırala”, her parçaya bir tutamaç ekler: parçayı yeni yerine sürükleyin. Her bırakma anında kaydedilir; “Bitti” veya “Geri” moddan çıkar.</string>
     <string name="whats_new_1952_m3u_title">M3U çalma listelerini içe aktar</string>
     <string name="whats_new_1952_m3u_body">Kitaplık › Çalma listeleri › Yeni çalma listesi › Dosya artık .m3u ve .m3u8 dosyalarını okuyor. Parçalar, liste bir bilgisayarda yazılmış olsa bile bu cihazdaki müzikte bulunur; burada olmayanlar atlanır.</string>
+    <string name="whats_new_1952_m3u_export_title">Çalma listesini M3U olarak dışa aktar</string>
+    <string name="whats_new_1952_m3u_export_body">Bir çalma listesinin ⋮ menüsündeki “M3U olarak dışa aktar”, listeyi seçtiğiniz yere .m3u dosyası olarak kaydeder; başka oynatıcılar veya başka bir cihaz için. Bu cihazda dosya olan parçalar listelenir; yalnızca akışla çalınanlar atlanır.</string>
     <string name="whats_new_1952_dac_tile_title">DAC’i Hızlı Ayarlar’dan serbest bırak</string>
     <string name="whats_new_1952_dac_tile_body">Yeni bir kutu tek dokunuşla müziği duraklatır ve DAC’i diğer uygulamalara bırakır; bir dokunuş daha DAC’i geri alır. Ayarlar › Ses’te, Özel USB DAC’in altından ekleyin.</string>
 </resources>

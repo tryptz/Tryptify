@@ -218,6 +218,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYLISTS,
+                    title = "Export a playlist as M3U",
+                    body = "Export as M3U, in a playlist's ⋮ menu, saves it as an .m3u file wherever you choose, for other players or another device. It lists the songs that are files on this device; songs that only stream are left out.",
+                    titleRes = R.string.whats_new_1952_m3u_export_title,
+                    bodyRes = R.string.whats_new_1952_m3u_export_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = USB_DAC,
                     title = "Release the DAC from Quick Settings",
                     body = "A new tile pauses the music and hands the DAC to other apps in one tap; another tap takes it back. Add it in Settings › Audio, under Exclusive USB DAC.",

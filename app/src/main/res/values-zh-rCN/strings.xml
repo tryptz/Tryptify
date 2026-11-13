@@ -114,6 +114,11 @@
     <string name="import_m3u_empty">该文件中没有歌曲，可能不是 M3U 歌单。</string>
     <string name="import_m3u_no_local_music">音乐库中还没有本地音乐。请先扫描本机音乐，然后重新导入歌单。</string>
     <string name="import_m3u_none_found">在本机音乐中没有找到其中的任何歌曲。</string>
+    <string name="export_m3u">导出为 M3U</string>
+    <string name="export_m3u_done">已将 %1$s 导出到 M3U 文件</string>
+    <string name="export_m3u_left_out">不是本机文件的歌曲已被略过。</string>
+    <string name="export_m3u_none">这个歌单中没有任何歌曲是本机文件，因此没有可导出的内容。</string>
+    <string name="export_m3u_failed">无法写入 M3U 文件。</string>
     <string name="strict_album_matching">严格匹配专辑</string>
     <string name="strict_album_matching_detail">只接受来自同一专辑的匹配。关闭后能找到更多歌曲，但有时会匹配到错误的录音版本。</string>
     <string name="action_collapse">收起</string>
@@ -3363,6 +3368,8 @@
     <string name="whats_new_1952_reorder_body">歌单 ⋮ 菜单中的“重新排序”会为每首歌显示一个拖动手柄：将歌曲拖到新位置即可。每次放下都会立即保存，点按“完成”或“返回”即可退出该模式。</string>
     <string name="whats_new_1952_m3u_title">导入 M3U 歌单</string>
     <string name="whats_new_1952_m3u_body">“音乐库 › 歌单 › 新建歌单 › 文件”现在可以读取 .m3u 和 .m3u8 文件。其中的歌曲会在本机音乐中查找，即使列表是在电脑上生成的也能找到；本机没有的歌曲将被略过。</string>
+    <string name="whats_new_1952_m3u_export_title">将歌单导出为 M3U</string>
+    <string name="whats_new_1952_m3u_export_body">歌单 ⋮ 菜单中的“导出为 M3U”可将歌单保存为 .m3u 文件，位置由你选择，供其他播放器或其他设备使用。文件中列出的是本机上的歌曲文件；只能在线播放的歌曲会被略过。</string>
     <string name="whats_new_1952_dac_tile_title">从快捷设置释放 DAC</string>
     <string name="whats_new_1952_dac_tile_body">新的功能块点一下即可暂停音乐并将 DAC 交给其他应用，再点一下即可重新占用。可在“设置 › 音频”的“独占 USB DAC”下方添加。</string>
 </resources>

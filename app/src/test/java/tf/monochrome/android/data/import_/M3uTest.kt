@@ -106,6 +106,68 @@ class M3uTest {
         assertEquals(emptyList<M3uEntry>(), M3u.parse("#EXTM3U\n").entries)
     }
 
+    // ── Writing ─────────────────────────────────────────────────────────────
+
+    @Test
+    fun `a playlist is written as an extended M3U`() {
+        val text = M3u.write(
+            "Road trip",
+            listOf(
+                M3uEntry("/storage/emulated/0/Music/Queen/11 Bohemian Rhapsody.flac", "Queen - Bohemian Rhapsody", 354),
+                M3uEntry("/storage/emulated/0/Music/loose.mp3"),
+            ),
+        )
+        assertEquals(
+            "#EXTM3U\n" +
+                "#PLAYLIST:Road trip\n" +
+                "#EXTINF:354,Queen - Bohemian Rhapsody\n" +
+                "/storage/emulated/0/Music/Queen/11 Bohemian Rhapsody.flac\n" +
+                "/storage/emulated/0/Music/loose.mp3\n",
+            text,
+        )
+    }
+
+    @Test
+    fun `what is written reads back the same`() {
+        val entries = listOf(
+            M3uEntry("/storage/emulated/0/Music/Beyoncé/Déjà Vu.mp3", "Beyoncé - Déjà Vu", 240),
+            M3uEntry("/storage/1A2B-3C4D/音楽/宇多田ヒカル/First Love.flac", "宇多田ヒカル - First Love", 258),
+            M3uEntry("/storage/emulated/0/Music/Earth, Wind & Fire/September.mp3", "Earth, Wind & Fire - September", 215),
+            M3uEntry("/storage/emulated/0/Music/no tags.ogg"),
+        )
+        val back = M3u.parse(M3u.decode(M3u.write("Mix, the first", entries).toByteArray(Charsets.UTF_8)))
+        assertEquals("Mix, the first", back.title)
+        assertEquals(entries, back.entries)
+    }
+
+    @Test
+    fun `a song with text but no length is written with -1, and reads back with none`() {
+        val text = M3u.write(null, listOf(M3uEntry("/m/a.mp3", "A - One"), M3uEntry("/m/b.mp3", null, 30)))
+        assertEquals("#EXTM3U\n#EXTINF:-1,A - One\n/m/a.mp3\n#EXTINF:30,\n/m/b.mp3\n", text)
+        assertEquals(listOf(M3uEntry("/m/a.mp3", "A - One"), M3uEntry("/m/b.mp3", null, 30)), M3u.parse(text).entries)
+    }
+
+    @Test
+    fun `a line break in a name cannot start a line of its own`() {
+        val text = M3u.write("Two\nlines", listOf(M3uEntry("/m/a.mp3", "A -\r\nOne", 10)))
+        assertEquals("#EXTM3U\n#PLAYLIST:Two lines\n#EXTINF:10,A -  One\n/m/a.mp3\n", text)
+        assertEquals(1, M3u.parse(text).entries.size)
+    }
+
+    @Test
+    fun `an empty playlist and a blank name are still a valid file`() {
+        assertEquals("#EXTM3U\n", M3u.write(null, emptyList()))
+        assertEquals("#EXTM3U\n", M3u.write("   ", listOf(M3uEntry("  "))))
+        assertEquals(emptyList<M3uEntry>(), M3u.parse(M3u.write("", emptyList())).entries)
+    }
+
+    @Test
+    fun `the text is artist - title, or the title alone`() {
+        assertEquals("Queen - Bohemian Rhapsody", M3u.displayOf("Queen", "Bohemian Rhapsody"))
+        assertEquals("Bohemian Rhapsody", M3u.displayOf("  ", " Bohemian Rhapsody "))
+        assertEquals("Bohemian Rhapsody", M3u.displayOf(null, "Bohemian Rhapsody"))
+    }
+
     // ── Decoding ────────────────────────────────────────────────────────────
 
     private val accented = "#EXTM3U\nBeyoncé/Déjà Vu.mp3\n"

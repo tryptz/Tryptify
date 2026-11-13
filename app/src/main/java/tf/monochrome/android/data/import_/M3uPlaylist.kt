@@ -28,11 +28,13 @@ data class M3uPlaylist(val title: String?, val entries: List<M3uEntry>)
 
 /**
  * Reads `.m3u` and `.m3u8` playlists (issue #155): the plain list of paths, and
- * the extended form with `#EXTM3U`, `#EXTINF` and `#PLAYLIST` lines.
+ * the extended form with `#EXTM3U`, `#EXTINF` and `#PLAYLIST` lines. And
+ * writes one ([write]), for a playlist exported to a file.
  *
  * Nothing here needs Android, so it is tested against whole files
  * ([M3uTest]); finding each song among the listener's own music is
- * [M3uLocalMatcher]'s, and reading the picked file [M3uPlaylistImporter]'s.
+ * [M3uLocalMatcher]'s, reading the picked file [M3uPlaylistImporter]'s and
+ * writing one [M3uPlaylistExporter]'s.
  */
 object M3u {
     /** A playlist file past this is not a playlist; the same cap the CSV import has. */
@@ -119,6 +121,40 @@ object M3u {
         }
         return M3uPlaylist(title, entries)
     }
+
+    /**
+     * The playlist as the text of an extended M3U, the form [parse] reads
+     * back: `#EXTM3U`, the name on a `#PLAYLIST` line when there is one, and
+     * for each song an `#EXTINF` line (its length in seconds, -1 when not
+     * known, and its text) above its location.
+     *
+     * UTF-8, no byte-order mark (some players read a mark as part of the
+     * first line), lines ending in a line feed. A line break inside a name
+     * would start a line of its own, and a line of its own is a song: breaks
+     * become spaces. A song with no location is left out.
+     */
+    fun write(title: String?, entries: List<M3uEntry>): String = buildString {
+        append("#EXTM3U\n")
+        title?.let(::oneLine)?.takeIf { it.isNotEmpty() }?.let { append(PLAYLIST).append(it).append('\n') }
+        for (entry in entries) {
+            val location = oneLine(entry.location)
+            if (location.isEmpty()) continue
+            val display = entry.display?.let(::oneLine).orEmpty()
+            val seconds = entry.durationSeconds?.takeIf { it > 0 }
+            if (display.isNotEmpty() || seconds != null) {
+                append(EXTINF).append(seconds ?: -1).append(',').append(display).append('\n')
+            }
+            append(location).append('\n')
+        }
+    }
+
+    /** The `#EXTINF` text for a song: "Artist - Title", or the title alone when no artist is known. */
+    fun displayOf(artist: String?, title: String): String {
+        val by = artist?.trim().orEmpty()
+        return if (by.isEmpty()) title.trim() else "$by - ${title.trim()}"
+    }
+
+    private fun oneLine(text: String): String = text.replace('\r', ' ').replace('\n', ' ').trim()
 
     private const val EXTINF = "#EXTINF:"
     private const val PLAYLIST = "#PLAYLIST:"

@@ -117,6 +117,11 @@
     <string name="import_m3u_empty">That file has no songs in it. It may not be an M3U playlist.</string>
     <string name="import_m3u_no_local_music">There is no local music in the library yet. Scan this device’s music first, then import the playlist again.</string>
     <string name="import_m3u_none_found">None of its songs were found in the music on this device.</string>
+    <string name="export_m3u">Export as M3U</string>
+    <string name="export_m3u_done">Exported %1$s to the M3U file</string>
+    <string name="export_m3u_left_out">Songs that aren’t files on this device were left out.</string>
+    <string name="export_m3u_none">None of this playlist’s songs are files on this device, so there is nothing to export.</string>
+    <string name="export_m3u_failed">Couldn’t write the M3U file.</string>
     <string name="strict_album_matching">Strict album matching</string>
     <string name="strict_album_matching_detail">Only accept a match from the same album. Off finds more, but sometimes the wrong recording.</string>
     <string name="action_collapse">Collapse</string>
@@ -3444,6 +3449,8 @@
     <string name="whats_new_1952_reorder_body">Reorder, in a playlist\'s ⋮ menu, puts a handle on every song: drag one to its new place. Each drop is saved at once, and Done or Back leaves the mode.</string>
     <string name="whats_new_1952_m3u_title">Import M3U playlists</string>
     <string name="whats_new_1952_m3u_body">Library › Playlists › New playlist › File now reads .m3u and .m3u8 files. Their songs are found in the music on this device, even if the list was written on a computer; songs that aren\'t here are left out.</string>
+    <string name="whats_new_1952_m3u_export_title">Export a playlist as M3U</string>
+    <string name="whats_new_1952_m3u_export_body">Export as M3U, in a playlist\'s ⋮ menu, saves it as an .m3u file wherever you choose, for other players or another device. It lists the songs that are files on this device; songs that only stream are left out.</string>
     <string name="whats_new_1952_dac_tile_title">Release the DAC from Quick Settings</string>
     <string name="whats_new_1952_dac_tile_body">A new tile pauses the music and hands the DAC to other apps in one tap; another tap takes it back. Add it in Settings › Audio, under Exclusive USB DAC.</string>
 </resources>

@@ -31,6 +31,7 @@ class PlaylistViewModel @Inject constructor(
     private val libraryRepository: LibraryRepository,
     private val musicRepository: MusicRepository,
     private val playlistFixer: PlaylistFixer,
+    private val m3uExporter: tf.monochrome.android.data.import_.M3uPlaylistExporter,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -155,6 +156,73 @@ class PlaylistViewModel @Inject constructor(
         viewModelScope.launch {
             withContext(NonCancellable) {
                 libraryRepository.reorderPlaylist(playlistId, orderedTrackIds)
+            }
+        }
+    }
+
+    /** How an M3U export ended, for the screen to say. */
+    sealed interface M3uExportResult {
+        /** [written] of the playlist's [total] songs are in the file. */
+        data class Saved(val written: Int, val total: Int) : M3uExportResult
+
+        /** None of the songs is a file on the device: no file was made. */
+        data object NothingToExport : M3uExportResult
+
+        data object Failed : M3uExportResult
+    }
+
+    private val _m3uExportReady = MutableStateFlow<tf.monochrome.android.data.import_.M3uPlaylistExporter.Export?>(null)
+
+    /** A playlist worked out and waiting for the listener to say where the file goes. */
+    val m3uExportReady: StateFlow<tf.monochrome.android.data.import_.M3uPlaylistExporter.Export?> = _m3uExportReady.asStateFlow()
+
+    private val _m3uExportResults = kotlinx.coroutines.flow.MutableSharedFlow<M3uExportResult>(extraBufferCapacity = 4)
+    val m3uExportResults: kotlinx.coroutines.flow.SharedFlow<M3uExportResult> = _m3uExportResults
+
+    private var m3uPreparing = false
+
+    /**
+     * Export as M3U, step one: which of the songs are files, before any file
+     * is made. With none there is nothing to save, and no picker is shown.
+     */
+    fun prepareM3uExport() {
+        if (m3uPreparing) return
+        m3uPreparing = true
+        viewModelScope.launch {
+            try {
+                val export = m3uExporter.prepare(_playlistInfo.value?.name.orEmpty(), _tracks.value)
+                if (export.written == 0) _m3uExportResults.emit(M3uExportResult.NothingToExport)
+                else _m3uExportReady.value = export
+            } finally {
+                m3uPreparing = false
+            }
+        }
+    }
+
+    /** The picker was closed without a place chosen. */
+    fun cancelM3uExport() {
+        _m3uExportReady.value = null
+    }
+
+    /**
+     * Step two: the listener chose [uri]. What was prepared is written; if
+     * the app was restarted behind the picker, it is worked out again.
+     */
+    fun saveM3uExport(uri: android.net.Uri) {
+        val ready = _m3uExportReady.value
+        _m3uExportReady.value = null
+        viewModelScope.launch {
+            withContext(NonCancellable) {
+                val export = ready ?: m3uExporter.prepare(_playlistInfo.value?.name.orEmpty(), _tracks.value)
+                val result = when {
+                    export.written == 0 -> {
+                        m3uExporter.discard(uri)
+                        M3uExportResult.NothingToExport
+                    }
+                    m3uExporter.save(uri, export.text) -> M3uExportResult.Saved(export.written, export.total)
+                    else -> M3uExportResult.Failed
+                }
+                _m3uExportResults.emit(result)
             }
         }
     }

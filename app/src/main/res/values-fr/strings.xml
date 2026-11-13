@@ -118,6 +118,11 @@
     <string name="import_m3u_empty">Ce fichier ne contient aucun titre. Ce n’est peut-être pas une playlist M3U.</string>
     <string name="import_m3u_no_local_music">La bibliothèque ne contient pas encore de musique locale. Analysez d’abord la musique de cet appareil, puis importez de nouveau la playlist.</string>
     <string name="import_m3u_none_found">Aucun de ses titres n’a été trouvé dans la musique de cet appareil.</string>
+    <string name="export_m3u">Exporter en M3U</string>
+    <string name="export_m3u_done">%1$s exportés dans le fichier M3U</string>
+    <string name="export_m3u_left_out">Les titres qui ne sont pas des fichiers sur cet appareil ont été laissés de côté.</string>
+    <string name="export_m3u_none">Aucun titre de cette playlist n’est un fichier sur cet appareil : il n’y a rien à exporter.</string>
+    <string name="export_m3u_failed">Impossible d’écrire le fichier M3U.</string>
     <string name="strict_album_matching">Correspondance stricte de l’album</string>
     <string name="strict_album_matching_detail">N’accepter que les correspondances du même album. Désactivé, on en trouve davantage, mais parfois le mauvais enregistrement.</string>
     <string name="action_collapse">Réduire</string>
@@ -3519,6 +3524,8 @@
     <string name="whats_new_1952_reorder_body">« Réorganiser », dans le menu ⋮ d’une playlist, affiche une poignée sur chaque titre : faites-en glisser un vers sa nouvelle place. Chaque dépôt est enregistré aussitôt, et « Terminé » ou « Retour » quitte ce mode.</string>
     <string name="whats_new_1952_m3u_title">Importer des playlists M3U</string>
     <string name="whats_new_1952_m3u_body">Bibliothèque › Playlists › Nouvelle playlist › Fichier lit désormais les fichiers .m3u et .m3u8. Leurs titres sont retrouvés dans la musique de cet appareil, même si la liste a été écrite sur un ordinateur ; ceux qui n’y sont pas sont laissés de côté.</string>
+    <string name="whats_new_1952_m3u_export_title">Exporter une playlist en M3U</string>
+    <string name="whats_new_1952_m3u_export_body">« Exporter en M3U », dans le menu ⋮ d’une playlist, l’enregistre en fichier .m3u là où vous le choisissez, pour d’autres lecteurs ou un autre appareil. Il liste les titres qui sont des fichiers sur cet appareil ; ceux qui ne sont qu’en streaming sont laissés de côté.</string>
     <string name="whats_new_1952_dac_tile_title">Libérer le DAC depuis les Réglages rapides</string>
     <string name="whats_new_1952_dac_tile_body">Un nouveau bloc met la musique en pause et confie le DAC aux autres apps d’un seul appui ; un autre appui le reprend. Ajoutez-le dans Paramètres › Audio, sous DAC USB exclusif.</string>
 </resources>

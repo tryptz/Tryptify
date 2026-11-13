@@ -118,6 +118,11 @@
     <string name="import_m3u_empty">Quel file non contiene brani. Forse non è una playlist M3U.</string>
     <string name="import_m3u_no_local_music">Nella libreria non c’è ancora musica locale. Scansiona prima la musica di questo dispositivo, poi importa di nuovo la playlist.</string>
     <string name="import_m3u_none_found">Nessuno dei suoi brani è stato trovato nella musica su questo dispositivo.</string>
+    <string name="export_m3u">Esporta come M3U</string>
+    <string name="export_m3u_done">Esportato %1$s nel file M3U</string>
+    <string name="export_m3u_left_out">I brani che non sono file su questo dispositivo sono stati tralasciati.</string>
+    <string name="export_m3u_none">Nessun brano di questa playlist è un file su questo dispositivo: non c’è nulla da esportare.</string>
+    <string name="export_m3u_failed">Impossibile scrivere il file M3U.</string>
     <string name="strict_album_matching">Corrispondenza esatta dell\'album</string>
     <string name="strict_album_matching_detail">Accetta solo corrispondenze dello stesso album. Se disattivata trova più risultati, ma a volte la registrazione sbagliata.</string>
     <string name="action_collapse">Comprimi</string>
@@ -3519,6 +3524,8 @@
     <string name="whats_new_1952_reorder_body">“Riordina”, nel menu ⋮ di una playlist, mostra una maniglia su ogni brano: trascinane uno nella nuova posizione. Ogni rilascio viene salvato subito, e “Fine” o “Indietro” escono dalla modalità.</string>
     <string name="whats_new_1952_m3u_title">Importa playlist M3U</string>
     <string name="whats_new_1952_m3u_body">Libreria › Playlist › Nuova playlist › File ora legge i file .m3u e .m3u8. I loro brani vengono trovati nella musica su questo dispositivo, anche se la lista è stata scritta su un computer; quelli che non ci sono vengono tralasciati.</string>
+    <string name="whats_new_1952_m3u_export_title">Esporta una playlist come M3U</string>
+    <string name="whats_new_1952_m3u_export_body">“Esporta come M3U”, nel menu ⋮ di una playlist, la salva come file .m3u dove preferisci, per altri lettori o un altro dispositivo. Elenca i brani che sono file su questo dispositivo; quelli solo in streaming vengono tralasciati.</string>
     <string name="whats_new_1952_dac_tile_title">Rilascia il DAC dalle Impostazioni rapide</string>
     <string name="whats_new_1952_dac_tile_body">Un nuovo riquadro mette in pausa la musica e cede il DAC alle altre app con un tocco; un altro tocco lo riprende. Aggiungilo in Impostazioni › Audio, sotto DAC USB esclusivo.</string>
 </resources>

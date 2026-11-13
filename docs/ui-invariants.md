@@ -1057,6 +1057,28 @@ not supported). They are different imports behind one button:
 
 `M3uTest` and `M3uLocalMatcherTest` hold the reading and the matching.
 
+**A playlist exports as an M3U from its ⋮ menu** (`PlaylistScreen`,
+`M3uPlaylistExporter`; the listener's own playlists).
+
+- **Which songs are files is worked out before the picker opens.** A file the
+  picker has made cannot be un-made reliably, so a playlist none of whose
+  songs is a file says so and never shows a picker.
+- **A song is listed when another app can open its file**: the file the app
+  would play it from (`LocalTrackLocator`, as every play asks), in shared
+  storage (`isSharedFile`). A streamed song has no file; a download in the
+  app's own storage (`Android/data`) or behind a `content://` address is one
+  no other app can read. Those are left out, and the toast gives the count
+  ("12/15 tracks") and says what was left out.
+- **The file is `.m3u`, created as `audio/x-mpegurl`**, written as UTF-8
+  without a byte-order mark. With another extension the system's picker adds
+  `.m3u` after it; with a mark some players read it as part of the first
+  line.
+- **Its icon is the mixer's export mark**, not Download, which on this screen
+  means fetching the songs.
+
+`M3uTest` holds what is written (and that it reads back the same), and
+`M3uPlaylistExporterTest` which paths are listed and how the file is named.
+
 **Playlist Import in Settings is the link import.** No account needed: the
 link is looked up as it is pasted (`rememberSpotifyLinkPreview`,
 `LinkPreviewCard`, the same pieces as Library › Playlists › New playlist),
