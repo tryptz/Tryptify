@@ -1767,12 +1767,25 @@ class PlayerViewModel @Inject constructor(
      * on whichever service the person it's sent to has (ShareLinks).
      */
     fun shareLink(track: Track) {
-        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track)) }
+        val start = previewStartFor(track.id)
+        viewModelScope.launch { shareLinks.shareTrack(track, unifiedFor(track), start) }
+    }
+
+    /**
+     * Where a shared song's preview starts: where it is playing, when it is
+     * the song playing (or paused), so the listener picks the moment by
+     * sharing at it. Any other song starts where the server picks.
+     */
+    private fun previewStartFor(trackId: Long): Int? {
+        if (currentTrack.value?.id != trackId) return null
+        return tf.monochrome.android.share.ShareLinks.previewStart(mediaController?.currentPosition ?: positionMs.value)
     }
 
     /** Share a YouTube or SoundCloud song from a list as a tryptify.com link (ShareLinks). */
     fun shareUnifiedLink(track: UnifiedTrack) {
-        viewModelScope.launch { shareLinks.shareTrack(track.toLegacyTrack(), track) }
+        val legacy = track.toLegacyTrack()
+        val start = previewStartFor(legacy.id)
+        viewModelScope.launch { shareLinks.shareTrack(legacy, track, start) }
     }
 
     /** Share an album page's album as a tryptify.com link (ShareLinks). */

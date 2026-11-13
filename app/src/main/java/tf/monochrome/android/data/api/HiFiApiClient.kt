@@ -549,7 +549,7 @@ class HiFiApiClient @Inject constructor(
      * Null when none answers (a HiFi API that is not TrypT-hifi has no such
      * route): the caller then makes the link itself, which still plays.
      */
-    suspend fun shareLink(source: String, album: String, track: Long?): String? {
+    suspend fun shareLink(source: String, album: String, track: Long?, startSec: Int? = null): String? {
         val first = when (source) {
             "qobuz" -> instanceManager.qobuzInstanceOrNull()
             "deezer" -> instanceManager.deezerInstanceOrNull()
@@ -560,7 +560,10 @@ class HiFiApiClient @Inject constructor(
             first, instanceManager.qobuzInstanceOrNull(), instanceManager.deezerInstanceOrNull(),
             instanceManager.appleInstanceOrNull(), instanceManager.tidalInstanceOrNull(),
         ).map { it.url.trimEnd('/') }.distinct()
-        val query = "source=$source&album=${java.net.URLEncoder.encode(album, "UTF-8")}" + (track?.let { "&track=$it" } ?: "")
+        // t: where the preview starts, for a song shared while it plays. A
+        // TrypT-hifi from before it ignores the parameter.
+        val query = "source=$source&album=${java.net.URLEncoder.encode(album, "UTF-8")}" + (track?.let { "&track=$it" } ?: "") +
+            (startSec?.takeIf { track != null && it >= 0 }?.let { "&t=$it" } ?: "")
         for (base in bases) {
             val url = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
                 runCatching {

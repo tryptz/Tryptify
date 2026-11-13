@@ -50,12 +50,14 @@ class ShareLinks @Inject constructor(
 ) {
     /**
      * Shares [track], played as [unified] says (null: a legacy track, its
-     * catalog read from its ids).
+     * catalog read from its ids). [previewStartSec] is where the preview
+     * Discord plays begins: where the song is playing, when the song shared
+     * is the one playing; null lets the server start a third of the way in.
      */
-    suspend fun shareTrack(track: Track, unified: UnifiedTrack?) {
+    suspend fun shareTrack(track: Track, unified: UnifiedTrack?, previewStartSec: Int? = null) {
         val source = unified?.source
         val link = if (source is PlaybackSource.Scxyt) {
-            signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it) }
+            signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it, previewStartSec) }
         } else {
             linkFor(track, source, unified?.pageUrl)
         }
@@ -63,7 +65,7 @@ class ShareLinks @Inject constructor(
             toast(text().getString(R.string.share_link_unavailable))
             return
         }
-        share(link, track.title)
+        share(link, track.title, previewStartSec)
     }
 
     /** Shares [detail], from the catalog its page loaded it from. */
@@ -118,18 +120,18 @@ class ShareLinks @Inject constructor(
      * clip, so the listener is told the tap was taken. Signed out there is
      * nothing to wait for: the server would only refuse it.
      */
-    private suspend fun preview(title: String, mediaId: String): Result<ScxytShare> {
+    private suspend fun preview(title: String, mediaId: String, startSec: Int?): Result<ScxytShare> {
         if (!scxyt.isSignedIn()) return Result.failure(ScxytError.SignedOut())
         // Says what the wait is for: the share sheet opens only once the preview is made.
         toast(text().getString(R.string.share_link_preparing, title))
-        val share = withTimeoutOrNull(PREVIEW_WAIT_MS) { withContext(Dispatchers.IO) { scxyt.share(mediaId) } }
+        val share = withTimeoutOrNull(PREVIEW_WAIT_MS) { withContext(Dispatchers.IO) { scxyt.share(mediaId, startSec) } }
             ?: Result.failure(ScxytError.Timeout())
         share.onFailure { Log.i(TAG, "share link: no preview for $mediaId, shared without it: ${it::class.simpleName}: ${it.message}") }
         return share
     }
 
-    private suspend fun share(link: SharedLink, title: String) {
-        val url = link.album?.let { apiClient.shareLink(link.source.slug, it, link.track) } ?: SharedLink.url(link)
+    private suspend fun share(link: SharedLink, title: String, previewStartSec: Int? = null) {
+        val url = link.album?.let { apiClient.shareLink(link.source.slug, it, link.track, previewStartSec) } ?: SharedLink.url(link)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, url)
@@ -155,6 +157,14 @@ class ShareLinks @Inject constructor(
          * without one.
          */
         const val PREVIEW_WAIT_MS = 120_000L
+
+        /**
+         * The playing song's position as a preview's start, in whole
+         * seconds; null for no position (nothing loaded yet). The server
+         * holds it inside the song: shared in the last seconds, the clip is
+         * the song's last thirty.
+         */
+        fun previewStart(positionMs: Long): Int? = if (positionMs < 0) null else (positionMs / 1000).toInt().coerceAtMost(99_999)
 
         /**
          * [songLink], signed with the preview [preview] has the server make,

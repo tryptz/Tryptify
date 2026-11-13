@@ -19,6 +19,7 @@ class ScxytRouterTest {
     private class FakeBackend(private val name: String, private val error: ScxytError? = null) : ScxytServer {
         val asked = mutableListOf<String>()
         val shared = mutableListOf<Triple<String, File?, String?>>()
+        val starts = mutableListOf<Int?>()
 
         override suspend fun search(query: String, source: ScxytSource, limit: Int): List<ScxytTrack> {
             asked += "search:${source.wire}:$query"
@@ -33,9 +34,10 @@ class ScxytRouterTest {
             return ScxytStream(id, "m4a", "audio/mp4", 1, "$name://$id", file = if (name == "phone") File("/cache/youtube/x.m4a") else null)
         }
 
-        override suspend fun share(id: String, audio: File?, mime: String?): ScxytShare {
+        override suspend fun share(id: String, audio: File?, mime: String?, startSec: Int?): ScxytShare {
             asked += "share:$id"
             shared += Triple(id, audio, mime)
+            starts += startSec
             error?.let { throw it }
             return ScxytShare(id, "Q0iqjfn2xWlNUgxv", page = if (id.startsWith("sc:")) "https://soundcloud.com/a/b" else null)
         }
@@ -118,6 +120,11 @@ class ScxytRouterTest {
         assertEquals(listOf("prepare:yt:dQw4w9WgXcQ"), phone.asked)
         assertEquals(Triple("sc:123456", null, null), server.shared.last())
         assertEquals("https://soundcloud.com/a/b", sc.page)
+        // No start chosen: the server picks. One chosen goes up with either kind of song.
+        assertEquals(listOf<Int?>(null, null), server.starts)
+        router.share("yt:dQw4w9WgXcQ", 95).getOrThrow()
+        router.share("sc:123456", 12).getOrThrow()
+        assertEquals(listOf(null, null, 95, 12), server.starts)
     }
 
     @Test

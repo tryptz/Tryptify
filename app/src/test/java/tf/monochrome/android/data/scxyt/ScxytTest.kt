@@ -195,6 +195,13 @@ class ScxytTest {
         assertEquals(ScxytShare(id = "yt:dQw4w9WgXcQ", s = "Q0iqjfn2xWlNUgxv", page = null), share)
         val post = transport.posts.single()
         assertEquals("$base/api/v1/share?id=yt%3AdQw4w9WgXcQ", post.url)
+        // A start the sharer chose is t=, in whole seconds; none, and the parameter is left out.
+        assertEquals("$base/api/v1/share?id=yt%3AdQw4w9WgXcQ&t=95", ScxytClient.shareUrl(base, "yt:dQw4w9WgXcQ", 95))
+        assertEquals("$base/api/v1/share?id=sc%3A1&t=0", ScxytClient.shareUrl(base, "sc:1", 0))
+        assertEquals("$base/api/v1/share?id=sc%3A1", ScxytClient.shareUrl(base, "sc:1", -4))
+        assertEquals(95, tf.monochrome.android.share.ShareLinks.previewStart(95_900L))
+        assertEquals(0, tf.monochrome.android.share.ShareLinks.previewStart(0L))
+        assertEquals(null, tf.monochrome.android.share.ShareLinks.previewStart(-1L))
         assertEquals("t1", post.token)
         // The cached file itself, as the type it is: the server cannot fetch YouTube.
         assertEquals(file, post.body)

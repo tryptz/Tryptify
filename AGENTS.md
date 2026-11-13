@@ -373,6 +373,16 @@ falls back to YouTube the same way; an album link does not.
 `SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the
 signature and its fallback, the match and the routing.
 
+**The preview starts where the song is playing**, when the song shared is
+the one playing or paused (`PlayerViewModel.previewStartFor`,
+`ShareLinks.previewStart`): the listener picks the moment by sharing at it.
+The second goes up as `t=`, to trypt-hifi-scxyt's `/api/v1/share` and to
+TrypT-hifi's `/api/share/link`, and each server signs it with the link and
+holds it inside the song. Any other song is shared without it and starts a
+third of the way in, the servers' own pick. A catalogue clip cut from the
+full file is lossless and fades in and out; a YouTube or SoundCloud clip is
+the song's own sound copied, so it has no fade.
+
 `ScxytTest` holds the app to the server's JSON and error codes (the share's
 upload too), `ScxytRouterTest` holds the routing, and `YoutubeMappingTest`,
 `ChunkedDownloadTest`, `YoutubeAudioCacheTest` and the PO-token tests above

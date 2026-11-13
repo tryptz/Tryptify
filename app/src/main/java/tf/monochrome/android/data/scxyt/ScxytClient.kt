@@ -60,11 +60,11 @@ class ScxytClient(
      * A file larger than the server takes is refused here, before 40 MB go
      * up only to be turned away.
      */
-    suspend fun share(id: String, audio: File? = null, mime: String? = null): ScxytShare {
+    suspend fun share(id: String, audio: File? = null, mime: String? = null, startSec: Int? = null): ScxytShare {
         if (audio != null && audio.length() > SHARE_MAX_BYTES) {
             throw ScxytError.TooLong("${audio.length()} bytes, more than the server takes")
         }
-        val url = shareUrl(baseUrl, id)
+        val url = shareUrl(baseUrl, id, startSec)
         val data = decode<ScxytShared>(send { token -> transport.post(url, token, audio, mime, SHARE_TIMEOUT_MS) })
         if (data.s.isBlank()) throw ScxytError.Failed("no_signature")
         return ScxytShare(id = data.id.ifBlank { id }, s = data.s, page = data.page?.takeIf { it.isNotBlank() })
@@ -113,7 +113,13 @@ class ScxytClient(
 
         fun prepareUrl(base: String, id: String): String = "${base.trimEnd('/')}/api/v1/prepare?id=${encode(id)}"
 
-        fun shareUrl(base: String, id: String): String = "${base.trimEnd('/')}/api/v1/share?id=${encode(id)}"
+        /**
+         * [startSec]: where the preview starts, when the sharer chose (the
+         * song shared while it plays, from where it is); the server holds it
+         * inside the song. Left out, the server starts a third of the way in.
+         */
+        fun shareUrl(base: String, id: String, startSec: Int? = null): String =
+            "${base.trimEnd('/')}/api/v1/share?id=${encode(id)}" + (startSec?.takeIf { it >= 0 }?.let { "&t=$it" } ?: "")
 
         /**
          * The server's [link] (`/api/v1/stream?id=…&exp=…&sig=…`) as an address

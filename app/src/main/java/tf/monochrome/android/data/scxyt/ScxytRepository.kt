@@ -57,7 +57,7 @@ class ScxytRepository @Inject constructor(
         server = object : ScxytServer {
             override suspend fun search(query: String, source: ScxytSource, limit: Int) = client.search(query, source, limit)
             override suspend fun prepare(id: String) = client.prepare(id)
-            override suspend fun share(id: String, audio: File?, mime: String?) = client.share(id, audio, mime)
+            override suspend fun share(id: String, audio: File?, mime: String?, startSec: Int?) = client.share(id, audio, mime, startSec)
         },
         youtube = youtube,
     )
@@ -106,9 +106,9 @@ class ScxytRepository @Inject constructor(
      * when it is not there. Signed out it fails at once, before a YouTube
      * song is fetched only to be refused.
      */
-    suspend fun share(mediaId: String): Result<ScxytShare> {
+    suspend fun share(mediaId: String, startSec: Int? = null): Result<ScxytShare> {
         if (!isSignedIn()) return Result.failure(ScxytError.SignedOut())
-        return router.share(mediaId)
+        return router.share(mediaId, startSec)
     }
 
     private suspend fun token(stale: String?): String = try {

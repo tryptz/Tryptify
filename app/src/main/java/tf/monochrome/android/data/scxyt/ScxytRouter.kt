@@ -14,8 +14,12 @@ interface ScxytBackend {
 
 /** trypt-hifi-scxyt, which also makes shared songs' previews, YouTube's included. */
 interface ScxytServer : ScxytBackend {
-    /** Makes [id]'s preview, from [audio] when given (a YouTube song's file, as [mime]). */
-    suspend fun share(id: String, audio: File?, mime: String?): ScxytShare
+    /**
+     * Makes [id]'s preview, from [audio] when given (a YouTube song's file, as
+     * [mime]), starting [startSec] seconds in when the sharer chose (null: a
+     * third of the way in, the server's own pick).
+     */
+    suspend fun share(id: String, audio: File?, mime: String?, startSec: Int? = null): ScxytShare
 }
 
 /**
@@ -56,12 +60,12 @@ class ScxytRouter(
      * just played) and its file sent up, because YouTube turns the server
      * away. A SoundCloud song the server fetches itself.
      */
-    suspend fun share(mediaId: String): Result<ScxytShare> = call {
+    suspend fun share(mediaId: String, startSec: Int? = null): Result<ScxytShare> = call {
         if (ScxytSource.ofId(mediaId) == ScxytSource.YOUTUBE) {
             val audio = youtube.prepare(mediaId)
-            server.share(mediaId, audio.file ?: throw ScxytError.Failed("no_file"), audio.mime)
+            server.share(mediaId, audio.file ?: throw ScxytError.Failed("no_file"), audio.mime, startSec)
         } else {
-            server.share(mediaId, null, null)
+            server.share(mediaId, null, null, startSec)
         }
     }
 
