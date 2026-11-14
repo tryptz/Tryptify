@@ -181,6 +181,7 @@ class PlaybackService : MediaSessionService() {
 
     /** How long the audio track stays off while the chain is configured again. */
     private val reconfigureGapMs = 150L
+    private var outputsLogged = false
 
     /**
      * Configures the audio chain again for the song that is playing: a
@@ -1426,7 +1427,8 @@ class PlaybackService : MediaSessionService() {
                 it.type in headphoneTypes ||
                     (it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE && (it.channelCounts.maxOrNull() ?: 2) <= 2)
             }
-            if (headphonesConnected.value != headphones) {
+            if (headphonesConnected.value != headphones || !outputsLogged) {
+                outputsLogged = true
                 android.util.Log.i(
                     "AtmosProcessor",
                     "outputs: " + audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)

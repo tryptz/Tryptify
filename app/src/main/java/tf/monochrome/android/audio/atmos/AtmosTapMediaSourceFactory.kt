@@ -87,7 +87,7 @@ private class TapMediaSource(
 
 /** Forwards every [MediaPeriod] call, wrapping E-AC-3 sample streams with a tap. */
 @UnstableApi
-private class TapMediaPeriod(
+internal class TapMediaPeriod(
     val delegate: MediaPeriod,
     private val frameBuffer: AtmosFrameBuffer,
 ) : MediaPeriod, MediaPeriod.Callback {
@@ -116,25 +116,43 @@ private class TapMediaPeriod(
         streamResetFlags: BooleanArray,
         positionUs: Long,
     ): Long {
+        // The period under this one is handed back its OWN streams, never the
+        // wrappers: it casts the ones it is asked to keep to its own class.
+        // (Passed the wrappers, any reselection of tracks on a playing song
+        // threw a ClassCastException inside the player and the song started
+        // over. Nothing reselected tracks mid-song until the Atmos settings
+        // began to; it crashed the first time one was switched.)
+        val inner = arrayOfNulls<SampleStream>(streams.size)
+        for (i in streams.indices) inner[i] = (streams[i] as? TapSampleStream)?.delegate ?: streams[i]
         val result = delegate.selectTracks(
-            selections, mayRetainStreamFlags, streams, streamResetFlags, positionUs)
+            selections, mayRetainStreamFlags, inner, streamResetFlags, positionUs)
         for (i in streams.indices) {
-            val stream = streams[i]
+            val stream = inner[i]
             val format = selections[i]?.selectedFormat
-            if (stream != null && stream !is TapSampleStream && isEac3(selections[i])) {
-                streams[i] = TapSampleStream(stream, frameBuffer)
-                android.util.Log.i(
-                    "AtmosTap",
-                    "tapping ${format?.sampleMimeType} codecs=${format?.codecs} ${format?.channelCount}ch " +
-                        "${format?.sampleRate}Hz ${format?.bitrate}bps",
-                )
-            } else if (format != null && androidx.media3.common.MimeTypes.isAudio(format.sampleMimeType) &&
-                (format.channelCount > 2)
-            ) {
-                android.util.Log.i(
-                    "AtmosTap",
-                    "not tapped (not E-AC-3): ${format.sampleMimeType} codecs=${format.codecs} ${format.channelCount}ch",
-                )
+            val current = streams[i] as? TapSampleStream
+            when {
+                stream == null -> streams[i] = null
+                // Kept by the period: the wrapper already round it stays.
+                current != null && current.delegate === stream -> Unit
+                isEac3(selections[i]) -> {
+                    streams[i] = TapSampleStream(stream, frameBuffer)
+                    android.util.Log.i(
+                        "AtmosTap",
+                        "tapping ${format?.sampleMimeType} codecs=${format?.codecs} ${format?.channelCount}ch " +
+                            "${format?.sampleRate}Hz ${format?.bitrate}bps",
+                    )
+                }
+                else -> {
+                    streams[i] = stream
+                    if (format != null && androidx.media3.common.MimeTypes.isAudio(format.sampleMimeType) &&
+                        format.channelCount > 2
+                    ) {
+                        android.util.Log.i(
+                            "AtmosTap",
+                            "not tapped (not E-AC-3): ${format.sampleMimeType} codecs=${format.codecs} ${format.channelCount}ch",
+                        )
+                    }
+                }
             }
         }
         return result
@@ -167,7 +185,7 @@ private class TapMediaPeriod(
 
 /** Copies each decoded-through sample's raw bytes into the frame buffer. */
 @UnstableApi
-private class TapSampleStream(
+internal class TapSampleStream(
     val delegate: SampleStream,
     private val frameBuffer: AtmosFrameBuffer,
 ) : SampleStream {
