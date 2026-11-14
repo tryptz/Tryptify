@@ -3571,4 +3571,9 @@
     <string name="room_tap_to_use">toca para usarla como sala</string>
     <string name="room_applied">Sala %1$s añadida</string>
     <string name="room_unusable">Este archivo no contiene ninguna sala utilizable</string>
+    <string name="atmos_envelope">Panorámica trapezoidal</string>
+    <string name="atmos_envelope_summary">Cuanto más alto está un sonido, menos anchura y fondo de la sala puede usar, así lo que se coloca arriba se oye arriba y no a un lado. Desactivado, cada objeto suena donde lo pone la mezcla.</string>
+    <string name="atmos_envelope_width">Ancho del techo</string>
+    <string name="atmos_envelope_depth">Fondo del techo</string>
+    <string name="atmos_envelope_curve">Curva de las paredes</string>
 </resources>

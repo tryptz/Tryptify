@@ -3496,4 +3496,9 @@
     <string name="room_tap_to_use">tap to use as the room</string>
     <string name="room_applied">Room %1$s added</string>
     <string name="room_unusable">This file holds no room the render can use</string>
+    <string name="atmos_envelope">Trapezoid panning</string>
+    <string name="atmos_envelope_summary">The higher a sound is, the less of the room\'s width and depth it may use, so what is placed high is heard above and not at the side. Off plays every object where the mix puts it.</string>
+    <string name="atmos_envelope_width">Ceiling width</string>
+    <string name="atmos_envelope_depth">Ceiling depth</string>
+    <string name="atmos_envelope_curve">Wall curve</string>
 </resources>

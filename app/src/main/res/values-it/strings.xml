@@ -3571,4 +3571,9 @@
     <string name="room_tap_to_use">tocca per usare come stanza</string>
     <string name="room_applied">Stanza %1$s aggiunta</string>
     <string name="room_unusable">Questo file non contiene una stanza utilizzabile</string>
+    <string name="atmos_envelope">Panning trapezoidale</string>
+    <string name="atmos_envelope_summary">Più un suono è in alto, meno larghezza e profondità della stanza può usare: ciò che è posto in alto si sente sopra e non di lato. Disattivato, ogni oggetto suona dove lo mette il mix.</string>
+    <string name="atmos_envelope_width">Larghezza del soffitto</string>
+    <string name="atmos_envelope_depth">Profondità del soffitto</string>
+    <string name="atmos_envelope_curve">Curva delle pareti</string>
 </resources>

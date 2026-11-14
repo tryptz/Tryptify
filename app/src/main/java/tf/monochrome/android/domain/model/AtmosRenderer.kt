@@ -289,6 +289,8 @@ data class RendererProfile(
     val roomFile: String? = null,
     /** The room the listener describes ([RoomKind.CUSTOM]). */
     val customRoom: CustomRoom = CustomRoom(),
+    /** The space objects may use: off (the mix's own box), or narrowing with height. */
+    val panEnvelope: PanEnvelope = PanEnvelope(),
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
     val binauralStrength: Float = 1.0f,
     /** Virtualize height objects on layouts without physical top speakers. */
@@ -311,6 +313,7 @@ data class RendererProfile(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
             roomAmount = roomAmount.c(0f, 1f, DEFAULT_ROOM_AMOUNT),
             customRoom = customRoom.clamped(),
+            panEnvelope = panEnvelope.clamped(),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
             downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),

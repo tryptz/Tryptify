@@ -3571,4 +3571,9 @@
     <string name="room_tap_to_use">toucher pour l’utiliser comme salle</string>
     <string name="room_applied">Salle %1$s ajoutée</string>
     <string name="room_unusable">Ce fichier ne contient aucune salle utilisable</string>
+    <string name="atmos_envelope">Panoramique trapézoïdal</string>
+    <string name="atmos_envelope_summary">Plus un son est haut, moins il peut utiliser la largeur et la profondeur de la salle : ce qui est placé en hauteur s’entend au-dessus et non sur le côté. Désactivé, chaque objet est joué là où le mixage le place.</string>
+    <string name="atmos_envelope_width">Largeur au plafond</string>
+    <string name="atmos_envelope_depth">Profondeur au plafond</string>
+    <string name="atmos_envelope_curve">Courbe des murs</string>
 </resources>

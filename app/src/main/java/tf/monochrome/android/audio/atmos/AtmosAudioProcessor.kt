@@ -506,6 +506,10 @@ class AtmosAudioProcessor @Inject constructor(
         }
         // The room first: the render params below hand it the strength as well.
         AtmosNative.nativeSetRoomAmount(p, cur.roomAmount)
+        val envelope = cur.panEnvelope.clamped()
+        AtmosNative.nativeSetPanEnvelope(
+            p, envelope.enabled, envelope.ceilingWidth, envelope.ceilingDepth, envelope.curve,
+        )
         AtmosNative.nativeSetRenderParams(
             p,
             mode.ordinal,

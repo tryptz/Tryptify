@@ -3415,4 +3415,9 @@
     <string name="room_tap_to_use">タップして部屋として使用</string>
     <string name="room_applied">部屋 %1$s を追加しました</string>
     <string name="room_unusable">このファイルには使用できる部屋がありません</string>
+    <string name="atmos_envelope">台形パンニング</string>
+    <string name="atmos_envelope_summary">音が高いほど、使える部屋の幅と奥行きが狭くなり、高く置かれた音は横ではなく上から聞こえます。オフでは、すべてのオブジェクトをミックスどおりの位置で再生します。</string>
+    <string name="atmos_envelope_width">天井の幅</string>
+    <string name="atmos_envelope_depth">天井の奥行き</string>
+    <string name="atmos_envelope_curve">壁のカーブ</string>
 </resources>

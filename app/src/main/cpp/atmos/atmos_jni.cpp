@@ -226,6 +226,22 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRoomAmount(
   if (pipe != nullptr) pipe->set_room_amount(room);
 }
 
+// The panning envelope (PanEnvelope, speaker_renderer.h): with `enabled`,
+// objects use less of the room's width and depth the higher they are.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetPanEnvelope(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jboolean enabled, jfloat ceilingWidth,
+    jfloat ceilingDepth, jfloat curve) {
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return;
+  tf::atmos::PanEnvelope envelope;
+  envelope.enabled = enabled == JNI_TRUE;
+  envelope.ceiling_width = ceilingWidth;
+  envelope.ceiling_depth = ceilingDepth;
+  envelope.curve = curve;
+  pipe->set_pan_envelope(envelope);
+}
+
 // Objects rendered in the last frame, or 0 when the decoded bed played
 // instead (no JOC in the stream, none yet after a seek, or the bed mode).
 JNIEXPORT jint JNICALL

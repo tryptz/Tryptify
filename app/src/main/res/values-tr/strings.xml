@@ -3493,4 +3493,9 @@
     <string name="room_tap_to_use">oda olarak kullanmak için dokunun</string>
     <string name="room_applied">%1$s odası eklendi</string>
     <string name="room_unusable">Bu dosyada kullanılabilir bir oda yok</string>
+    <string name="atmos_envelope">Yamuk panlama</string>
+    <string name="atmos_envelope_summary">Bir ses ne kadar yüksekteyse odanın genişliğinin ve derinliğinin o kadar azını kullanabilir; böylece yükseğe yerleştirilen ses yandan değil yukarıdan duyulur. Kapalıyken her nesne miksin koyduğu yerden çalınır.</string>
+    <string name="atmos_envelope_width">Tavan genişliği</string>
+    <string name="atmos_envelope_depth">Tavan derinliği</string>
+    <string name="atmos_envelope_curve">Duvar eğrisi</string>
 </resources>

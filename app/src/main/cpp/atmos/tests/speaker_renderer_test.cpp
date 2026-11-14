@@ -341,6 +341,97 @@ void test_render_ramp() {
 
 }  // namespace
 
+void test_envelope() {
+  std::printf("the panning envelope: the higher, the narrower\n");
+  PanEnvelope e;
+  // Off, it moves nothing.
+  Vec3 p = e.apply({0.0f, 1.0f, 1.0f});
+  CHECK(p.x == 0.0f && p.y == 1.0f && p.z == 1.0f);
+  // On: all of the floor at ear level, half of it each way at the ceiling,
+  // about the middle, and the height is the object's own.
+  e.enabled = true;
+  p = e.apply({0.0f, 1.0f, 0.0f});
+  CHECK(p.x == 0.0f && p.y == 1.0f);
+  p = e.apply({0.0f, 1.0f, 1.0f});
+  CHECK_NEAR(p.x, 0.25f, 1e-6f);
+  CHECK_NEAR(p.y, 0.75f, 1e-6f);
+  CHECK(p.z == 1.0f);
+  p = e.apply({0.5f, 0.5f, 1.0f});
+  CHECK_NEAR(p.x, 0.5f, 1e-6f);
+  CHECK_NEAR(p.y, 0.5f, 1e-6f);
+  CHECK_NEAR(e.apply({1.0f, 0.0f, 0.5f}).x, 0.875f, 1e-6f);  // straight walls: half way up, half way in
+  // Left stays left of right at every height: the order across the room is kept.
+  for (float z = 0.0f; z <= 1.0f; z += 0.125f) CHECK(e.apply({0.2f, 0.5f, z}).x < e.apply({0.3f, 0.5f, z}).x);
+  // Its width and its depth are set apart, and the curve bends the walls:
+  // over 1 they are still wide half way up, under 1 already closing.
+  e.ceiling_width = 0.2f;
+  e.ceiling_depth = 1.0f;
+  p = e.apply({0.0f, 0.0f, 1.0f});
+  CHECK_NEAR(p.x, 0.4f, 1e-6f);
+  CHECK(p.y == 0.0f);
+  e.ceiling_width = 0.5f;
+  e.curve = 2.0f;
+  CHECK_NEAR(e.extent(0.5f, 0.5f), 0.875f, 1e-6f);
+  e.curve = 0.5f;
+  CHECK_NEAR(e.extent(0.5f, 0.5f), 1.0f - 0.5f * std::sqrt(0.5f), 1e-6f);
+  // Values out of range are taken as the nearest that makes sense.
+  e.curve = 0.0f;
+  e.ceiling_width = -3.0f;
+  CHECK(dspIsFinite(e.apply({0.0f, 0.0f, 0.7f}).x));
+  CHECK_NEAR(e.extent(-3.0f, 1.0f), 0.0f, 1e-6f);
+  CHECK_NEAR(e.extent(9.0f, 1.0f), 1.0f, 1e-6f);
+
+  // In the renderer, on every layout: an object plays as one mixed at its
+  // place inside the envelope would, power adds to 1, and what is not an
+  // object in the room (a bed channel, the LFE) is not moved.
+  PanEnvelope on;
+  on.enabled = true;
+  for (int l = 0; l < 8; ++l) {
+    SpeakerRenderer r, plain;
+    r.configure(kSpeakerLayouts[l], 16);
+    plain.configure(kSpeakerLayouts[l], 16);
+    r.set_envelope(on);
+    std::vector<float> g(r.channels()), want(r.channels());
+    for (const Vec3 where : {Vec3{0.0f, 0.0f, 1.0f}, Vec3{1.0f, 0.5f, 0.6f}, Vec3{0.1f, 0.9f, 0.3f}, Vec3{0.3f, 0.2f, 0.0f}}) {
+      r.object_gains(at(where.x, where.y, where.z), false, g.data());
+      const Vec3 moved = on.apply(where);
+      plain.object_gains(at(moved.x, moved.y, moved.z), false, want.data());
+      for (int c = 0; c < r.channels(); ++c) CHECK_NEAR(g[c], want[c], 1e-6f);
+      CHECK_NEAR(power(g), 1.0f, 1e-4f);
+    }
+    // At ear level the envelope is the whole floor: nothing changes.
+    r.object_gains(at(0.0f, 1.0f, 0.0f), false, g.data());
+    plain.object_gains(at(0.0f, 1.0f, 0.0f), false, want.data());
+    for (int c = 0; c < r.channels(); ++c) CHECK(g[c] == want[c]);
+    ObjectState bed = at(0.0f, 0.0f, 1.0f);
+    bed.is_bed = true;
+    bed.bed_channel = ReferenceChannel::kFrontLeft;
+    r.object_gains(bed, false, g.data());
+    plain.object_gains(bed, false, want.data());
+    for (int c = 0; c < r.channels(); ++c) CHECK(g[c] == want[c]);
+    r.object_gains(at(0.0f, 0.0f, 1.0f), true, g.data());
+    CHECK(g[r.lfe_channel()] == 1.0f);
+  }
+  // What it is for, on 7.1.4: a sound at the ceiling's left edge is no longer
+  // all in the left top speakers, so it is heard overhead and not at the side.
+  SpeakerRenderer r;
+  r.configure(OutputLayout::k7_1_4, 16);
+  std::vector<float> g(r.channels());
+  const std::vector<SpeakerDef> sp = layout_speakers(OutputLayout::k7_1_4);
+  auto right_share = [&] {
+    float right = 0.0f;
+    for (int c = 0; c < r.channels(); ++c) if (sp[c].z > 0.0f && sp[c].x > 0.5f) right += g[c] * g[c];
+    return right;
+  };
+  r.object_gains(at(0.0f, 0.5f, 1.0f), false, g.data());
+  CHECK(right_share() < 1e-6f);
+  on.ceiling_width = 0.2f;
+  r.set_envelope(on);
+  r.object_gains(at(0.0f, 0.5f, 1.0f), false, g.data());
+  std::printf("   7.1.4, ceiling width 20%%: %.0f%% of a far-left ceiling object's power is in the right tops\n", 100.0f * right_share());
+  CHECK(right_share() > 0.05f && right_share() < 0.5f);
+}
+
 int main() {
   std::printf("=== Speaker renderer tests ===\n");
   test_layouts();
@@ -353,6 +444,7 @@ int main() {
   test_beds_and_lfe();
   test_warp_and_trim();
   test_render_ramp();
+  test_envelope();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }

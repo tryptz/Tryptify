@@ -207,6 +207,46 @@ inline Vec3 bed_channel_room(cavern::ReferenceChannel ch) {
 // reference check"). Height is the same again between layers, and a layout
 // with no speakers overhead plays an object at its place on the floor.
 //
+// The panning envelope: how much of the room's width and depth an object may
+// use, as a function of how high it is.
+//
+// The room objects are mixed in is a box, and a mix can put a sound in a top
+// corner of it. No loudspeaker stands there in any layout, a real ceiling
+// has none near its edges, and what is placed high and wide comes out wide
+// and not high. With the envelope on, the usable room narrows as it rises:
+// at ear level all of the floor, at the ceiling `ceiling_width` of its width
+// and `ceiling_depth` of its depth, about the room's middle. An object's
+// place across and along the room is drawn in by that share, so what was at
+// a wall is at the envelope's wall and everything between keeps its order;
+// its height is untouched. `curve` bends the walls: at 1 they are straight
+// and the envelope is a trapezoid seen from any side, over 1 it stays wide
+// for longer and closes late, under 1 it closes early.
+//
+// The trapezoidal domain is Poorna Srikar Maremanda's idea ("Beyond the
+// Sphere", iammps.com); the geometry here is this project's own.
+struct PanEnvelope {
+  bool enabled = false;
+  float ceiling_width = 0.5f;  // of the floor's width, 0..1; 1 is the box
+  float ceiling_depth = 0.5f;
+  float curve = 1.0f;
+
+  // How much of the full width (or depth) is usable at height z (0 ear level, 1 the ceiling).
+  float extent(float ceiling, float z) const {
+    const float up = z < 0.0f ? 0.0f : (z > 1.0f ? 1.0f : z);
+    const float c = ceiling < 0.0f ? 0.0f : (ceiling > 1.0f ? 1.0f : ceiling);
+    const float bend = curve < 0.25f ? 0.25f : (curve > 4.0f ? 4.0f : curve);
+    return 1.0f - (1.0f - c) * std::pow(up, bend);
+  }
+
+  // Where an object mixed at `room` plays from.
+  Vec3 apply(Vec3 room) const {
+    if (!enabled) return room;
+    room.x = 0.5f + (room.x - 0.5f) * extent(ceiling_width, room.z);
+    room.y = 0.5f + (room.y - 0.5f) * extent(ceiling_depth, room.z);
+    return room;
+  }
+};
+
 // Speakers are grouped into layers by z, rows by y inside a layer, and sorted
 // by x inside a row. Outside the outermost speaker of an axis the object is at
 // that speaker. Power adds to 1 at every point of the room.
@@ -363,6 +403,12 @@ class SpeakerRenderer {
     trims_ = mid_room_speakers_ ? nullptr : trims;
     trim_count_ = count;
   }
+  // The space objects may use (PanEnvelope). Bed channels and the LFE are
+  // loudspeakers, not objects, and are not moved. Takes hold with the next
+  // render(), over its ramp like any other move.
+  void set_envelope(const PanEnvelope& envelope) { envelope_ = envelope; }
+  const PanEnvelope& envelope() const { return envelope_; }
+
   int lfe_channel() const { return lfe_; }
 
   // Forgets gain history (seek / flush): the next frame starts at its target.
@@ -400,6 +446,7 @@ class SpeakerRenderer {
     const BalancePanner& panner = zone_panners_[zone * 2 + (st.enable_elevation ? 1 : 0)];
     Vec3 room = st.room;
     if (warp_) room.y = std::fmin(1.0f, 2.0f * room.y);
+    room = envelope_.apply(room);
     if (st.snap) {
       const int ch = panner.nearest(room);
       if (ch >= 0) gains[ch] = 1.0f;
@@ -410,7 +457,8 @@ class SpeakerRenderer {
     const float pc = (1.0f - v) / (1.0f + v), ps = v / (1.0f + v);
     spread(panner, st, room, pc, gains);
     if (ps > 0.0f) {
-      const float off = 0.5f * v;
+      // The two sides keep inside the envelope as the centre does.
+      const float off = 0.5f * v * envelope_.extent(envelope_.enabled ? envelope_.ceiling_width : 1.0f, room.z);
       spread(panner, st, {std::fmax(0.0f, room.x - off), room.y, room.z}, ps, gains);
       spread(panner, st, {std::fmin(1.0f, room.x + off), room.y, room.z}, ps, gains);
     }
@@ -650,6 +698,7 @@ class SpeakerRenderer {
   OutputLayout layout_ = OutputLayout::k5_1;
   bool mid_room_speakers_ = false;
   bool warp_ = false;
+  PanEnvelope envelope_;
   const float* trims_ = nullptr;
   int trim_count_ = 0;
   std::vector<SpeakerDef> speakers_;

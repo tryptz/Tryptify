@@ -3415,4 +3415,9 @@
     <string name="room_tap_to_use">点按以用作房间</string>
     <string name="room_applied">已添加房间 %1$s</string>
     <string name="room_unusable">此文件不包含可用的房间</string>
+    <string name="atmos_envelope">梯形声像</string>
+    <string name="atmos_envelope_summary">声音越高，可用的房间宽度和进深越小，这样放在高处的声音会从上方而不是侧面传来。关闭时，每个对象都按混音的位置播放。</string>
+    <string name="atmos_envelope_width">顶部宽度</string>
+    <string name="atmos_envelope_depth">顶部进深</string>
+    <string name="atmos_envelope_curve">墙面曲线</string>
 </resources>

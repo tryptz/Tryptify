@@ -63,6 +63,37 @@ data class CustomRoom(
 }
 
 /**
+ * The panning envelope (`PanEnvelope` in `speaker_renderer.h`): with it on,
+ * the room objects may use narrows as it rises. At ear level it is all of
+ * the floor; at the ceiling [ceilingWidth] of the floor's width and
+ * [ceilingDepth] of its depth (1 is the box). [curve] bends the walls: 1 is
+ * straight, a trapezoid; over 1 they stay wide and close late, under 1 they
+ * close early.
+ */
+@Serializable
+data class PanEnvelope(
+    val enabled: Boolean = false,
+    val ceilingWidth: Float = 0.5f,
+    val ceilingDepth: Float = 0.5f,
+    val curve: Float = 1f,
+) {
+    fun clamped(): PanEnvelope {
+        fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
+        return copy(
+            ceilingWidth = ceilingWidth.c(MIN_CEILING, 1f, 0.5f),
+            ceilingDepth = ceilingDepth.c(MIN_CEILING, 1f, 0.5f),
+            curve = curve.c(MIN_CURVE, MAX_CURVE, 1f),
+        )
+    }
+
+    companion object {
+        const val MIN_CEILING = 0.1f
+        const val MIN_CURVE = 0.25f
+        const val MAX_CURVE = 4f
+    }
+}
+
+/**
  * A room made ready for the render (a packed room, as
  * `AtmosNative.nativePrepareRoomSofa` and `nativeBuildBoxRoom` give one and
  * `render/measured_room.h` lays it out): its response, and what is known of
@@ -124,12 +155,14 @@ data class RoomShape(
     val height: Float,
     val roundness: Float = 0f,
     /**
-     * How far the walls lean in: the share of the floor's width and depth
-     * that each wall has come in by at the ceiling. 0 is upright walls; at
-     * 0.25 the ceiling is half as wide and half as deep as the floor, and
-     * the room is a trapezoid seen from any side.
+     * How the walls lean in above ear height: the ceiling is [ceilingWidth]
+     * of the floor's width and [ceilingDepth] of its depth (1 is upright
+     * walls, a box), and [curve] bends them as the panning envelope's does.
+     * At a half each way the room is a trapezoid seen from any side.
      */
-    val taper: Float = 0f,
+    val ceilingWidth: Float = 1f,
+    val ceilingDepth: Float = 1f,
+    val curve: Float = 1f,
     val listenerX: Float = width / 2f,
     val listenerY: Float = depth / 2f,
     val earHeight: Float = minOf(EAR_HEIGHT, height / 2f),
@@ -138,8 +171,26 @@ data class RoomShape(
     /** False for a measured room whose file gives the floor plan alone: [height] is then a guess. */
     val heightKnown: Boolean = true,
 ) {
-    /** The share of the floor's size each wall has leaned in by at [z] metres up. */
-    fun lean(z: Float): Float = taper.coerceIn(0f, MAX_TAPER) * (z / height).coerceIn(0f, 1f)
+    /** How far up the leaning part of the walls [z] metres is: 0 at ear height and below, 1 at the ceiling. */
+    private fun rise(z: Float): Float {
+        val span = height - earHeight
+        if (span <= 0f) return 0f
+        return Math.pow(((z - earHeight) / span).coerceIn(0f, 1f).toDouble(), curve.coerceIn(0.25f, 4f).toDouble()).toFloat()
+    }
+
+    /** The share of the floor's width each side wall has leaned in by at [z] metres up. */
+    fun leanX(z: Float): Float = (1f - ceilingWidth.coerceIn(MIN_CEILING, 1f)) / 2f * rise(z)
+
+    /** The share of the floor's depth the walls ahead and behind have leaned in by at [z] metres up. */
+    fun leanY(z: Float): Float = (1f - ceilingDepth.coerceIn(MIN_CEILING, 1f)) / 2f * rise(z)
+
+    /** Whether the walls stand upright. */
+    val upright: Boolean get() = ceilingWidth >= 1f && ceilingDepth >= 1f
+
+    /** This room with its walls leaning as [envelope] says, if it is on. */
+    fun within(envelope: PanEnvelope): RoomShape =
+        if (!envelope.enabled) this
+        else copy(ceilingWidth = envelope.ceilingWidth, ceilingDepth = envelope.ceilingDepth, curve = envelope.curve)
 
     /** How far a corner is rounded, in metres: up to half the shorter side. */
     val cornerRadius: Float get() = roundness.coerceIn(0f, 1f) * minOf(width, depth) / 2f
@@ -168,20 +219,28 @@ data class RoomShape(
             }
         }
         val pz = earHeight + z.coerceIn(0f, 1f) * (height - earHeight)
-        val l = lean(pz)
-        return floatArrayOf(
-            px.coerceIn(l * width, width - l * width),
-            py.coerceIn(l * depth, depth - l * depth),
-            pz,
-        )
+        val lx = leanX(pz) * width
+        val ly = leanY(pz) * depth
+        return floatArrayOf(px.coerceIn(lx, width - lx), py.coerceIn(ly, depth - ly), pz)
     }
 
-    /** The ceiling's outline: the floor's, drawn in by the walls' lean. */
-    fun ceiling(): List<FloatArray> {
-        val keep = 1f - 2f * lean(height)
+    /** The walls' outline [z] metres up: the floor's, drawn in by the walls' lean there. */
+    fun ring(z: Float): List<FloatArray> {
+        val keepX = 1f - 2f * leanX(z)
+        val keepY = 1f - 2f * leanY(z)
         return outline().map {
-            floatArrayOf(width / 2f + (it[0] - width / 2f) * keep, depth / 2f + (it[1] - depth / 2f) * keep)
+            floatArrayOf(width / 2f + (it[0] - width / 2f) * keepX, depth / 2f + (it[1] - depth / 2f) * keepY)
         }
+    }
+
+    /**
+     * The heights the walls are drawn through, floor to ceiling: upright to
+     * ear height, then straight to the ceiling, or in steps when they curve.
+     */
+    fun wallHeights(): FloatArray = when {
+        upright -> floatArrayOf(0f, height)
+        curve == 1f -> floatArrayOf(0f, earHeight, height)
+        else -> FloatArray(WALL_STEPS + 2) { if (it == 0) 0f else earHeight + (height - earHeight) * (it - 1) / WALL_STEPS }
     }
 
     /** The floor's outline, clockwise from the front left: four corners, or their arcs. */
@@ -216,41 +275,30 @@ data class RoomShape(
      * image of the source in the surface, and where the line from it to the
      * listener goes through the surface. A source that stands on a surface
      * has none off it, and a turn that would fall outside the surface is not
-     * one. The walls are flat (leaning, if the room tapers); rounded corners
-     * move their points very little.
+     * one. A leaning wall is taken as the flat one through its foot at ear
+     * height and its top at the ceiling (below ear height it stands upright,
+     * and a curved one is near that); rounded corners move the points very
+     * little.
      */
     fun firstReflections(sx: Float, sy: Float, sz: Float): List<Reflection> {
-        val source = floatArrayOf(sx, sy, sz)
         val listener = floatArrayOf(listenerX, listenerY, earHeight)
-        val leanX = taper.coerceIn(0f, MAX_TAPER) * width   // how far a side wall is in at the ceiling
-        val leanY = taper.coerceIn(0f, MAX_TAPER) * depth
-        // Each surface: a point on it, and its normal into the room.
-        val surfaces = arrayOf(
-            floatArrayOf(0f, 0f, 0f, height, 0f, -leanX),        // the left wall
-            floatArrayOf(width, 0f, 0f, -height, 0f, -leanX),    // the right wall
-            floatArrayOf(0f, 0f, 0f, 0f, height, -leanY),        // the wall ahead
-            floatArrayOf(0f, depth, 0f, 0f, -height, -leanY),    // the wall behind
-            floatArrayOf(0f, 0f, 0f, 0f, 0f, 1f),                // the floor
-            floatArrayOf(0f, 0f, height, 0f, 0f, -1f),           // the ceiling
-        )
-        val out = ArrayList<Reflection>(surfaces.size)
-        for (s in surfaces) {
-            val norm = kotlin.math.sqrt(s[3] * s[3] + s[4] * s[4] + s[5] * s[5])
-            val n = floatArrayOf(s[3] / norm, s[4] / norm, s[5] / norm)
-            var fromSource = 0f
+        val out = ArrayList<Reflection>(6)
+        for (image in mirrorImages(sx, sy, sz)) {
+            // image[3..5] is a point of the surface, image[6..8] its normal.
             var fromListener = 0f
+            var fromImage = 0f
             for (c in 0..2) {
-                fromSource += (source[c] - s[c]) * n[c]
-                fromListener += (listener[c] - s[c]) * n[c]
+                fromListener += (listener[c] - image[3 + c]) * image[6 + c]
+                fromImage += (image[c] - image[3 + c]) * image[6 + c]
             }
-            if (fromSource < ON_SURFACE || fromListener <= 0f) continue
-            val image = FloatArray(3) { source[it] - 2f * fromSource * n[it] }
-            val t = fromSource / (fromSource + fromListener)
+            if (fromListener <= 0f) continue
+            val t = -fromImage / (fromListener - fromImage)
             val p = FloatArray(3) { image[it] + t * (listener[it] - image[it]) }
-            val l = lean(p[2])
+            val lx = leanX(p[2]) * width
+            val ly = leanY(p[2]) * depth
             val inside = p[2] in -EDGE..height + EDGE &&
-                p[0] in l * width - EDGE..width - l * width + EDGE &&
-                p[1] in l * depth - EDGE..depth - l * depth + EDGE
+                p[0] in lx - EDGE..width - lx + EDGE &&
+                p[1] in ly - EDGE..depth - ly + EDGE
             if (!inside) continue
             var path = 0f
             for (c in 0..2) path += (listener[c] - image[c]) * (listener[c] - image[c])
@@ -259,12 +307,47 @@ data class RoomShape(
         return out
     }
 
+    /**
+     * The mirror images of a source at ([sx], [sy], [sz]) in the room's six
+     * surfaces: what each surface's reflection of it seems to come from.
+     * Each is x, y, z, then a point of the surface and the surface's normal
+     * into the room. A source that stands on a surface has no image in it.
+     */
+    fun mirrorImages(sx: Float, sy: Float, sz: Float): List<FloatArray> {
+        val source = floatArrayOf(sx, sy, sz)
+        val inX = leanX(height) * width   // how far a side wall is in at the ceiling
+        val inY = leanY(height) * depth
+        val up = height - earHeight       // over which it leans
+        val surfaces = arrayOf(
+            floatArrayOf(0f, 0f, earHeight, up, 0f, -inX),        // the left wall
+            floatArrayOf(width, 0f, earHeight, -up, 0f, -inX),    // the right wall
+            floatArrayOf(0f, 0f, earHeight, 0f, up, -inY),        // the wall ahead
+            floatArrayOf(0f, depth, earHeight, 0f, -up, -inY),    // the wall behind
+            floatArrayOf(0f, 0f, 0f, 0f, 0f, 1f),                 // the floor
+            floatArrayOf(0f, 0f, height, 0f, 0f, -1f),            // the ceiling
+        )
+        val out = ArrayList<FloatArray>(surfaces.size)
+        for (s in surfaces) {
+            val norm = kotlin.math.sqrt(s[3] * s[3] + s[4] * s[4] + s[5] * s[5])
+            val n = floatArrayOf(s[3] / norm, s[4] / norm, s[5] / norm)
+            var fromSource = 0f
+            for (c in 0..2) fromSource += (source[c] - s[c]) * n[c]
+            if (fromSource < ON_SURFACE) continue
+            out += floatArrayOf(
+                source[0] - 2f * fromSource * n[0], source[1] - 2f * fromSource * n[1], source[2] - 2f * fromSource * n[2],
+                s[0], s[1], s[2], n[0], n[1], n[2],
+            )
+        }
+        return out
+    }
+
     companion object {
         const val EAR_HEIGHT = 1.2f
         private const val ARC_STEPS = 6
         private const val ON_SURFACE = 0.15f
-        private const val EDGE = 0.02f
-        const val MAX_TAPER = 0.45f
+        private const val EDGE = 0.05f
+        private const val WALL_STEPS = 5
+        private const val MIN_CEILING = 0.1f
 
         /**
          * The built-in room has no measurements: this is how it is drawn. Its
@@ -272,7 +355,7 @@ data class RoomShape(
          * stands, a quarter in at the ceiling: no sound comes from wider up
          * there, so the room is not drawn wider.
          */
-        val BUILT_IN = RoomShape(width = 5f, depth = 5f, height = 2.75f, taper = 0.25f)
+        val BUILT_IN = RoomShape(width = 5f, depth = 5f, height = 2.75f, ceilingWidth = 0.5f, ceilingDepth = 0.5f)
 
         /** A measured or worked-out room, or null when its size is not known. */
         fun of(room: AtmosRoom): RoomShape? {

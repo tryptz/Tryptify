@@ -206,6 +206,19 @@ object AtmosNative {
      */
     external fun nativeSetRoom(pipeline: Long, packed: FloatArray?): Int
 
+    /**
+     * The panning envelope ([tf.monochrome.android.domain.model.PanEnvelope]):
+     * with [enabled], objects use less of the room's width and depth the
+     * higher they are, on headphones and on loudspeakers alike.
+     */
+    external fun nativeSetPanEnvelope(
+        pipeline: Long,
+        enabled: Boolean,
+        ceilingWidth: Float,
+        ceilingDepth: Float,
+        curve: Float,
+    )
+
     const val ROOM_FIELDS = 4
     const val ROOM_MAX_SPEAKERS = 32
     const val OBJECT_METER_FIELDS = 5

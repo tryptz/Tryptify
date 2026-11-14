@@ -3493,4 +3493,9 @@
     <string name="room_tap_to_use">tippen, um ihn als Raum zu nutzen</string>
     <string name="room_applied">Raum %1$s hinzugefügt</string>
     <string name="room_unusable">Diese Datei enthält keinen nutzbaren Raum</string>
+    <string name="atmos_envelope">Trapez-Panning</string>
+    <string name="atmos_envelope_summary">Je höher ein Klang liegt, desto weniger von Breite und Tiefe des Raums darf er nutzen: Was hoch platziert ist, klingt von oben und nicht von der Seite. Aus: Jedes Objekt spielt dort, wo der Mix es hinsetzt.</string>
+    <string name="atmos_envelope_width">Deckenbreite</string>
+    <string name="atmos_envelope_depth">Deckentiefe</string>
+    <string name="atmos_envelope_curve">Wandkrümmung</string>
 </resources>

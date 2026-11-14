@@ -134,32 +134,66 @@ class AtmosRoomTest {
 
     @Test
     fun `a room whose walls lean in is a trapezoid, and everything in it keeps inside`() {
-        val room = RoomShape(width = 8f, depth = 8f, height = 4f, taper = 0.25f, earHeight = 1f)
-        // The ceiling is half the floor each way, about the same middle.
-        val ceiling = room.ceiling()
-        assertEquals(listOf(2f, 2f), ceiling[0].toList())
-        assertEquals(listOf(6f, 6f), ceiling[2].toList())
-        assertEquals(0.125f, room.lean(2f), 1e-6f)
-        // A speaker on a wall stands on the leaning wall at its own height: at
-        // ear level (1 m of 4) a sixteenth in, at the ceiling a quarter in.
-        assertEquals(0.5f, room.place(0f, 0.5f, 0f)[0], 1e-5f)
-        assertEquals(7.5f, room.place(1f, 0.5f, 0f)[0], 1e-5f)
-        assertEquals(2f, room.place(0f, 0f, 1f)[0], 1e-5f)
-        assertEquals(2f, room.place(0f, 0f, 1f)[1], 1e-5f)
-        // The layout's top ring, a quarter in, is at the ceiling's corners as it stands.
-        assertEquals(listOf(2f, 2f, 4f), room.place(0.25f, 0.25f, 1f).toList())
+        // 8 x 8 x 5 m, ears at 1 m, the ceiling half the floor each way.
+        val room = RoomShape(width = 8f, depth = 8f, height = 5f, earHeight = 1f, ceilingWidth = 0.5f, ceilingDepth = 0.5f)
+        // The walls stand upright to ear height and lean from there: the
+        // ceiling is half the floor, about the same middle.
+        assertEquals(0f, room.leanX(0.5f), 0f)
+        assertEquals(0f, room.leanX(1f), 0f)
+        assertEquals(0.125f, room.leanX(3f), 1e-6f)
+        assertEquals(0.25f, room.leanX(5f), 1e-6f)
+        assertEquals(listOf(0f, 0f), room.ring(1f)[0].toList())
+        assertEquals(listOf(2f, 2f), room.ring(5f)[0].toList())
+        assertEquals(listOf(6f, 6f), room.ring(5f)[2].toList())
+        assertEquals(listOf(0f, 1f, 5f), room.wallHeights().toList())
+        assertFalse(room.upright)
+        // An ear-level speaker is on the wall; one half way up is on the
+        // leaning wall there; the layout's top ring, a quarter in, is at the
+        // ceiling's corners as it stands.
+        assertEquals(0f, room.place(0f, 0.5f, 0f)[0], 0f)
+        assertEquals(1f, room.place(0f, 0.5f, 0.5f)[0], 1e-5f)
+        assertEquals(7f, room.place(1f, 0.5f, 0.5f)[0], 1e-5f)
+        assertEquals(listOf(2f, 2f, 5f), room.place(0.25f, 0.25f, 1f).toList())
+        assertEquals(listOf(2f, 2f, 5f), room.place(0f, 0f, 1f).toList())
         // What is inside the walls is not moved.
-        assertEquals(listOf(4f, 4f, 2.5f), room.place(0.5f, 0.5f, 0.5f).toList())
+        assertEquals(listOf(4f, 4f, 3f), room.place(0.5f, 0.5f, 0.5f).toList())
+        // Its width and depth lean apart, and a curve bends the walls: drawn in steps.
+        val odd = room.copy(ceilingWidth = 0.2f, ceilingDepth = 1f, curve = 2f)
+        assertEquals(0.4f, odd.leanX(5f), 1e-6f)
+        assertEquals(0f, odd.leanY(5f), 0f)
+        assertEquals(0.4f * 0.25f, odd.leanX(3f), 1e-6f)   // half way up, a quarter of the way in
+        assertTrue(odd.wallHeights().size > 3)
         // The built-in room is such a trapezoid; a measured or described one stands upright.
-        assertEquals(0.25f, RoomShape.BUILT_IN.taper, 0f)
-        assertEquals(0f, RoomShape.of(CustomRoom()).taper, 0f)
+        assertEquals(0.5f, RoomShape.BUILT_IN.ceilingWidth, 0f)
+        assertTrue(RoomShape.of(CustomRoom()).upright)
+        assertEquals(listOf(0f, 2.7f), RoomShape.of(CustomRoom()).wallHeights().toList())
         // A reflection off a leaning wall turns on that wall, the angle in the angle out.
-        val listening = room.copy(listenerX = 4f, listenerY = 4f)
-        val hit = listening.firstReflections(4f, 2f, 1f).first { it.x < 2f }
-        assertEquals(room.lean(hit.z) * 8f, hit.x, 1e-3f)
-        val toSource = kotlin.math.sqrt((4f - hit.x) * (4f - hit.x) + (2f - hit.y) * (2f - hit.y) + (1f - hit.z) * (1f - hit.z))
+        val listening = room.copy(listenerX = 4f, listenerY = 4f, earHeight = 1f)
+        val hit = listening.firstReflections(4f, 2f, 3f).first { it.x < 2.5f && it.z > 1f && it.z < 5f && kotlin.math.abs(it.x - listening.leanX(it.z) * 8f) < 1e-2f }
+        val toSource = kotlin.math.sqrt((4f - hit.x) * (4f - hit.x) + (2f - hit.y) * (2f - hit.y) + (3f - hit.z) * (3f - hit.z))
         val toListener = kotlin.math.sqrt((4f - hit.x) * (4f - hit.x) + (4f - hit.y) * (4f - hit.y) + (1f - hit.z) * (1f - hit.z))
         assertEquals(hit.path, toSource + toListener, 1e-3f)
+    }
+
+    @Test
+    fun `the panning envelope shapes the room that is drawn, and is clamped`() {
+        val box = RoomShape.of(CustomRoom(width = 6f, depth = 4f, height = 3f))
+        assertTrue(box.within(PanEnvelope()).upright)                      // off: the room as it is
+        val shaped = box.within(PanEnvelope(enabled = true, ceilingWidth = 0.4f, ceilingDepth = 0.8f, curve = 2f))
+        assertEquals(0.4f, shaped.ceilingWidth, 0f)
+        assertEquals(0.8f, shaped.ceilingDepth, 0f)
+        assertEquals(2f, shaped.curve, 0f)
+        assertEquals(6f, shaped.width, 0f)
+        // The built-in room takes the envelope's shape in place of its own.
+        assertEquals(0.9f, RoomShape.BUILT_IN.within(PanEnvelope(enabled = true, ceilingWidth = 0.9f)).ceilingWidth, 0f)
+        val wild = PanEnvelope(enabled = true, ceilingWidth = -2f, ceilingDepth = 9f, curve = Float.NaN).clamped()
+        assertEquals(PanEnvelope.MIN_CEILING, wild.ceilingWidth, 0f)
+        assertEquals(1f, wild.ceilingDepth, 0f)
+        assertEquals(1f, wild.curve, 0f)
+        assertEquals(PanEnvelope.MAX_CURVE, PanEnvelope(curve = 99f).clamped().curve, 0f)
+        // A stored profile from before the envelope plays every object where the mix puts it.
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        assertFalse(json.decodeFromString<RendererProfile>("""{"hrtfEnabled":true}""").panEnvelope.enabled)
     }
 
     @Test

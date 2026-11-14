@@ -90,6 +90,13 @@ class AtmosPipeline {
     room_.set_bass_management(bass_management, crossover_hz);
   }
 
+  // The space objects may use, on headphones and on loudspeakers alike
+  // (PanEnvelope, speaker_renderer.h).
+  void set_pan_envelope(const PanEnvelope& envelope) {
+    spk_path_.renderer.set_envelope(envelope);
+    room_path_.renderer.set_envelope(envelope);
+  }
+
   // How much of the virtual room's reflections and tail the headphone render
   // has, 0 to 1.
   void set_room_amount(float room) {
@@ -325,9 +332,13 @@ class AtmosPipeline {
     for (int o = 0; o < count; ++o) {
       float* f = out + static_cast<size_t>(o) * kMeterFields;
       const cavern::ObjectState* st = engine_.object_state(o);
-      f[0] = st ? st->room.x : 0.5f;
-      f[1] = st ? st->room.y : 0.5f;
-      f[2] = st ? st->room.z : 0.0f;
+      // Where it plays from: inside the panning envelope, if there is one.
+      const bool free = st != nullptr && !st->is_bed && o != lfe;
+      const Vec3 at = st == nullptr ? Vec3{0.5f, 0.5f, 0.0f}
+                                    : (free ? room_path_.renderer.envelope().apply(st->room) : st->room);
+      f[0] = at.x;
+      f[1] = at.y;
+      f[2] = at.z;
       f[3] = tracked ? -1.0f : peak_abs(engine_.object_channel(o), samples);
       f[4] = o == lfe ? kMeterLfe : ((st && st->is_bed) ? kMeterBed : kMeterObject);
     }

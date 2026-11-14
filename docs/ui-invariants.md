@@ -3365,9 +3365,13 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
 - With real speakers chosen (`speakerRender`) the flat map of that layout
   stays: those are the speakers that play.
 - **The room drawn is the room heard** (`RoomShape`, `domain/model/AtmosRoom.kt`).
-  The built-in room is a trapezoid: its walls lean in to the layout's top
-  ring of speakers, a quarter in at the ceiling, because no sound comes from
-  wider up there. A measured room whose file gives its size (a shoebox) and
+  The built-in room is a trapezoid: its walls stand upright to ear height
+  and lean in from there to the layout's top ring of speakers, a quarter in
+  at the ceiling, because no sound comes from wider up there. With Trapezoid
+  panning on, every room's walls lean as the envelope says
+  (`RoomShape.within`, drawn through `RoomShape.ring` at each of
+  `wallHeights()`, in steps when the walls curve): the room drawn is the
+  space objects may use. A measured room whose file gives its size (a shoebox) and
   the listener's own room are drawn at their real proportions, with a line a
   metre on the floor and their measurements written along the near edges; a
   measured room with no size keeps the built-in shape and says so under the
@@ -3385,6 +3389,25 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   level, falling away over the room's own decay time (`Afterglow`): a long
   room is seen to hold its sound. Do not animate anything there that the
   audio is not doing.
+- **The wave field is worked out, not painted** (`drawWaveField`,
+  `WaveField`). On a flat slice at ear height and an upright slice across the
+  room at the listener, each cell is lit by how far the waves reaching it are
+  in step: one wave from each of the three loudest speakers and, with some
+  Room, one from each speaker's mirror image in every surface
+  (`RoomShape.mirrorImages`), which is that surface's reflection. So the
+  bands move when the mix moves, change with the room's shape, and grow
+  busier as Room goes up. It is a glow in the theme's primary colour, at most
+  `FIELD_ALPHA`, drawn without anti-aliasing (softened cell edges showed as a
+  grid). Its waves are slowed and lengthened on purpose (`WAVE_SPEED`,
+  `WAVELENGTH`): real sound would cross the room in a frame. It moves thirty
+  times a second, only while something plays through the room, and not at
+  all with reduced motion (`reduceMotion()`), where the rays and spots still
+  say the same thing standing still.
+- **Trapezoid panning** is a switch with its summary and, when on, three
+  sliders: Ceiling width, Ceiling depth, Wall curve. It is off unless the
+  listener turns it on: on, objects no longer play exactly where the mix
+  puts them, and the reference checks against Dolby's own render are made
+  with it off.
 - **The Room controls** (`AtmosRoomSection`) sit under the Room amount:
   Built-in room, each measured room that was added (with a delete), and My
   room with its Width, Depth, Height and Damping and the room's lowest modes

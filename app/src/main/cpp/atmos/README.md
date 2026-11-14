@@ -276,6 +276,20 @@ what gives a room its modes; `measured_room_test` finds the depth mode of a
 5 x 6 x 2.7 m room 7 dB over a frequency half way to its second. Nothing in
 this has been checked by ear here.
 
+`PanEnvelope` (`speaker_renderer.h`, `AtmosPipeline::set_pan_envelope`) is
+the panning envelope: with it on, an object's place across and along the
+room is drawn in about the middle by `extent(z) = 1 - (1 - ceiling) * z^curve`,
+so the room it may use is all of the floor at ear level and `ceiling_width`
+by `ceiling_depth` of it at the ceiling. It is applied in
+`SpeakerRenderer::object_gains` after warp and before snap, size and
+divergence, for every layout; bed channels, ISF objects and the LFE are not
+moved, and the object meter reports the place inside the envelope. Off by
+default: `speaker_renderer_test` holds that on, an object plays exactly as
+one mixed at its enveloped place would with it off, and that at ear level
+nothing changes. On 7.1.4 with the ceiling at 20% of the width, 21% of a
+far-left ceiling object's power is in the right top speakers, where before
+there was none.
+
 The idea of a trapezoidal room and panning domain (walls that lean in, so
 what is high is not wide), and the name 15.1.12, are Poorna Srikar
 Maremanda's (iammps.com, "Beyond the Sphere", CC BY 4.0). The geometry and

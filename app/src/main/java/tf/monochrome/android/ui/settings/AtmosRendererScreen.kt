@@ -488,11 +488,14 @@ fun AtmosRendererScreen(
                         room?.let { tf.monochrome.android.domain.model.RoomShape.of(it) }
                     else -> null
                 } ?: tf.monochrome.android.domain.model.RoomShape.BUILT_IN
+                // Its walls lean as the panning envelope does, when that is on:
+                // the view shows the space objects may use.
+                val enveloped = shape.within(profile.panEnvelope.clamped())
                 AtmosRoom3d(
                     layout = roomLayout,
                     speakers = roomSpeakers ?: fromChannels,
                     objects = objects,
-                    shape = shape,
+                    shape = enveloped,
                     roomAmount = profile.roomAmount,
                     decaySeconds = room?.decaySeconds?.takeIf { it > 0f } ?: BUILT_IN_ROOM_DECAY,
                     modifier = Modifier
@@ -739,6 +742,39 @@ fun AtmosRendererScreen(
                         Text(stringResource(R.string.atmos_load_sofa_file))
                     }
                 }
+            }
+            // The space objects may use, for headphones and loudspeakers
+            // alike; the room above takes its shape.
+            val envelope = profile.panEnvelope.clamped()
+            SettingSwitchItem(
+                title = stringResource(R.string.atmos_envelope),
+                subtitle = stringResource(R.string.atmos_envelope_summary),
+                checked = envelope.enabled,
+                onCheckedChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(enabled = it))) },
+            )
+            if (envelope.enabled) {
+                val min = tf.monochrome.android.domain.model.PanEnvelope.MIN_CEILING
+                LabeledSlider(
+                    title = stringResource(R.string.atmos_envelope_width),
+                    valueText = "${(envelope.ceilingWidth * 100).toInt()}%",
+                    value = envelope.ceilingWidth,
+                    range = min..1f,
+                    onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingWidth = it))) },
+                )
+                LabeledSlider(
+                    title = stringResource(R.string.atmos_envelope_depth),
+                    valueText = "${(envelope.ceilingDepth * 100).toInt()}%",
+                    value = envelope.ceilingDepth,
+                    range = min..1f,
+                    onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingDepth = it))) },
+                )
+                LabeledSlider(
+                    title = stringResource(R.string.atmos_envelope_curve),
+                    valueText = String.format(java.util.Locale.getDefault(), "%.2f", envelope.curve),
+                    value = envelope.curve,
+                    range = tf.monochrome.android.domain.model.PanEnvelope.MIN_CURVE..tf.monochrome.android.domain.model.PanEnvelope.MAX_CURVE,
+                    onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(curve = it))) },
+                )
             }
             Spacer(Modifier.height(16.dp))
 

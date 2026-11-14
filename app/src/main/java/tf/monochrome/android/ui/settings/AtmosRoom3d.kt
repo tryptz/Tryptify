@@ -132,10 +132,16 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * along its edges. The 28 speakers of the 15.1.12 layout stand on its walls,
  * each as bright as it is driven, the mix's objects float where the mix puts
  * them, and the listener sits where the room's listener sat. From the three
- * loudest speakers a ray runs to the listener, and with [roomAmount] of room
- * so do their first reflections, each by way of the spot on the wall where
- * it turns; the walls themselves glow with what the room still holds, and
- * that glow dies away over [decaySeconds], as the room's sound does.
+ * loudest speakers a ray runs to the listener, and their waves fill the room
+ * as a faint glowing field ([drawWaveField]): where the waves from those
+ * speakers and from the walls meet in step it is bright, where they cancel
+ * it is dark, on a flat slice at ear height and an upright one across the
+ * room at the listener. With [roomAmount] of room the walls' reflections join
+ * the field and are drawn as rays too, each by way of the spot where it
+ * turns. The walls themselves glow with what the room still holds, and that
+ * glow dies away over [decaySeconds], as the room's sound does. The field
+ * moves only while something plays, and not at all when the listener has
+ * asked for less motion.
  *
  * Drag sideways to walk round it. [layout] is
  * [AtmosNative.nativeRoomLayout]'s, [speakers] the processor's levels in the
@@ -189,6 +195,20 @@ internal fun AtmosRoom3d(
     val loudest = remember { IntArray(RAYS) }
     val path = remember { Path() }
     val afterglow = remember { Afterglow() }
+    // The wave field's clock: read where the field is drawn and nowhere else,
+    // thirty times a second, and running only while there is sound to draw.
+    val clock = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    val waves = speakers != null && !tf.monochrome.android.ui.theme.reduceMotion()
+    if (waves) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            while (true) {
+                clock.longValue = System.nanoTime()
+                kotlinx.coroutines.delay(33)
+            }
+        }
+    }
+    val liveWaves by rememberUpdatedState(waves)
+    val field = remember { WaveField() }
 
     Box(modifier = modifier) {
         Spacer(
@@ -221,18 +241,28 @@ internal fun AtmosRoom3d(
                     val held = afterglow.follow(peak, liveDecay)
 
                     // The walls, lit by what the room holds; the floor and its grid.
-                    val floorLine = room.outline()
-                    val ceilingLine = room.ceiling()  // drawn in, when the walls lean
+                    // The walls go up through rings: the floor's outline, the
+                    // same at ear height, then drawn in as they lean.
+                    val heights = room.wallHeights()
+                    val rings = heights.map { room.ring(it) }
+                    val floorLine = rings.first()
+                    val ceilingLine = rings.last()
                     val wallGlow = accent.copy(alpha = 0.16f * amount * held)
-                    for (i in floorLine.indices) {
-                        val j = (i + 1) % floorLine.size
-                        path.rewind()
-                        at(floorLine[i][0], floorLine[i][1], 0f).let { path.moveTo(it.x, it.y) }
-                        at(floorLine[j][0], floorLine[j][1], 0f).let { path.lineTo(it.x, it.y) }
-                        at(ceilingLine[j][0], ceilingLine[j][1], room.height).let { path.lineTo(it.x, it.y) }
-                        at(ceilingLine[i][0], ceilingLine[i][1], room.height).let { path.lineTo(it.x, it.y) }
-                        path.close()
-                        if (wallGlow.alpha > 0.004f) drawPath(path, wallGlow)
+                    if (wallGlow.alpha > 0.004f) {
+                        for (k in 0 until rings.size - 1) {
+                            val low = rings[k]
+                            val high = rings[k + 1]
+                            for (i in low.indices) {
+                                val j = (i + 1) % low.size
+                                path.rewind()
+                                at(low[i][0], low[i][1], heights[k]).let { path.moveTo(it.x, it.y) }
+                                at(low[j][0], low[j][1], heights[k]).let { path.lineTo(it.x, it.y) }
+                                at(high[j][0], high[j][1], heights[k + 1]).let { path.lineTo(it.x, it.y) }
+                                at(high[i][0], high[i][1], heights[k + 1]).let { path.lineTo(it.x, it.y) }
+                                path.close()
+                                drawPath(path, wallGlow)
+                            }
+                        }
                     }
                     path.rewind()
                     floorLine.forEachIndexed { i, p ->
@@ -268,14 +298,30 @@ internal fun AtmosRoom3d(
                             strokeWidth = 1.5f,
                         )
                     }
-                    // A room with corners has four edges up them; a round room none.
+                    // A room with corners has four edges up them, bending where
+                    // the walls do; a round room none. Where walls begin to
+                    // lean, at ear height, a faint line says so.
                     if (floorLine.size == 4) {
-                        for (i in floorLine.indices) {
+                        for (k in 0 until rings.size - 1) {
+                            for (i in floorLine.indices) {
+                                drawLine(
+                                    faint,
+                                    at(rings[k][i][0], rings[k][i][1], heights[k]),
+                                    at(rings[k + 1][i][0], rings[k + 1][i][1], heights[k + 1]),
+                                    strokeWidth = 1.5f,
+                                )
+                            }
+                        }
+                    }
+                    if (!room.upright) {
+                        val earLine = rings[1]
+                        for (i in earLine.indices) {
+                            val j = (i + 1) % earLine.size
                             drawLine(
-                                faint,
-                                at(floorLine[i][0], floorLine[i][1], 0f),
-                                at(ceilingLine[i][0], ceilingLine[i][1], room.height),
-                                strokeWidth = 1.5f,
+                                faint.copy(alpha = 0.09f),
+                                at(earLine[i][0], earLine[i][1], heights[1]),
+                                at(earLine[j][0], earLine[j][1], heights[1]),
+                                strokeWidth = 1f,
                             )
                         }
                     }
@@ -284,14 +330,12 @@ internal fun AtmosRoom3d(
                     val screenLow = 0.15f * room.height
                     val screenHigh = 0.8f * room.height
                     fun onFrontWall(fromSide: Float, z: Float): Offset {
-                        val l = room.lean(z)
-                        val side = maxOf(fromSide, l * room.width + 0.04f * room.width, inset)
-                        return at(side, l * room.depth, z)
+                        val side = maxOf(fromSide, (room.leanX(z) + 0.04f) * room.width, inset)
+                        return at(side, room.leanY(z) * room.depth, z)
                     }
                     fun onFrontWallRight(fromSide: Float, z: Float): Offset {
-                        val l = room.lean(z)
-                        val side = maxOf(fromSide, l * room.width + 0.04f * room.width, inset)
-                        return at(room.width - side, l * room.depth, z)
+                        val side = maxOf(fromSide, (room.leanX(z) + 0.04f) * room.width, inset)
+                        return at(room.width - side, room.leanY(z) * room.depth, z)
                     }
                     val screenIn = 0.12f * room.width
                     onFrontWall(screenIn, screenLow).let { path.moveTo(it.x, it.y) }
@@ -305,8 +349,8 @@ internal fun AtmosRoom3d(
                     sizeLabels.getOrNull(0)?.let { drawLabel(it, at(room.width / 2f, room.depth, 0f), 0f, 14f) }
                     sizeLabels.getOrNull(1)?.let { drawLabel(it, at(room.width, room.depth / 2f, 0f), 26f, 4f) }
                     sizeLabels.getOrNull(2)?.let {
-                        val l = room.lean(room.height / 2f)
-                        drawLabel(it, at(room.width * (1f - l), room.depth * (1f - l), room.height / 2f), 26f, 0f)
+                        val z = room.height / 2f
+                        drawLabel(it, at(room.width * (1f - room.leanX(z)), room.depth * (1f - room.leanY(z)), z), 26f, 0f)
                     }
 
                     // The sound's way to the listener, for the loudest speakers:
@@ -314,6 +358,24 @@ internal fun AtmosRoom3d(
                     val ear = floatArrayOf(room.listenerX, room.listenerY, room.earHeight)
                     val seat = at(ear[0], ear[1], ear[2])
                     pickLoudest(levels, layout, count, loudest)
+                    if (liveWaves) {
+                        // The waves in the room: each loud speaker, and with some
+                        // room its image in every surface, which is its reflection.
+                        field.clear()
+                        for (i in loudest) {
+                            if (i < 0) continue
+                            val f = i * AtmosNative.ROOM_FIELDS
+                            val glow = atmosSpeakerGlow(levels!![i])
+                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
+                            field.add(s[0], s[1], s[2], glow)
+                            if (amount > 0f) {
+                                for (image in room.mirrorImages(s[0], s[1], s[2])) {
+                                    field.add(image[0], image[1], image[2], glow * amount * REFLECTED)
+                                }
+                            }
+                        }
+                        drawWaveField(field, view, room, clock.longValue / 1e9f, accent, ::at)
+                    }
                     for (i in loudest) {
                         if (i < 0) continue
                         val f = i * AtmosNative.ROOM_FIELDS
@@ -425,6 +487,125 @@ internal fun AtmosRoom3d(
     }
 }
 
+/** The sources of the wave field: where each is, in metres, and how strong. */
+private class WaveField {
+    val sources = FloatArray(MAX_SOURCES * 4)
+    var count = 0
+    val points = FloatArray((FIELD_CELLS + 1) * (FIELD_CELLS + 1) * 2)  // a slice's corners, on the page
+    val path = Path()
+    val paint = androidx.compose.ui.graphics.Paint().apply { isAntiAlias = false }
+
+    fun clear() { count = 0 }
+
+    fun add(x: Float, y: Float, z: Float, strength: Float) {
+        if (count == MAX_SOURCES || strength <= 0f) return
+        val at = count * 4
+        sources[at] = x; sources[at + 1] = y; sources[at + 2] = z; sources[at + 3] = strength
+        count++
+    }
+
+    /**
+     * The field at a point, -1..1: every source's wave as it is there at
+     * [phase], weaker the further it has come, over the most they could add
+     * up to. 1 is all of them in step, -1 all of them against.
+     */
+    fun at(x: Float, y: Float, z: Float, phase: Float): Float {
+        var sum = 0f
+        var most = 0f
+        for (i in 0 until count) {
+            val s = i * 4
+            val dx = x - sources[s]
+            val dy = y - sources[s + 1]
+            val dz = z - sources[s + 2]
+            val far = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+            val reach = sources[s + 3] / (NEAR + far)
+            sum += reach * cos(TWO_PI * far / WAVELENGTH - phase)
+            most += reach
+        }
+        return if (most > 0f) sum / most else 0f
+    }
+
+    /** The strongest source, 0..1: how bright the whole field is. */
+    fun strongest(): Float {
+        var top = 0f
+        for (i in 0 until count) top = maxOf(top, sources[i * 4 + 3])
+        return top.coerceIn(0f, 1f)
+    }
+
+    private companion object {
+        const val MAX_SOURCES = RAYS * 7   // each speaker and its six images
+        const val NEAR = 0.6f              // metres: keeps a source from blinding the cells next to it
+        const val TWO_PI = 6.2831855f
+    }
+}
+
+/**
+ * The waves in the room, as a faint glow on two slices of it: one lying flat
+ * at ear height, one standing across the room at the listener's depth. Each
+ * slice is a grid of cells; a cell is lit by how far the waves that reach it
+ * are in step (see [WaveField.at]), so the picture is the interference of the
+ * speakers that play with the walls' reflections of them. The waves are drawn
+ * a few hundred times slower and longer than sound, which would cross the
+ * room in the time of one frame.
+ */
+private fun DrawScope.drawWaveField(
+    field: WaveField,
+    view: AtmosRoomView,
+    room: RoomShape,
+    seconds: Float,
+    tint: Color,
+    at: (AtmosRoomView.Point) -> Offset,
+) {
+    if (field.count == 0) return
+    val brightness = FIELD_ALPHA * field.strongest()
+    if (brightness < 0.01f) return
+    val phase = 6.2831855f * seconds * WAVE_SPEED / WAVELENGTH
+    val n = FIELD_CELLS
+    for (slice in 0..1) {
+        // A slice's corner (u, v): flat, across and along the room at ear
+        // height; upright, across the room and up it at the listener's depth.
+        val flat = slice == 0
+        val alongV = if (flat) room.depth else room.height
+        for (v in 0..n) for (u in 0..n) {
+            val x = u * room.width / n
+            val along = v * alongV / n
+            val o = at(if (flat) view.project(x, along, room.earHeight) else view.project(x, room.listenerY, along))
+            val i = (v * (n + 1) + u) * 2
+            field.points[i] = o.x
+            field.points[i + 1] = o.y
+        }
+        for (v in 0 until n) for (u in 0 until n) {
+            val x = (u + 0.5f) * room.width / n
+            val along = (v + 0.5f) * alongV / n
+            val y = if (flat) along else room.listenerY
+            val z = if (flat) room.earHeight else along
+            // Only what is inside the walls where they are at that height.
+            val lx = room.leanX(z) * room.width
+            val ly = room.leanY(z) * room.depth
+            if (x < lx || x > room.width - lx || y < ly || y > room.depth - ly) continue
+            // Many waves are seldom all in step: a third of that is already a crest.
+            val crest = (field.at(x, y, z, phase) * FIELD_GAIN).coerceAtMost(1f)
+            if (crest <= 0.05f) continue
+            val alpha = brightness * crest * kotlin.math.sqrt(crest)
+            if (alpha < 0.012f) continue
+            val p = field.points
+            val i00 = (v * (n + 1) + u) * 2
+            val i10 = i00 + 2
+            val i01 = ((v + 1) * (n + 1) + u) * 2
+            val i11 = i01 + 2
+            field.path.rewind()
+            field.path.moveTo(p[i00], p[i00 + 1])
+            field.path.lineTo(p[i10], p[i10 + 1])
+            field.path.lineTo(p[i11], p[i11 + 1])
+            field.path.lineTo(p[i01], p[i01 + 1])
+            field.path.close()
+            // Not anti-aliased: softened edges of cells side by side would show as a grid.
+            field.paint.color = tint.copy(alpha = alpha)
+            drawContext.canvas.drawPath(field.path, field.paint)
+        }
+    }
+}
+
 /** What the room still holds of the loudest sound, for the walls' glow: it falls 60 dB in the room's decay. */
 private class Afterglow {
     private var held = 0f
@@ -488,4 +669,10 @@ private const val TURN = 3.2f          // radians a drag across the whole room t
 private const val MAX_NUMBERS = 32
 private const val MAX_ITEMS = AtmosNative.ROOM_MAX_SPEAKERS + 32
 private const val RAYS = 3             // speakers whose way to the listener is drawn
+private const val FIELD_CELLS = 26     // cells across a slice of the wave field
+private const val FIELD_ALPHA = 0.42f  // the field at its brightest: a glow, never a surface
+private const val FIELD_GAIN = 2.6f    // how soon waves that are partly in step count as a crest
+private const val WAVELENGTH = 1.3f    // metres between the field's wave fronts
+private const val WAVE_SPEED = 1.1f    // metres a second on the page: sound itself would cross the room in a frame
+private const val REFLECTED = 0.65f    // what a wall gives back of a wave, at Room 100%
 private const val LFE_HEIGHT = 0.25f   // metres: the LFE stands on the floor
