@@ -234,6 +234,9 @@ class AtmosRendererTest {
         val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         val old = json.decodeFromString<RendererProfile>("""{"hrtfEnabled":true,"binauralStrength":0.5}""")
         assertEquals(0.25f, old.roomAmount, 0f)
+        // The sound is drawn in the room unless the listener turns that off, and the choice is kept.
+        assertTrue(old.roomSound)
+        assertFalse(json.decodeFromString<RendererProfile>(json.encodeToString(old.copy(roomSound = false))).clamped().roomSound)
         assertEquals(1f, old.copy(roomAmount = 7f).clamped().roomAmount, 0f)
         assertEquals(0f, old.copy(roomAmount = -1f).clamped().roomAmount, 0f)
         assertEquals(0.25f, old.copy(roomAmount = Float.NaN).clamped().roomAmount, 0f)

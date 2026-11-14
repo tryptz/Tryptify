@@ -291,6 +291,11 @@ data class RendererProfile(
     val customRoom: CustomRoom = CustomRoom(),
     /** The space objects may use: off (the mix's own box), or narrowing with height. */
     val panEnvelope: PanEnvelope = PanEnvelope(),
+    /**
+     * Whether the page's 3D room draws the sound in it (the grain in the air
+     * and the rays to the listener). Nothing that is heard: the page's alone.
+     */
+    val roomSound: Boolean = true,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
     val binauralStrength: Float = 1.0f,
     /** Virtualize height objects on layouts without physical top speakers. */

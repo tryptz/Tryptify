@@ -3476,6 +3476,9 @@
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>
     <string name="atmos_room_shape">Boyut ve şekil</string>
+    <string name="atmos_room_sound">Sesi odada göster</string>
+    <string name="atmos_room_sound_summary">Havada tanecikler ve dinleyiciye uzanan ışınlar. Kapalıyken hoparlörler çalarken yine yanar.</string>
+    <string name="atmos_room_thumbnail">Odaya dön</string>
     <string name="atmos_room_browse">Oda veritabanına göz at</string>
     <string name="atmos_room_width">Genişlik</string>
     <string name="atmos_room_depth">Derinlik</string>

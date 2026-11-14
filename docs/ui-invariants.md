@@ -3450,6 +3450,25 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   Nothing moves them but the levels: the clock only redraws the room
   between the meter's readings, and with reduced motion it stands still and
   the room is drawn as each reading comes.
+- **Show sound in the room** (`RendererProfile.roomSound`, the switch under
+  the room) turns the drawing of the sound off: no grain, no rays, no
+  turning spots, and the clock that redraws the room between the meter's
+  readings stops. The speakers still light as they play and the objects
+  stay where the mix puts them: the room is still the channel map. It is
+  the page's alone and changes nothing that is heard.
+- **Scrolled past, the room stays as a small picture in the top right
+  corner** (`RoomThumbnail`, 156 dp wide, the size of a video playing on
+  over another app; the owner asked for it, to watch the room while
+  setting what is further down the page). It comes when none of the room
+  is on screen and goes when any of it is, and a tap scrolls back up to
+  the room. Only one of the two is ever drawn: the room's place in the
+  page is kept empty while the picture shows, or the shader would run
+  twice. Both are turned the same way (one `yaw`). The picture is
+  `compact`: no object numbers, no measurements, and a drag does not turn
+  it. It is a picture on plain surface colour with an outline, not a
+  `GlassPanel`: a frosted pane behind a drawing of a room would be one more
+  see-through thing over it. It covers the right end of the rows under
+  it, their switches included; scrolling moves them out from under it.
 - **Trapezoid panning** is a switch with its summary and, when on, three
   sliders: Ceiling width, Ceiling depth, Wall curve. It is off unless the
   listener turns it on: on, objects no longer play exactly where the mix

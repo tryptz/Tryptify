@@ -3476,6 +3476,9 @@
     <string name="atmos_room_custom">Mein Raum</string>
     <string name="atmos_rooms">Räume</string>
     <string name="atmos_room_shape">Größe und Form</string>
+    <string name="atmos_room_sound">Klang im Raum anzeigen</string>
+    <string name="atmos_room_sound_summary">Körnung in der Luft und Strahlen zum Hörer. Aus: Die Lautsprecher leuchten weiterhin, wenn sie spielen.</string>
+    <string name="atmos_room_thumbnail">Zurück zum Raum</string>
     <string name="atmos_room_browse">Raumdatenbank durchsuchen</string>
     <string name="atmos_room_width">Breite</string>
     <string name="atmos_room_depth">Tiefe</string>

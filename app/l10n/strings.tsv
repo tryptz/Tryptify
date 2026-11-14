@@ -3423,6 +3423,9 @@ atmos_room_builtin	Built-in room	内置房间	内蔵の部屋	Salle intégrée	S
 atmos_room_custom	My room	我的房间	自分の部屋	Ma salle	Mi sala	Odam	Mein Raum	La mia stanza
 atmos_rooms	Rooms	房间	部屋	Salles	Salas	Odalar	Räume	Stanze
 atmos_room_shape	Size and shape	尺寸和形状	大きさと形	Taille et forme	Tamaño y forma	Boyut ve şekil	Größe und Form	Dimensioni e forma
+atmos_room_sound	Show sound in the room	在房间中显示声音	部屋に音を表示	Afficher le son dans la salle	Mostrar el sonido en la sala	Sesi odada göster	Klang im Raum anzeigen	Mostra il suono nella stanza
+atmos_room_sound_summary	Grain in the air and rays to the listener. Off, the speakers still light up as they play.	空气中的颗粒和通向听者的射线。关闭后，扬声器播放时仍会亮起。	空気中の粒子とリスナーへの光線。オフでも、スピーカーは再生中に点灯します。	Du grain dans l'air et des rayons vers l'auditeur. Désactivé, les enceintes s'allument toujours quand elles jouent.	Grano en el aire y rayos hacia el oyente. Desactivado, los altavoces siguen iluminándose al sonar.	Havada tanecikler ve dinleyiciye uzanan ışınlar. Kapalıyken hoparlörler çalarken yine yanar.	Körnung in der Luft und Strahlen zum Hörer. Aus: Die Lautsprecher leuchten weiterhin, wenn sie spielen.	Grana nell'aria e raggi verso l'ascoltatore. Disattivato, gli altoparlanti si illuminano comunque quando suonano.
+atmos_room_thumbnail	Back to the room	返回房间	部屋に戻る	Revenir à la salle	Volver a la sala	Odaya dön	Zurück zum Raum	Torna alla stanza
 atmos_room_browse	Browse room database	浏览房间数据库	部屋データベースを見る	Parcourir la base de salles	Explorar la base de datos de salas	Oda veritabanına göz at	Raumdatenbank durchsuchen	Sfoglia database delle stanze
 atmos_room_width	Width	宽度	幅	Largeur	Ancho	Genişlik	Breite	Larghezza
 atmos_room_depth	Depth	进深	奥行き	Profondeur	Fondo	Derinlik	Tiefe	Profondità

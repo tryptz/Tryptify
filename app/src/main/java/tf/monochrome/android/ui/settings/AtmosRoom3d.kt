@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,7 +66,6 @@ internal class AtmosRoomView(yaw: Float, private val shape: RoomShape) {
     companion object {
         const val EYE = 2.6f
         const val PITCH = 0.42f          // 24 degrees down
-        const val START_YAW = -0.5f      // from behind the listener's right shoulder
     }
 }
 
@@ -147,6 +147,13 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * shader cannot run. Drag sideways to walk round it. [layout] is
  * [AtmosNative.nativeRoomLayout]'s, [speakers] the processor's levels in the
  * same order (null: nothing plays through the room).
+ *
+ * With [sound] off the sound is not drawn: no grain and no rays, and nothing
+ * moves between the meter's readings; the speakers still light as they play
+ * and the objects are where the mix puts them. [compact] is the room as a
+ * small picture: no numbers, no measurements, and it is not turned by a
+ * drag. [yaw] is how far it is turned, the page's to keep when the room is
+ * drawn in two places.
  */
 @Composable
 internal fun AtmosRoom3d(
@@ -157,14 +164,34 @@ internal fun AtmosRoom3d(
     roomAmount: Float,
     decaySeconds: Float,
     modifier: Modifier = Modifier,
+    sound: Boolean = true,
+    compact: Boolean = false,
+    yaw: MutableFloatState = remember { mutableFloatStateOf(RoomCamera.START_YAW) },
 ) {
     val shader = rememberRoomShader()
+    val options = RoomViewOptions(sound, compact, yaw)
     if (shader != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-        AtmosRoomGpu(shader, layout, speakers, objects, shape, roomAmount, decaySeconds, modifier)
+        AtmosRoomGpu(shader, layout, speakers, objects, shape, roomAmount, decaySeconds, options, modifier)
     } else {
-        AtmosRoomCanvas(layout, speakers, objects, shape, roomAmount, decaySeconds, modifier)
+        AtmosRoomCanvas(layout, speakers, objects, shape, roomAmount, decaySeconds, options, modifier)
     }
 }
+
+/** How the room is shown, whichever way it is drawn: see [AtmosRoom3d]. */
+private class RoomViewOptions(val sound: Boolean, val compact: Boolean, val yaw: MutableFloatState)
+
+/** Turns the room with a sideways drag (up and down still scrolls the page); a [compact] room is not turned. */
+private fun Modifier.turnsRoom(view: RoomViewOptions): Modifier =
+    if (view.compact) {
+        this
+    } else {
+        pointerInput(view.yaw) {
+            detectHorizontalDragGestures { change, drag ->
+                change.consume()
+                view.yaw.floatValue += drag / size.width * TURN
+            }
+        }
+    }
 
 /** The room's labels: the objects' numbers, and its measurements (width, depth, height; empty when it has none). */
 private class RoomLabels(
@@ -233,6 +260,7 @@ private fun AtmosRoomGpu(
     shape: RoomShape,
     roomAmount: Float,
     decaySeconds: Float,
+    options: RoomViewOptions,
     modifier: Modifier = Modifier,
 ) {
     val liveSpeakers by rememberUpdatedState(speakers)
@@ -240,7 +268,8 @@ private fun AtmosRoomGpu(
     val liveShape by rememberUpdatedState(shape)
     val liveAmount by rememberUpdatedState(roomAmount)
     val liveDecay by rememberUpdatedState(decaySeconds)
-    val yaw = remember { mutableFloatStateOf(RoomCamera.START_YAW) }
+    val liveOptions by rememberUpdatedState(options)
+    val yaw = options.yaw
     val accent = MaterialTheme.colorScheme.primary
     val heightTint = MaterialTheme.colorScheme.tertiary
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -251,24 +280,19 @@ private fun AtmosRoomGpu(
     val afterglow = remember { Afterglow() }
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
-    val clock = rememberGrainClock(speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
+    val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
             modifier = Modifier
                 .fillMaxSize()
-                // Sideways only: up and down still scrolls the page.
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { change, drag ->
-                        change.consume()
-                        yaw.floatValue += drag / size.width * TURN
-                    }
-                }
+                .turnsRoom(options)
                 .drawBehind {
                     val room = liveShape
                     val amount = liveAmount.coerceIn(0f, 1f)
                     val levels = liveSpeakers
                     val o = liveObjects
+                    val sound = liveOptions.sound
                     val camera = RoomCamera(yaw.floatValue, room, size.width, size.height)
                     clock.longValue  // read: see rememberGrainClock
 
@@ -288,7 +312,7 @@ private fun AtmosRoomGpu(
                         }
                         scene.addSpeaker(
                             s[0], s[1], if (kind == RoomScene.KIND_LFE) LFE_HEIGHT else s[2],
-                            level = glow, air = air.follow(i, glow), kind = kind,
+                            level = glow, air = if (sound) air.follow(i, glow) else 0f, kind = kind,
                         )
                     }
                     if (o != null) {
@@ -299,16 +323,18 @@ private fun AtmosRoomGpu(
                         }
                     }
                     // The loudest speakers now: their ray to the listener.
-                    pickLoudest(glows, layout, count, loudest)
-                    loudest.forEachIndexed { slot, i ->
-                        if (i < 0) return@forEachIndexed
-                        val f = i * AtmosNative.ROOM_FIELDS
-                        val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                        scene.setRay(slot, s[0], s[1], s[2], glows[i])
+                    if (sound) {
+                        pickLoudest(glows, layout, count, loudest)
+                        loudest.forEachIndexed { slot, i ->
+                            if (i < 0) return@forEachIndexed
+                            val f = i * AtmosNative.ROOM_FIELDS
+                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
+                            scene.setRay(slot, s[0], s[1], s[2], glows[i])
+                        }
                     }
                     // And the loudest of late: with some room, grain where their
                     // sound turns on a surface towards the listener.
-                    if (amount > 0f) {
+                    if (sound && amount > 0f) {
                         pickLoudest(air.levels, layout, count, loudest)
                         for (i in loudest) {
                             if (i < 0) continue
@@ -324,11 +350,12 @@ private fun AtmosRoomGpu(
                     val held = afterglow.follow(peak, liveDecay)
                     shader.draw(
                         drawContext.canvas.nativeCanvas, size.width, size.height, camera, room, scene,
-                        glow = amount * held,
+                        glow = if (sound) amount * held else 0f,
                         primary = accent, tertiary = heightTint, ink = onSurface,
                     )
 
                     // Over it: each object's number beside it, and the room's measurements.
+                    if (liveOptions.compact) return@drawBehind
                     if (o != null) {
                         for (k in 0 until o.count) {
                             if (o.isLfe(k)) continue
@@ -390,6 +417,7 @@ private fun AtmosRoomCanvas(
     shape: RoomShape,
     roomAmount: Float,
     decaySeconds: Float,
+    options: RoomViewOptions,
     modifier: Modifier = Modifier,
 ) {
     val liveSpeakers by rememberUpdatedState(speakers)
@@ -397,7 +425,8 @@ private fun AtmosRoomCanvas(
     val liveShape by rememberUpdatedState(shape)
     val liveAmount by rememberUpdatedState(roomAmount)
     val liveDecay by rememberUpdatedState(decaySeconds)
-    val yaw = remember { mutableFloatStateOf(AtmosRoomView.START_YAW) }
+    val liveOptions by rememberUpdatedState(options)
+    val yaw = options.yaw
     val accent = MaterialTheme.colorScheme.primary
     val heightTint = MaterialTheme.colorScheme.tertiary
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -416,22 +445,18 @@ private fun AtmosRoomCanvas(
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
     val grain = remember { CanvasGrain() }
-    val clock = rememberGrainClock(speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
+    val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
             modifier = Modifier
                 .fillMaxSize()
-                // Sideways only: up and down still scrolls the page.
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { change, drag ->
-                        change.consume()
-                        yaw.floatValue += drag / size.width * TURN
-                    }
-                }
+                .turnsRoom(options)
                 .drawBehind {
                     val room = liveShape
                     val amount = liveAmount.coerceIn(0f, 1f)
+                    val sound = liveOptions.sound
+                    val compact = liveOptions.compact
                     val view = AtmosRoomView(yaw.floatValue, room)
                     clock.longValue  // read: see rememberGrainClock
                     // The whole room at any turn: its near corners come out
@@ -543,11 +568,13 @@ private fun AtmosRoomCanvas(
                     drawPath(path, onSurface.copy(alpha = 0.05f))
                     drawPath(path, faint, style = Stroke(width = 1.5f))
                     // Its measurements, along the near floor edges and up the near corner.
-                    sizeLabels.getOrNull(0)?.let { drawLabel(it, at(room.width / 2f, room.depth, 0f), 0f, 14f) }
-                    sizeLabels.getOrNull(1)?.let { drawLabel(it, at(room.width, room.depth / 2f, 0f), 26f, 4f) }
-                    sizeLabels.getOrNull(2)?.let {
-                        val z = room.height / 2f
-                        drawLabel(it, at(room.width * (1f - room.leanX(z)), room.depth * (1f - room.leanY(z)), z), 26f, 0f)
+                    if (!compact) {
+                        sizeLabels.getOrNull(0)?.let { drawLabel(it, at(room.width / 2f, room.depth, 0f), 0f, 14f) }
+                        sizeLabels.getOrNull(1)?.let { drawLabel(it, at(room.width, room.depth / 2f, 0f), 26f, 4f) }
+                        sizeLabels.getOrNull(2)?.let {
+                            val z = room.height / 2f
+                            drawLabel(it, at(room.width * (1f - room.leanX(z)), room.depth * (1f - room.leanY(z)), z), 26f, 0f)
+                        }
                     }
 
                     // The sound's way to the listener, for the loudest speakers:
@@ -556,13 +583,13 @@ private fun AtmosRoomCanvas(
                     val seat = at(ear[0], ear[1], ear[2])
                     // The sound, as grain: round each speaker that plays, where the
                     // loudest of late turn on a surface, and what the room holds.
-                    grain.clear(RoomGrain.reach(room), amount * held)
-                    for (i in 0 until count) {
+                    grain.clear(RoomGrain.reach(room), if (sound) amount * held else 0f)
+                    if (sound) for (i in 0 until count) {
                         val f = i * AtmosNative.ROOM_FIELDS
                         val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
                         grain.addSpeaker(s[0], s[1], if (isLfe(layout, f)) LFE_HEIGHT else s[2], air.levels[i], high = layout[f + 2] > 0f)
                     }
-                    if (amount > 0f) {
+                    if (sound && amount > 0f) {
                         pickLoudest(air.levels, layout, count, loudest)
                         for (i in loudest) {
                             if (i < 0) continue
@@ -575,7 +602,7 @@ private fun AtmosRoomCanvas(
                     }
                     grain.draw(drawContext.canvas.nativeCanvas, room, unit * 0.004f, accent, heightTint) { x, y, z -> at(x, y, z) }
 
-                    pickLoudest(glows, layout, count, loudest)
+                    if (sound) pickLoudest(glows, layout, count, loudest) else loudest.fill(-1)
                     for (i in loudest) {
                         if (i < 0) continue
                         val f = i * AtmosNative.ROOM_FIELDS
@@ -661,7 +688,7 @@ private fun AtmosRoomCanvas(
                             val r = unit * (0.02f + 0.022f * level) * p.scale
                             drawCircle(tint.copy(alpha = 0.16f * level), r * 2.3f, pos)
                             drawCircle(tint.copy(alpha = 0.4f + 0.6f * level), r, pos)
-                            numbers.getOrNull(k)?.let { label ->
+                            if (!compact) numbers.getOrNull(k)?.let { label ->
                                 drawText(label, topLeft = Offset(pos.x + r + 2f, pos.y - label.size.height / 2f))
                             }
                         }

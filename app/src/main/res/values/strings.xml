@@ -3479,6 +3479,9 @@
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>
     <string name="atmos_room_shape">Size and shape</string>
+    <string name="atmos_room_sound">Show sound in the room</string>
+    <string name="atmos_room_sound_summary">Grain in the air and rays to the listener. Off, the speakers still light up as they play.</string>
+    <string name="atmos_room_thumbnail">Back to the room</string>
     <string name="atmos_room_browse">Browse room database</string>
     <string name="atmos_room_width">Width</string>
     <string name="atmos_room_depth">Depth</string>

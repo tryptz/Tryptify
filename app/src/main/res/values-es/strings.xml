@@ -3554,6 +3554,9 @@
     <string name="atmos_room_custom">Mi sala</string>
     <string name="atmos_rooms">Salas</string>
     <string name="atmos_room_shape">Tamaño y forma</string>
+    <string name="atmos_room_sound">Mostrar el sonido en la sala</string>
+    <string name="atmos_room_sound_summary">Grano en el aire y rayos hacia el oyente. Desactivado, los altavoces siguen iluminándose al sonar.</string>
+    <string name="atmos_room_thumbnail">Volver a la sala</string>
     <string name="atmos_room_browse">Explorar la base de datos de salas</string>
     <string name="atmos_room_width">Ancho</string>
     <string name="atmos_room_depth">Fondo</string>

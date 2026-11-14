@@ -3398,6 +3398,9 @@
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>
     <string name="atmos_room_shape">大きさと形</string>
+    <string name="atmos_room_sound">部屋に音を表示</string>
+    <string name="atmos_room_sound_summary">空気中の粒子とリスナーへの光線。オフでも、スピーカーは再生中に点灯します。</string>
+    <string name="atmos_room_thumbnail">部屋に戻る</string>
     <string name="atmos_room_browse">部屋データベースを見る</string>
     <string name="atmos_room_width">幅</string>
     <string name="atmos_room_depth">奥行き</string>

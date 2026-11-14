@@ -3554,6 +3554,9 @@
     <string name="atmos_room_custom">La mia stanza</string>
     <string name="atmos_rooms">Stanze</string>
     <string name="atmos_room_shape">Dimensioni e forma</string>
+    <string name="atmos_room_sound">Mostra il suono nella stanza</string>
+    <string name="atmos_room_sound_summary">Grana nell\'aria e raggi verso l\'ascoltatore. Disattivato, gli altoparlanti si illuminano comunque quando suonano.</string>
+    <string name="atmos_room_thumbnail">Torna alla stanza</string>
     <string name="atmos_room_browse">Sfoglia database delle stanze</string>
     <string name="atmos_room_width">Larghezza</string>
     <string name="atmos_room_depth">Profondità</string>

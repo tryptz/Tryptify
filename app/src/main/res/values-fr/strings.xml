@@ -3554,6 +3554,9 @@
     <string name="atmos_room_custom">Ma salle</string>
     <string name="atmos_rooms">Salles</string>
     <string name="atmos_room_shape">Taille et forme</string>
+    <string name="atmos_room_sound">Afficher le son dans la salle</string>
+    <string name="atmos_room_sound_summary">Du grain dans l\'air et des rayons vers l\'auditeur. Désactivé, les enceintes s\'allument toujours quand elles jouent.</string>
+    <string name="atmos_room_thumbnail">Revenir à la salle</string>
     <string name="atmos_room_browse">Parcourir la base de salles</string>
     <string name="atmos_room_width">Largeur</string>
     <string name="atmos_room_depth">Profondeur</string>

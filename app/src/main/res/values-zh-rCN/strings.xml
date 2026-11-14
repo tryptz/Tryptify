@@ -3398,6 +3398,9 @@
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>
     <string name="atmos_room_shape">尺寸和形状</string>
+    <string name="atmos_room_sound">在房间中显示声音</string>
+    <string name="atmos_room_sound_summary">空气中的颗粒和通向听者的射线。关闭后，扬声器播放时仍会亮起。</string>
+    <string name="atmos_room_thumbnail">返回房间</string>
     <string name="atmos_room_browse">浏览房间数据库</string>
     <string name="atmos_room_width">宽度</string>
     <string name="atmos_room_depth">进深</string>
