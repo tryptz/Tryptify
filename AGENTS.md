@@ -120,7 +120,7 @@ So, in native code that the phone builds with `-ffast-math`:
   is finite uses `dspIsFinite` too, never `std::isfinite`.
 
 Four more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, twenty tests, each built a second time with the phone's `-ffast-math`; the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, twenty-one tests, each built a second time with the phone's `-ffast-math`; the
 script above runs only `channel_placer_test` from it), Trypt Mania's game
 engine (`glyph/tests/`, held to the same rules as its Kotlin twin), the
 motion blur behind the note trails and the lyric glide (`motion/tests/`) and

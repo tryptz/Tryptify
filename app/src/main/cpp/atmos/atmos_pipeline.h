@@ -97,6 +97,20 @@ class AtmosPipeline {
     room_.set_params(strength_, room_amount_);
   }
 
+  // A measured or worked-out room for the headphone render (a packed room,
+  // render/measured_room.h), or the built-in one for null. False when
+  // `packed` is not a room. Allocates: loader thread.
+  bool set_room_response(const float* packed, size_t size) {
+    if (packed == nullptr) {
+      room_.set_room_response(nullptr);
+      return true;
+    }
+    render::RoomResponse response;
+    if (!render::unpack_room(packed, size, response)) return false;
+    room_.set_room_response(&response);
+    return true;
+  }
+
   // Installs a runtime HRTF from a SOFA buffer (off the audio thread), or
   // reverts to the baked default. The load itself is defined in the JNI lib.
   bool load_sofa(const char* data, long size) {

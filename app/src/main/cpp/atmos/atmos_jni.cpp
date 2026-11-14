@@ -11,6 +11,9 @@
 #include "atmos_pipeline.h"
 #include "cavern/extensible_metadata_decoder.h"
 #include "object_engine.h"
+#include "render/box_room.h"
+#include "render/measured_room.h"
+#include "render/room_sofa.h"
 
 namespace {
 
@@ -51,6 +54,12 @@ jint write_object_meter(JNIEnv* env, jfloatArray out, Fill fill) {
   const int count = fill(buf, capacity);
   if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
   return count;
+}
+
+jfloatArray to_java(JNIEnv* env, const std::vector<float>& values) {
+  jfloatArray out = env->NewFloatArray(static_cast<jsize>(values.size()));
+  if (out != nullptr) env->SetFloatArrayRegion(out, 0, static_cast<jsize>(values.size()), values.data());
+  return out;
 }
 
 }  // namespace
@@ -302,6 +311,68 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomMeter(
   const int count = pipe->room_meter(buf, capacity, tracked == JNI_TRUE);
   if (count > 0) env->SetFloatArrayRegion(out, 0, count, buf);
   return count;
+}
+
+// ── Rooms for the headphone render ───────────────────────────────────────
+// A room is prepared once, off the playback thread, into a packed room (an
+// array of floats: render/measured_room.h says what is in it), which the app
+// keeps and hands to every pipeline it makes.
+
+// A measured room out of a SOFA file of room impulse responses (BRIRs, SRIRs,
+// DRIRs). Null when the file cannot be read or holds no room. Any thread;
+// slow (it parses the whole file) and allocates.
+JNIEXPORT jfloatArray JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePrepareRoomSofa(
+    JNIEnv* env, jclass /*clazz*/, jbyteArray sofa) {
+  const jsize len = env->GetArrayLength(sofa);
+  if (len <= 0) return nullptr;
+  std::vector<char> file(static_cast<size_t>(len));
+  env->GetByteArrayRegion(sofa, 0, len, reinterpret_cast<jbyte*>(file.data()));
+  std::vector<float> left, right;
+  double rate = 0.0;
+  tf::atmos::render::RoomGeometry geometry;
+  if (!tf::atmos::read_room_sofa(file.data(), len, left, right, rate, geometry)) return nullptr;
+  file = std::vector<char>();  // the file is the larger part of the memory; done with it
+  tf::atmos::render::RoomResponse room;
+  if (!tf::atmos::render::prepare_room_response(left.data(), right.data(), static_cast<int>(left.size()),
+                                                rate, room)) {
+    return nullptr;
+  }
+  return to_java(env, tf::atmos::render::pack_room(room, geometry));
+}
+
+// A room worked out from its size (render/box_room.h): metres, and the share
+// of sound its walls take up, 0 to 1. Any thread; allocates.
+JNIEXPORT jfloatArray JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeBuildBoxRoom(
+    JNIEnv* env, jclass /*clazz*/, jfloat width, jfloat depth, jfloat height, jfloat absorption) {
+  tf::atmos::render::BoxRoom box;
+  box.width = width;
+  box.depth = depth;
+  box.height = height;
+  box.absorption = absorption;
+  std::vector<float> left, right;
+  tf::atmos::render::box_response(box, left, right);
+  tf::atmos::render::RoomResponse room;
+  if (!tf::atmos::render::prepare_room_response(left.data(), right.data(), static_cast<int>(left.size()),
+                                                48000.0, room)) {
+    return nullptr;
+  }
+  return to_java(env, tf::atmos::render::pack_room(room, tf::atmos::render::box_geometry(box)));
+}
+
+// The room the pipeline's headphone render plays in: a packed room, or null
+// for the built-in one. Returns 1 when it was taken. Never the audio thread.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRoom(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jfloatArray packed) {
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return 0;
+  if (packed == nullptr) return pipe->set_room_response(nullptr, 0) ? 1 : 0;
+  const jsize len = env->GetArrayLength(packed);
+  std::vector<float> room(static_cast<size_t>(len));
+  env->GetFloatArrayRegion(packed, 0, len, room.data());
+  return pipe->set_room_response(room.data(), room.size()) ? 1 : 0;
 }
 
 }  // extern "C"

@@ -46,6 +46,7 @@
 #include "../fft.h"
 #include "hrir_dfe.h"
 #include "hrir_table.h"
+#include "measured_room.h"
 #include "partitioned_fir.h"
 
 namespace tf {
@@ -118,6 +119,8 @@ class VirtualRoom {
     set_bass_management(bass_, crossover_hz_);
     design_lowpass(kLfeCutoffHz, lfe_c_);
     design_highpass(kTailLowCutHz, tail_hp_c_);
+    design_highpass(kRoomLowCutHz, room_hp_c_);
+    convolver_.configure();
     reserve(kTypicalFrame);
     reset_history();
 
@@ -157,6 +160,24 @@ class VirtualRoom {
     publish(data.data(), delay.data(), dfe.data());
   }
 
+  // A measured or worked-out room in place of the built-in reflections and
+  // tail (measured_room.h); null for the built-in one. The Room amount is its
+  // level as it is the built-in room's. Loader thread only, one call at a time.
+  void set_room_response(const RoomResponse* response) {
+    const uint32_t cur = room_active_.load(std::memory_order_acquire);
+    const uint32_t slot = (cur & 1u) ^ 1u;
+    wait_for_render();
+    if (response != nullptr) {
+      RoomConvolver::analyse(*response, room_sets_[slot]);
+    } else {
+      room_sets_[slot] = RoomConvolver::Spectra{};
+    }
+    room_active_.store(next_version(cur) | slot, std::memory_order_seq_cst);
+  }
+  bool has_room_response() const {
+    return room_sets_[room_active_.load(std::memory_order_acquire) & 1u].parts > 0;
+  }
+
   // Back to the baked set and its baked equalizer.
   void set_hrir_baked() {
     if (count_ == 0) return;
@@ -178,6 +199,7 @@ class VirtualRoom {
     predelay_pos_ = 0;
     std::memset(z_, 0, sizeof(z_));
     std::memset(shelf_z_, 0, sizeof(shelf_z_));
+    convolver_.reset();
     std::memset(align_, 0, sizeof(align_));
     align_pos_ = 0;
     std::memset(look_l_, 0, sizeof(look_l_));
@@ -202,11 +224,16 @@ class VirtualRoom {
     reserve(n);
     const float room = room_;
     const bool dry_on = strength_ < 0.999f;
+    // The room that is heard: a measured one, or else the built-in.
+    const RoomConvolver::Spectra& measured = room_sets_[room_active_.load(std::memory_order_seq_cst) & 1u];
+    const bool convolving = measured.parts > 0 && room > 0.0f;
+    if (convolving && !convolving_) convolver_.reset();  // what it last heard is long past
+    convolving_ = convolving;
 
     for (int b = 0; b < n; b += kBlock) {
       const int len = n - b < kBlock ? n - b : kBlock;
       take_block(feeds + static_cast<size_t>(b) * count_, len, b, dry_on);
-      if (room > 0.0f) add_reflections(len, room);
+      if (room > 0.0f && !convolving) add_reflections(len, room);
       convolve_block(set, len, wet_.data() + 2 * b);
     }
     dfe_fir_.process(wet_.data(), n);
@@ -216,7 +243,7 @@ class VirtualRoom {
     }
     // Rung out is silent: the shelf's memory never lingers as denormals.
     for (float& z : shelf_z_) if (std::fabs(z) < 1e-25f) z = 0.0f;
-    finish(n, room, dry_on, out);
+    finish(n, room, dry_on, convolving ? &measured : nullptr, out);
     renders_.fetch_add(1, std::memory_order_release);
   }
 
@@ -354,6 +381,9 @@ class VirtualRoom {
   static constexpr int kLines = 8;
   static constexpr float kTailSeconds = 0.32f;  // RT60
   static constexpr float kTailLowCutHz = 150.0f;
+  // A measured or worked-out room is sent more of the low end than the
+  // built-in tail is: its first modes are part of what it is.
+  static constexpr float kRoomLowCutHz = 60.0f;
   static constexpr float kTailDamp = 0.30f;
   static constexpr float kTailGain = 0.30f;     // at room = 1; see virtual_room_test
   static constexpr int kPredelay = 576;         // 12 ms at 48 kHz
@@ -385,12 +415,18 @@ class VirtualRoom {
   void publish(const float* data, const float* delay, const float* dfe) {
     const uint32_t cur = active_.load(std::memory_order_acquire);
     const uint32_t slot = (cur & 1u) ^ 1u;
+    wait_for_render();
+    build(sets_[slot], data, delay, dfe);
+    active_.store(next_version(cur) | slot, std::memory_order_seq_cst);
+  }
+
+  // A render that read the old choice of set may still be inside it: the
+  // loader waits for that one to end before it writes to the other set.
+  void wait_for_render() const {
     const uint32_t running = renders_.load(std::memory_order_seq_cst);
     if (running & 1u) {
       while (renders_.load(std::memory_order_acquire) == running) std::this_thread::yield();
     }
-    build(sets_[slot], data, delay, dfe);
-    active_.store(next_version(cur) | slot, std::memory_order_seq_cst);
   }
 
   void build(FilterSet& set, const float* data, const float* delay, const float* dfe) {
@@ -872,7 +908,7 @@ class VirtualRoom {
   }
 
   // Everything after the ear filters, a sample at a time.
-  void finish(int n, float room, bool dry_on, float* out) {
+  void finish(int n, float room, bool dry_on, const RoomConvolver::Spectra* measured, float* out) {
     const float wet_g = strength_, dry_g = 1.0f - strength_;
     const float tail_g = kTailGain * room;
     const bool tail_on = room > 0.0f;
@@ -898,7 +934,12 @@ class VirtualRoom {
       const float sub = kLfeGain * biquad(lfe_c_, z_ + 14, biquad(lfe_c_, z_ + 12, lfe));
       l += sub;
       r += sub;
-      if (tail_on) {
+      if (measured != nullptr) {
+        float tl, tr;
+        convolver_.tick(*measured, biquad(room_hp_c_, z_ + 16, mono), tl, tr);
+        l += room * tl;
+        r += room * tr;
+      } else if (tail_on) {
         float tl, tr;
         tail(biquad(tail_hp_c_, z_ + 16, mono), tl, tr);
         l += tail_g * tl;
@@ -1006,7 +1047,12 @@ class VirtualRoom {
 
   // Biquad coefficients and their states, two floats each: the stereo
   // high-pass (0-7), the bass (8-11), the LFE (12-15), the tail's low cut (16).
-  float lp_c_[5] = {}, hp_c_[5] = {}, lfe_c_[5] = {}, tail_hp_c_[5] = {};
+  float lp_c_[5] = {}, hp_c_[5] = {}, lfe_c_[5] = {}, tail_hp_c_[5] = {}, room_hp_c_[5] = {};
+  // The measured room: its two sets (as sets_, one in use), and what plays it.
+  RoomConvolver::Spectra room_sets_[2];
+  std::atomic<uint32_t> room_active_{0};
+  RoomConvolver convolver_;
+  bool convolving_ = false;
   float z_[18] = {};
   float shelf_z_[4] = {};
   // mono, LFE and the dry pair, kSincDelay samples behind.

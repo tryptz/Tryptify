@@ -265,6 +265,7 @@ add_library(monochrome_atmos_jni SHARED
     atmos/atmos_jni.cpp
     atmos/placer_jni.cpp
     atmos/render/sofa_loader.cpp
+    atmos/render/room_sofa.cpp
 )
 target_include_directories(monochrome_atmos_jni PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/atmos

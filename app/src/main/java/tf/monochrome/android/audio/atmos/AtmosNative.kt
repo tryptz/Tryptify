@@ -184,6 +184,28 @@ object AtmosNative {
      */
     external fun nativeRoomMeter(pipeline: Long, tracked: Boolean, out: FloatArray): Int
 
+    /**
+     * A measured room out of a SOFA file of room impulse responses (BRIRs,
+     * SRIRs, DRIRs), as a packed room ([tf.monochrome.android.domain.model.AtmosRoom]
+     * reads one). Null when the file cannot be read or holds no room. Slow:
+     * it parses the whole file. Never on the playback thread.
+     */
+    external fun nativePrepareRoomSofa(sofa: ByteArray): FloatArray?
+
+    /**
+     * A room worked out from its size in metres and the share of sound its
+     * walls take up ([absorption], 0..1), as a packed room. Never on the
+     * playback thread.
+     */
+    external fun nativeBuildBoxRoom(width: Float, depth: Float, height: Float, absorption: Float): FloatArray?
+
+    /**
+     * The room [pipeline]'s headphone render plays in: a packed room, or null
+     * for the built-in one. Returns 1 when it was taken. Never on the
+     * playback thread while it renders.
+     */
+    external fun nativeSetRoom(pipeline: Long, packed: FloatArray?): Int
+
     const val ROOM_FIELDS = 4
     const val ROOM_MAX_SPEAKERS = 32
     const val OBJECT_METER_FIELDS = 5
