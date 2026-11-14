@@ -467,8 +467,13 @@ data class RoomShape(
 
         /**
          * The room the listener describes, at once (the render's own copy
-         * takes a moment to work out). The listener and the two loudspeakers
-         * stand where `render/box_room.h` puts them.
+         * takes a moment to work out). The two loudspeakers stand where
+         * `render/box_room.h` puts them. The head is drawn in the middle,
+         * which is where the objects are panned around. `box_room.h` works
+         * the reflections out from a spot a little left and three fifths
+         * back, so the two ears do not get the same tail: drawn there, the
+         * head read as "you are off to one side of the mix" (the owner,
+         * 2026-11-14), which is not what is heard.
          */
         fun of(room: CustomRoom): RoomShape {
             val r = room.clamped()
@@ -481,8 +486,6 @@ data class RoomShape(
                 ceilingWidth = r.ceilingWidth,
                 ceilingDepth = r.ceilingDepth,
                 leanFrom = 0f,
-                listenerX = r.width * 0.44f,
-                listenerY = r.depth * 0.6f,
                 earHeight = ear,
                 sources = listOf(
                     floatArrayOf(r.width * 0.25f, r.depth / 6f, ear),

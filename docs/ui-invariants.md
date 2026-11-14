@@ -3381,8 +3381,11 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   the listener's own room are drawn at their real proportions, with a line a
   metre on the floor and their measurements written along the near edges; a
   measured room with no size keeps the built-in shape and says so under the
-  Room controls (`atmos_room_unsized`), never an invented size. The listener's
-  head is where the room's listener sat, the loudspeakers it was measured
+  Room controls (`atmos_room_unsized`), never an invented size. In a
+  measured room the head is where the room's listener sat; in the listener's
+  own room it is in the middle, where the objects are panned around, never at
+  the off-centre spot `box_room.h` works the reflections out from (drawn
+  there it read as sitting to one side of the mix). The loudspeakers it was measured
   with are small diamonds, and the layout's 28 speakers stand on its walls
   (`RoomShape.place`: a point beyond a leaning wall or a rounded corner is
   brought in to it).

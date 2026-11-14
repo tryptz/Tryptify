@@ -176,6 +176,14 @@ class AtmosRoomTest {
     }
 
     @Test
+    fun `the listener's own room is drawn with the head in the middle`() {
+        // Where the objects are panned around, not where the reflections are worked out from.
+        val shape = RoomShape.of(CustomRoom(width = 10f, depth = 16f, height = 4f))
+        assertEquals(5f, shape.listenerX, 0f)
+        assertEquals(8f, shape.listenerY, 0f)
+    }
+
+    @Test
     fun `the panning envelope shapes the room that is drawn, and is clamped`() {
         val box = RoomShape.of(CustomRoom(width = 6f, depth = 4f, height = 3f))
         assertTrue(box.within(PanEnvelope()).upright)                      // off: the room as it is
