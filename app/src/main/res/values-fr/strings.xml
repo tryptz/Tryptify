@@ -3550,4 +3550,25 @@
     <string name="whats_new_1952_atmos_decode_body">Trois mises à jour d\'objets sur quatre étaient manquées, si bien que les objets bougeaient en retard et bavaient les uns sur les autres. Chaque mise à jour est désormais lue, les canaux surround sont remis en phase et le rendu sur enceintes n\'est plus trop faible de 3 dB.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos montre ses objets, pas « 6 ch »</string>
     <string name="whats_new_1952_atmos_objects_body">Un flux Atmos est un cœur 5.1 qui contient les objets. Le panneau Chaîne audio et la page Configuration du moteur de rendu Atmos comptent désormais les objets et indiquent s\'ils sont joués, et le plan de la salle montre chacun là où le mixage le place.</string>
+    <string name="atmos_room_builtin">Salle intégrée</string>
+    <string name="atmos_room_custom">Ma salle</string>
+    <string name="atmos_room_browse">Parcourir la base de salles</string>
+    <string name="atmos_room_width">Largeur</string>
+    <string name="atmos_room_depth">Profondeur</string>
+    <string name="atmos_room_height">Hauteur</string>
+    <string name="atmos_room_damping">Absorption</string>
+    <string name="atmos_room_roundness">Arrondi</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · décroissance %4$s s</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · décroissance %3$s s</string>
+    <string name="atmos_room_unsized">Le fichier ne donne pas les dimensions de la salle · décroissance %1$s s</string>
+    <string name="atmos_room_modes">Premiers modes de la salle : %1$s, %2$s et %3$s Hz</string>
+    <string name="atmos_room_working">Calcul de la salle…</string>
+    <string name="atmos_room_delete">Supprimer la salle</string>
+    <string name="room_database">Base de données de salles</string>
+    <string name="room_databases">Bases de données de salles</string>
+    <string name="room_unreachable">Impossible de joindre la base de données de salles.</string>
+    <string name="room_tap_to_use">toucher pour l’utiliser comme salle</string>
+    <string name="room_applied">Salle %1$s ajoutée</string>
+    <string name="room_unusable">Ce fichier ne contient aucune salle utilisable</string>
 </resources>

@@ -3550,4 +3550,25 @@
     <string name="whats_new_1952_atmos_decode_body">Tre aggiornamenti degli oggetti su quattro andavano persi, così gli oggetti si muovevano in ritardo e si mescolavano tra loro. Ora ogni aggiornamento viene letto, i canali surround tornano in fase e il rendering sugli altoparlanti non è più 3 dB più basso.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos mostra i suoi oggetti, non «6 ch»</string>
     <string name="whats_new_1952_atmos_objects_body">Uno stream Atmos è un core 5.1 con gli oggetti al suo interno. Il pannello Catena audio e la pagina Configurazione del renderer Atmos ora contano gli oggetti e dicono se stanno suonando, e la mappa della stanza mostra ciascuno dove lo colloca il mix.</string>
+    <string name="atmos_room_builtin">Stanza integrata</string>
+    <string name="atmos_room_custom">La mia stanza</string>
+    <string name="atmos_room_browse">Sfoglia database delle stanze</string>
+    <string name="atmos_room_width">Larghezza</string>
+    <string name="atmos_room_depth">Profondità</string>
+    <string name="atmos_room_height">Altezza</string>
+    <string name="atmos_room_damping">Assorbimento</string>
+    <string name="atmos_room_roundness">Arrotondamento</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · decadimento %4$s s</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · decadimento %3$s s</string>
+    <string name="atmos_room_unsized">Il file non indica le dimensioni della stanza · decadimento %1$s s</string>
+    <string name="atmos_room_modes">Modi più bassi della stanza: %1$s, %2$s e %3$s Hz</string>
+    <string name="atmos_room_working">Calcolo della stanza…</string>
+    <string name="atmos_room_delete">Elimina stanza</string>
+    <string name="room_database">Database delle stanze</string>
+    <string name="room_databases">Database delle stanze</string>
+    <string name="room_unreachable">Impossibile raggiungere il database delle stanze.</string>
+    <string name="room_tap_to_use">tocca per usare come stanza</string>
+    <string name="room_applied">Stanza %1$s aggiunta</string>
+    <string name="room_unusable">Questo file non contiene una stanza utilizzabile</string>
 </resources>

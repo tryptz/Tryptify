@@ -101,8 +101,27 @@ class AtmosRendererViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val channelDetector: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val atmosProcessor: tf.monochrome.android.audio.atmos.AtmosAudioProcessor,
+    private val roomStore: tf.monochrome.android.audio.atmos.AtmosRoomStore,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /** The measured or custom room in use, once it is ready; null for the built-in one or while it is made. */
+    val room: StateFlow<tf.monochrome.android.domain.model.AtmosRoom?> = roomStore.current
+
+    private val _measuredRooms = kotlinx.coroutines.flow.MutableStateFlow<List<java.io.File>>(emptyList())
+
+    /** The measured rooms that have been added (the room database, or a file). */
+    val measuredRooms: StateFlow<List<java.io.File>> = _measuredRooms
+
+    /** Deletes a measured room; the built-in one takes its place if it was the one in use. */
+    fun deleteRoom(file: java.io.File) {
+        roomStore.delete(file)
+        _measuredRooms.value = roomStore.measured()
+        val current = profile.value
+        if (current.roomFile == file.absolutePath) {
+            update(current.copy(roomKind = tf.monochrome.android.domain.model.RoomKind.BUILT_IN, roomFile = null))
+        }
+    }
 
     /**
      * Live SOFA apply outcome from the render pipeline (path → accepted).
@@ -187,6 +206,7 @@ class AtmosRendererViewModel @Inject constructor(
      * the profile and adds preset files behind this ViewModel's back.
      */
     fun refreshFromStorage() {
+        _measuredRooms.value = roomStore.measured()
         viewModelScope.launch { _profile.value = preferences.rendererProfile.first() }
         viewModelScope.launch(Dispatchers.IO) { rescanSofaDir() }
     }
@@ -373,6 +393,8 @@ fun AtmosRendererScreen(
     val detected by viewModel.channelState.collectAsStateWithLifecycle()
     val objects by viewModel.objects.collectAsStateWithLifecycle()
     val roomSpeakers by viewModel.speakers.collectAsStateWithLifecycle()
+    val room by viewModel.room.collectAsStateWithLifecycle()
+    val measuredRooms by viewModel.measuredRooms.collectAsStateWithLifecycle()
     val outcome by viewModel.outcome.collectAsStateWithLifecycle()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
@@ -457,10 +479,22 @@ fun AtmosRendererScreen(
                 val fromChannels = remember(d, roomLayout) {
                     d?.let { roomLevelsFromChannels(roomLayout, it.channelNames, it.peaksDb) }
                 }
+                // The room that is heard: the listener's own at once, a
+                // measured one when its file gives a size, else the built-in.
+                val shape = when (profile.roomKind) {
+                    tf.monochrome.android.domain.model.RoomKind.CUSTOM ->
+                        tf.monochrome.android.domain.model.RoomShape.of(profile.customRoom)
+                    tf.monochrome.android.domain.model.RoomKind.MEASURED ->
+                        room?.let { tf.monochrome.android.domain.model.RoomShape.of(it) }
+                    else -> null
+                } ?: tf.monochrome.android.domain.model.RoomShape.BUILT_IN
                 AtmosRoom3d(
                     layout = roomLayout,
                     speakers = roomSpeakers ?: fromChannels,
                     objects = objects,
+                    shape = shape,
+                    roomAmount = profile.roomAmount,
+                    decaySeconds = room?.decaySeconds?.takeIf { it > 0f } ?: BUILT_IN_ROOM_DECAY,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1.15f),
@@ -621,6 +655,14 @@ fun AtmosRendererScreen(
                     range = 0f..1f,
                     onValueChange = { viewModel.update(profile.copy(roomAmount = it)) },
                 )
+                AtmosRoomSection(
+                    profile = profile,
+                    room = room,
+                    measured = measuredRooms,
+                    onProfile = viewModel::update,
+                    onDelete = viewModel::deleteRoom,
+                    onBrowse = { navController.navigateTool(Screen.RoomDatabase) },
+                )
                 if (profile.hrtfProfileId == null) Text(
                     stringResource(R.string.atmos_using_the_built_in_mit_kemar_set_pick_a_sofa),
                     style = MaterialTheme.typography.bodySmall,
@@ -708,6 +750,9 @@ fun AtmosRendererScreen(
 
 // ── Building blocks ─────────────────────────────────────────────────────────
 
+/** The built-in room's tail, in seconds (VirtualRoom::kTailSeconds). */
+private const val BUILT_IN_ROOM_DECAY = 0.32f
+
 @Composable
 private fun SectionHeader(title: String) {
     Text(
@@ -720,7 +765,7 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun LabeledSlider(
+internal fun LabeledSlider(
     title: String,
     valueText: String,
     value: Float,

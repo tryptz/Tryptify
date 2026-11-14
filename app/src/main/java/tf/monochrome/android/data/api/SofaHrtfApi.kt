@@ -38,8 +38,18 @@ class SofaHrtfApi {
         const val BASE = "https://sofacoustics.org/data/database/"
         private val CACHE_TTL_MS = TimeUnit.HOURS.toMillis(24)
         private val HREF = Regex("""href="([^"?][^"]*)"""", RegexOption.IGNORE_CASE)
-        // A trailing Apache size token: digits with an optional K/M/G suffix.
-        private val SIZE = Regex("""\s\d+(\.\d+)?[KMG]?\s*$""")
+        // The index's size cell, after the date's: "1.1M", "861K", "12345".
+        private val SIZE = Regex("""<td[^>]*>\s*(\d+(?:\.\d+)?[KMG]?)\s*</td>""")
+
+        /**
+         * The folders of room impulse responses (BRIRs, SRIRs, DRIRs) in the
+         * collection, as sofaconventions.org lists them; every other folder
+         * holds HRTFs, directivities or headphone responses.
+         */
+        val ROOM_FOLDERS = setOf(
+            "6dof dataset", "bbc maida vale", "dechorate", "kaist-iem", "oldenburg", "pan-ar",
+            "room transition dataset", "sbsbrir", "thk", "tu-ilmenau (robot)", "tu-ilmenau (rooms)", "tuburo",
+        )
         // Useful HRTF sets for this renderer are a few MB; anything past this is a
         // dense-grid / BRIR set that would OOM the heap and downsample away anyway.
         private const val MAX_SOFA_BYTES = 48L * 1024 * 1024
@@ -74,7 +84,7 @@ class SofaHrtfApi {
                         folders += HrtfNode(decode(href.dropLast(1)), href, true)
                     href.endsWith(".sofa", ignoreCase = true) ->
                         files += HrtfNode(decode(href).removeSuffix(".sofa"), href, false,
-                            size = SIZE.find(line.substring(m.range.last))?.value?.trim())
+                            size = SIZE.findAll(line.substring(m.range.last)).lastOrNull()?.groupValues?.get(1))
                 }
             }
             folders.sortBy { it.display.lowercase() }

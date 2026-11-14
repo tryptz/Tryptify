@@ -3472,4 +3472,25 @@
     <string name="whats_new_1952_atmos_decode_body">Drei von vier Objekt-Updates eines Streams wurden übersehen, sodass Objekte sich verspätet bewegten und ineinander übersprachen. Jetzt wird jedes Update gelesen, die Surround-Kanäle werden in Phase zurückgedreht, und das Lautsprecher-Rendering ist nicht mehr 3 dB zu leise.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos zeigt seine Objekte, nicht „6 ch“</string>
     <string name="whats_new_1952_atmos_objects_body">Ein Atmos-Stream ist ein 5.1-Kern mit den Objekten darin. Das Audio-Pipeline-Blatt und die Seite Atmos-Renderer-Konfiguration zählen jetzt die Objekte und sagen, ob sie spielen, und die Raumkarte zeigt jedes dort, wo der Mix es platziert.</string>
+    <string name="atmos_room_builtin">Eingebauter Raum</string>
+    <string name="atmos_room_custom">Mein Raum</string>
+    <string name="atmos_room_browse">Raumdatenbank durchsuchen</string>
+    <string name="atmos_room_width">Breite</string>
+    <string name="atmos_room_depth">Tiefe</string>
+    <string name="atmos_room_height">Höhe</string>
+    <string name="atmos_room_damping">Dämpfung</string>
+    <string name="atmos_room_roundness">Rundung</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · Nachhall %4$s s</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · Nachhall %3$s s</string>
+    <string name="atmos_room_unsized">Die Datei nennt die Raumgröße nicht · Nachhall %1$s s</string>
+    <string name="atmos_room_modes">Tiefste Raummoden: %1$s, %2$s und %3$s Hz</string>
+    <string name="atmos_room_working">Raum wird berechnet …</string>
+    <string name="atmos_room_delete">Raum löschen</string>
+    <string name="room_database">Raumdatenbank</string>
+    <string name="room_databases">Raumdatenbanken</string>
+    <string name="room_unreachable">Raumdatenbank nicht erreichbar.</string>
+    <string name="room_tap_to_use">tippen, um ihn als Raum zu nutzen</string>
+    <string name="room_applied">Raum %1$s hinzugefügt</string>
+    <string name="room_unusable">Diese Datei enthält keinen nutzbaren Raum</string>
 </resources>

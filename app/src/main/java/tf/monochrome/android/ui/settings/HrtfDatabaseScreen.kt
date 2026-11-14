@@ -71,10 +71,15 @@ data class HrtfBrowseState(
     val status: UiText? = null,     // last apply result
 )
 
-@HiltViewModel
-class HrtfDatabaseViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val preferences: PreferencesManager,
+/**
+ * Walks the SOFA collection and takes a file from it: the HRTF database and
+ * the room database are the same browser over different folders, and differ
+ * in what they do with a file ([use]).
+ */
+abstract class SofaBrowseViewModel(
+    /** The root folders shown (lower case, as displayed); null for all of them. */
+    private val rootFolders: Set<String>?,
+    private val unreachable: Int,
 ) : ViewModel() {
 
     private val api = SofaHrtfApi()
@@ -91,10 +96,17 @@ class HrtfDatabaseViewModel @Inject constructor(
         _state.value = _state.value.copy(loading = true, error = null, query = "")
         viewModelScope.launch {
             val result = api.list(currentPath())
+            val listing = result.getOrNull()?.let { all ->
+                if (stack.isEmpty() && rootFolders != null) {
+                    all.copy(folders = all.folders.filter { it.display.lowercase() in rootFolders }, files = emptyList())
+                } else {
+                    all
+                }
+            }
             _state.value = _state.value.copy(
                 loading = false,
-                listing = result.getOrNull(),
-                error = result.exceptionOrNull()?.let { UiText.Res(R.string.hrtf_unreachable) },
+                listing = listing,
+                error = result.exceptionOrNull()?.let { UiText.Res(unreachable) },
                 location = if (stack.isEmpty()) null
                     else stack.joinToString(" / ") { it.display },
             )
@@ -111,7 +123,7 @@ class HrtfDatabaseViewModel @Inject constructor(
 
     fun setQuery(q: String) { _state.value = _state.value.copy(query = q) }
 
-    /** Downloads a .sofa, stores it in app storage and selects it as the HRTF. */
+    /** Downloads a .sofa and puts it to use; the status line says how that went. */
     fun apply(file: HrtfNode) {
         if (_state.value.busyFile != null) return
         _state.value = _state.value.copy(busyFile = file.href, status = null)
@@ -121,32 +133,93 @@ class HrtfDatabaseViewModel @Inject constructor(
             val bytes = result.getOrNull()
             val status = if (bytes == null || bytes.isEmpty()) {
                 result.exceptionOrNull()?.let { errorText(it, R.string.hrtf_download_failed) } ?: UiText.Res(R.string.hrtf_download_failed)
-            } else withContext(Dispatchers.IO) {
-                runCatching {
-                    val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
-                    val dest = File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
-                    dest.writeBytes(bytes)
-                    // Keep previous downloads — every stored .sofa remains a
-                    // selectable preset on the renderer page.
-                    val profile = preferences.rendererProfile.first()
-                    // Applying a downloaded HRTF is an explicit request to use
-                    // one — also re-enable the binauralizer if it was off.
-                    preferences.setRendererProfile(
-                        profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true)
-                    )
-                    UiText.Res(R.string.hrtf_applied, listOf(file.display, bytes.size / 1024))
-                }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
+            } else {
+                use(file, bytes)
             }
             _state.value = _state.value.copy(busyFile = null, status = status)
         }
     }
+
+    /** Takes the downloaded [bytes] of [file] into use; what to tell the listener. */
+    protected abstract suspend fun use(file: HrtfNode, bytes: ByteArray): UiText
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@HiltViewModel
+class HrtfDatabaseViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val preferences: PreferencesManager,
+) : SofaBrowseViewModel(rootFolders = null, unreachable = R.string.hrtf_unreachable) {
+
+    /** Stores the .sofa in app storage and selects it as the HRTF. */
+    override suspend fun use(file: HrtfNode, bytes: ByteArray): UiText = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
+            val dest = File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
+            dest.writeBytes(bytes)
+            // Keep previous downloads: every stored .sofa remains a
+            // selectable preset on the renderer page.
+            val profile = preferences.rendererProfile.first()
+            // Applying a downloaded HRTF is an explicit request to use
+            // one, so the binauralizer goes on as well if it was off.
+            preferences.setRendererProfile(
+                profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true)
+            )
+            UiText.Res(R.string.hrtf_applied, listOf(file.display, bytes.size / 1024))
+        }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
+    }
+}
+
+/**
+ * The room database: the collection's folders of room impulse responses.
+ * A file is read once into a room the render can play in
+ * ([tf.monochrome.android.audio.atmos.AtmosRoomStore.addMeasured]) and that
+ * room is selected; the SOFA itself is not kept.
+ */
+@HiltViewModel
+class RoomDatabaseViewModel @Inject constructor(
+    private val preferences: PreferencesManager,
+    private val rooms: tf.monochrome.android.audio.atmos.AtmosRoomStore,
+) : SofaBrowseViewModel(rootFolders = SofaHrtfApi.ROOM_FOLDERS, unreachable = R.string.room_unreachable) {
+
+    override suspend fun use(file: HrtfNode, bytes: ByteArray): UiText {
+        val room = rooms.addMeasured(file.display, bytes) ?: return UiText.Res(R.string.room_unusable)
+        val profile = preferences.rendererProfile.first()
+        preferences.setRendererProfile(
+            profile.copy(
+                roomKind = tf.monochrome.android.domain.model.RoomKind.MEASURED,
+                roomFile = room.absolutePath,
+            )
+        )
+        return UiText.Res(R.string.room_applied, listOf(file.display))
+    }
+}
+
 @Composable
 fun HrtfDatabaseScreen(
     navController: NavController,
     viewModel: HrtfDatabaseViewModel = hiltViewModel(),
+) = SofaBrowser(
+    navController, viewModel,
+    title = R.string.hrtf_hrtf_database, root = R.string.hrtf_databases, tapToUse = R.string.hrtf_tap_to_use,
+)
+
+@Composable
+fun RoomDatabaseScreen(
+    navController: NavController,
+    viewModel: RoomDatabaseViewModel = hiltViewModel(),
+) = SofaBrowser(
+    navController, viewModel,
+    title = R.string.room_database, root = R.string.room_databases, tapToUse = R.string.room_tap_to_use,
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SofaBrowser(
+    navController: NavController,
+    viewModel: SofaBrowseViewModel,
+    @androidx.annotation.StringRes title: Int,
+    @androidx.annotation.StringRes root: Int,
+    @androidx.annotation.StringRes tapToUse: Int,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -157,9 +230,9 @@ fun HrtfDatabaseScreen(
         TopAppBar(
             title = {
                 Column {
-                    Text(stringResource(R.string.hrtf_hrtf_database))
+                    Text(stringResource(title))
                     Text(
-                        state.location ?: stringResource(R.string.hrtf_databases),
+                        state.location ?: stringResource(root),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -233,7 +306,7 @@ fun HrtfDatabaseScreen(
                     ListItem(
                         headlineContent = { Text(file.display) },
                         supportingContent = {
-                            Text(listOfNotNull(file.size, stringResource(R.string.hrtf_tap_to_use)).joinToString(" · "))
+                            Text(listOfNotNull(file.size, stringResource(tapToUse)).joinToString(" · "))
                         },
                         leadingContent = { Icon(Icons.Filled.GraphicEq, contentDescription = null) },
                         trailingContent = {

@@ -3550,4 +3550,25 @@
     <string name="whats_new_1952_atmos_decode_body">Se perdían tres de cada cuatro actualizaciones de objetos de una transmisión, por lo que los objetos se movían tarde y se mezclaban entre sí. Ahora se lee cada actualización, los canales envolventes vuelven a su fase y el renderizado en altavoces ya no suena 3 dB más bajo.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos muestra sus objetos, no «6 ch»</string>
     <string name="whats_new_1952_atmos_objects_body">Una transmisión Atmos es un núcleo 5.1 con los objetos dentro. El panel Cadena de audio y la página Configuración del renderizador Atmos ahora cuentan los objetos y dicen si están sonando, y el mapa de la sala muestra cada uno donde lo coloca la mezcla.</string>
+    <string name="atmos_room_builtin">Sala integrada</string>
+    <string name="atmos_room_custom">Mi sala</string>
+    <string name="atmos_room_browse">Explorar la base de datos de salas</string>
+    <string name="atmos_room_width">Ancho</string>
+    <string name="atmos_room_depth">Fondo</string>
+    <string name="atmos_room_height">Altura</string>
+    <string name="atmos_room_damping">Absorción</string>
+    <string name="atmos_room_roundness">Redondez</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · caída %4$s s</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · caída %3$s s</string>
+    <string name="atmos_room_unsized">El archivo no indica el tamaño de la sala · caída %1$s s</string>
+    <string name="atmos_room_modes">Modos más bajos de la sala: %1$s, %2$s y %3$s Hz</string>
+    <string name="atmos_room_working">Calculando la sala…</string>
+    <string name="atmos_room_delete">Eliminar sala</string>
+    <string name="room_database">Base de datos de salas</string>
+    <string name="room_databases">Bases de datos de salas</string>
+    <string name="room_unreachable">No se pudo acceder a la base de datos de salas.</string>
+    <string name="room_tap_to_use">toca para usarla como sala</string>
+    <string name="room_applied">Sala %1$s añadida</string>
+    <string name="room_unusable">Este archivo no contiene ninguna sala utilizable</string>
 </resources>

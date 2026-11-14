@@ -3472,4 +3472,25 @@
     <string name="whats_new_1952_atmos_decode_body">Bir akıştaki nesne güncellemelerinin dörtte üçü kaçırılıyordu; bu yüzden nesneler geç hareket ediyor ve birbirine karışıyordu. Artık her güncelleme okunuyor, surround kanalları yeniden faza getiriliyor ve hoparlör işlemesi 3 dB kısık değil.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos “6 ch” değil, nesnelerini gösteriyor</string>
     <string name="whats_new_1952_atmos_objects_body">Bir Atmos akışı, nesneleri içinde taşıyan bir 5.1 çekirdektir. Ses işlem hattı sayfası ve Atmos oluşturucu yapılandırması sayfası artık nesneleri sayıyor ve çalınıp çalınmadıklarını söylüyor; oda haritası her birini miksin koyduğu yerde gösteriyor.</string>
+    <string name="atmos_room_builtin">Yerleşik oda</string>
+    <string name="atmos_room_custom">Odam</string>
+    <string name="atmos_room_browse">Oda veritabanına göz at</string>
+    <string name="atmos_room_width">Genişlik</string>
+    <string name="atmos_room_depth">Derinlik</string>
+    <string name="atmos_room_height">Yükseklik</string>
+    <string name="atmos_room_damping">Sönümleme</string>
+    <string name="atmos_room_roundness">Yuvarlaklık</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · sönüm %4$s sn</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · sönüm %3$s sn</string>
+    <string name="atmos_room_unsized">Dosya odanın boyutunu vermiyor · sönüm %1$s sn</string>
+    <string name="atmos_room_modes">En düşük oda modları: %1$s, %2$s ve %3$s Hz</string>
+    <string name="atmos_room_working">Oda hesaplanıyor…</string>
+    <string name="atmos_room_delete">Odayı sil</string>
+    <string name="room_database">Oda veritabanı</string>
+    <string name="room_databases">Oda veritabanları</string>
+    <string name="room_unreachable">Oda veritabanına ulaşılamadı.</string>
+    <string name="room_tap_to_use">oda olarak kullanmak için dokunun</string>
+    <string name="room_applied">%1$s odası eklendi</string>
+    <string name="room_unusable">Bu dosyada kullanılabilir bir oda yok</string>
 </resources>

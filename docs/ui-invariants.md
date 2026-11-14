@@ -3364,6 +3364,35 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   screen, and an LFE object gets no dot.
 - With real speakers chosen (`speakerRender`) the flat map of that layout
   stays: those are the speakers that play.
+- **The room drawn is the room heard** (`RoomShape`, `domain/model/AtmosRoom.kt`).
+  The built-in room is a trapezoid: its walls lean in to the layout's top
+  ring of speakers, a quarter in at the ceiling, because no sound comes from
+  wider up there. A measured room whose file gives its size (a shoebox) and
+  the listener's own room are drawn at their real proportions, with a line a
+  metre on the floor and their measurements written along the near edges; a
+  measured room with no size keeps the built-in shape and says so under the
+  Room controls (`atmos_room_unsized`), never an invented size. The listener's
+  head is where the room's listener sat, the loudspeakers it was measured
+  with are small diamonds, and the layout's 28 speakers stand on its walls
+  (`RoomShape.place`: a point beyond a leaning wall or a rounded corner is
+  brought in to it).
+- **Reflections are geometry, not decoration.** From the three loudest
+  speakers a ray runs to the listener, and each first reflection is drawn by
+  way of the spot where the mirror image says it turns
+  (`RoomShape.firstReflections`, held to that by `AtmosRoomTest`). Their
+  brightness is the speaker's level times the Room amount, so Room at 0%
+  shows the direct rays alone. The walls glow with the loudest speaker's
+  level, falling away over the room's own decay time (`Afterglow`): a long
+  room is seen to hold its sound. Do not animate anything there that the
+  audio is not doing.
+- **The Room controls** (`AtmosRoomSection`) sit under the Room amount:
+  Built-in room, each measured room that was added (with a delete), and My
+  room with its Width, Depth, Height and Damping and the room's lowest modes
+  (c / 2L, `atmos_room_modes`). The line under them is the room in use, with
+  its measured decay; while it is being worked out it reads
+  `atmos_room_working`. The room database is the HRTF browser over the
+  collection's room folders (`SofaBrowser`, `SofaHrtfApi.ROOM_FOLDERS`); a
+  file that holds no room says `room_unusable` and changes nothing.
 
 ## The visualizer has two compositions, and only one at a time
 

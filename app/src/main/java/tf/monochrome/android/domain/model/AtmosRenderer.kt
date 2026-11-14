@@ -283,6 +283,12 @@ data class RendererProfile(
     val hrtfProfileId: String? = null,
     /** How much of the virtual room's reflections and tail there is, 0..1. */
     val roomAmount: Float = DEFAULT_ROOM_AMOUNT,
+    /** Which room that is: the render's own, a measured one, or the listener's. */
+    val roomKind: RoomKind = RoomKind.BUILT_IN,
+    /** The measured room's file ([RoomKind.MEASURED]), as `AtmosRoomStore` keeps it. */
+    val roomFile: String? = null,
+    /** The room the listener describes ([RoomKind.CUSTOM]). */
+    val customRoom: CustomRoom = CustomRoom(),
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */
     val binauralStrength: Float = 1.0f,
     /** Virtualize height objects on layouts without physical top speakers. */
@@ -304,6 +310,7 @@ data class RendererProfile(
         return copy(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
             roomAmount = roomAmount.c(0f, 1f, DEFAULT_ROOM_AMOUNT),
+            customRoom = customRoom.clamped(),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
             downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),

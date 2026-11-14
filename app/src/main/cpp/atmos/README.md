@@ -246,6 +246,43 @@ low end is level, never more than 9 dB. Level to within 1.5 dB from 50 Hz up
 for the speakers ahead (`test_low_end`). On a real TIDAL stream the render's
 80-630 Hz is now within 1 dB of the stream's own stereo fold.
 
+## Measured rooms, and rooms worked out from their size (1.9.52)
+
+The virtual room's reflections and tail can be replaced by a room
+(`VirtualRoom::set_room_response`): a mono send of all the speaker feeds,
+high-passed at 60 Hz, through the room's two-ear response in a uniformly
+partitioned convolution (`render/measured_room.h`, `RoomConvolver`, 256-sample
+blocks, up to 2 s). The convolver is one block late and the prepared response
+starts one block after the measurement's direct sound, so reflections arrive
+when they did in the room; the first 5 ms of them go with the direct sound,
+which the render plays itself through its own ear filters.
+
+`prepare_room_response` makes any two-channel measurement fit: 48 kHz, the
+direct sound cut, the tail trimmed at -60 dB and at one and a half times the
+room's own decay (a measurement's noise floor never falls), one energy for
+every room (`kRoomResponseEnergy`, set so that Room at 100% adds what the
+built-in room adds: -7.1 dB against the direct sound for both in
+`measured_room_test`). `render/room_sofa.cpp` reads the room databases'
+SOFA conventions through libmysofa's raw loader (its HRTF path refuses
+them) and a shoebox's corners, listener and loudspeakers. Tried on files
+from dEchorate, Oldenburg, TH Köln, TU Berlin, TU Ilmenau, BBC Maida Vale and
+PAN-AR; a file whose HDF5 header libmysofa cannot follow (two PAN-AR files)
+is refused, as is an anechoic one.
+
+`render/box_room.h` works a box's response out by the image-source model
+(Allen and Berkley), followed for as long as 1.5 million images allow and
+then by noise falling at the room's Eyring rate. The lattice of images is
+what gives a room its modes; `measured_room_test` finds the depth mode of a
+5 x 6 x 2.7 m room 7 dB over a frequency half way to its second. Nothing in
+this has been checked by ear here.
+
+The idea of a trapezoidal room and panning domain (walls that lean in, so
+what is high is not wide), and the name 15.1.12, are Poorna Srikar
+Maremanda's (iammps.com, "Beyond the Sphere", CC BY 4.0). The geometry and
+code here are this project's own; that site publishes no coordinates. Its
+author asks to be contacted before commercial software implementing the
+approach is released, and states patent and design applications.
+
 ## The stage ahead sounded hollow (fixed 1.9.52)
 
 Sound panned between the front pair reaches each ear from both speakers, a

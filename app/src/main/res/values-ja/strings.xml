@@ -3394,4 +3394,25 @@
     <string name="whats_new_1952_atmos_decode_body">これまでストリームのオブジェクト更新の 4 分の 3 が見落とされ、オブジェクトの動きが遅れ、互いににじんでいました。すべての更新を読み取るようになり、サラウンドチャンネルの位相を戻し、スピーカーレンダリングが 3 dB 小さくなることもなくなりました。</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos は「6 ch」ではなくオブジェクトを表示</string>
     <string name="whats_new_1952_atmos_objects_body">Atmos ストリームは、オブジェクトを内包した 5.1 コアです。オーディオパイプラインのシートとAtmos レンダラーの設定のページがオブジェクトを数え、再生されているかどうかを示すようになり、ルームマップには各オブジェクトがミックスの置いた位置に表示されます。</string>
+    <string name="atmos_room_builtin">内蔵の部屋</string>
+    <string name="atmos_room_custom">自分の部屋</string>
+    <string name="atmos_room_browse">部屋データベースを見る</string>
+    <string name="atmos_room_width">幅</string>
+    <string name="atmos_room_depth">奥行き</string>
+    <string name="atmos_room_height">高さ</string>
+    <string name="atmos_room_damping">吸音</string>
+    <string name="atmos_room_roundness">丸み</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m・残響 %4$s 秒</string>
+    <string name="atmos_room_plan">%1$s × %2$s m・残響 %3$s 秒</string>
+    <string name="atmos_room_unsized">ファイルに部屋の寸法がありません・残響 %1$s 秒</string>
+    <string name="atmos_room_modes">最低の定在波：%1$s、%2$s、%3$s Hz</string>
+    <string name="atmos_room_working">部屋を計算中…</string>
+    <string name="atmos_room_delete">部屋を削除</string>
+    <string name="room_database">部屋データベース</string>
+    <string name="room_databases">部屋データベース</string>
+    <string name="room_unreachable">部屋データベースに接続できませんでした。</string>
+    <string name="room_tap_to_use">タップして部屋として使用</string>
+    <string name="room_applied">部屋 %1$s を追加しました</string>
+    <string name="room_unusable">このファイルには使用できる部屋がありません</string>
 </resources>

@@ -3475,4 +3475,25 @@
     <string name="whats_new_1952_atmos_decode_body">Three in four of a stream\'s object updates were being missed, so objects moved late and bled into each other. Every update is read now, the surround channels are turned back into phase, and the speaker render is no longer 3 dB quiet.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos shows its objects, not “6 ch”</string>
     <string name="whats_new_1952_atmos_objects_body">An Atmos stream is a 5.1 core with the objects inside it. The Audio pipeline sheet and the Atmos Renderer Configuration page now count the objects and say whether they are playing, and the room map shows each one where the mix puts it.</string>
+    <string name="atmos_room_builtin">Built-in room</string>
+    <string name="atmos_room_custom">My room</string>
+    <string name="atmos_room_browse">Browse room database</string>
+    <string name="atmos_room_width">Width</string>
+    <string name="atmos_room_depth">Depth</string>
+    <string name="atmos_room_height">Height</string>
+    <string name="atmos_room_damping">Damping</string>
+    <string name="atmos_room_roundness">Roundness</string>
+    <string name="atmos_room_metres">%1$s m</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s m · decay %4$s s</string>
+    <string name="atmos_room_plan">%1$s × %2$s m · decay %3$s s</string>
+    <string name="atmos_room_unsized">The file does not give the room\'s size · decay %1$s s</string>
+    <string name="atmos_room_modes">Lowest room modes: %1$s, %2$s and %3$s Hz</string>
+    <string name="atmos_room_working">Working out the room…</string>
+    <string name="atmos_room_delete">Delete room</string>
+    <string name="room_database">Room database</string>
+    <string name="room_databases">Room databases</string>
+    <string name="room_unreachable">Couldn\'t reach the room database.</string>
+    <string name="room_tap_to_use">tap to use as the room</string>
+    <string name="room_applied">Room %1$s added</string>
+    <string name="room_unusable">This file holds no room the render can use</string>
 </resources>

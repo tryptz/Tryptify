@@ -3394,4 +3394,25 @@
     <string name="whats_new_1952_atmos_decode_body">此前流中四分之三的对象更新被漏掉，导致对象移动滞后并相互串音。现在每次更新都会读取，环绕声道的相位被转回，扬声器渲染也不再低 3 dB。</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos 显示它的对象，而不是“6 ch”</string>
     <string name="whats_new_1952_atmos_objects_body">Atmos 流是一个内含对象的 5.1 核心。音频处理链面板和Atmos 渲染器配置页面现在会统计对象并说明它们是否在播放，房间图会在混音放置的位置显示每个对象。</string>
+    <string name="atmos_room_builtin">内置房间</string>
+    <string name="atmos_room_custom">我的房间</string>
+    <string name="atmos_room_browse">浏览房间数据库</string>
+    <string name="atmos_room_width">宽度</string>
+    <string name="atmos_room_depth">进深</string>
+    <string name="atmos_room_height">高度</string>
+    <string name="atmos_room_damping">吸音</string>
+    <string name="atmos_room_roundness">圆角</string>
+    <string name="atmos_room_metres">%1$s 米</string>
+    <string name="atmos_room_size">%1$s × %2$s × %3$s 米 · 衰减 %4$s 秒</string>
+    <string name="atmos_room_plan">%1$s × %2$s 米 · 衰减 %3$s 秒</string>
+    <string name="atmos_room_unsized">文件未提供房间尺寸 · 衰减 %1$s 秒</string>
+    <string name="atmos_room_modes">最低房间模式：%1$s、%2$s 和 %3$s Hz</string>
+    <string name="atmos_room_working">正在计算房间…</string>
+    <string name="atmos_room_delete">删除房间</string>
+    <string name="room_database">房间数据库</string>
+    <string name="room_databases">房间数据库</string>
+    <string name="room_unreachable">无法连接房间数据库。</string>
+    <string name="room_tap_to_use">点按以用作房间</string>
+    <string name="room_applied">已添加房间 %1$s</string>
+    <string name="room_unusable">此文件不包含可用的房间</string>
 </resources>

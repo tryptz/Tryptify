@@ -51,6 +51,7 @@ import javax.inject.Singleton
 class AtmosAudioProcessor @Inject constructor(
     private val frameBuffer: AtmosFrameBuffer,
     preferences: PreferencesManager,
+    private val roomStore: AtmosRoomStore,
 ) : AudioProcessor {
 
     // The user's settings from the Atmos Renderer Configuration screen. Kept in a
@@ -83,6 +84,7 @@ class AtmosAudioProcessor @Inject constructor(
         )
         profile = updated
         refreshSofa(updated.hrtfProfileId)
+        refreshRoom(updated)
         pushParams()
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -406,6 +408,43 @@ class AtmosAudioProcessor @Inject constructor(
             .launchIn(scope)
     }
 
+    // The room the headphone render plays in, made ready by the store off
+    // this thread: null is the render's own. [roomApplied] is false while the
+    // live pipeline does not yet have it (a change, or a fresh pipeline).
+    @Volatile private var room: tf.monochrome.android.domain.model.AtmosRoom? = null
+    @Volatile private var roomApplied = false
+    private var roomJob: kotlinx.coroutines.Job? = null
+
+    /** Has the store make [profile]'s room ready, then hands it to the pipeline. */
+    private fun refreshRoom(profile: RendererProfile) {
+        roomJob?.cancel()
+        roomJob = scope.launch {
+            // A room being set by its sliders is worked out when they rest.
+            if (profile.roomKind == tf.monochrome.android.domain.model.RoomKind.CUSTOM) kotlinx.coroutines.delay(300)
+            val ready = roomStore.resolve(profile)
+            if (ready === room && roomApplied) return@launch
+            room = ready
+            roomApplied = false
+            applyRoom()
+        }
+    }
+
+    /**
+     * Gives the pipeline the room (or its own back); once per change. It is
+     * called from the store's thread as well as the player's, so it holds
+     * [pipelineLock] against the pipeline being replaced under it.
+     */
+    private fun applyRoom() = synchronized(pipelineLock) {
+        val p = pipeline
+        if (p == 0L || roomApplied) return@synchronized
+        val ok = AtmosNative.nativeSetRoom(p, room?.packed) == 1
+        android.util.Log.i(TAG, "room -> ${room?.let { "decay ${it.decaySeconds}s, sized=${it.sized}" } ?: "built-in"} (${if (ok) "set" else "REFUSED"})")
+        roomApplied = true
+    }
+
+    /** Held while the native pipeline is made, destroyed, or given a room from another thread. */
+    private val pipelineLock = Any()
+
     /** Reads the selected .sofa off the audio thread; caches its bytes. */
     private fun refreshSofa(path: String?) {
         if (path == loadedSofaPath) return
@@ -480,6 +519,7 @@ class AtmosAudioProcessor @Inject constructor(
             cur.dialogNormalization,
         )
         applySofa(p)
+        applyRoom()
         android.util.Log.i(
             TAG,
             "params -> mode=$mode layout=${activeLayout.label} downmix=$downmix " +
@@ -784,9 +824,12 @@ class AtmosAudioProcessor @Inject constructor(
         val layout = pendingLayout
         activeLayout = layout
         if (formatChanged) {
-            if (pipeline != 0L) AtmosNative.nativePipelineDestroy(pipeline)
-            pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
-            sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
+            synchronized(pipelineLock) {
+                if (pipeline != 0L) AtmosNative.nativePipelineDestroy(pipeline)
+                pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
+                sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
+                roomApplied = false  // and its own room
+            }
         } else if (pipeline != 0L) {
             AtmosNative.nativePipelineFlush(pipeline)
         }
@@ -803,7 +846,9 @@ class AtmosAudioProcessor @Inject constructor(
 
     override fun reset() {
         flush()
-        if (pipeline != 0L) { AtmosNative.nativePipelineDestroy(pipeline); pipeline = 0L }
+        synchronized(pipelineLock) {
+            if (pipeline != 0L) { AtmosNative.nativePipelineDestroy(pipeline); pipeline = 0L }
+        }
         pendingFormat = AudioFormat.NOT_SET
         inputFormat = AudioFormat.NOT_SET
         pendingLayout = ChannelLayout.STEREO
