@@ -3504,12 +3504,16 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   readings stops. The speakers still light as they play and the objects
   stay where the mix puts them: the room is still the channel map. It is
   the page's alone and changes nothing that is heard.
-- **Scrolled past, the room stays as a picture at the top of the page,
-  centred** (`RoomThumbnail`, `ROOM_THUMBNAIL_SHARE` 0.82 of the page's
-  width; the owner asked for it, to watch the room while setting what is
-  further down the page. It began 156 dp wide in the top right corner, the
-  size of a video playing on over another app, and the owner asked for it
-  almost as big as the room and in the middle). It comes when none of the room
+- **Scrolled past, the room stays as a small picture in the page's top
+  right corner** (`RoomThumbnail`, `ROOM_THUMBNAIL_WIDTH` 156 dp, the size
+  of a video playing on over another app; the owner asked for it, to watch
+  the room while setting what is further down the page. For a day it was
+  0.82 of the page's width and centred, at the owner's asking, and then the
+  owner asked for it small and in the corner again, and lighter). **The
+  sound is not drawn in it**, whatever "Show sound in the room" says: no
+  grain, no rays, and no clock, so it is drawn when the meter has something
+  new and not thirty times a second, and no pixel walks the room for grain.
+  Its speakers still light and its objects still move. It comes when none of the room
   is on screen and goes when any of it is, and a tap scrolls back up to
   the room. Only one of the two is ever drawn: the room's place in the
   page is kept empty while the picture shows, or the shader would run
@@ -3517,8 +3521,8 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `compact`: no object numbers, no measurements, and a drag does not turn
   it. It is a picture on plain surface colour with an outline, not a
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
-  see-through thing over it. It covers the rows under it, most of their
-  width; scrolling moves them out from under it.
+  see-through thing over it. It covers a corner of the rows under it;
+  scrolling moves them out from under it.
 - **The ear tuner** (`AtmosEarTuner.kt`, under SOFA presets while the
   binaural render is on or automatic) is one folding section, closed until
   opened, saying "On" or "As the head" beside its title. Its design is the

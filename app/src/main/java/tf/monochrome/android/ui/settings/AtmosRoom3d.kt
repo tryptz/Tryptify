@@ -152,8 +152,11 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * With [sound] off the sound is not drawn: no grain and no rays, and nothing
  * moves between the meter's readings; the speakers still light as they play
  * and the objects are where the mix puts them. [compact] is the room as a
- * small picture: no numbers, no measurements, and it is not turned by a
- * drag. [yaw] is how far it is turned, the page's to keep when the room is
+ * small picture: no numbers, no measurements, it is not turned by a drag,
+ * and the sound is not drawn in it either. At that size the grain is a few
+ * pixels of haze, and it is what costs: every pixel walks the room's cells
+ * for it, thirty times a second. Without it the picture is drawn only when
+ * the meter has something new, and each pixel stops at the walls. [yaw] is how far it is turned, the page's to keep when the room is
  * drawn in two places.
  */
 @Composable
@@ -170,7 +173,7 @@ internal fun AtmosRoom3d(
     yaw: MutableFloatState = remember { mutableFloatStateOf(RoomCamera.START_YAW) },
 ) {
     val shader = rememberRoomShader()
-    val options = RoomViewOptions(sound, compact, yaw)
+    val options = RoomViewOptions(sound && !compact, compact, yaw)
     if (shader != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         AtmosRoomGpu(shader, layout, speakers, objects, shape, roomAmount, decaySeconds, options, modifier)
     } else {
