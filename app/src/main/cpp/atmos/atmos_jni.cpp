@@ -147,6 +147,48 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeClearSofa(
   if (pipe != nullptr) pipe->clear_sofa();
 }
 
+// Reads a .sofa where it is on disk into a packed HRTF set
+// (render/sofa_set.h): its table, and its own measurement for each speaker of
+// the 15.1.12 room. Null when the file is not an HRTF set. A finely measured
+// file takes seconds and hundreds of megabytes while it is open: called once
+// for a file, off every playback thread, and the answer kept.
+JNIEXPORT jfloatArray JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePrepareSofa(
+    JNIEnv* env, jclass /*clazz*/, jstring path) {
+  if (path == nullptr) return nullptr;
+  const char* file = env->GetStringUTFChars(path, nullptr);
+  if (file == nullptr) return nullptr;
+  std::vector<float> directions;
+  for (const tf::atmos::SpeakerDef& s : tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12)) {
+    if (tf::atmos::is_lfe(s)) continue;
+    directions.push_back(s.azimuth);
+    directions.push_back(s.elevation);
+  }
+  std::vector<float> packed;
+  const bool ok = tf::atmos::load_sofa_set(file, directions.data(), static_cast<int>(directions.size() / 2), packed);
+  env->ReleaseStringUTFChars(path, file);
+  if (!ok || packed.empty()) return nullptr;
+  jfloatArray out = env->NewFloatArray(static_cast<jsize>(packed.size()));
+  if (out != nullptr) env->SetFloatArrayRegion(out, 0, static_cast<jsize>(packed.size()), packed.data());
+  return out;
+}
+
+// Installs a set nativePrepareSofa made. Returns how many of the room's
+// speakers now play the set's own measurement, or -1 when `packed` is not a
+// set (the HRTF in use is then left as it is).
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetSofa(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jfloatArray packed) {
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr || packed == nullptr) return -1;
+  const jsize n = env->GetArrayLength(packed);
+  if (n <= 0) return -1;
+  std::vector<float> buf(static_cast<size_t>(n));
+  env->GetFloatArrayRegion(packed, 0, n, buf.data());
+  if (!pipe->set_sofa_set(buf.data(), buf.size())) return -1;
+  return pipe->exact_speakers();
+}
+
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
 // `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
 // floats when the pipeline produced output (the objects, or the bed while

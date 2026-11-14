@@ -36,7 +36,7 @@ dummy-head microphone,"* MIT Media Lab Perceptual Computing Technical Report
 The baked table is the **default** HRTF and is embedded with no runtime
 dependency. libmysofa (BSD-3-Clause) is **also vendored at
 `third_party/libmysofa`** and linked into the Atmos JNI lib so the user can load
-their own `.sofa` HRTF at runtime (`sofa_loader.cpp` → `nativeLoadSofa`), which
+their own `.sofa` HRTF at runtime (`sofa_loader.cpp` → `nativePrepareSofa`), which
 reproduces the same onset-aligned grid in memory. A device that never loads a
 SOFA pulls in that code but never runs it, and the header-only renderer keeps no
 libmysofa dependency of its own.

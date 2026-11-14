@@ -1400,6 +1400,7 @@
     <string name="hrtf_databases">HRTF データベース</string>
     <string name="hrtf_unreachable">HRTF データベースに接続できませんでした。</string>
     <string name="hrtf_download_failed">ダウンロードに失敗しました</string>
+    <string name="hrtf_downloading">%1$s をダウンロード中：%2$d / %3$d MB</string>
     <string name="hrtf_applied">%1$s を適用しました（%2$d KB）</string>
     <string name="hrtf_save_failed">HRTF を保存できませんでした</string>
     <string name="hrtf_tap_to_use">タップして HRTF として使用</string>

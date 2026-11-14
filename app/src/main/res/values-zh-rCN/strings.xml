@@ -1400,6 +1400,7 @@
     <string name="hrtf_databases">HRTF 数据库</string>
     <string name="hrtf_unreachable">无法连接 HRTF 数据库。</string>
     <string name="hrtf_download_failed">下载失败</string>
+    <string name="hrtf_downloading">正在下载 %1$s：%2$d / %3$d MB</string>
     <string name="hrtf_applied">已应用 %1$s（%2$d KB）</string>
     <string name="hrtf_save_failed">无法保存 HRTF</string>
     <string name="hrtf_tap_to_use">点按以用作 HRTF</string>

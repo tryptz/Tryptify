@@ -3523,6 +3523,15 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
   see-through thing over it. It covers a corner of the rows under it;
   scrolling moves them out from under it.
+- **An HRTF set downloads to a file and says how far it is** (the HRTF
+  database, `HrtfDatabaseViewModel.take`, `SofaHrtfApi.downloadTo`): the
+  status line counts megabytes while a large one comes in, and the set is in
+  use only when the whole file is there. Never fetch one through memory or
+  put the 48 MB cap back on it: the sets over it are the finely measured
+  ones, and those are the ones worth having. The room database still reads
+  through memory, with its cap. A set that is being read for the first time
+  (seconds, for one measured every degree) shows as selected, then loaded;
+  the render keeps the head it had until then.
 - **The ear tuner** (`AtmosEarTuner.kt`, under SOFA presets while the
   binaural render is on or automatic) is one folding section, closed until
   opened, saying "On" or "As the head" beside its title. Its design is the

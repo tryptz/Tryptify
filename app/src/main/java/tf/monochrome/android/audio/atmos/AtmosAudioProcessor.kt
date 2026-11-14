@@ -52,6 +52,7 @@ class AtmosAudioProcessor @Inject constructor(
     private val frameBuffer: AtmosFrameBuffer,
     preferences: PreferencesManager,
     private val roomStore: AtmosRoomStore,
+    private val sofaStore: AtmosSofaStore,
 ) : AudioProcessor {
 
     // The user's settings from the Atmos Renderer Configuration screen. Kept in a
@@ -91,12 +92,14 @@ class AtmosAudioProcessor @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Custom HRTF (a user .sofa copied into app storage; its path is the
-    // profile's hrtfProfileId). The bytes are read here on the Default
-    // dispatcher — never on the audio thread — and applied to the native
-    // pipeline via nativeLoadSofa. null path = the baked default HRTF.
-    @Volatile private var sofaBytes: ByteArray? = null
-    private var loadedSofaPath: String? = null
-    // False when the live pipeline does not yet reflect [sofaBytes] — set on a
+    // profile's hrtfProfileId). The file is read by [AtmosSofaStore] on the
+    // Default dispatcher, never on the audio thread, into the set the native
+    // pipeline is given (nativeSetSofa). null path = the baked default HRTF.
+    @Volatile private var sofaSet: FloatArray? = null
+    @Volatile private var sofaFailed = false
+    @Volatile private var loadedSofaPath: String? = null
+    private var sofaJob: kotlinx.coroutines.Job? = null
+    // False when the live pipeline does not yet reflect [sofaSet] — set on a
     // SOFA change or a fresh pipeline, cleared once (re)applied.
     @Volatile private var sofaApplied = false
 
@@ -494,29 +497,52 @@ class AtmosAudioProcessor @Inject constructor(
     /** Held while the native pipeline is made, destroyed, or given a room from another thread. */
     private val pipelineLock = Any()
 
-    /** Reads the selected .sofa off the audio thread; caches its bytes. */
+    /**
+     * Has the store read the selected .sofa (a moment for most, seconds for
+     * one measured every degree) and gives the pipeline its set. Until it is
+     * ready the pipeline keeps the HRTF it has.
+     */
     private fun refreshSofa(path: String?) {
         if (path == loadedSofaPath) return
         loadedSofaPath = path
-        sofaBytes = path?.let { runCatching { java.io.File(it).readBytes() }.getOrNull() }
-        sofaApplied = false
-        _sofaStatus.value = when {
-            path == null -> null                    // built-in HRTF selected
-            sofaBytes == null -> path to false      // unreadable file = rejected
-            else -> null                            // pending until applied
+        sofaJob?.cancel()
+        if (path == null) {
+            sofaSet = null
+            sofaFailed = false
+            sofaApplied = false
+            _sofaStatus.value = null                // built-in HRTF selected
+            return
+        }
+        _sofaStatus.value = null                    // pending until applied
+        sofaFailed = false
+        sofaJob = scope.launch {
+            val set = sofaStore.prepared(path)
+            if (loadedSofaPath != path) return@launch
+            sofaSet = set
+            sofaFailed = set == null
+            sofaApplied = false
+            if (set == null) _sofaStatus.value = path to false  // unreadable file = rejected
+            synchronized(pipelineLock) { applySofa(pipeline) }
         }
     }
 
-    /** Loads the cached SOFA into [p] (or reverts to baked); once per change. */
+    /** Gives [p] the set that was read (or the baked one back); once per change. */
     private fun applySofa(p: Long) {
         if (p == 0L || sofaApplied) return
-        val bytes = sofaBytes
-        if (bytes != null) {
-            val ok = AtmosNative.nativeLoadSofa(p, bytes) == 1
-            android.util.Log.i(TAG, "custom HRTF ${if (ok) "loaded" else "REJECTED"} (${bytes.size}B)")
-            loadedSofaPath?.let { _sofaStatus.value = it to ok }
-        } else {
-            AtmosNative.nativeClearSofa(p)
+        val set = sofaSet
+        when {
+            set != null -> {
+                val exact = AtmosNative.nativeSetSofa(p, set)
+                android.util.Log.i(
+                    TAG,
+                    "custom HRTF ${if (exact >= 0) "loaded: $exact of the room's speakers play its own measurement" else "REJECTED"}",
+                )
+                loadedSofaPath?.let { _sofaStatus.value = it to (exact >= 0) }
+            }
+            // No file chosen, or one that could not be read: the built-in set.
+            loadedSofaPath == null || sofaFailed -> AtmosNative.nativeClearSofa(p)
+            // Still being read: what the pipeline has stays until it is.
+            else -> return
         }
         sofaApplied = true
     }
@@ -582,7 +608,7 @@ class AtmosAudioProcessor @Inject constructor(
                 "drc=${cur.drc} dialnorm=${cur.dialogNormalization} " +
                 "hrtf=${when {
                     !cur.hrtfEnabled -> "off (AutoEQ only)"
-                    sofaBytes != null -> "custom"
+                    sofaSet != null -> "custom"
                     else -> "built-in"
                 }} room=15.1.12 @ ${cur.roomAmount}",
         )

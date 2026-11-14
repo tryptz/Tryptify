@@ -1442,6 +1442,7 @@
     <string name="hrtf_databases">HRTF-Datenbanken</string>
     <string name="hrtf_unreachable">HRTF-Datenbank nicht erreichbar.</string>
     <string name="hrtf_download_failed">Download fehlgeschlagen</string>
+    <string name="hrtf_downloading">%1$s wird geladen: %2$d von %3$d MB</string>
     <string name="hrtf_applied">%1$s angewendet (%2$d KB)</string>
     <string name="hrtf_save_failed">HRTF konnte nicht gespeichert werden</string>
     <string name="hrtf_tap_to_use">tippen, um sie als HRTF zu nutzen</string>

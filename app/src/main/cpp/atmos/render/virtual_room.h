@@ -187,6 +187,7 @@ class VirtualRoom {
     {
       std::lock_guard<std::mutex> lock(load_mutex_);
       src_baked_ = true;
+      src_exact_.clear();
       build(sets_[0], &kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
     }
     active_.store(next_version(active_.load(std::memory_order_acquire)),
@@ -228,7 +229,43 @@ class VirtualRoom {
     src_delay_.assign(delay.begin(), delay.begin() + points);
     src_dfe_ = dfe;
     src_baked_ = false;
+    src_exact_.clear();
     publish(src_data_.data(), src_delay_.data(), src_dfe_.data());
+  }
+
+  // The same, with the set's own HRIR pair for each speaker of the room
+  // where it has one (sofa_set.h says why): `exact_taps` is
+  // [speaker][ear][kHrirTaps] and `exact_delays` [speaker][ear], in the
+  // room's own order, and `has` says which speakers they are there for. The
+  // others, and everything worked out over all directions, use the table.
+  void set_hrir(const std::vector<float>& data, const std::vector<float>& delay,
+                const std::vector<float>& exact_taps, const std::vector<float>& exact_delays,
+                const std::vector<char>& has) {
+    const size_t points = static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2;
+    const size_t n = static_cast<size_t>(count_);
+    if (count_ == 0 || data.size() < points * kHrirTaps || delay.size() < points) return;
+    if (exact_taps.size() < n * 2 * kHrirTaps || exact_delays.size() < n * 2 || has.size() < n) {
+      set_hrir(data, delay);
+      return;
+    }
+    std::vector<float> dfe(kDfeTaps, 0.0f);
+    design_dfe(data.data(), dfe.data());
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    src_data_.assign(data.begin(), data.begin() + points * kHrirTaps);
+    src_delay_.assign(delay.begin(), delay.begin() + points);
+    src_dfe_ = dfe;
+    src_baked_ = false;
+    src_exact_.assign(has.begin(), has.begin() + n);
+    src_exact_taps_.assign(exact_taps.begin(), exact_taps.begin() + n * 2 * kHrirTaps);
+    src_exact_delay_.assign(exact_delays.begin(), exact_delays.begin() + n * 2);
+    publish(src_data_.data(), src_delay_.data(), src_dfe_.data());
+  }
+  // How many of the room's speakers play the set's own measurement.
+  int exact_speakers() const {
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    int n = 0;
+    for (char c : src_exact_) n += c ? 1 : 0;
+    return n;
   }
 
   // The listener's ears on top of the set in use (EarTune). Builds the
@@ -253,6 +290,17 @@ class VirtualRoom {
   void ear_curve(const EarTune& tune, float az_deg, float el_deg, int ear,
                  const float* hz, int n, float* db) const {
     std::lock_guard<std::mutex> lock(load_mutex_);
+    // A speaker's own direction is drawn as it plays: from its exact pair.
+    for (int s = 0; s < count_; ++s) {
+      if (speakers_[s].lfe || !exact(s)) continue;
+      const float da = speakers_[s].azimuth - az_deg, de = speakers_[s].elevation - el_deg;
+      if (da > -0.01f && da < 0.01f && de > -0.01f && de < 0.01f) {
+        const size_t at = (static_cast<size_t>(s) * 2 + ear);
+        curve_of_pair(&src_exact_taps_[at * kHrirTaps], src_exact_delay_[at], tune.clamped(), sample_rate_,
+                      el_deg, hz, n, db);
+        return;
+      }
+    }
     curve_of(source_data(), source_delay(), tune.clamped(), sample_rate_, az_deg, el_deg, ear, hz, n, db);
   }
   // The same of the baked set, for when nothing is playing.
@@ -284,6 +332,7 @@ class VirtualRoom {
     if (count_ == 0) return;
     std::lock_guard<std::mutex> lock(load_mutex_);
     src_baked_ = true;
+    src_exact_.clear();
     publish(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
   }
 
@@ -359,6 +408,13 @@ class VirtualRoom {
     lookup(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], speakers_[s].azimuth,
            speakers_[s].elevation, hl, hr, dl, dr);
     delayed_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, ir);
+  }
+
+  // The table's own pair for a direction, blended from its neighbours, and
+  // its two onset delays: what a speaker without a pair of its own plays.
+  static void table_pair(const float* data, const float* delay, float az_deg, float el_deg,
+                         float* hl, float* hr, float& dl, float& dr) {
+    lookup(data, delay, az_deg, el_deg, hl, hr, dl, dr);
   }
 
   // ── What a set needs put right ───────────────────────────────────────────
@@ -543,9 +599,19 @@ class VirtualRoom {
         for (int k = 0; k < 2 * kBins; ++k) spec[k] = fft::Complex(0.0f, 0.0f);
         continue;
       }
-      lookup(data, delay, speakers_[s].azimuth, speakers_[s].elevation, hl, hr, dl, dr);
+      const float* pair[2] = {hl, hr};
+      if (exact(s)) {
+        // The set's own measurement for this speaker, not a blend of the table's.
+        const size_t at = static_cast<size_t>(s) * 2;
+        pair[0] = &src_exact_taps_[at * kHrirTaps];
+        pair[1] = &src_exact_taps_[(at + 1) * kHrirTaps];
+        dl = src_exact_delay_[at];
+        dr = src_exact_delay_[at + 1];
+      } else {
+        lookup(data, delay, speakers_[s].azimuth, speakers_[s].elevation, hl, hr, dl, dr);
+      }
       for (int ear = 0; ear < 2; ++ear) {
-        tuned_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, tune_, sample_rate_,
+        tuned_filter(pair[ear], ear == 0 ? dl : dr, tune_, sample_rate_,
                      speakers_[s].elevation, ir);
         for (int k = 0; k < kFilterLen; ++k) ir[k] *= scale;
         fft.forward(ir, spec + ear * kBins);
@@ -638,13 +704,21 @@ class VirtualRoom {
   static void curve_of(const float* data, const float* delay, const EarTune& tune, int sample_rate,
                        float az_deg, float el_deg, int ear, const float* hz, int n, float* db) {
     float hl[kHrirTaps], hr[kHrirTaps], dl, dr;
-    float ir[kFft];
     lookup(data, delay, az_deg, el_deg, hl, hr, dl, dr);
-    tuned_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, tune, sample_rate, el_deg, ir);
+    curve_of_pair(ear == 0 ? hl : hr, ear == 0 ? dl : dr, tune, sample_rate, el_deg, hz, n, db);
+  }
+  static void curve_of_pair(const float* h, float delay, const EarTune& tune, int sample_rate,
+                            float el_deg, const float* hz, int n, float* db) {
+    float ir[kFft];
+    tuned_filter(h, delay, tune, sample_rate, el_deg, ir);
     for (int i = 0; i < n; ++i) {
       const double w = 2.0 * kPiD * hz[i] / sample_rate;
       db[i] = static_cast<float>(10.0 * std::log10(tone_power(ir, kFilterLen, w) + 1e-12));
     }
+  }
+  // Whether speaker `s` has the set's own pair (load_mutex_ held).
+  bool exact(int s) const {
+    return !src_baked_ && static_cast<size_t>(s) < src_exact_.size() && src_exact_[s] != 0;
   }
 
   // ── Set design: the pieces ───────────────────────────────────────────────
@@ -1209,6 +1283,10 @@ class VirtualRoom {
   mutable std::mutex load_mutex_;
   bool src_baked_ = true;
   std::vector<float> src_data_, src_delay_, src_dfe_;
+  // The set's own pair for a speaker of the room, where it gave one
+  // (set_hrir's second form): which speakers, their taps and their delays.
+  std::vector<char> src_exact_;
+  std::vector<float> src_exact_taps_, src_exact_delay_;
   EarTune tune_;
 
   // Filters: two sets, the published one's slot in bit 0 and a version above.

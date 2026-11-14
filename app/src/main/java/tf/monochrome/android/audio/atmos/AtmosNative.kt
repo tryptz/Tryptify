@@ -220,6 +220,22 @@ object AtmosNative {
     )
 
     /**
+     * Reads the .sofa at [path], where it is on disk, into a packed HRTF set
+     * (`render/sofa_set.h`): the renderer's table, and the file's own
+     * measurement for each speaker of the 15.1.12 room. Null when the file is
+     * not an HRTF set. A finely measured file takes seconds and hundreds of
+     * megabytes while it is open: [AtmosSofaStore] calls it once for a file.
+     */
+    external fun nativePrepareSofa(path: String): FloatArray?
+
+    /**
+     * Gives the pipeline a set [nativePrepareSofa] made. Returns how many of
+     * the room's speakers now play the set's own measurement, or -1 when
+     * [packed] is not a set.
+     */
+    external fun nativeSetSofa(pipeline: Long, packed: FloatArray): Int
+
+    /**
      * The listener's ears on top of the HRTF set
      * ([tf.monochrome.android.domain.model.EarTune]). It builds the room's
      * filters again, which takes a moment: never from the audio thread while

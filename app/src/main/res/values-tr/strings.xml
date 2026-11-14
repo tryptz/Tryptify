@@ -1442,6 +1442,7 @@
     <string name="hrtf_databases">HRTF veritabanları</string>
     <string name="hrtf_unreachable">HRTF veritabanına ulaşılamadı.</string>
     <string name="hrtf_download_failed">İndirme başarısız</string>
+    <string name="hrtf_downloading">%1$s indiriliyor: %2$d / %3$d MB</string>
     <string name="hrtf_applied">%1$s uygulandı (%2$d KB)</string>
     <string name="hrtf_save_failed">HRTF kaydedilemedi</string>
     <string name="hrtf_tap_to_use">HRTF olarak kullanmak için dokunun</string>

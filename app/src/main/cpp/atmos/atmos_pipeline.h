@@ -18,6 +18,7 @@
 #include "cavern/enhanced_ac3.h"  // dialnorm from the syncframe header
 #include "object_engine.h"
 #include "render/sofa_loader.h"  // runtime SOFA HRTF (defined only in the JNI lib)
+#include "render/sofa_set.h"
 #include "render/virtual_room.h"  // the 15.1.12 virtual room's binaural stage
 #include "speaker_renderer.h"     // multichannel object render (5.1 .. 9.1.6)
 #include "vbap.h"  // Vec3
@@ -127,6 +128,35 @@ class AtmosPipeline {
     return true;
   }
   void clear_sofa() { room_.set_hrir_baked(); }
+
+  // Installs a loaded HRTF set as load_sofa_set packed it (render/sofa_set.h):
+  // its table, and its own pair for each of the room's speakers it has one
+  // for. False when `packed` is not a set. Allocates: off the audio thread.
+  bool set_sofa_set(const float* packed, size_t size) {
+    render::SofaSet set;
+    if (!render::SofaSet::unpack(packed, size, set)) return false;
+    const std::vector<SpeakerDef>& room = layout_speakers(OutputLayout::k15_1_12);
+    const size_t n = room.size();
+    std::vector<float> taps(set.taps, set.taps + render::SofaSet::kPoints * render::kHrirTaps);
+    std::vector<float> delays(set.delays, set.delays + render::SofaSet::kPoints);
+    std::vector<float> exact_taps(n * 2 * render::kHrirTaps, 0.0f), exact_delays(n * 2, 0.0f);
+    std::vector<char> has(n, 0);
+    for (size_t s = 0; s < n; ++s) {
+      if (is_lfe(room[s])) continue;
+      const int at = set.speaker_at(room[s].azimuth, room[s].elevation);
+      if (at < 0) continue;
+      has[s] = 1;
+      for (int k = 0; k < 2 * render::kHrirTaps; ++k) {
+        exact_taps[s * 2 * render::kHrirTaps + k] = set.speaker_taps[static_cast<size_t>(at) * 2 * render::kHrirTaps + k];
+      }
+      exact_delays[s * 2] = set.speaker_delays[static_cast<size_t>(at) * 2];
+      exact_delays[s * 2 + 1] = set.speaker_delays[static_cast<size_t>(at) * 2 + 1];
+    }
+    room_.set_hrir(taps, delays, exact_taps, exact_delays, has);
+    return true;
+  }
+  // Of the room's speakers, how many play the loaded set's own measurement.
+  int exact_speakers() const { return room_.exact_speakers(); }
 
   // The listener's ears on top of the HRIR set (render::EarTune): the ear's
   // size, and a bell on the speakers above ear level. Builds the room's

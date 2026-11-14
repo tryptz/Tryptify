@@ -1443,6 +1443,7 @@
     <string name="hrtf_databases">HRTF databases</string>
     <string name="hrtf_unreachable">Couldn\'t reach the HRTF database.</string>
     <string name="hrtf_download_failed">Download failed</string>
+    <string name="hrtf_downloading">Downloading %1$s: %2$d of %3$d MB</string>
     <string name="hrtf_applied">Applied %1$s (%2$d KB)</string>
     <string name="hrtf_save_failed">Couldn\'t save the HRTF</string>
     <string name="hrtf_tap_to_use">tap to use as HRTF</string>

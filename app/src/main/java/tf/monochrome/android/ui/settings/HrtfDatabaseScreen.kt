@@ -82,7 +82,7 @@ abstract class SofaBrowseViewModel(
     private val unreachable: Int,
 ) : ViewModel() {
 
-    private val api = SofaHrtfApi()
+    protected val api = SofaHrtfApi()
     private val stack = ArrayDeque<HrtfNode>()  // folders navigated into
 
     private val _state = MutableStateFlow(HrtfBrowseState())
@@ -129,15 +129,24 @@ abstract class SofaBrowseViewModel(
         _state.value = _state.value.copy(busyFile = file.href, status = null)
         val path = currentPath() + file.href
         viewModelScope.launch {
-            val result = api.download(path)
-            val bytes = result.getOrNull()
-            val status = if (bytes == null || bytes.isEmpty()) {
-                result.exceptionOrNull()?.let { errorText(it, R.string.hrtf_download_failed) } ?: UiText.Res(R.string.hrtf_download_failed)
-            } else {
-                use(file, bytes)
-            }
+            val status = take(path, file)
             _state.value = _state.value.copy(busyFile = null, status = status)
         }
+    }
+
+    /** Fetches the file at [path] and puts it to use; what to tell the listener. Through memory, unless overridden. */
+    protected open suspend fun take(path: String, file: HrtfNode): UiText {
+        val result = api.download(path)
+        val bytes = result.getOrNull()
+        return if (bytes == null || bytes.isEmpty()) failed(result.exceptionOrNull()) else use(file, bytes)
+    }
+
+    protected fun failed(cause: Throwable?): UiText =
+        cause?.let { errorText(it, R.string.hrtf_download_failed) } ?: UiText.Res(R.string.hrtf_download_failed)
+
+    /** Says how a long download is going, in the status line. */
+    protected fun progress(text: UiText) {
+        _state.value = _state.value.copy(status = text)
     }
 
     /** Takes the downloaded [bytes] of [file] into use; what to tell the listener. */
@@ -150,11 +159,36 @@ class HrtfDatabaseViewModel @Inject constructor(
     private val preferences: PreferencesManager,
 ) : SofaBrowseViewModel(rootFolders = null, unreachable = R.string.hrtf_unreachable) {
 
+    private fun destination(file: HrtfNode): File {
+        val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
+        return File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
+    }
+
+    /**
+     * An HRTF set goes straight to its file, whatever its size: the finest
+     * sets are over 160 MB, and those are the ones whose every speaker plays
+     * a measurement of its own.
+     */
+    override suspend fun take(path: String, file: HrtfNode): UiText {
+        val dest = destination(file)
+        val mb = 1024L * 1024L
+        val result = api.downloadTo(path, dest) { done, total ->
+            if (total > 0) progress(UiText.Res(R.string.hrtf_downloading, listOf(file.display, (done / mb).toInt(), (total / mb).toInt())))
+        }
+        val size = result.getOrNull() ?: return failed(result.exceptionOrNull())
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val profile = preferences.rendererProfile.first()
+                preferences.setRendererProfile(profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true))
+                UiText.Res(R.string.hrtf_applied, listOf(file.display, (size / 1024).toInt()))
+            }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
+        }
+    }
+
     /** Stores the .sofa in app storage and selects it as the HRTF. */
     override suspend fun use(file: HrtfNode, bytes: ByteArray): UiText = withContext(Dispatchers.IO) {
         runCatching {
-            val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
-            val dest = File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
+            val dest = destination(file)
             dest.writeBytes(bytes)
             // Keep previous downloads: every stored .sofa remains a
             // selectable preset on the renderer page.
