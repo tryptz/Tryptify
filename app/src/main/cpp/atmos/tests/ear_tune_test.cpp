@@ -84,7 +84,7 @@ void test_untuned_is_the_set() {
 }
 
 void test_height_band() {
-  std::printf("-- the height band is on the speakers above, by how far up they are\n");
+  std::printf("-- the height band: up on the speakers above, the other way at ear level\n");
   const std::vector<RoomSpeaker> v = room_layout();
   const int count = static_cast<int>(v.size());
   VirtualRoom plain, tuned;
@@ -101,7 +101,7 @@ void test_height_band() {
   std::printf("   +6 dB at 8 kHz: %.2f dB at 60 up, %.2f at 30, %.2f at ear level\n", at_top, at_mid, at_ear);
   CHECK_NEAR(at_top, 6.0, 0.3);
   CHECK_NEAR(at_mid, 6.0 * EarTune::height_share(30.0f), 0.3);
-  CHECK_NEAR(at_ear, 0.0, 1e-6);
+  CHECK_NEAR(at_ear, -6.0 * EarTune::kLevelShare, 0.3);  // the difference is widened from both sides
   // Away from the band the speaker above is as it was.
   const double away = level_db(click(tuned, count, top), 0, 1000.0) - level_db(click(plain, count, top), 0, 1000.0);
   CHECK_NEAR(away, 0.0, 0.2);

@@ -3554,6 +3554,11 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
     middle marks the head as it is, with a line from it to the dot.
   - **The pad takes every move of a finger on it** (`change.consume()`), so
     the page under it does not scroll while it is dragged.
+  - **Up and down on the pad is heard in everything**: the band goes one
+    way on the speakers above and the other way, at half strength, on those
+    at ear level (`EarTune::height_share`). On the speakers above alone it
+    was heard only where a mix has something overhead, and the owner took
+    the control for broken. Never narrow it to the height speakers again.
   - **It is heard while it is dragged**: `AtmosRendererViewModel.tuneEar`
     hands each move to the renderer at once, ahead of the profile's save,
     which waits for the hand to rest. Never route it through the save alone.

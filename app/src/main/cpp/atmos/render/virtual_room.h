@@ -67,10 +67,15 @@ namespace render {
 //    Each impulse response is stretched in time by `size` (over 1 a larger
 //    ear), which moves its whole spectrum down by the same ratio. The time
 //    between the ears is the head's, and is left as it is.
-//  - the height band: one bell (freq_hz, gain_db, q) on the speakers above
-//    ear level only, in full at 60 degrees up and less below (as the sine of
-//    the elevation), nothing at ear level. It makes the mark that says
-//    "above" stronger or weaker where the listener's own ear has it.
+//  - the height band: one bell (freq_hz, gain_db, q), in full on a speaker
+//    60 degrees up and less below (as the sine of the elevation), and the
+//    other way at half strength on the speakers at ear level. Up is heard as
+//    a difference: what the ear does to a sound from above against what it
+//    does to one from ahead. The band widens that difference from both
+//    sides. It first touched the speakers above alone, and then it was heard
+//    only where a mix puts something overhead, which in music is seldom and
+//    quiet: "height should change the sound, right now only ear size makes a
+//    difference" (the owner, 2026-11-14, on a song with nearly nothing above).
 //
 // The defaults change nothing, and then the filters are the set's own, bit
 // for bit.
@@ -99,9 +104,11 @@ struct EarTune {
   bool same(const EarTune& o) const {
     return size == o.size && freq_hz == o.freq_hz && gain_db == o.gain_db && q == o.q;
   }
-  // How much of the height band a speaker `el_deg` up gets, 0 to 1.
+  // How much of the height band a speaker `el_deg` up gets: 1 at 60 degrees
+  // and over, less below, and -kLevelShare at ear level and under it.
+  static constexpr float kLevelShare = 0.5f;
   static float height_share(float el_deg) {
-    if (el_deg <= 0.0f) return 0.0f;
+    if (el_deg <= 0.0f) return -kLevelShare;
     const float share = std::sin(el_deg * 0.01745329252f) / 0.8660254f;
     return share > 1.0f ? 1.0f : share;
   }
@@ -696,7 +703,7 @@ class VirtualRoom {
     delayed_filter(h, delay, ir);
     for (int k = kIrLen; k < kFft; ++k) ir[k] = 0.0f;
     const float share = EarTune::height_share(el_deg);
-    if (tune.bands() && share > 0.0f) {
+    if (tune.bands() && (share > 0.0f || share < 0.0f)) {
       bell(ir, kFilterLen, tune.freq_hz, tune.gain_db * share, tune.q, sample_rate);
     }
   }

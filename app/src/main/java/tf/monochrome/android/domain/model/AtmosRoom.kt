@@ -132,8 +132,9 @@ enum class RoomPreset(val room: CustomRoom) {
  * The listener's own ears on top of the HRTF in use (`EarTune` in
  * `render/virtual_room.h`, which says why). [size] is the ear's size against
  * the set's: over 1 a larger ear, every cue of the outer ear lower in pitch.
- * The height band is one bell ([freqHz], [gainDb], [q]) on the speakers above
- * ear level alone, in full at 60 degrees up. The defaults change nothing.
+ * The height band is one bell ([freqHz], [gainDb], [q]): in full on a speaker
+ * 60 degrees up, less below, and the other way at half strength at ear level,
+ * so it is heard in everything that plays. The defaults change nothing.
  */
 @Serializable
 data class EarTune(
