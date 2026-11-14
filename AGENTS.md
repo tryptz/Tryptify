@@ -509,6 +509,15 @@ falls back to YouTube the same way; an album link does not.
 `SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the
 signature and its fallback, the match and the routing.
 
+**A file of the listener's own has a link too** (`ShareLinks.localLink`): a
+file bought or downloaded from TIDAL, Qobuz or Deezer is the catalogue's
+song, and is shared as it. Its ISRC tag is asked of Qobuz, which finds a
+recording by that code; without a code, or where Qobuz has none for it, the
+catalogue is searched for the artist and title and the song within two
+seconds of the file's length is taken (`sameSong`: a live take or a remaster
+is another length). The code goes in the link either way. A recording found
+in neither has no link, as before. `LocalShareLinkTest` holds it.
+
 **The preview starts where the song is playing**, when the song shared is
 the one playing or paused (`PlayerViewModel.previewStartFor`,
 `ShareLinks.previewStart`): the listener picks the moment by sharing at it.

@@ -13,6 +13,7 @@
 
 #### Sharing
 - **A shared song's preview starts where the song is playing.** Share link on the song that is playing (or paused) sends its position with the share, and the 30-second preview Discord plays starts there; shared in the last seconds, the clip is the song's last thirty. A song that is not the one playing starts a third of the way in, as before. Needs the servers' side (TrypT-hifi and trypt-hifi-scxyt, which take `t=` and sign it with the link); an older server ignores it.
+- **A file on the phone can be shared as a link.** Share link on a local file used to say there was nothing to link to. A file that came from TIDAL, Qobuz or Deezer is a catalogue song all the same: it is found by the ISRC in its tags, or failing that by its artist, title and length (within two seconds, so a live take or a remaster is not taken for it), and shared as that song. The preview starts where the file is playing, as for any other song. A recording that is in no catalogue still has no link.
 - **Previews are lossless or untouched, and can be scrubbed** (the servers' side). A Qobuz, Deezer or TIDAL preview cut from the full file is FLAC, the song's own samples, with a two-second fade in and out; a YouTube or SoundCloud preview is the song's own AAC, MP3 or Opus copied, not re-encoded. Each has a key frame every two seconds and its index at the front.
 
 #### Exclusive USB DAC

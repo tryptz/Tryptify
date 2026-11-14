@@ -37,9 +37,10 @@ import tf.monochrome.android.locale.AppLanguage
  * here, unsigned, and still plays. A YouTube or SoundCloud song gets a link
  * to the song alone, signed by trypt-hifi-scxyt, which makes its preview
  * when it is shared ([signedSongLink]); the website makes the rest of its
- * page from YouTube's or SoundCloud's own preview. A local file, a music
- * server's song, a collection or a radio station has no catalog to point
- * at, so it has no link.
+ * page from YouTube's or SoundCloud's own preview. A file of the listener's
+ * own is linked as the catalog's song it is a copy of, found by its ISRC or
+ * by its name and length ([localLink]). A music server's song, a collection
+ * or a radio station has no catalog to point at, so it has no link.
  */
 @Singleton
 class ShareLinks @Inject constructor(
@@ -56,10 +57,17 @@ class ShareLinks @Inject constructor(
      */
     suspend fun shareTrack(track: Track, unified: UnifiedTrack?, previewStartSec: Int? = null) {
         val source = unified?.source
-        val link = if (source is PlaybackSource.Scxyt) {
-            signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it, previewStartSec) }
-        } else {
-            linkFor(track, source, unified?.pageUrl)
+        val link = when (source) {
+            is PlaybackSource.Scxyt -> signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it, previewStartSec) }
+            // A file of the listener's own: the song it is in a catalogue, if it is in one.
+            is PlaybackSource.LocalFile -> withContext(Dispatchers.IO) {
+                localLink(
+                    track, unified?.isrc,
+                    byIsrc = { runCatching { apiClient.findQobuzTrackByIsrc(it) }.getOrNull() },
+                    byName = { runCatching { apiClient.searchTracks(it, limit = 20) }.getOrDefault(emptyList()) },
+                )
+            }.also { Log.i(TAG, "share link: a local file ${if (it == null) "found in no catalogue" else "is ${it.source.slug} ${it.track}"} (isrc ${SharedLink.isrcOf(unified?.isrc) ?: "none"})") }
+            else -> linkFor(track, source, unified?.pageUrl)
         }
         if (link == null) {
             toast(text().getString(R.string.share_link_unavailable))
@@ -165,6 +173,75 @@ class ShareLinks @Inject constructor(
          * the song's last thirty.
          */
         fun previewStart(positionMs: Long): Int? = if (positionMs < 0) null else (positionMs / 1000).toInt().coerceAtMost(99_999)
+
+        /**
+         * The link for a file of the listener's own: the catalogue's song
+         * that it is a copy of. A file bought or downloaded from TIDAL, Qobuz
+         * or Deezer says which recording it is in its ISRC tag, and Qobuz
+         * finds a recording by that code ([byIsrc]): the link is to that
+         * song, on its album, with the code in it, so whoever opens it gets
+         * the same recording on whichever service they have. Without a code,
+         * or where Qobuz has none for it, the catalogue is searched for the
+         * artist and title ([byName]) and the song of the file's own length
+         * is taken ([sameSong]): a live take or a remaster is another length.
+         * Null when neither finds it: a recording of one's own has no link.
+         *
+         * The preview still starts where the file is playing: the caller
+         * hands the position to the server with the link, which holds it
+         * inside the song by the song's length.
+         */
+        suspend fun localLink(
+            track: Track,
+            isrc: String?,
+            byIsrc: suspend (String) -> tf.monochrome.android.data.api.QobuzTrackMatch?,
+            byName: suspend (String) -> List<Track>,
+        ): SharedLink? {
+            val code = SharedLink.isrcOf(isrc)
+            val title = track.title.takeIf { it.isNotBlank() }
+            val artist = track.displayArtist.takeIf { it.isNotBlank() }
+            val length = track.duration.takeIf { it > 0 }
+            if (code != null) {
+                val match = byIsrc(code)
+                val slug = match?.albumSlug?.takeIf { it.isNotBlank() }
+                if (match != null && slug != null) {
+                    return SharedLink(SharedLink.Source.QOBUZ, slug, match.trackId, code, title, artist, length)
+                }
+            }
+            if (title == null) return null
+            val found = sameSong(byName(listOfNotNull(artist, title).joinToString(" ")), track) ?: return null
+            val album = found.album?.id?.takeIf { it > 0 } ?: return null
+            return SharedLink(SharedLink.Source.TIDAL, album.toString(), found.id, code, title, artist, length)
+        }
+
+        /** How far a catalogue song's length may be from the file's, in seconds, and still be it. */
+        const val SAME_LENGTH_SEC = 2
+
+        /**
+         * Of [candidates], the one that is [file]'s song: the same title and
+         * artist once case, punctuation and bracketed notes
+         * ("(Remastered 2011)", "[Explicit]") are set aside, and a length
+         * within [SAME_LENGTH_SEC] of the file's, the nearest first. A file
+         * that does not know its length is not matched by name at all: the
+         * title alone would hand out the wrong version.
+         */
+        fun sameSong(candidates: List<Track>, file: Track): Track? {
+            if (file.duration <= 0) return null
+            val title = plain(file.title)
+            val artist = plain(file.displayArtist)
+            if (title.isEmpty()) return null
+            return candidates
+                .filter { it.id > 0 && plain(it.title) == title }
+                .filter { c ->
+                    val theirs = plain(c.displayArtist)
+                    artist.isEmpty() || theirs.isEmpty() || theirs.contains(artist) || artist.contains(theirs)
+                }
+                .filter { kotlin.math.abs(it.duration - file.duration) <= SAME_LENGTH_SEC }
+                .minByOrNull { kotlin.math.abs(it.duration - file.duration) }
+        }
+
+        private val NOTES = Regex("""[(\[][^)\]]*[)\]]""")
+        private fun plain(text: String): String =
+            NOTES.replace(text, " ").lowercase().filter { it.isLetterOrDigit() }
 
         /**
          * [songLink], signed with the preview [preview] has the server make,

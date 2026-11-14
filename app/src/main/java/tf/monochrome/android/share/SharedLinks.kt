@@ -68,6 +68,13 @@ data class SharedLink(
         private val SONG_PATH = Regex("""/listen/(?:youtube/track/([A-Za-z0-9_-]{11})|soundcloud/track/(\d{1,20}))/?""")
         private val ISRC = Regex("""[A-Z]{2}[A-Z0-9]{3}\d{7}""")
 
+        /**
+         * [raw] as an ISRC, or null when it is not one. A file's tag may write
+         * it with hyphens or spaces ("US-UM7-07-05412") or in lower case.
+         */
+        fun isrcOf(raw: String?): String? =
+            raw?.uppercase()?.filter { it.isLetterOrDigit() }?.takeIf { ISRC.matches(it) }
+
         /** The only `page=` the website links to: a song's address on soundcloud.com, whole. */
         private val SOUNDCLOUD_PAGE = Regex("""https://soundcloud\.com/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+""")
 
