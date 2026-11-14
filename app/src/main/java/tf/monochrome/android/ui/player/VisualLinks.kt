@@ -123,6 +123,24 @@ class VisualLinkLive(private val parent: VisualLinkLive? = null) {
         return cache.get(base, v) { VisualLinkTargets.applyGlass(base, area, v) }
     }
 
+    /**
+     * [glass] as a state that changes only when the glass itself does. A
+     * layer or draw block that calls [glass] reads this frame's values, which
+     * are new on every frame while anything at all is linked, a lyric setting
+     * included: so every pane of glass in the app ran its block again on every
+     * frame, built its effect again and had the GPU draw it again, for values
+     * that had not moved. On a phone that was the player at 64 frames a
+     * second with 30 to 40 slab effects rebuilt in each (the live log,
+     * 2026-11-14). Read this in the block instead, and the block runs when
+     * the glass moves and at no other time.
+     *
+     * The equality policy is the point: without one a derived state counts
+     * every new answer as a change, equal or not, and a glass setting that
+     * is linked but holding still would run the block every frame again.
+     */
+    fun glassState(base: PlayerGlassSettings, area: LinkArea): androidx.compose.runtime.State<PlayerGlassSettings> =
+        androidx.compose.runtime.derivedStateOf(androidx.compose.runtime.structuralEqualityPolicy()) { glass(base, area) }
+
     /** The CRT effect's [base] tuning with this frame's linked values in it. Call it from a layer block. */
     fun tv(base: GlyphTvTuning): GlyphTvTuning {
         val v = current
@@ -157,6 +175,17 @@ val LocalVisualLinks = staticCompositionLocalOf { VisualLinkLive.None }
  * Provided beside every `LocalPlayerGlass provides`.
  */
 val LocalGlassArea = staticCompositionLocalOf { LinkArea.PANELS }
+
+/**
+ * [base] as the music links have it here, for a layer or draw block to read:
+ * see [VisualLinkLive.glassState] for why it is this and not `links.glass`.
+ */
+@Composable
+fun rememberLinkedGlass(base: PlayerGlassSettings): androidx.compose.runtime.State<PlayerGlassSettings> {
+    val links = LocalVisualLinks.current
+    val area = LocalGlassArea.current
+    return remember(links, base, area) { links.glassState(base, area) }
+}
 
 /**
  * A short history of a band's level, so the visuals can wait for the sound to

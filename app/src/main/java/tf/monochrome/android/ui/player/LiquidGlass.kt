@@ -683,8 +683,7 @@ fun Modifier.glassFrost(
     ground: Color,
     isDark: Boolean = ground.luminance() <= 0.5f,
 ): Modifier {
-    val links = LocalVisualLinks.current
-    val area = LocalGlassArea.current
+    val linked = rememberLinkedGlass(glass)
     return hazeEffect(
         state = state,
         style = dev.chrisbanes.haze.HazeStyle(
@@ -694,7 +693,7 @@ fun Modifier.glassFrost(
             noiseFactor = 0f,
         ),
     ) {
-        val g = links.glass(glass, area)
+        val g = linked.value
         blurRadius = g.hazeBlurDp.dp
         tints = listOf(dev.chrisbanes.haze.HazeTint(playerFrostTint(g, isDark)))
     }
@@ -788,12 +787,12 @@ private fun playerGlassModifier(
     val anchor = rememberBackdropAnchor()
     val scrim = remember(backdrop.dominant) { backdropScrimTone(backdrop.dominant) }
     // The music links move this glass in the layer block alone, so a linked
-    // setting redraws this layer each frame and recomposes nothing.
-    val links = LocalVisualLinks.current
-    val area = LocalGlassArea.current
+    // glass setting redraws this layer each frame and recomposes nothing; a
+    // link to anything else leaves it be (rememberLinkedGlass).
+    val linked = rememberLinkedGlass(base)
     return Modifier.backdropAnchor(anchor).graphicsLayer {
         if (size.minDimension > 0f) {
-            val g = links.glass(base, area)
+            val g = linked.value
             // The transport and the mini player sit directly on the artwork, so
             // this is where lensing the real thing shows most: the play glyph
             // carries the cover's own colour through it instead of a wash.

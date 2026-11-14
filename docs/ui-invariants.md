@@ -756,8 +756,14 @@ each where its renderer lives:
 
 Which glass a renderer is drawing is `LocalGlassArea` (PLAYER inside the player
 route and the Player tab's preview, PANELS everywhere else). Glass reads its
-live values with `links.glass(base, area)` in its layer and draw blocks, and the
-haze frost goes through `Modifier.glassFrost`, whose `hazeEffect` block re-reads
+live values in its layer and draw blocks from `rememberLinkedGlass(base)`
+(`.value`), never from `links.glass(base, area)` itself: that call reads the
+links' values, which are new on every frame while anything is linked, a lyric
+setting included, so every pane's block ran on every frame, rebuilt its effect
+and had the GPU draw it again for glass that had not moved (the player at 64
+frames a second, 30 to 40 slab effects rebuilt in each; the live log,
+2026-11-14). The state it returns changes only when the glass does, and its
+equality policy is what makes that true (`LinkedGlassTest`). The haze frost goes through `Modifier.glassFrost`, whose `hazeEffect` block re-reads
 the blur and tint each frame. Never build a `HazeStyle` from the glass settings
 in composition: the blur would ignore its link.
 

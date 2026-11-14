@@ -454,13 +454,12 @@ internal fun BoxScope.GlassDropShadow(
     // Depth, softness and tint are read in the layer and draw blocks, from the
     // glass as the music links have it this frame: a linked shadow breathes
     // with the song and recomposes nothing.
-    val links = LocalVisualLinks.current
-    val area = LocalGlassArea.current
+    val linked = rememberLinkedGlass(glass)
     Box(
         modifier = Modifier
             .matchParentSize()
             .graphicsLayer {
-                val g = links.glass(glass, area)
+                val g = linked.value
                 translationY = (2f + g.shadowDepth * 6f).dp.toPx()
                 // As Modifier.blur with an unbounded edge: a decal blur, unclipped.
                 val r = (5f + g.shadowSoftness * 22f).dp.toPx()
@@ -468,7 +467,7 @@ internal fun BoxScope.GlassDropShadow(
                 clip = false
             }
             .drawBehind {
-                val g = links.glass(glass, area)
+                val g = linked.value
                 drawOutline(
                     shape.createOutline(size, layoutDirection, this),
                     shadowColour(g, tint),
@@ -556,20 +555,19 @@ internal fun TransportIcon(
         if (glass.enabled) {
             // The glyph drawn here rather than by an Icon, so its colour, drop
             // and blur can follow the music links in draw.
-            val links = LocalVisualLinks.current
-            val area = LocalGlassArea.current
+            val linked = rememberLinkedGlass(glass)
             Box(
                 Modifier
                     .requiredSize(size)
                     .graphicsLayer {
-                        val g = links.glass(glass, area)
+                        val g = linked.value
                         translationY = (1.5f + g.shadowDepth * 4f).dp.toPx()
                         val r = (2f + g.shadowSoftness * 12f).dp.toPx()
                         renderEffect = BlurEffect(r, r, TileMode.Decal)
                         clip = false
                     }
                     .drawBehind {
-                        val g = links.glass(glass, area)
+                        val g = linked.value
                         val colour = androidx.compose.ui.graphics.lerp(Color.Black, tint, g.shadowTint)
                             .copy(alpha = 0.30f + 0.5f * g.shadowDepth)
                         with(painter) { draw(this@drawBehind.size, colorFilter = ColorFilter.tint(colour)) }

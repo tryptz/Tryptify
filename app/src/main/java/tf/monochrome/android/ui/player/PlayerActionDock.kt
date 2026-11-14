@@ -157,8 +157,7 @@ fun PlayerActionDock(
         if (g.shadowDepth > 0.01f) {
             // Read in the layer and draw blocks, from the glass as the music
             // links have it this frame.
-            val links = LocalVisualLinks.current
-            val area = LocalGlassArea.current
+            val linked = rememberLinkedGlass(g)
             // Modifier order matters: the blur must be OUTSIDE the Offscreen
             // layer. Offscreen always clips to bounds, so blurring inside it
             // (graphicsLayer→blur) cut the soft spill back to a hard-edged
@@ -170,18 +169,18 @@ fun PlayerActionDock(
                     .matchParentSize()
                     .graphicsLayer {
                         // As Modifier.blur with an unbounded edge: a decal blur, unclipped.
-                        val r = (5f + links.glass(g, area).shadowSoftness * 22f).dp.toPx()
+                        val r = (5f + linked.value.shadowSoftness * 22f).dp.toPx()
                         renderEffect = BlurEffect(r, r, TileMode.Decal)
                         clip = false
                     }
                     .graphicsLayer {
-                        translationY = (2f + links.glass(g, area).shadowDepth * 6f).dp.toPx()
+                        translationY = (2f + linked.value.shadowDepth * 6f).dp.toPx()
                         compositingStrategy = CompositingStrategy.Offscreen
                     },
             ) {
                 val cornerPx = PlayerDesignTokens.GlassCornerLarge.toPx()
                 drawRoundRect(
-                    color = shadowColour(links.glass(g, area), glassTint),
+                    color = shadowColour(linked.value, glassTint),
                     cornerRadius = CornerRadius(cornerPx, cornerPx),
                 )
                 punchDockIcons(icons)

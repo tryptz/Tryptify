@@ -294,7 +294,10 @@ stutter is read from a session before anyone names a cause: on 2026-11-14
 from the log's JIT lines alone, and the owner's next message was that it
 stutters every time. The next guess, the ambient visualizer behind the glass,
 went the same way: switched off, the player still fell to 64 frames a second
-for seconds at a time. Hence the counts.
+for seconds at a time. Hence the counts. They named it: 30 to 40 slab
+effects rebuilt in every frame, because each glass block read the music
+links' values, new every frame while anything is linked
+(`rememberLinkedGlass` in `docs/ui-invariants.md`).
 
 ## A listener's Subsonic server is a device secret
 
