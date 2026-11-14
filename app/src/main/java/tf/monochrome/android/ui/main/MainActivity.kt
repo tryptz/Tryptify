@@ -120,6 +120,8 @@ class MainActivity : ComponentActivity() {
         // neither the wizard nor the main UI flashes in before we know which
         // one to show.
         splash.setKeepOnScreenCondition { !onboardingGateLoaded }
+        // The window the live log measures frames on, while it is on.
+        tf.monochrome.android.debug.FrameStallLog.window = java.lang.ref.WeakReference(window)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 

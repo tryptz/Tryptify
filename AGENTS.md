@@ -278,10 +278,17 @@ and each insert drops that account's lines older than a day. `LiveLogTest`
 holds the numbering, what is left out and that a sign-in never reaches a row.
 Never make it start by itself or stay on across launches.
 
-While it is on, `FrameStallLog` adds a line (tag `FrameStall`) for every
-gap of 120 ms or more between two frames, with the screen it happened on:
-"no frame for 840 ms on equalizer". It is how a reported stutter is seen
-from a session, with its length and place, before anyone names a cause.
+While it is on, `FrameStallLog` (tag `FrameStall`) says when the app drew
+slowly, on which screen, and where the time went: "no frame for 840 ms on
+equalizer" for a gap on the main thread, and for a second with slow frames
+in it "slow second on atmos_renderer: 41 frames, 30 over 16 ms, worst 88
+ms; slow frames average app 6 sync 2 issue 31 swap 4 gpu 22 ms". Much time
+in issue, swap or gpu with little in app is the drawing itself (an effect,
+a blur, a shader); much in app is the app's code. It is how a reported
+stutter is read from a session before anyone names a cause: on 2026-11-14
+"compiling on first run" was named for a stutter at every new glass pane
+from the log's JIT lines alone, and the owner's next message was that it
+stutters every time.
 
 ## A listener's Subsonic server is a device secret
 
