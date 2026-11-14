@@ -3417,6 +3417,17 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `exp` there goes through `fade`, which never asks for less than e to the
   minus 30: Skia's CPU renderer's quick `exp` gave rubbish for a light far
   from the ray, and drew a speaker's fill over the listener's head.
+- **The room's outline is soft over a pixel, never stepped** (`cover` in
+  the shader). The walls are looked for at 36 even steps, and a ray that
+  clips a leaning wall's corner between two steps used to count as missing
+  the room: the outline came out in stairs, a step of the march to each
+  (the owner: "jagged render"). The ray's nearest approach to the room is
+  now found between the steps, and how nearly it is inside, in pixels, is
+  how much of the pixel the room's surfaces take; the box the walls are
+  looked for in is a little bigger than the room, so a ray just outside is
+  asked too. The head's edge is soft the same way. A speck is a soft dot a
+  pixel or two across, not a hard disc under a pixel, which came out as
+  square pixels switching on and off.
 - **The sound is grain, and nothing else is** (the shader's `sound` and its
   cells; on the canvas `CanvasGrain`; the measures in `RoomGrain`). The owner
   asked for grain particles in place of the glowing wave bands, then for

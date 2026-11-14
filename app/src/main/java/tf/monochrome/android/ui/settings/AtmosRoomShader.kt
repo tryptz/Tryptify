@@ -187,31 +187,92 @@ half4 main(float2 fragCoord) {
     float3 tmax = max(t0, t1);
     float tNear = max(max(tmin.x, tmin.y), max(tmin.z, 0.0));
     float tFar = min(tmax.x, min(tmax.y, tmax.z));
+    // The same box a little bigger, to look for the walls in: a ray that just
+    // misses the room is still asked how nearly, so the room's outline is soft.
+    float3 pad = float3(0.03 * max(uRoom.x, uRoom.y));
+    t0 = (-pad - ro) * inv;
+    t1 = (uRoom + pad - ro) * inv;
+    tmin = min(t0, t1);
+    tmax = max(t0, t1);
+    float wNear = max(max(tmin.x, tmin.y), max(tmin.z, 0.0));
+    float wFar = min(tmax.x, min(tmax.y, tmax.z));
+    float pixel = 1.0 / (uFocal * uRes.y);  // a pixel's width, a metre off
 
-    // The listener: a head, which hides what is behind it.
+    // The listener: a head, which hides what is behind it. Its edge is soft
+    // over a pixel, as the room's outline is.
     float headT = -1.0;
+    float headCover = 0.0;
     {
         float3 to = uListener - ro;
         float along = dot(to, rd);
         float d2 = dot(to, to) - along * along;
         float r = 0.12 * uUnit;
-        if (along > 0.0 && d2 < r * r) headT = along - sqrt(r * r - d2);
+        if (along > 0.0) headCover = clamp(0.5 + (r - sqrt(d2)) / (pixel * along), 0.0, 1.0);
+        if (headCover > 0.0) headT = along - sqrt(max(r * r - d2, 0.0));
     }
 
     float exitT = -1.0;   // where the ray last leaves the room: the wall that is seen
     float enterT = -1.0;  // where it first comes in: the wall that is looked through
-    if (tFar > tNear) {
-        float stop = headT > 0.0 ? min(tFar, headT) : tFar;
-        float dt = (tFar - tNear) / float(STEPS);
+    float cover = 0.0;    // how much of the pixel the room takes: all of it inside, less across its outline
+    if (wFar > wNear) {
+        float dt = (wFar - wNear) / float(STEPS);
         float lastIn = -1.0;
         float firstIn = -1.0;
+        float least = 1e6;      // the nearest the ray comes to being inside (under zero: it is), and where
+        float tLeast = wNear;
         for (int i = 0; i < STEPS; i++) {
-            float t = tNear + (float(i) + 0.5) * dt;
-            if (room(ro + rd * t) < 0.0) {
+            float t = wNear + (float(i) + 0.5) * dt;
+            float d = room(ro + rd * t);
+            if (d < least) {
+                least = d;
+                tLeast = t;
+            }
+            if (d < 0.0) {
                 if (firstIn < 0.0) firstIn = t;
                 lastIn = t;
             }
         }
+        // Nearer than the steps can say: a ray that clips a corner between two
+        // of them is in the room all the same. Without this the outline came
+        // out in stairs, a step of the march to each.
+        float a = tLeast - dt;
+        float b = tLeast + dt;
+        for (int i = 0; i < 8; i++) {
+            float m1 = a + (b - a) / 3.0;
+            float m2 = b - (b - a) / 3.0;
+            if (room(ro + rd * m1) < room(ro + rd * m2)) b = m2; else a = m1;
+        }
+        float tMid = 0.5 * (a + b);
+        float dMid = room(ro + rd * tMid);
+        if (dMid < least) {
+            least = dMid;
+            tLeast = tMid;
+        }
+        cover = clamp(0.5 - least / (pixel * tLeast), 0.0, 1.0);
+        if (firstIn < 0.0 && cover > 0.0) {
+            firstIn = tLeast;
+            lastIn = tLeast;
+        }
+        if (lastIn > 0.0) {
+            // The wall itself, between the last step inside and the next one.
+            a = lastIn;
+            b = min(lastIn + dt, wFar + 0.01);
+            for (int i = 0; i < 8; i++) {
+                float m = 0.5 * (a + b);
+                if (room(ro + rd * m) < 0.0) a = m; else b = m;
+            }
+            exitT = 0.5 * (a + b);
+            a = max(firstIn - dt, wNear - 0.01);
+            b = firstIn;
+            for (int i = 0; i < 8; i++) {
+                float m = 0.5 * (a + b);
+                if (room(ro + rd * m) < 0.0) b = m; else a = m;
+            }
+            enterT = 0.5 * (a + b);
+        }
+    }
+    if (tFar > tNear) {
+        float stop = headT > 0.0 ? min(tFar, headT) : tFar;
         // The grain, cell by cell from the near wall to the far one. A speck
         // keeps clear of its cell's sides by more than its own size, so the
         // ray that meets it is in its cell.
@@ -220,21 +281,21 @@ half4 main(float2 fragCoord) {
         float3 cell = floor((ro + rd * (tNear + 1e-3)) / side);
         float3 tNext = ((cell + max(stepTo, 0.0)) * side - ro) * inv;
         float3 tCell = abs(side * inv);
-        float pixel = 1.0 / (uFocal * uRes.y);
         for (int i = 0; i < CELLS; i++) {
             float3 own = hash3(cell);
             float3 at = (cell + 0.16 + 0.68 * own) * side;
             float3 to = at - ro;
             float along = dot(to, rd);
-            // Fine, and never much under a pixel across, however far off it is.
-            float size = clamp(0.8 * pixel * along, 0.05 * side, 0.15 * side);
+            // Fine, but never so fine that it is one pixel on and the next off:
+            // it is a soft dot a pixel or two across, however far off it is.
+            float size = clamp(1.5 * pixel * along, 0.06 * side, 0.15 * side);
             float d2 = dot(to, to) - along * along;
             if (along > 0.0 && along < stop && d2 < size * size && room(at) < 0.0) {
                 float4 here = sound(at);
                 // Its rank; it comes and goes over a tenth of the way, not at once.
                 float rank = fract(own.x + own.y * 7.0 + own.z * 13.0);
                 float shown = smoothstep(0.0, 0.1, here.a - 0.9 * rank);
-                float disc = 1.0 - smoothstep(0.45, 1.0, d2 / (size * size));
+                float disc = fade(3.5 * d2 / (size * size));
                 acc = under(acc, here.rgb, shown * disc * uGrain.z);
             }
             float tOut = min(tNext.x, min(tNext.y, tNext.z));
@@ -242,23 +303,6 @@ half4 main(float2 fragCoord) {
             float3 go = step(tNext.xyz, tNext.yzx) * step(tNext.xyz, tNext.zxy);
             cell += go * stepTo;
             tNext += go * tCell;
-        }
-        if (lastIn > 0.0) {
-            // The wall itself, between the last step inside and the next one.
-            float a = lastIn;
-            float b = min(lastIn + dt, tFar + 0.01);
-            for (int i = 0; i < 6; i++) {
-                float m = 0.5 * (a + b);
-                if (room(ro + rd * m) < 0.0) a = m; else b = m;
-            }
-            exitT = 0.5 * (a + b);
-            a = max(firstIn - dt, tNear - 0.01);
-            b = firstIn;
-            for (int i = 0; i < 6; i++) {
-                float m = 0.5 * (a + b);
-                if (room(ro + rd * m) < 0.0) b = m; else a = m;
-            }
-            enterT = 0.5 * (a + b);
         }
     }
     float limit = headT > 0.0 ? headT : 1e5;
@@ -309,13 +353,13 @@ half4 main(float2 fragCoord) {
         float lit = 0.35 + 0.65 * clamp(dot(n, normalize(float3(-0.3, -0.5, 0.8))), 0.0, 1.0);
         float graze = 1.0 - clamp(dot(n, -rd), 0.0, 1.0);
         float rim = graze * graze * graze;
-        acc = under(acc, uInk * lit + uPrimary * rim * 0.6, 0.95);
+        acc = under(acc, uInk * lit + uPrimary * rim * 0.6, 0.95 * headCover);
     }
 
     // The room's surfaces: the one seen, and faintly the one looked through.
     for (int pass = 0; pass < 2; pass++) {
         float t = pass == 0 ? exitT : enterT;
-        float weight = pass == 0 ? 1.0 : 0.35;
+        float weight = (pass == 0 ? 1.0 : 0.35) * cover;
         if (t < 0.0) continue;
         float3 p = ro + rd * t;
         float2 h = halfSize(p.z);
@@ -559,7 +603,7 @@ internal object RoomGrain {
 
     const val ACROSS = 64f      // cells; the shader's CELLS is the most a ray can cross of them
     const val REACH = 0.2f      // of the room's shorter side
-    const val COVER = 0.9f      // a speck's cover: solid, a little of what is behind it through
+    const val COVER = 1f        // a speck's cover at its middle; it is soft from there out
     const val NEAR = 0.35f      // a speaker's reach as it falls silent, of its reach at full level
     const val TURNED = 0.4f     // the reach of a spot where sound turns, of the same
     const val HELD = 0.22f      // the grain through the whole room when it holds all it can, at Room 100%
