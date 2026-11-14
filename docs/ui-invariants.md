@@ -3389,8 +3389,31 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   level, falling away over the room's own decay time (`Afterglow`): a long
   room is seen to hold its sound. Do not animate anything there that the
   audio is not doing.
-- **The wave field is worked out, not painted** (`drawWaveField`,
-  `WaveField`). On a flat slice at ear height and an upright slice across the
+- **The room is drawn by the GPU** (`RoomShader`, `ui/settings/AtmosRoomShader.kt`):
+  one AGSL pass in which every pixel is a ray from a camera that orbits the
+  room (`RoomCamera`). The owner called the canvas drawing ugly, with a
+  powerful GPU in hand. The ray is walked through the room: the waves glow in
+  the air, faintly through the whole room and sharply on a sheet at ear
+  height; where the ray leaves is the wall that is seen (edges, the metre
+  grid, each speaker's light on the surface near it, the walls' glow), and
+  the wall it entered by is drawn faintly, so the room is looked into.
+  Speakers, objects, the measurement's loudspeakers and the rays are lights;
+  the listener is a head. The room is one distance function there (`room` in
+  the shader, the same geometry as `RoomShape`): rounded corners and leaning,
+  curved walls are that function, not special cases. Everything is laid as
+  tinted cover in the theme's primary, tertiary and onSurface (`under`), so
+  it holds on a light theme. The labels (objects' numbers, measurements) are
+  drawn over it by the same camera. Below Android 13, or when a driver
+  refuses the shader (logged as `AtmosRoom`), `AtmosRoomCanvas` draws the
+  same room with lines and cells: keep the two saying the same thing.
+- **Check the shader before shipping a change to it**:
+  `python3 tools/room_shader/check.py` compiles `ROOM_SRC` with Skia's own
+  runtime-effect compiler and draws a frame with `RoomCamera`'s maths. A
+  shader Android refuses falls back to the canvas without a word on the
+  page. AGSL takes no `while`, no array index but a loop's, and `pow` of a
+  negative base is undefined on a phone's GPU: square by multiplying.
+- **The wave field is worked out, not painted** (the shader's `waves`; on
+  the canvas `drawWaveField`, `WaveField`). On a flat slice at ear height and an upright slice across the
   room at the listener, each cell is lit by how far the waves reaching it are
   in step: one wave from each of the three loudest speakers and, with some
   Room, one from each speaker's mirror image in every surface
