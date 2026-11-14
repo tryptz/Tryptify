@@ -968,6 +968,7 @@ private fun liquidGlassEffect(
     } else {
         setNoRayLight(shader)
     }
+    tf.monochrome.android.debug.FrameStallLog.drew(tf.monochrome.android.debug.FrameStallLog.Effect.SLAB)
     return RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
 }
 

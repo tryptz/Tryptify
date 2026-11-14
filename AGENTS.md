@@ -284,11 +284,17 @@ equalizer" for a gap on the main thread, and for a second with slow frames
 in it "slow second on atmos_renderer: 41 frames, 30 over 16 ms, worst 88
 ms; slow frames average app 6 sync 2 issue 31 swap 4 gpu 22 ms". Much time
 in issue, swap or gpu with little in app is the drawing itself (an effect,
-a blur, a shader); much in app is the app's code. It is how a reported
+a blur, a shader); much in app is the app's code. The line ends with what
+was at work in that second: how many times the live lens drew a pane and
+how many megapixels it blurred and bent, and how many times the slab's, the
+god rays' and the lyric curve's effects were built again (`FrameStallLog.drew`).
+A count near the frame count means that effect ran every frame. It is how a reported
 stutter is read from a session before anyone names a cause: on 2026-11-14
 "compiling on first run" was named for a stutter at every new glass pane
 from the log's JIT lines alone, and the owner's next message was that it
-stutters every time.
+stutters every time. The next guess, the ambient visualizer behind the glass,
+went the same way: switched off, the player still fell to 64 frames a second
+for seconds at a time. Hence the counts.
 
 ## A listener's Subsonic server is a device secret
 

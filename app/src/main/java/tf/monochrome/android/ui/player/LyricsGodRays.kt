@@ -361,6 +361,7 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
         } else {
             RaysProbe.hit(RaysProbe.Surface.LIT)
             setGodRayUniforms(shader, light, f, output)
+            tf.monochrome.android.debug.FrameStallLog.drew(tf.monochrome.android.debug.FrameStallLog.Effect.RAYS)
             RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
         }
     }

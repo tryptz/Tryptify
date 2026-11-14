@@ -220,6 +220,10 @@ internal fun Modifier.liveGlassLens(
                         }
                 }
             }
+            tf.monochrome.android.debug.FrameStallLog.drew(
+                tf.monochrome.android.debug.FrameStallLog.Effect.LENS,
+                inflated.width.toLong() * inflated.height,
+            )
             translate(-margin, -margin) {
                 if (k == 1f) drawLayer(backdrop) else scale(k, pivot = Offset.Zero) { drawLayer(backdrop) }
             }

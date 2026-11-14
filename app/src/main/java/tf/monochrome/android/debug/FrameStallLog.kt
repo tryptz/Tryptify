@@ -40,7 +40,25 @@ object FrameStallLog : Choreographer.FrameCallback {
     @Volatile var window: WeakReference<Window>? = null
 
     private val main = Handler(Looper.getMainLooper())
-    private var running = false
+    @Volatile private var running = false
+
+    /** The effects that cost the GPU, each counted while the log runs: which were at work in a slow second. */
+    enum class Effect { LENS, SLAB, RAYS, CURVE }
+
+    private val drawn = java.util.concurrent.atomic.AtomicIntegerArray(Effect.entries.size)
+    private val lensPixels = java.util.concurrent.atomic.AtomicLong()
+
+    /**
+     * An effect was drawn or made anew just now: the live lens once for each
+     * pane it draws (with the [pixels] it blurs and bends), the others once
+     * for each time their effect is built again. Costs one check when the
+     * log is off.
+     */
+    fun drew(effect: Effect, pixels: Long = 0L) {
+        if (!running) return
+        drawn.incrementAndGet(effect.ordinal)
+        if (pixels > 0L) lensPixels.addAndGet(pixels)
+    }
     private var lastNanos = 0L
     private var thread: HandlerThread? = null
     private var listening: Window? = null
@@ -69,12 +87,16 @@ object FrameStallLog : Choreographer.FrameCallback {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) parts[4] += ms(FrameMetrics.GPU_DURATION)
         }
         if (now - secondStart >= 1_000_000_000L) {
+            val counts = IntArray(Effect.entries.size) { drawn.getAndSet(it, 0) }
+            val megapixels = lensPixels.getAndSet(0L) / 1_000_000.0
             if (slow >= FEW || worst >= STALL_MS) {
                 fun avg(i: Int) = (parts[i] / slow).toInt()
                 Log.i(
                     TAG,
                     "slow second on $screen: $frames frames, $slow over ${SLOW_MS.toInt()} ms, worst ${worst.toInt()} ms; " +
-                        "slow frames average app ${avg(0)} sync ${avg(1)} issue ${avg(2)} swap ${avg(3)} gpu ${avg(4)} ms",
+                        "slow frames average app ${avg(0)} sync ${avg(1)} issue ${avg(2)} swap ${avg(3)} gpu ${avg(4)} ms; " +
+                        "drew lens ${counts[0]} (${"%.1f".format(java.util.Locale.US, megapixels)} Mpx) " +
+                        "slab ${counts[1]} rays ${counts[2]} curve ${counts[3]}",
                 )
             }
             secondStart = now

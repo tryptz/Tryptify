@@ -123,6 +123,7 @@ private fun Modifier.curved(
         shader.setFloatUniform("uInner", if (wide) 1f / WORD_SIDE_ROOM else LINE_SIDE_INNER, 1f / DOME_HEADROOM)
         // Its height in its width: the bend is taken in the width both ways.
         shader.setFloatUniform("uAspect", if (dome.width > 0f) dome.height / dome.width else 1f)
+        tf.monochrome.android.debug.FrameStallLog.drew(tf.monochrome.android.debug.FrameStallLog.Effect.CURVE)
         renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
     }
 
