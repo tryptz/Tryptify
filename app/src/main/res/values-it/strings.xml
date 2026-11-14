@@ -3552,6 +3552,8 @@
     <string name="whats_new_1952_atmos_objects_body">Uno stream Atmos è un core 5.1 con gli oggetti al suo interno. Il pannello Catena audio e la pagina Configurazione del renderer Atmos ora contano gli oggetti e dicono se stanno suonando, e la mappa della stanza mostra ciascuno dove lo colloca il mix.</string>
     <string name="atmos_room_builtin">Stanza integrata</string>
     <string name="atmos_room_custom">La mia stanza</string>
+    <string name="atmos_rooms">Stanze</string>
+    <string name="atmos_room_shape">Dimensioni e forma</string>
     <string name="atmos_room_browse">Sfoglia database delle stanze</string>
     <string name="atmos_room_width">Larghezza</string>
     <string name="atmos_room_depth">Profondità</string>

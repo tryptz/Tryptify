@@ -3477,6 +3477,8 @@
     <string name="whats_new_1952_atmos_objects_body">An Atmos stream is a 5.1 core with the objects inside it. The Audio pipeline sheet and the Atmos Renderer Configuration page now count the objects and say whether they are playing, and the room map shows each one where the mix puts it.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
+    <string name="atmos_rooms">Rooms</string>
+    <string name="atmos_room_shape">Size and shape</string>
     <string name="atmos_room_browse">Browse room database</string>
     <string name="atmos_room_width">Width</string>
     <string name="atmos_room_depth">Depth</string>
@@ -3511,4 +3513,5 @@
     <string name="atmos_room_preset_hall">Concert hall</string>
     <string name="atmos_room_preset_chapel">Stone chapel</string>
     <string name="atmos_room_preset_round">Round room</string>
+    <string name="atmos_room_preset_stereo" translatable="false">Stereo Montréal</string>
 </resources>

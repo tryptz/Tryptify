@@ -3385,47 +3385,60 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   way of the spot where the mirror image says it turns
   (`RoomShape.firstReflections`, held to that by `AtmosRoomTest`). Their
   brightness is the speaker's level times the Room amount, so Room at 0%
-  shows the direct rays alone. The walls glow with the loudest speaker's
-  level, falling away over the room's own decay time (`Afterglow`): a long
-  room is seen to hold its sound. Do not animate anything there that the
-  audio is not doing.
+  shows the direct rays alone (the canvas draws the turns as lines and
+  spots, the GPU as grain at the spots). What the room holds is the loudest
+  speaker's level, falling away over the room's own decay time
+  (`Afterglow`): a long room is seen to hold its sound, as grain through
+  it. Do not animate anything there that the audio is not doing.
 - **The room is drawn by the GPU** (`RoomShader`, `ui/settings/AtmosRoomShader.kt`):
   one AGSL pass in which every pixel is a ray from a camera that orbits the
   room (`RoomCamera`). The owner called the canvas drawing ugly, with a
-  powerful GPU in hand. The ray is walked through the room: the waves glow in
-  the air, faintly through the whole room and sharply on a sheet at ear
-  height; where the ray leaves is the wall that is seen (edges, the metre
-  grid, each speaker's light on the surface near it, the walls' glow), and
-  the wall it entered by is drawn faintly, so the room is looked into.
-  Speakers, objects, the measurement's loudspeakers and the rays are lights;
-  the listener is a head. The room is one distance function there (`room` in
+  powerful GPU in hand. The ray goes through the room: the sound is grain
+  in the air (below); where the ray leaves is the wall that is seen (edges
+  and the metre grid), and the wall it entered by is drawn faintly, so the
+  room is looked into. Speakers, objects, the measurement's loudspeakers
+  and the rays are lights; the listener is a head. Those marks are a size
+  on the page, not in the room (`uUnit`, `RoomGrain.markScale`): at their
+  true size in a 23 m hall the speakers were dots and the head a pixel
+  (seen on device). The room is one distance function there (`room` in
   the shader, the same geometry as `RoomShape`): rounded corners and leaning,
   curved walls are that function, not special cases. Everything is laid as
   tinted cover in the theme's primary, tertiary and onSurface (`under`), so
   it holds on a light theme. The labels (objects' numbers, measurements) are
   drawn over it by the same camera. Below Android 13, or when a driver
   refuses the shader (logged as `AtmosRoom`), `AtmosRoomCanvas` draws the
-  same room with lines and cells: keep the two saying the same thing.
+  same room with lines and points: keep the two saying the same thing.
 - **Check the shader before shipping a change to it**:
   `python3 tools/room_shader/check.py` compiles `ROOM_SRC` with Skia's own
   runtime-effect compiler and draws a frame with `RoomCamera`'s maths. A
   shader Android refuses falls back to the canvas without a word on the
   page. AGSL takes no `while`, no array index but a loop's, and `pow` of a
-  negative base is undefined on a phone's GPU: square by multiplying.
-- **The wave field is worked out, not painted** (the shader's `waves`; on
-  the canvas `drawWaveField`, `WaveField`). On a flat slice at ear height and an upright slice across the
-  room at the listener, each cell is lit by how far the waves reaching it are
-  in step: one wave from each of the three loudest speakers and, with some
-  Room, one from each speaker's mirror image in every surface
-  (`RoomShape.mirrorImages`), which is that surface's reflection. So the
-  bands move when the mix moves, change with the room's shape, and grow
-  busier as Room goes up. It is a glow in the theme's primary colour, at most
-  `FIELD_ALPHA`, drawn without anti-aliasing (softened cell edges showed as a
-  grid). Its waves are slowed and lengthened on purpose (`WAVE_SPEED`,
-  `WAVELENGTH`): real sound would cross the room in a frame. It moves thirty
-  times a second, only while something plays through the room, and not at
-  all with reduced motion (`reduceMotion()`), where the rays and spots still
-  say the same thing standing still.
+  negative base is undefined on a phone's GPU: square by multiplying. Every
+  `exp` there goes through `fade`, which never asks for less than e to the
+  minus 30: Skia's CPU renderer's quick `exp` gave rubbish for a light far
+  from the ray, and drew a speaker's fill over the listener's head.
+- **The sound is grain, and nothing else is** (the shader's `sound` and its
+  cells; on the canvas `CanvasGrain`; the measures in `RoomGrain`). The owner
+  asked for grain particles in place of the glowing wave bands, then for
+  them finer and averaged a lot. The room's air is a grid of cells with one
+  speck in each, at a place and with a rank that are the cell's own; a
+  speck shows when there is more sound where it is than its rank. Sound is:
+  round each speaker, falling away, further the harder it is driven; with
+  some Room, round the spots where the three loudest speakers' sound turns
+  on a surface towards the listener (`RoomShape.firstReflections`); and the
+  same everywhere for what the room still holds (the Room amount times
+  `Afterglow`), which thins out over the room's decay. The specks stand in
+  the room and turn with it: do not make them a screen-space dither, which
+  swims when the room is turned. What drives them is each speaker's level
+  averaged over about a second (`SlowLevels`, quicker up than down), not the
+  meter's reading, and a speck fades in over a tenth of the way: the grain
+  swells and thins, it does not flicker. No halo round a speaker, no light
+  on the walls, no wash: a speaker's ring fills as it plays, and its sound
+  is the grain. The cells follow the room's size (`RoomGrain.ACROSS` of
+  them over its longest way), so a booth and a hall get the same picture.
+  Nothing moves them but the levels: the clock only redraws the room
+  between the meter's readings, and with reduced motion it stands still and
+  the room is drawn as each reading comes.
 - **Trapezoid panning** is a switch with its summary and, when on, three
   sliders: Ceiling width, Ceiling depth, Wall curve. It is off unless the
   listener turns it on: on, objects no longer play exactly where the mix
@@ -3433,9 +3446,17 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   with it off.
 - **The Room controls** (`AtmosRoomSection`) sit under the Room amount:
   Built-in room, each measured room that was added (with a delete), and My
-  room with its presets (`RoomPreset`: typical sizes for kinds of room,
-  named for the kind and never for a real venue, whose dimensions nobody
-  here has verified), its Width, Depth, Height and Damping, its shape
+  room. **The lists fold** (`FoldingList`): Rooms, and SOFA presets under
+  it, are each one row that names what is chosen, closed to begin with,
+  because every room or ear set that is added made the page longer (the
+  owner, with five rooms added: "make these collapsible"). My room's Size
+  and shape folds too and starts open, since choosing My room is asking to
+  set it. Browse room database stays outside the fold. My room has its
+  presets (`RoomPreset`: typical sizes for kinds of room, named for the
+  kind; the one named for a real venue, Stereo Montréal, is an estimate
+  the owner asked for, from the building's footprint and photographs, and
+  its comment says so: add no other named room without numbers at least
+  that good), its Width, Depth, Height and Damping, its shape
   (Roundness, Ceiling width, Ceiling depth) and the room's lowest modes
   (c / 2L, `atmos_room_modes`). A preset only fills those values: every one
   stays the listener's to change, and a changed room is no preset's (its

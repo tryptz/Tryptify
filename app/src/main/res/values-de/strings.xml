@@ -3474,6 +3474,8 @@
     <string name="whats_new_1952_atmos_objects_body">Ein Atmos-Stream ist ein 5.1-Kern mit den Objekten darin. Das Audio-Pipeline-Blatt und die Seite Atmos-Renderer-Konfiguration zählen jetzt die Objekte und sagen, ob sie spielen, und die Raumkarte zeigt jedes dort, wo der Mix es platziert.</string>
     <string name="atmos_room_builtin">Eingebauter Raum</string>
     <string name="atmos_room_custom">Mein Raum</string>
+    <string name="atmos_rooms">Räume</string>
+    <string name="atmos_room_shape">Größe und Form</string>
     <string name="atmos_room_browse">Raumdatenbank durchsuchen</string>
     <string name="atmos_room_width">Breite</string>
     <string name="atmos_room_depth">Tiefe</string>

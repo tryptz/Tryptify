@@ -3396,6 +3396,8 @@
     <string name="whats_new_1952_atmos_objects_body">Atmos ストリームは、オブジェクトを内包した 5.1 コアです。オーディオパイプラインのシートとAtmos レンダラーの設定のページがオブジェクトを数え、再生されているかどうかを示すようになり、ルームマップには各オブジェクトがミックスの置いた位置に表示されます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
+    <string name="atmos_rooms">部屋</string>
+    <string name="atmos_room_shape">大きさと形</string>
     <string name="atmos_room_browse">部屋データベースを見る</string>
     <string name="atmos_room_width">幅</string>
     <string name="atmos_room_depth">奥行き</string>

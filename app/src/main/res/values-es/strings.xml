@@ -3552,6 +3552,8 @@
     <string name="whats_new_1952_atmos_objects_body">Una transmisión Atmos es un núcleo 5.1 con los objetos dentro. El panel Cadena de audio y la página Configuración del renderizador Atmos ahora cuentan los objetos y dicen si están sonando, y el mapa de la sala muestra cada uno donde lo coloca la mezcla.</string>
     <string name="atmos_room_builtin">Sala integrada</string>
     <string name="atmos_room_custom">Mi sala</string>
+    <string name="atmos_rooms">Salas</string>
+    <string name="atmos_room_shape">Tamaño y forma</string>
     <string name="atmos_room_browse">Explorar la base de datos de salas</string>
     <string name="atmos_room_width">Ancho</string>
     <string name="atmos_room_depth">Fondo</string>

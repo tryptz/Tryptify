@@ -696,14 +696,12 @@ fun AtmosRendererScreen(
                 }
                 // Every imported/downloaded .sofa stays on hand as a preset —
                 // tap to switch HRTFs without re-downloading or re-picking.
-                if (sofaPresets.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.atmos_sofa_presets),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
+                if (sofaPresets.isNotEmpty()) FoldingList(
+                    title = stringResource(R.string.atmos_sofa_presets),
+                    chosen = sofaPresets
+                        .firstOrNull { profile.hrtfEnabled && profile.hrtfProfileId == it.absolutePath }
+                        ?.name?.removeSuffix(".sofa"),
+                ) {
                     sofaPresets.forEach { file ->
                         val isSelected =
                             profile.hrtfEnabled && profile.hrtfProfileId == file.absolutePath

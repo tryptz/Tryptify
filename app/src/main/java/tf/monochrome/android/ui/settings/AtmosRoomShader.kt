@@ -18,16 +18,23 @@ import kotlin.math.sqrt
  * The room the headphone render plays in, drawn by the GPU: one AGSL pass in
  * which every pixel is a ray from a camera that orbits the room.
  *
- * The ray is walked through the room in even steps. Along it the waves from
- * the loudest speakers and from their reflections ([RoomScene.sources]) add
- * up, and where they are in step the air glows: faintly through the whole
- * room, and sharply on a sheet at ear height, where they are heard. Where the
- * ray leaves the room is the wall that is seen: its edges, the floor's metre
- * grid, the light each speaker throws on the surface near it, the glow of
- * what the room still holds; the wall it came in through is drawn faintly, so
- * the room is looked into and not at. Speakers, objects, the measurement's
+ * The sound is grain: the room's air is a grid of cells with one speck in
+ * each, at a place and with a rank that are the cell's own. A speck shows
+ * when there is more sound where it is than its rank, so a speaker has a
+ * cloud of specks round it that is denser and reaches further the harder it
+ * is driven, the spots where its sound turns on a wall towards the listener
+ * ([RoomScene.sources]) have a smaller one, and what the room still holds is
+ * a thin grain through all of it. The specks stand in the room, so they turn
+ * with it. The ray goes through the grid cell by cell and meets the specks
+ * it passes.
+ *
+ * Where the ray leaves the room is the wall that is seen: its edges and the
+ * floor's metre grid; the wall it came in through is drawn faintly, so the
+ * room is looked into and not at. Speakers, objects, the measurement's
  * loudspeakers and the rays to the listener are lights the ray passes; the
- * listener is a head that hides what is behind it.
+ * listener is a head that hides what is behind it. Those marks are a size on
+ * the page, not in the room (`uUnit`): a head its true size in a hall would
+ * be one pixel.
  *
  * The room is a distance function ([RoomShape]'s geometry again, in the
  * shader's `room`): a floor plan with rounded corners, drawn in above ear
@@ -39,42 +46,51 @@ import kotlin.math.sqrt
  */
 private const val ROOM_SRC = """
 uniform float2 uRes;       // the picture, in pixels
-uniform float uTime;       // seconds, for the grain only
 uniform float3 uEye;       // the camera, in metres
 uniform float3 uRight;     // its basis: right, up, forward
 uniform float3 uUp;
 uniform float3 uFwd;
 uniform float uFocal;      // focal length over the picture's height
 uniform float3 uRoom;      // width, depth, height
-uniform float uEar;        // ear height: where the waves' sheet is
 uniform float uLean;       // the height the walls lean from
 uniform float3 uCeil;      // ceiling width and depth as shares of the floor's; the walls' curve
 uniform float uCorner;     // corner radius
 uniform float3 uListener;
 uniform float4 uSpk[32];   // each speaker: where, and how hard it is driven (0..1)
 uniform float uSpkKind[32];  // 0 ear level, 1 a height speaker, 2 the LFE
+uniform float uSpkAir[32];   // its level averaged over a second or so: the grain round it
 uniform float uSpkCount;
 uniform float4 uObj[32];   // each object: where, and its level; under zero, a height object
 uniform float uObjCount;
-uniform float4 uSrc[12];   // the wave field's sources: where, and how strong
+uniform float4 uSrc[12];   // where the loudest speakers' sound turns on a surface, and how strong
 uniform float uSrcCount;
 uniform float4 uRay[3];    // the loudest speakers, for their ray to the listener
 uniform float4 uMark[8];   // the loudspeakers the room was measured with
 uniform float uMarkCount;
-uniform float2 uWave;      // the field's wavelength, and its phase
-uniform float uField;      // the field at its brightest
-uniform float uGlow;       // what the room still holds, times the Room amount: the walls' glow
+uniform float3 uGrain;     // the grain: a cell's side, how far a loud speaker's cloud reaches, a speck's cover
+uniform float3 uCloud;     // of that reach: a silent speaker's, a turning spot's; and the grain a full room holds
+uniform float uGlow;       // what the room still holds, times the Room amount: the grain through all of it
+uniform float uUnit;       // how many times their size in the built-in room the marks are drawn
 uniform float3 uPrimary;   // the theme: speakers and waves,
 uniform float3 uTertiary;  // heights,
 uniform float3 uInk;       // the room's lines and the listener,
 uniform float uGrid;       // and whether the floor has a metre grid
 
-const int STEPS = 36;
+const int STEPS = 36;    // along a ray, looking for the walls
+const int CELLS = 168;   // the most grain cells a ray goes through
 
-float hash(float2 p) {
-    float3 q = fract(float3(p.xyx) * 0.1031);
-    q += dot(q, q.yzx + 33.33);
-    return fract((q.x + q.y) * q.z);
+// Three numbers in 0..1 that are a cell's own.
+float3 hash3(float3 p) {
+    p = fract(p * float3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz + 33.33);
+    return fract((p.xxy + p.yxx) * p.zyx);
+}
+
+// e to the minus x. Never asked for the vanishingly small: a renderer's quick
+// exp is not to be trusted there, and one of them drew a far speaker over the
+// listener's head.
+float fade(float x) {
+    return exp(-min(x, 30.0));
 }
 
 // How far in the walls have leaned at height z: 0 up to where they start, 1 at the ceiling.
@@ -101,19 +117,31 @@ float room(float3 p) {
     return max(plan(p), max(-p.z, p.z - uRoom.z));
 }
 
-// The waves at p, -1..1: every source's wave as it is there, weaker the
-// further it has come, over the most they could add up to.
-float waves(float3 p) {
-    float sum = 0.0;
-    float most = 0.0;
+// The sound at p: whose colour it has, and how much of it there is (0..1).
+// A speaker's falls away round it, further the harder it is driven; what the
+// room holds is the same everywhere.
+float4 sound(float3 p) {
+    float sum = uGlow * uCloud.z;
+    float3 tint = uPrimary * sum;
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uSpkCount) break;
+        float level = uSpkAir[i];
+        if (level <= 0.0) continue;
+        float reach = uGrain.y * (uCloud.x + level);
+        float3 to = p - uSpk[i].xyz;
+        float w = level * sqrt(level) * fade(dot(to, to) / (reach * reach));
+        sum += w;
+        tint += (uSpkKind[i] == 1.0 ? uTertiary : uPrimary) * w;
+    }
     for (int i = 0; i < 12; i++) {
         if (float(i) >= uSrcCount) break;
-        float tFar = length(p - uSrc[i].xyz);
-        float reach = uSrc[i].w / (0.6 + tFar);
-        sum += reach * cos(6.2831853 * tFar / uWave.x - uWave.y);
-        most += reach;
+        float reach = uGrain.y * uCloud.y;
+        float3 to = p - uSrc[i].xyz;
+        float w = uSrc[i].w * fade(dot(to, to) / (reach * reach));
+        sum += w;
+        tint += uPrimary * w;
     }
-    return most > 0.0 ? sum / most : 0.0;
+    return float4(tint / max(sum, 1e-4), min(sum, 1.0));
 }
 
 // A point of light seen along the ray: the square of how far the ray passes from it.
@@ -166,7 +194,7 @@ half4 main(float2 fragCoord) {
         float3 to = uListener - ro;
         float along = dot(to, rd);
         float d2 = dot(to, to) - along * along;
-        float r = 0.12;
+        float r = 0.12 * uUnit;
         if (along > 0.0 && d2 < r * r) headT = along - sqrt(r * r - d2);
     }
 
@@ -175,10 +203,6 @@ half4 main(float2 fragCoord) {
     if (tFar > tNear) {
         float stop = headT > 0.0 ? min(tFar, headT) : tFar;
         float dt = (tFar - tNear) / float(STEPS);
-        // The walls are looked for at even steps, so the room's outline holds
-        // still; the waves are sampled a grain's worth off them, which turns
-        // the steps' banding into a fine noise.
-        float grain = hash(fragCoord + fract(uTime) * 61.0) - 0.5;
         float lastIn = -1.0;
         float firstIn = -1.0;
         for (int i = 0; i < STEPS; i++) {
@@ -186,26 +210,38 @@ half4 main(float2 fragCoord) {
             if (room(ro + rd * t) < 0.0) {
                 if (firstIn < 0.0) firstIn = t;
                 lastIn = t;
-                float ts = t + grain * dt;
-                if (ts < stop && uSrcCount > 0.0) {
-                    float crest = clamp(waves(ro + rd * ts) * 2.6, 0.0, 1.0);
-                    float dense = crest * crest * (3.0 - 2.0 * crest);
-                    acc = under(acc, uPrimary, dense * uField * dt * 0.30);
-                }
             }
         }
-        // The waves again where they are heard: a sheet at ear height, on
-        // which their crests are sharp enough to count.
-        if (uSrcCount > 0.0 && abs(rd.z) > 1e-4) {
-            float ts = (uEar - ro.z) / rd.z;
-            float3 p = ro + rd * ts;
-            if (ts > 0.0 && ts < stop && room(p) < 0.0) {
-                float w = waves(p) * 2.6;
-                float crest = smoothstep(0.15, 0.75, w);
-                // Fainter near the walls, so the sheet has no edge.
-                float inside = smoothstep(0.0, 0.5, -plan(p));
-                acc = under(acc, uPrimary, crest * uField * 0.9 * inside);
+        // The grain, cell by cell from the near wall to the far one. A speck
+        // keeps clear of its cell's sides by more than its own size, so the
+        // ray that meets it is in its cell.
+        float side = uGrain.x;
+        float3 stepTo = step(0.0, rd) * 2.0 - 1.0;
+        float3 cell = floor((ro + rd * (tNear + 1e-3)) / side);
+        float3 tNext = ((cell + max(stepTo, 0.0)) * side - ro) * inv;
+        float3 tCell = abs(side * inv);
+        float pixel = 1.0 / (uFocal * uRes.y);
+        for (int i = 0; i < CELLS; i++) {
+            float3 own = hash3(cell);
+            float3 at = (cell + 0.16 + 0.68 * own) * side;
+            float3 to = at - ro;
+            float along = dot(to, rd);
+            // Fine, and never much under a pixel across, however far off it is.
+            float size = clamp(0.8 * pixel * along, 0.05 * side, 0.15 * side);
+            float d2 = dot(to, to) - along * along;
+            if (along > 0.0 && along < stop && d2 < size * size && room(at) < 0.0) {
+                float4 here = sound(at);
+                // Its rank; it comes and goes over a tenth of the way, not at once.
+                float rank = fract(own.x + own.y * 7.0 + own.z * 13.0);
+                float shown = smoothstep(0.0, 0.1, here.a - 0.9 * rank);
+                float disc = 1.0 - smoothstep(0.45, 1.0, d2 / (size * size));
+                acc = under(acc, here.rgb, shown * disc * uGrain.z);
             }
+            float tOut = min(tNext.x, min(tNext.y, tNext.z));
+            if (tOut >= tFar || acc.a > 0.97) break;
+            float3 go = step(tNext.xyz, tNext.yzx) * step(tNext.xyz, tNext.zxy);
+            cell += go * stepTo;
+            tNext += go * tCell;
         }
         if (lastIn > 0.0) {
             // The wall itself, between the last step inside and the next one.
@@ -235,38 +271,35 @@ half4 main(float2 fragCoord) {
         float level = uSpk[i].w;
         float kind = uSpkKind[i];
         float3 tint = kind == 1.0 ? uTertiary : uPrimary;
-        float size = kind == 2.0 ? 0.085 : 0.062;
-        float d = sqrt(d2);
-        // A ring that is always there; lit, a core and a halo as wide as it is loud.
-        float off = (d - size) / 0.012;
-        float wide = size * (1.8 + 3.2 * level);
-        float ring = exp(-off * off);
-        float core = exp(-d2 / (size * size * 0.55)) * level;
-        float halo = exp(-d2 / (wide * wide)) * level * 0.55;
-        lights = under(lights, tint, ring * 0.6 + core + halo);
+        float size = (kind == 2.0 ? 0.085 : 0.062) * uUnit;
+        // A ring that is always there, filled as the speaker plays: its sound is the grain round it.
+        float off = (sqrt(d2) - size) / (0.012 * uUnit);
+        float ring = fade(off * off);
+        float core = fade(d2 / (size * size * 0.55)) * level;
+        lights = under(lights, tint, ring * 0.6 + core);
     }
     for (int i = 0; i < 32; i++) {
         if (float(i) >= uObjCount) break;
         float level = abs(uObj[i].w);
         float3 tint = uObj[i].w < 0.0 ? uTertiary : uInk;
-        float size = 0.05 + 0.06 * level;
+        float size = (0.05 + 0.06 * level) * uUnit;
         float d2 = passes(ro, rd, uObj[i].xyz, limit);
-        float core = exp(-d2 / (size * size)) * (0.45 + 0.55 * level);
-        float halo = exp(-d2 / (size * size * 9.0)) * level * 0.35;
+        float core = fade(d2 / (size * size)) * (0.45 + 0.55 * level);
+        float halo = fade(d2 / (size * size * 9.0)) * level * 0.35;
         // Its place on the floor, so its height can be read.
-        float foot = exp(-passes(ro, rd, float3(uObj[i].xy, 0.01), limit) / 0.0012) * 0.35;
+        float foot = fade(passes(ro, rd, float3(uObj[i].xy, 0.01), limit) / (0.0012 * uUnit * uUnit)) * 0.35;
         lights = under(lights, tint, core + halo + foot);
     }
     for (int i = 0; i < 3; i++) {
         if (uRay[i].w <= 0.0) continue;
-        float d2 = passesLine(ro, rd, uRay[i].xyz, uListener);
-        lights = under(lights, uPrimary, (exp(-d2 / 0.00012) * 0.8 + exp(-d2 / 0.004) * 0.18) * uRay[i].w);
+        float d2 = passesLine(ro, rd, uRay[i].xyz, uListener) / (uUnit * uUnit);
+        lights = under(lights, uPrimary, (fade(d2 / 0.00012) * 0.8 + fade(d2 / 0.004) * 0.18) * uRay[i].w);
     }
     for (int i = 0; i < 8; i++) {
         if (float(i) >= uMarkCount) break;
-        float d = sqrt(passes(ro, rd, uMark[i].xyz, limit));
+        float d = sqrt(passes(ro, rd, uMark[i].xyz, limit)) / uUnit;
         float off = (d - 0.09) / 0.014;
-        lights = under(lights, uInk, exp(-off * off) * 0.7 + exp(-d * d / 0.0006) * 0.7);
+        lights = under(lights, uInk, fade(off * off) * 0.7 + fade(d * d / 0.0006) * 0.7);
     }
     acc = under(acc, lights.rgb / max(lights.a, 1e-4), lights.a);
 
@@ -300,22 +333,11 @@ half4 main(float2 fragCoord) {
         // The floor's metre grid.
         float2 cell = abs(fract(p.xy + 0.5) - 0.5);
         float grid = uGrid * onFloor * (1.0 - smoothstep(0.0, line, min(cell.x, cell.y))) * 0.5;
-        // The speakers' light on the surface near them.
-        float pool = 0.0;
-        float3 poolTint = float3(0.0);
-        for (int i = 0; i < 32; i++) {
-            if (float(i) >= uSpkCount) break;
-            float3 to = uSpk[i].xyz - p;
-            float fall = uSpk[i].w / (1.0 + 5.0 * dot(to, to));
-            pool += fall;
-            poolTint += (uSpkKind[i] == 1.0 ? uTertiary : uPrimary) * fall;
-        }
         float fill = onFloor * 0.07 + onWall * 0.035 + onCeiling * 0.02;
         // The listener's shadow on the floor.
-        float shadow = onFloor * exp(-dot(p.xy - uListener.xy, p.xy - uListener.xy) / 0.05);
+        float2 fromSeat = (p.xy - uListener.xy) / uUnit;
+        float shadow = onFloor * fade(dot(fromSeat, fromSeat) / 0.05);
         acc = under(acc, uInk, (edge * 0.55 + grid * 0.22) * weight);
-        acc = under(acc, poolTint / max(pool, 1e-4), clamp(pool * 0.55, 0.0, 0.6) * weight);
-        acc = under(acc, uPrimary, onWall * uGlow * 0.22 * weight);
         acc = under(acc, uInk, (fill - shadow * 0.04) * weight);
     }
     return half4(acc);
@@ -398,10 +420,11 @@ internal class RoomCamera(yaw: Float, shape: RoomShape, private val width: Float
 internal class RoomScene {
     val speakers = FloatArray(MAX_SPEAKERS * 4)      // x, y, z, how hard it is driven (0..1)
     val speakerKinds = FloatArray(MAX_SPEAKERS)      // KIND_EAR, KIND_HEIGHT, KIND_LFE
+    val speakerAir = FloatArray(MAX_SPEAKERS)        // that level, averaged: the grain round it
     var speakerCount = 0
     val objects = FloatArray(MAX_OBJECTS * 4)        // x, y, z, level; under zero for a height object
     var objectCount = 0
-    val sources = FloatArray(MAX_SOURCES * 4)        // the wave field's: x, y, z, strength
+    val sources = FloatArray(MAX_SOURCES * 4)        // where sound turns on a surface: x, y, z, strength
     var sourceCount = 0
     val rays = FloatArray(MAX_RAYS * 4)              // the loudest speakers: x, y, z, level
     val marks = FloatArray(MAX_MARKS * 4)            // the measurement's loudspeakers
@@ -415,9 +438,10 @@ internal class RoomScene {
         rays.fill(0f)
     }
 
-    fun addSpeaker(x: Float, y: Float, z: Float, level: Float, kind: Float) {
+    fun addSpeaker(x: Float, y: Float, z: Float, level: Float, air: Float, kind: Float) {
         if (speakerCount == MAX_SPEAKERS) return
         put(speakers, speakerCount, x, y, z, level)
+        speakerAir[speakerCount] = air
         speakerKinds[speakerCount++] = kind
     }
 
@@ -426,7 +450,7 @@ internal class RoomScene {
         put(objects, objectCount++, x, y, z, if (high) -level.coerceAtLeast(0.01f) else level.coerceAtLeast(0.01f))
     }
 
-    /** A wave source; when there are more than the shader takes, the weakest goes. */
+    /** A spot where sound turns on a surface; when there are more than the shader takes, the weakest goes. */
     fun addSource(x: Float, y: Float, z: Float, strength: Float) {
         if (strength <= 0f) return
         if (sourceCount < MAX_SOURCES) {
@@ -444,13 +468,6 @@ internal class RoomScene {
 
     fun addMark(x: Float, y: Float, z: Float) {
         if (markCount < MAX_MARKS) put(marks, markCount++, x, y, z, 1f)
-    }
-
-    /** The strongest wave source, 0..1: how bright the field is. */
-    fun strongest(): Float {
-        var top = 0f
-        for (i in 0 until sourceCount) top = maxOf(top, sources[i * 4 + 3])
-        return top.coerceIn(0f, 1f)
     }
 
     private fun put(into: FloatArray, i: Int, x: Float, y: Float, z: Float, w: Float) {
@@ -486,29 +503,25 @@ internal class RoomShader {
         camera: RoomCamera,
         shape: RoomShape,
         scene: RoomScene,
-        seconds: Float,
-        phase: Float,
-        field: Float,
         glow: Float,
         primary: Color,
         tertiary: Color,
         ink: Color,
     ) {
         shader.setFloatUniform("uRes", width, height)
-        shader.setFloatUniform("uTime", seconds)
         shader.setFloatUniform("uEye", camera.eye)
         shader.setFloatUniform("uRight", camera.right)
         shader.setFloatUniform("uUp", camera.up)
         shader.setFloatUniform("uFwd", camera.forward)
         shader.setFloatUniform("uFocal", RoomCamera.FOCAL)
         shader.setFloatUniform("uRoom", shape.width, shape.depth, shape.height)
-        shader.setFloatUniform("uEar", shape.earHeight)
         shader.setFloatUniform("uLean", shape.leanStart)
         shader.setFloatUniform("uCeil", shape.ceilingWidth, shape.ceilingDepth, shape.curve)
         shader.setFloatUniform("uCorner", shape.cornerRadius)
         shader.setFloatUniform("uListener", shape.listenerX, shape.listenerY, shape.earHeight)
         shader.setFloatUniform("uSpk", scene.speakers)
         shader.setFloatUniform("uSpkKind", scene.speakerKinds)
+        shader.setFloatUniform("uSpkAir", scene.speakerAir)
         shader.setFloatUniform("uSpkCount", scene.speakerCount.toFloat())
         shader.setFloatUniform("uObj", scene.objects)
         shader.setFloatUniform("uObjCount", scene.objectCount.toFloat())
@@ -517,20 +530,39 @@ internal class RoomShader {
         shader.setFloatUniform("uRay", scene.rays)
         shader.setFloatUniform("uMark", scene.marks)
         shader.setFloatUniform("uMarkCount", scene.markCount.toFloat())
-        shader.setFloatUniform("uWave", WAVELENGTH, phase)
-        shader.setFloatUniform("uField", field)
+        shader.setFloatUniform("uGrain", RoomGrain.cell(shape), RoomGrain.reach(shape), RoomGrain.COVER)
+        shader.setFloatUniform("uCloud", RoomGrain.NEAR, RoomGrain.TURNED, RoomGrain.HELD)
         shader.setFloatUniform("uGlow", glow)
+        shader.setFloatUniform("uUnit", RoomGrain.markScale(shape))
         shader.setFloatUniform("uPrimary", primary.red, primary.green, primary.blue)
         shader.setFloatUniform("uTertiary", tertiary.red, tertiary.green, tertiary.blue)
         shader.setFloatUniform("uInk", ink.red, ink.green, ink.blue)
         shader.setFloatUniform("uGrid", 1f)
         canvas.drawRect(0f, 0f, width, height, paint)
     }
+}
 
-    companion object {
-        /** Metres between the wave field's fronts, as it is drawn. */
-        const val WAVELENGTH = 1.3f
-    }
+/**
+ * The grain's measures, which follow the room's size: the same picture of a
+ * booth and of a hall. The shader and the canvas drawing both take them from
+ * here.
+ */
+internal object RoomGrain {
+    /** A grain cell's side, in metres: [ACROSS] of them over the room's longest way. */
+    fun cell(shape: RoomShape): Float = maxOf(shape.width, shape.depth, 2f * shape.height) / ACROSS
+
+    /** How far a speaker's cloud reaches at full level, in metres (a speaker driven less reaches less). */
+    fun reach(shape: RoomShape): Float = REACH * minOf(shape.width, shape.depth)
+
+    /** How many times their size in the built-in room the marks are drawn, so they are that size on the page. */
+    fun markScale(shape: RoomShape): Float = (cell(shape) / cell(RoomShape.BUILT_IN)).coerceAtLeast(1f)
+
+    const val ACROSS = 64f      // cells; the shader's CELLS is the most a ray can cross of them
+    const val REACH = 0.2f      // of the room's shorter side
+    const val COVER = 0.9f      // a speck's cover: solid, a little of what is behind it through
+    const val NEAR = 0.35f      // a speaker's reach as it falls silent, of its reach at full level
+    const val TURNED = 0.4f     // the reach of a spot where sound turns, of the same
+    const val HELD = 0.22f      // the grain through the whole room when it holds all it can, at Room 100%
 }
 
 /**

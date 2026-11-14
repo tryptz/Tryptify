@@ -64,21 +64,22 @@ class RoomCameraTest {
     @Test
     fun `the scene keeps what the shader has room for`() {
         val scene = RoomScene()
-        repeat(40) { scene.addSpeaker(it.toFloat(), 0f, 0f, 0.5f, RoomScene.KIND_EAR) }
+        repeat(40) { scene.addSpeaker(it.toFloat(), 0f, 0f, level = 0.5f, air = 0.25f, kind = RoomScene.KIND_EAR) }
         assertEquals(RoomScene.MAX_SPEAKERS, scene.speakerCount)
+        assertEquals(0.25f, scene.speakerAir[RoomScene.MAX_SPEAKERS - 1], 0f)
         // An object's level is never nothing, and a height object's is under zero.
         scene.addObject(1f, 2f, 3f, 0f, high = false)
         scene.addObject(1f, 2f, 3f, 0.6f, high = true)
         assertEquals(2, scene.objectCount)
         assertTrue(scene.objects[3] > 0f)
         assertEquals(-0.6f, scene.objects[7], 0f)
-        // Wave sources: the strongest twelve are kept, whatever order they come in.
+        // Where sound turns on a surface: the strongest twelve are kept, whatever order they come in.
         for (i in 0 until 20) scene.addSource(i.toFloat(), 0f, 0f, 0.05f * (i + 1))
         scene.addSource(99f, 0f, 0f, 0f)                                 // nothing: not a source
         assertEquals(RoomScene.MAX_SOURCES, scene.sourceCount)
         val kept = (0 until scene.sourceCount).map { scene.sources[it * 4 + 3] }.sorted()
         assertEquals(0.45f, kept.first(), 1e-5f)                         // the ninth of twenty and up
-        assertEquals(1f, scene.strongest(), 1e-5f)
+        assertEquals(1f, kept.last(), 1e-5f)
         scene.setRay(0, 1f, 1f, 1f, 0.7f)
         scene.setRay(7, 1f, 1f, 1f, 0.7f)                                // out of range: ignored
         assertEquals(0.7f, scene.rays[3], 0f)
@@ -87,6 +88,23 @@ class RoomCameraTest {
         scene.clear()
         assertEquals(0, scene.speakerCount + scene.objectCount + scene.sourceCount + scene.markCount)
         assertEquals(0f, scene.rays[3], 0f)
-        assertEquals(0f, scene.strongest(), 0f)
+    }
+
+    @Test
+    fun `the grain and the marks follow the room's size`() {
+        val hall = RoomShape(width = 23f, depth = 23f, height = 6.7f)
+        // The marks are their own size in the built-in room and no smaller in a little one.
+        assertEquals(1f, RoomGrain.markScale(RoomShape.BUILT_IN), 0f)
+        assertEquals(1f, RoomGrain.markScale(RoomShape(width = 2f, depth = 2.4f, height = 2.3f)), 0f)
+        assertEquals(23f / 5.5f, RoomGrain.markScale(hall), 1e-4f)
+        // A cloud reaches as far across a hall as across a booth, as a share of it.
+        assertEquals(RoomGrain.reach(RoomShape.BUILT_IN) / 5f, RoomGrain.reach(hall) / 23f, 1e-5f)
+        // However a room is proportioned, a ray crosses no more cells than the
+        // shader walks (its CELLS, 168): the cells across, along and up it.
+        for (room in listOf(hall, RoomShape.BUILT_IN, RoomShape(30f, 30f, 12f), RoomShape(2f, 30f, 12f), RoomShape(30f, 2f, 2f))) {
+            val cell = RoomGrain.cell(room)
+            assertTrue((room.width + room.depth + room.height) / cell <= 2.5f * RoomGrain.ACROSS + 1e-3f)
+        }
+        assertTrue(2.5f * RoomGrain.ACROSS <= 168f)
     }
 }

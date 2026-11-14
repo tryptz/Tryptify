@@ -105,6 +105,15 @@ data class CustomRoom(
  * A room to start from: typical sizes for a kind of room, not a survey of
  * any one. Choosing one fills the listener's room with its values, which
  * stay theirs to change.
+ *
+ * [STEREO] is the one that names a real room, the upstairs room of the club
+ * in Montréal, because the owner asked for it. Nobody has published its
+ * size: it is an estimate, a plain box of about the right size, from the
+ * building's footprint on the city's property roll (20 by 28 m, some 571
+ * square metres a floor), two photographs of the room empty, scaled by the
+ * stairs to its rear platform, and its 700 capacity. Its sunken floor and
+ * raised platform are not in it. Do not add another named room without
+ * numbers at least that good.
  */
 enum class RoomPreset(val room: CustomRoom) {
     BOOTH(CustomRoom(width = 2.0f, depth = 2.4f, height = 2.3f, damping = 0.55f)),
@@ -116,6 +125,7 @@ enum class RoomPreset(val room: CustomRoom) {
     HALL(CustomRoom(width = 22f, depth = 30f, height = 12f, damping = 0.18f, ceilingWidth = 0.8f)),
     CHAPEL(CustomRoom(width = 8f, depth = 22f, height = 11f, damping = 0.06f, roundness = 0.2f, ceilingWidth = 0.6f)),
     ROUND(CustomRoom(width = 9f, depth = 9f, height = 4.5f, damping = 0.20f, roundness = 1f)),
+    STEREO(CustomRoom(width = 17.5f, depth = 18f, height = 5.5f, damping = 0.35f)),
 }
 
 /**
@@ -382,7 +392,7 @@ data class RoomShape(
      * Each is x, y, z, then a point of the surface and the surface's normal
      * into the room. A source that stands on a surface has no image in it.
      */
-    fun mirrorImages(sx: Float, sy: Float, sz: Float): List<FloatArray> {
+    private fun mirrorImages(sx: Float, sy: Float, sz: Float): List<FloatArray> {
         val source = floatArrayOf(sx, sy, sz)
         val inX = leanX(height) * width   // how far a side wall is in at the ceiling
         val inY = leanY(height) * depth

@@ -133,16 +133,17 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * along its edges. The 28 speakers of the 15.1.12 layout stand on its walls,
  * each as bright as it is driven, the mix's objects float where the mix puts
  * them, and the listener sits where the room's listener sat. From the three
- * loudest speakers a ray runs to the listener, and their waves fill the room
- * as a glow: bright where the waves from those speakers and from the walls
- * meet in step, dark where they cancel. With [roomAmount] of room the walls'
- * reflections join the waves, and the walls themselves glow with what the
- * room still holds, which dies away over [decaySeconds] as the room's sound
- * does. The waves move only while something plays, and not at all when the
- * listener has asked for less motion.
+ * loudest speakers a ray runs to the listener. The sound itself is grain:
+ * fine specks in the room's air, dense round a speaker that plays and
+ * reaching further the harder it is driven ([RoomGrain]). With [roomAmount]
+ * of room there is grain too where the loudest speakers' sound turns on a
+ * wall towards the listener, and thinly through the whole room for what it
+ * still holds, which dies away over [decaySeconds] as the room's sound does.
+ * The grain follows each speaker's level averaged over a second or so
+ * ([SlowLevels]), so it swells and thins and does not flicker with the meter.
  *
- * It is drawn by the GPU ([RoomShader]: a camera, lit surfaces, light in the
- * air) on Android 13 and up, and on the canvas ([AtmosRoomCanvas]) where that
+ * It is drawn by the GPU ([RoomShader]: a camera, the room's surfaces, grain
+ * in the air) on Android 13 and up, and on the canvas ([AtmosRoomCanvas]) where that
  * shader cannot run. Drag sideways to walk round it. [layout] is
  * [AtmosNative.nativeRoomLayout]'s, [speakers] the processor's levels in the
  * same order (null: nothing plays through the room).
@@ -196,12 +197,14 @@ private fun rememberRoomLabels(shape: RoomShape, ink: Color): RoomLabels {
 }
 
 /**
- * The waves' clock: the time since it started, in nanoseconds, thirty times
- * a second while [running], and held still otherwise. Read only where the
- * waves are drawn, so nothing else is redrawn by it.
+ * The grain's clock: the time since it started, in nanoseconds, thirty times
+ * a second while [running], and held still otherwise. Nothing is drawn from
+ * the time itself: reading it where the room is drawn is what draws the room
+ * again between the meter's ten readings a second, so the averaged levels
+ * ([SlowLevels]) move smoothly; nothing else is redrawn by it.
  */
 @Composable
-private fun rememberWaveClock(running: Boolean): androidx.compose.runtime.LongState {
+private fun rememberGrainClock(running: Boolean): androidx.compose.runtime.LongState {
     val clock = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     if (running) {
         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -246,7 +249,9 @@ private fun AtmosRoomGpu(
     val scene = remember { RoomScene() }
     val loudest = remember { IntArray(RAYS) }
     val afterglow = remember { Afterglow() }
-    val clock = rememberWaveClock(speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
+    val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
+    val air = remember { SlowLevels() }
+    val clock = rememberGrainClock(speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
@@ -265,12 +270,15 @@ private fun AtmosRoomGpu(
                     val levels = liveSpeakers
                     val o = liveObjects
                     val camera = RoomCamera(yaw.floatValue, room, size.width, size.height)
+                    clock.longValue  // read: see rememberGrainClock
 
                     scene.clear()
+                    air.tick(playing = levels != null)
                     var peak = 0f
                     for (i in 0 until count) {
                         val f = i * AtmosNative.ROOM_FIELDS
                         val glow = levels?.getOrNull(i)?.let(::atmosSpeakerGlow) ?: 0f
+                        glows[i] = glow
                         peak = maxOf(peak, glow)
                         val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
                         val kind = when {
@@ -278,7 +286,10 @@ private fun AtmosRoomGpu(
                             layout[f + 2] > 0f -> RoomScene.KIND_HEIGHT
                             else -> RoomScene.KIND_EAR
                         }
-                        scene.addSpeaker(s[0], s[1], if (kind == RoomScene.KIND_LFE) LFE_HEIGHT else s[2], glow, kind)
+                        scene.addSpeaker(
+                            s[0], s[1], if (kind == RoomScene.KIND_LFE) LFE_HEIGHT else s[2],
+                            level = glow, air = air.follow(i, glow), kind = kind,
+                        )
                     }
                     if (o != null) {
                         for (k in 0 until o.count) {
@@ -287,32 +298,32 @@ private fun AtmosRoomGpu(
                             scene.addObject(s[0], s[1], s[2], atmosObjectLevel(o.level(k)), high = o.z(k) > 0.25f)
                         }
                     }
-                    // The waves: each loud speaker and, with some room, its image
-                    // in every surface, which is that surface's reflection of it.
-                    pickLoudest(levels, layout, count, loudest)
+                    // The loudest speakers now: their ray to the listener.
+                    pickLoudest(glows, layout, count, loudest)
                     loudest.forEachIndexed { slot, i ->
                         if (i < 0) return@forEachIndexed
                         val f = i * AtmosNative.ROOM_FIELDS
-                        val glow = atmosSpeakerGlow(levels!![i])
                         val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                        scene.setRay(slot, s[0], s[1], s[2], glow)
-                        scene.addSource(s[0], s[1], s[2], glow)
-                        if (amount > 0f) {
-                            for (image in room.mirrorImages(s[0], s[1], s[2])) {
-                                scene.addSource(image[0], image[1], image[2], glow * amount * REFLECTED)
+                        scene.setRay(slot, s[0], s[1], s[2], glows[i])
+                    }
+                    // And the loudest of late: with some room, grain where their
+                    // sound turns on a surface towards the listener.
+                    if (amount > 0f) {
+                        pickLoudest(air.levels, layout, count, loudest)
+                        for (i in loudest) {
+                            if (i < 0) continue
+                            val f = i * AtmosNative.ROOM_FIELDS
+                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
+                            for (r in room.firstReflections(s[0], s[1], s[2])) {
+                                scene.addSource(r.x, r.y, r.z, air.levels[i] * amount * room.directOver(s, r))
                             }
                         }
                     }
                     for (src in room.sources) scene.addMark(src[0], src[1], src[2])
 
                     val held = afterglow.follow(peak, liveDecay)
-                    val seconds = clock.longValue / 1e9
-                    val phase = (2.0 * Math.PI * seconds * WAVE_SPEED / RoomShader.WAVELENGTH) % (2.0 * Math.PI)
                     shader.draw(
                         drawContext.canvas.nativeCanvas, size.width, size.height, camera, room, scene,
-                        seconds = (seconds % 64.0).toFloat(),
-                        phase = phase.toFloat(),
-                        field = FIELD_ALPHA * scene.strongest(),
                         glow = amount * held,
                         primary = accent, tertiary = heightTint, ink = onSurface,
                     )
@@ -368,12 +379,11 @@ private fun AtmosRoomGpu(
 
 /**
  * The room drawn on the canvas, for Android 12 and older and for a phone
- * whose driver refuses the shader: the same room and the same waves, as
- * lines and flat cells.
+ * whose driver refuses the shader: the same room and the same grain, as
+ * lines and points.
  */
 @Composable
 private fun AtmosRoomCanvas(
-
     layout: FloatArray,
     speakers: FloatArray?,
     objects: AtmosAudioProcessor.ObjectMeter?,
@@ -403,10 +413,10 @@ private fun AtmosRoomCanvas(
     val loudest = remember { IntArray(RAYS) }
     val path = remember { Path() }
     val afterglow = remember { Afterglow() }
-    val waves = speakers != null && !tf.monochrome.android.ui.theme.reduceMotion()
-    val clock = rememberWaveClock(waves)
-    val liveWaves by rememberUpdatedState(waves)
-    val field = remember { WaveField() }
+    val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
+    val air = remember { SlowLevels() }
+    val grain = remember { CanvasGrain() }
+    val clock = rememberGrainClock(speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
@@ -423,6 +433,7 @@ private fun AtmosRoomCanvas(
                     val room = liveShape
                     val amount = liveAmount.coerceIn(0f, 1f)
                     val view = AtmosRoomView(yaw.floatValue, room)
+                    clock.longValue  // read: see rememberGrainClock
                     // The whole room at any turn: its near corners come out
                     // 0.7 of a room to the side and 0.57 below the middle.
                     val unit = min(size.width * 0.54f, size.height * 0.84f)
@@ -435,33 +446,21 @@ private fun AtmosRoomCanvas(
                     // What the room still holds: the loudest speaker, falling
                     // away over the room's own decay.
                     var peak = 0f
-                    for (i in 0 until count) levels?.getOrNull(i)?.let { peak = maxOf(peak, atmosSpeakerGlow(it)) }
+                    air.tick(playing = levels != null)
+                    for (i in 0 until count) {
+                        glows[i] = levels?.getOrNull(i)?.let(::atmosSpeakerGlow) ?: 0f
+                        air.follow(i, glows[i])
+                        peak = maxOf(peak, glows[i])
+                    }
                     val held = afterglow.follow(peak, liveDecay)
 
-                    // The walls, lit by what the room holds; the floor and its grid.
-                    // The walls go up through rings: the floor's outline, the
-                    // same at ear height, then drawn in as they lean.
+                    // The floor and its grid, and the walls: they go up through
+                    // rings, the floor's outline, the same at ear height, then
+                    // drawn in as they lean.
                     val heights = room.wallHeights()
                     val rings = heights.map { room.ring(it) }
                     val floorLine = rings.first()
                     val ceilingLine = rings.last()
-                    val wallGlow = accent.copy(alpha = 0.16f * amount * held)
-                    if (wallGlow.alpha > 0.004f) {
-                        for (k in 0 until rings.size - 1) {
-                            val low = rings[k]
-                            val high = rings[k + 1]
-                            for (i in low.indices) {
-                                val j = (i + 1) % low.size
-                                path.rewind()
-                                at(low[i][0], low[i][1], heights[k]).let { path.moveTo(it.x, it.y) }
-                                at(low[j][0], low[j][1], heights[k]).let { path.lineTo(it.x, it.y) }
-                                at(high[j][0], high[j][1], heights[k + 1]).let { path.lineTo(it.x, it.y) }
-                                at(high[i][0], high[i][1], heights[k + 1]).let { path.lineTo(it.x, it.y) }
-                                path.close()
-                                drawPath(path, wallGlow)
-                            }
-                        }
-                    }
                     path.rewind()
                     floorLine.forEachIndexed { i, p ->
                         val o = at(p[0], p[1], 0f)
@@ -555,42 +554,40 @@ private fun AtmosRoomCanvas(
                     // straight, and by way of each surface it turns on.
                     val ear = floatArrayOf(room.listenerX, room.listenerY, room.earHeight)
                     val seat = at(ear[0], ear[1], ear[2])
-                    pickLoudest(levels, layout, count, loudest)
-                    if (liveWaves) {
-                        // The waves in the room: each loud speaker, and with some
-                        // room its image in every surface, which is its reflection.
-                        field.clear()
+                    // The sound, as grain: round each speaker that plays, where the
+                    // loudest of late turn on a surface, and what the room holds.
+                    grain.clear(RoomGrain.reach(room), amount * held)
+                    for (i in 0 until count) {
+                        val f = i * AtmosNative.ROOM_FIELDS
+                        val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
+                        grain.addSpeaker(s[0], s[1], if (isLfe(layout, f)) LFE_HEIGHT else s[2], air.levels[i], high = layout[f + 2] > 0f)
+                    }
+                    if (amount > 0f) {
+                        pickLoudest(air.levels, layout, count, loudest)
                         for (i in loudest) {
                             if (i < 0) continue
                             val f = i * AtmosNative.ROOM_FIELDS
-                            val glow = atmosSpeakerGlow(levels!![i])
                             val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                            field.add(s[0], s[1], s[2], glow)
-                            if (amount > 0f) {
-                                for (image in room.mirrorImages(s[0], s[1], s[2])) {
-                                    field.add(image[0], image[1], image[2], glow * amount * REFLECTED)
-                                }
+                            for (r in room.firstReflections(s[0], s[1], s[2])) {
+                                grain.addTurn(r.x, r.y, r.z, air.levels[i] * amount * room.directOver(s, r))
                             }
                         }
-                        drawWaveField(field, view, room, clock.longValue / 1e9f, accent, ::at)
                     }
+                    grain.draw(drawContext.canvas.nativeCanvas, room, unit * 0.004f, accent, heightTint) { x, y, z -> at(x, y, z) }
+
+                    pickLoudest(glows, layout, count, loudest)
                     for (i in loudest) {
                         if (i < 0) continue
                         val f = i * AtmosNative.ROOM_FIELDS
-                        val glow = atmosSpeakerGlow(levels!![i])
+                        val glow = glows[i]
                         val tint = if (layout[f + 2] > 0f) heightTint else accent
                         val s = room.place(layout[f], layout[f + 1], layout[f + 2])
                         val from = at(s[0], s[1], s[2])
                         drawLine(tint.copy(alpha = 0.18f * glow), from, seat, strokeWidth = 5f)
                         drawLine(tint.copy(alpha = 0.75f * glow), from, seat, strokeWidth = 1.5f)
                         if (amount <= 0f) continue
-                        val direct = kotlin.math.sqrt(
-                            (s[0] - ear[0]) * (s[0] - ear[0]) + (s[1] - ear[1]) * (s[1] - ear[1]) +
-                                (s[2] - ear[2]) * (s[2] - ear[2])
-                        )
                         for (r in room.firstReflections(s[0], s[1], s[2])) {
-                            // Fainter the longer its way round is than the straight one.
-                            val strength = glow * amount * (direct / r.path).coerceIn(0f, 1f)
+                            val strength = glow * amount * room.directOver(s, r)
                             if (strength < 0.03f) continue
                             val p = view.project(r.x, r.y, r.z)
                             val spot = at(p)
@@ -685,126 +682,150 @@ private fun AtmosRoomCanvas(
     }
 }
 
-/** The sources of the wave field: where each is, in metres, and how strong. */
-private class WaveField {
-    val sources = FloatArray(MAX_SOURCES * 4)
-    var count = 0
-    val points = FloatArray((FIELD_CELLS + 1) * (FIELD_CELLS + 1) * 2)  // a slice's corners, on the page
-    val path = Path()
-    val paint = androidx.compose.ui.graphics.Paint().apply { isAntiAlias = false }
+/**
+ * Each speaker's level as the grain shows it: averaged over a second or so,
+ * quicker up than down, so a cloud swells with a passage and thins after it
+ * and does not jump with every reading of the meter.
+ */
+private class SlowLevels {
+    /** Each speaker's averaged level, 0..1, in the layout's order. */
+    val levels = FloatArray(AtmosNative.ROOM_MAX_SPEAKERS)
+    private var last = 0L
+    private var up = 1f
+    private var down = 1f
 
-    fun clear() { count = 0 }
-
-    fun add(x: Float, y: Float, z: Float, strength: Float) {
-        if (count == MAX_SOURCES || strength <= 0f) return
-        val at = count * 4
-        sources[at] = x; sources[at + 1] = y; sources[at + 2] = z; sources[at + 3] = strength
-        count++
+    /** Once a frame, before [follow]. With nothing [playing] there is no next frame to settle in: all is still at once. */
+    fun tick(playing: Boolean) {
+        val now = System.nanoTime()
+        val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceIn(0f, 0.25f)
+        last = now
+        if (!playing) levels.fill(0f)
+        up = 1f - kotlin.math.exp(-dt / RISE)
+        down = 1f - kotlin.math.exp(-dt / FALL)
     }
 
-    /**
-     * The field at a point, -1..1: every source's wave as it is there at
-     * [phase], weaker the further it has come, over the most they could add
-     * up to. 1 is all of them in step, -1 all of them against.
-     */
-    fun at(x: Float, y: Float, z: Float, phase: Float): Float {
-        var sum = 0f
-        var most = 0f
-        for (i in 0 until count) {
-            val s = i * 4
-            val dx = x - sources[s]
-            val dy = y - sources[s + 1]
-            val dz = z - sources[s + 2]
-            val far = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
-            val reach = sources[s + 3] / (NEAR + far)
-            sum += reach * cos(TWO_PI * far / WAVELENGTH - phase)
-            most += reach
-        }
-        return if (most > 0f) sum / most else 0f
-    }
-
-    /** The strongest source, 0..1: how bright the whole field is. */
-    fun strongest(): Float {
-        var top = 0f
-        for (i in 0 until count) top = maxOf(top, sources[i * 4 + 3])
-        return top.coerceIn(0f, 1f)
+    /** Moves speaker [i]'s average towards [level], and gives it. */
+    fun follow(i: Int, level: Float): Float {
+        if (i !in levels.indices) return 0f
+        levels[i] += (level - levels[i]) * (if (level > levels[i]) up else down)
+        return levels[i]
     }
 
     private companion object {
-        const val MAX_SOURCES = RAYS * 7   // each speaker and its six images
-        const val NEAR = 0.6f              // metres: keeps a source from blinding the cells next to it
-        const val TWO_PI = 6.2831855f
+        const val RISE = 0.45f  // seconds to come most of the way up to a louder level
+        const val FALL = 1.1f   // and down to a quieter one
     }
 }
 
 /**
- * The waves in the room, as a faint glow on two slices of it: one lying flat
- * at ear height, one standing across the room at the listener's depth. Each
- * slice is a grid of cells; a cell is lit by how far the waves that reach it
- * are in step (see [WaveField.at]), so the picture is the interference of the
- * speakers that play with the walls' reflections of them. The waves are drawn
- * a few hundred times slower and longer than sound, which would cross the
- * room in the time of one frame.
+ * The grain on the canvas: specks that stand at fixed places in the room,
+ * each with a rank; a speck is drawn when there is more sound where it is
+ * than its rank. What "sound" is, is the shader's `sound` again, with
+ * [RoomGrain]'s measures.
  */
-private fun DrawScope.drawWaveField(
-    field: WaveField,
-    view: AtmosRoomView,
-    room: RoomShape,
-    seconds: Float,
-    tint: Color,
-    at: (AtmosRoomView.Point) -> Offset,
-) {
-    if (field.count == 0) return
-    val brightness = FIELD_ALPHA * field.strongest()
-    if (brightness < 0.01f) return
-    val phase = 6.2831855f * seconds * WAVE_SPEED / WAVELENGTH
-    val n = FIELD_CELLS
-    for (slice in 0..1) {
-        // A slice's corner (u, v): flat, across and along the room at ear
-        // height; upright, across the room and up it at the listener's depth.
-        val flat = slice == 0
-        val alongV = if (flat) room.depth else room.height
-        for (v in 0..n) for (u in 0..n) {
-            val x = u * room.width / n
-            val along = v * alongV / n
-            val o = at(if (flat) view.project(x, along, room.earHeight) else view.project(x, room.listenerY, along))
-            val i = (v * (n + 1) + u) * 2
-            field.points[i] = o.x
-            field.points[i + 1] = o.y
-        }
-        for (v in 0 until n) for (u in 0 until n) {
-            val x = (u + 0.5f) * room.width / n
-            val along = (v + 0.5f) * alongV / n
-            val y = if (flat) along else room.listenerY
-            val z = if (flat) room.earHeight else along
+private class CanvasGrain {
+    // Each speck: where in the room, 0..1 of its width, depth and height, and its rank.
+    private val specks = FloatArray(SPECKS * 4).also { all ->
+        val random = java.util.Random(28)
+        for (i in all.indices) all[i] = random.nextFloat()
+    }
+    // What sounds: x, y, z, how much, and one over the square of its reach.
+    private val sounds = FloatArray(MAX_SOUNDS * 5)
+    private val high = BooleanArray(MAX_SOUNDS)
+    private var count = 0
+    private var reach = 1f
+    private var held = 0f
+    private val low = FloatArray(SPECKS * 2)       // the specks to draw in the speakers' colour, on the page
+    private val above = FloatArray(SPECKS * 2)     // and in the height speakers'
+    private val paint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        strokeCap = android.graphics.Paint.Cap.ROUND
+    }
+
+    /** A new frame: a full-level speaker's [reach] in this room, and how much the room [held]s, 0..1. */
+    fun clear(reach: Float, held: Float) {
+        count = 0
+        this.reach = reach
+        this.held = held * RoomGrain.HELD
+    }
+
+    fun addSpeaker(x: Float, y: Float, z: Float, level: Float, high: Boolean) {
+        if (level > 0.01f) add(x, y, z, level * kotlin.math.sqrt(level), reach * (RoomGrain.NEAR + level), high)
+    }
+
+    /** A spot where sound turns on a surface towards the listener. */
+    fun addTurn(x: Float, y: Float, z: Float, strength: Float) {
+        if (strength > 0.01f) add(x, y, z, strength, reach * RoomGrain.TURNED, false)
+    }
+
+    private fun add(x: Float, y: Float, z: Float, amount: Float, reach: Float, high: Boolean) {
+        if (count == MAX_SOUNDS) return
+        val at = count * 5
+        sounds[at] = x; sounds[at + 1] = y; sounds[at + 2] = z; sounds[at + 3] = amount
+        sounds[at + 4] = 1f / (reach * reach)
+        this.high[count++] = high
+    }
+
+    fun draw(
+        canvas: android.graphics.Canvas,
+        room: RoomShape,
+        size: Float,
+        tint: Color,
+        highTint: Color,
+        at: (Float, Float, Float) -> Offset,
+    ) {
+        if (count == 0 && held <= 0f) return
+        var lows = 0
+        var highs = 0
+        for (i in 0 until SPECKS) {
+            val f = i * 4
+            val x = specks[f] * room.width
+            val y = specks[f + 1] * room.depth
+            val z = specks[f + 2] * room.height
             // Only what is inside the walls where they are at that height.
             val lx = room.leanX(z) * room.width
             val ly = room.leanY(z) * room.depth
             if (x < lx || x > room.width - lx || y < ly || y > room.depth - ly) continue
-            // Many waves are seldom all in step: a third of that is already a crest.
-            val crest = (field.at(x, y, z, phase) * FIELD_GAIN).coerceAtMost(1f)
-            if (crest <= 0.05f) continue
-            val alpha = brightness * crest * kotlin.math.sqrt(crest)
-            if (alpha < 0.012f) continue
-            val p = field.points
-            val i00 = (v * (n + 1) + u) * 2
-            val i10 = i00 + 2
-            val i01 = ((v + 1) * (n + 1) + u) * 2
-            val i11 = i01 + 2
-            field.path.rewind()
-            field.path.moveTo(p[i00], p[i00 + 1])
-            field.path.lineTo(p[i10], p[i10 + 1])
-            field.path.lineTo(p[i11], p[i11 + 1])
-            field.path.lineTo(p[i01], p[i01 + 1])
-            field.path.close()
-            // Not anti-aliased: softened edges of cells side by side would show as a grid.
-            field.paint.color = tint.copy(alpha = alpha)
-            drawContext.canvas.drawPath(field.path, field.paint)
+            var sum = held
+            var fromHigh = 0f
+            for (k in 0 until count) {
+                val s = k * 5
+                val dx = x - sounds[s]
+                val dy = y - sounds[s + 1]
+                val dz = z - sounds[s + 2]
+                val far = (dx * dx + dy * dy + dz * dz) * sounds[s + 4]
+                if (far > 12f) continue
+                val w = sounds[s + 3] * kotlin.math.exp(-far)
+                sum += w
+                if (high[k]) fromHigh += w
+            }
+            if (sum <= 0.9f * specks[f + 3]) continue  // the shader's rank
+            val o = at(x, y, z)
+            if (fromHigh > sum / 2f) {
+                above[highs++] = o.x; above[highs++] = o.y
+            } else {
+                low[lows++] = o.x; low[lows++] = o.y
+            }
         }
+        paint.strokeWidth = size
+        paint.color = android.graphics.Color.argb(
+            (RoomGrain.COVER * 255).toInt(), (tint.red * 255).toInt(), (tint.green * 255).toInt(), (tint.blue * 255).toInt(),
+        )
+        canvas.drawPoints(low, 0, lows, paint)
+        paint.color = android.graphics.Color.argb(
+            (RoomGrain.COVER * 255).toInt(),
+            (highTint.red * 255).toInt(), (highTint.green * 255).toInt(), (highTint.blue * 255).toInt(),
+        )
+        canvas.drawPoints(above, 0, highs, paint)
+    }
+
+    private companion object {
+        const val SPECKS = 6000
+        const val MAX_SOUNDS = AtmosNative.ROOM_MAX_SPEAKERS + RAYS * 6   // every speaker, and each loud one's six turns
     }
 }
 
-/** What the room still holds of the loudest sound, for the walls' glow: it falls 60 dB in the room's decay. */
+/** What the room still holds of the loudest sound, for the grain through it and the canvas's walls: it falls 60 dB in the room's decay. */
 private class Afterglow {
     private var held = 0f
     private var last = 0L
@@ -826,20 +847,33 @@ private fun cornerCut(m: Float, length: Float, radius: Float): Float {
     return radius - kotlin.math.sqrt((radius * radius - d * d).coerceAtLeast(0f))
 }
 
-/** The [RAYS] speakers driven hardest (not the LFE, and only ones that are heard) into [into]; -1 for none. */
-private fun pickLoudest(levels: FloatArray?, layout: FloatArray, count: Int, into: IntArray) {
+/**
+ * The [RAYS] speakers with the most of [glows] (each 0..1, in the layout's
+ * order) into [into], -1 for none: not the LFE, and only ones that are heard.
+ */
+private fun pickLoudest(glows: FloatArray, layout: FloatArray, count: Int, into: IntArray) {
     into.fill(-1)
-    if (levels == null) return
-    for (i in 0 until min(count, levels.size)) {
+    for (i in 0 until min(count, glows.size)) {
         val f = i * AtmosNative.ROOM_FIELDS
-        if (isLfe(layout, f) || atmosSpeakerGlow(levels[i]) < 0.15f) continue
+        if (isLfe(layout, f) || glows[i] < 0.15f) continue
         var slot = -1
         for (k in into.indices) {
             if (into[k] < 0) { slot = k; break }
-            if (slot < 0 || kotlin.math.abs(levels[into[k]]) < kotlin.math.abs(levels[into[slot]])) slot = k
+            if (slot < 0 || glows[into[k]] < glows[into[slot]]) slot = k
         }
-        if (into[slot] < 0 || kotlin.math.abs(levels[i]) > kotlin.math.abs(levels[into[slot]])) into[slot] = i
+        if (into[slot] < 0 || glows[i] > glows[into[slot]]) into[slot] = i
     }
+}
+
+/**
+ * How much of a speaker's level a first reflection [r] of it keeps: less the
+ * longer its way round is than the straight one from the speaker at [s].
+ */
+private fun RoomShape.directOver(s: FloatArray, r: RoomShape.Reflection): Float {
+    val dx = s[0] - listenerX
+    val dy = s[1] - listenerY
+    val dz = s[2] - earHeight
+    return (kotlin.math.sqrt(dx * dx + dy * dy + dz * dz) / r.path).coerceIn(0f, 1f)
 }
 
 private fun DrawScope.drawLabel(label: androidx.compose.ui.text.TextLayoutResult, at: Offset, dx: Float, dy: Float) {
@@ -867,10 +901,4 @@ private const val TURN = 3.2f          // radians a drag across the whole room t
 private const val MAX_NUMBERS = 32
 private const val MAX_ITEMS = AtmosNative.ROOM_MAX_SPEAKERS + 32
 private const val RAYS = 3             // speakers whose way to the listener is drawn
-private const val FIELD_CELLS = 26     // cells across a slice of the wave field
-private const val FIELD_ALPHA = 0.42f  // the field at its brightest: a glow, never a surface
-private const val FIELD_GAIN = 2.6f    // how soon waves that are partly in step count as a crest
-private const val WAVELENGTH = 1.3f    // metres between the canvas field's wave fronts (the shader's: RoomShader.WAVELENGTH)
-private const val WAVE_SPEED = 1.1f    // metres a second on the page: sound itself would cross the room in a frame
-private const val REFLECTED = 0.65f    // what a wall gives back of a wave, at Room 100%
 private const val LFE_HEIGHT = 0.25f   // metres: the LFE stands on the floor

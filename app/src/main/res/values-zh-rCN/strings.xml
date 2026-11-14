@@ -3396,6 +3396,8 @@
     <string name="whats_new_1952_atmos_objects_body">Atmos 流是一个内含对象的 5.1 核心。音频处理链面板和Atmos 渲染器配置页面现在会统计对象并说明它们是否在播放，房间图会在混音放置的位置显示每个对象。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
+    <string name="atmos_rooms">房间</string>
+    <string name="atmos_room_shape">尺寸和形状</string>
     <string name="atmos_room_browse">浏览房间数据库</string>
     <string name="atmos_room_width">宽度</string>
     <string name="atmos_room_depth">进深</string>

@@ -3474,6 +3474,8 @@
     <string name="whats_new_1952_atmos_objects_body">Bir Atmos akışı, nesneleri içinde taşıyan bir 5.1 çekirdektir. Ses işlem hattı sayfası ve Atmos oluşturucu yapılandırması sayfası artık nesneleri sayıyor ve çalınıp çalınmadıklarını söylüyor; oda haritası her birini miksin koyduğu yerde gösteriyor.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
+    <string name="atmos_rooms">Odalar</string>
+    <string name="atmos_room_shape">Boyut ve şekil</string>
     <string name="atmos_room_browse">Oda veritabanına göz at</string>
     <string name="atmos_room_width">Genişlik</string>
     <string name="atmos_room_depth">Derinlik</string>
