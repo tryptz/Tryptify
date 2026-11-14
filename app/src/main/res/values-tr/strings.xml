@@ -3544,4 +3544,20 @@
     <string name="eq_claude_err_nothing">Bir resim ver ya da ne istediğini söyle</string>
     <string name="eq_claude_err_picture">Bu resim açılamadı</string>
     <string name="eq_claude_preset_name">Claude EQ</string>
+    <string name="assistant_title">Asistan</string>
+    <string name="assistant_summary">Claude\'a Tryptify\'da bir şeyin nasıl yapılacağını sor ya da senin yerine yapmasını iste</string>
+    <string name="assistant_intro">Bir şeyin nerede olduğunu, bir özelliğin ne yaptığını sor ya da Claude\'a neyi değiştirmek istediğini söyle. Otomatik açık değilse her değişiklikten önce sorar. Kendi Claude API anahtarını kullanır.</string>
+    <string name="assistant_auto">Otomatik</string>
+    <string name="assistant_auto_off">Claude her değişiklikten önce sorar</string>
+    <string name="assistant_auto_on">Uygulama kapanana kadar Claude sormadan değişiklik yapar</string>
+    <string name="assistant_asks">Claude şunu yapmak istiyor:</string>
+    <string name="assistant_allow">İzin ver</string>
+    <string name="assistant_deny">Hayır</string>
+    <string name="assistant_did">Yapıldı: %1$s</string>
+    <string name="assistant_did_not">Yapılmadı: %1$s</string>
+    <string name="assistant_placeholder">Claude\'a sor ya da söyle…</string>
+    <string name="assistant_send">Gönder</string>
+    <string name="assistant_start_over">Baştan başla</string>
+    <string name="assistant_err_too_long">Bu, bir turun izin verdiğinden fazla adım gerektirdi. Tekrar sor ya da baştan başla.</string>
+    <string name="assistant_err_other">Claude bu isteği işleyemedi</string>
 </resources>

@@ -3622,4 +3622,20 @@
     <string name="eq_claude_err_nothing">Fornisci un\'immagine o di\' cosa vuoi</string>
     <string name="eq_claude_err_picture">Impossibile aprire l\'immagine</string>
     <string name="eq_claude_preset_name">Claude EQ</string>
+    <string name="assistant_title">Assistente</string>
+    <string name="assistant_summary">Chiedi a Claude come fare qualcosa in Tryptify, o lascia che lo faccia per te</string>
+    <string name="assistant_intro">Chiedi dove si trova qualcosa, cosa fa una funzione, o di\' a Claude cosa vuoi cambiare. Chiede prima di ogni modifica, a meno che Auto non sia attivo. Usa la tua chiave API di Claude.</string>
+    <string name="assistant_auto">Auto</string>
+    <string name="assistant_auto_off">Claude chiede prima di ogni modifica</string>
+    <string name="assistant_auto_on">Claude apporta modifiche senza chiedere, finché l\'app non viene chiusa</string>
+    <string name="assistant_asks">Claude vuole:</string>
+    <string name="assistant_allow">Consenti</string>
+    <string name="assistant_deny">No</string>
+    <string name="assistant_did">Fatto: %1$s</string>
+    <string name="assistant_did_not">Non fatto: %1$s</string>
+    <string name="assistant_placeholder">Chiedi o di\' a Claude…</string>
+    <string name="assistant_send">Invia</string>
+    <string name="assistant_start_over">Ricomincia</string>
+    <string name="assistant_err_too_long">Ha richiesto più passaggi di quanti un turno ne consenta. Chiedi di nuovo o ricomincia.</string>
+    <string name="assistant_err_other">Claude non ha potuto elaborare la richiesta</string>
 </resources>

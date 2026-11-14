@@ -3466,4 +3466,20 @@
     <string name="eq_claude_err_nothing">画像を渡すか、希望を入力してください</string>
     <string name="eq_claude_err_picture">その画像を開けませんでした</string>
     <string name="eq_claude_preset_name">Claude EQ</string>
+    <string name="assistant_title">アシスタント</string>
+    <string name="assistant_summary">Tryptify での操作方法を Claude に聞くか、代わりにやってもらう</string>
+    <string name="assistant_intro">機能の場所や働きを聞くか、変えたいことを Claude に伝えてください。自動がオンでない限り、変更のたびに確認します。あなた自身の Claude API キーを使います。</string>
+    <string name="assistant_auto">自動</string>
+    <string name="assistant_auto_off">Claude は変更のたびに確認します</string>
+    <string name="assistant_auto_on">アプリを閉じるまで、Claude は確認なしで変更します</string>
+    <string name="assistant_asks">Claude が行おうとしていること：</string>
+    <string name="assistant_allow">許可</string>
+    <string name="assistant_deny">いいえ</string>
+    <string name="assistant_did">完了：%1$s</string>
+    <string name="assistant_did_not">未実行：%1$s</string>
+    <string name="assistant_placeholder">Claude に質問または指示…</string>
+    <string name="assistant_send">送信</string>
+    <string name="assistant_start_over">最初から</string>
+    <string name="assistant_err_too_long">1 回のやり取りの上限を超えました。もう一度聞くか、最初からやり直してください。</string>
+    <string name="assistant_err_other">Claude はそのリクエストを処理できませんでした</string>
 </resources>

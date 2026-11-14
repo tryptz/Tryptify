@@ -3466,4 +3466,20 @@
     <string name="eq_claude_err_nothing">请提供图片或说出你的需求</string>
     <string name="eq_claude_err_picture">无法打开该图片</string>
     <string name="eq_claude_preset_name">Claude EQ</string>
+    <string name="assistant_title">助手</string>
+    <string name="assistant_summary">问 Claude 如何在 Tryptify 中完成某件事，或让它替你完成</string>
+    <string name="assistant_intro">问某项功能在哪里、有什么用，或告诉 Claude 你想改什么。除非开启自动，否则每次更改前它都会询问。它使用你自己的 Claude API 密钥。</string>
+    <string name="assistant_auto">自动</string>
+    <string name="assistant_auto_off">Claude 在每次更改前都会询问</string>
+    <string name="assistant_auto_on">Claude 无需询问即可更改，直到应用关闭</string>
+    <string name="assistant_asks">Claude 想要：</string>
+    <string name="assistant_allow">允许</string>
+    <string name="assistant_deny">不</string>
+    <string name="assistant_did">已完成：%1$s</string>
+    <string name="assistant_did_not">未执行：%1$s</string>
+    <string name="assistant_placeholder">向 Claude 提问或下指令…</string>
+    <string name="assistant_send">发送</string>
+    <string name="assistant_start_over">重新开始</string>
+    <string name="assistant_err_too_long">这次所需步骤超出了单轮上限。请再问一次，或重新开始。</string>
+    <string name="assistant_err_other">Claude 无法处理该请求</string>
 </resources>

@@ -286,6 +286,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         "System",
         listOf("immersive", "hide status bar", "notification bar", "navigation bar", "gesture bar"),
     ),
+    entry("Assistant", R.string.assistant_title, "System", listOf("claude", "ai", "help", "chat", "ask", "how do i"))
+        .at(SettingsDestination.Route("assistant")),
     entry("Debug log", R.string.settings_view_debug_log, "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
     entry("Save crash reports", R.string.settings_save_crash_reports, "System", listOf("crash", "anr", "freeze", "diagnostics", "report", "privacy", "downloads", "log")),

@@ -201,6 +201,7 @@ sealed class Screen(val route: String) {
     }
     data object Crossfeed : Screen("crossfeed")
     data object DebugLog : Screen("debug_log")
+    data object Assistant : Screen("assistant")
     data object LyricsFxStudio : Screen("lyrics_fx_studio")
     data object MusicLinks : Screen("music_links")
     data object ThemeStore : Screen("theme_store")
@@ -1044,6 +1045,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     tf.monochrome.android.devedit.DevEditScreen("debug_log") {
                         DebugLogScreen(navController = navController)
                     }
+                }
+                composable(Screen.Assistant.route) {
+                    tf.monochrome.android.ui.assistant.AssistantScreen(
+                        navController = navController,
+                        playerViewModel = playerViewModel,
+                    )
                 }
                 composable(Screen.LyricsFxStudio.route) {
                     tf.monochrome.android.devedit.DevEditScreen("lyrics_fx_studio") {

@@ -1177,6 +1177,32 @@ class PreferencesManager @Inject constructor(
         }
     }
 
+    /**
+     * The stored values of [names], for the assistant (`AssistantSettings`,
+     * which decides what may be asked for). A setting never changed from its
+     * default has no stored value and is left out.
+     */
+    suspend fun storedValues(names: Collection<String>): Map<String, Any> {
+        val wanted = names.toSet()
+        return dataStore.data.first().asMap().entries
+            .filter { it.key.name in wanted }
+            .associate { it.key.name to it.value }
+    }
+
+    /** Stores [value] under the key [name], as the type of [value]: the caller has made it the key's own type. */
+    suspend fun storeValue(name: String, value: Any) {
+        dataStore.edit { prefs ->
+            when (value) {
+                is Boolean -> prefs[booleanPreferencesKey(name)] = value
+                is Int -> prefs[intPreferencesKey(name)] = value
+                is Long -> prefs[longPreferencesKey(name)] = value
+                is Float -> prefs[floatPreferencesKey(name)] = value
+                is Double -> prefs[doublePreferencesKey(name)] = value
+                else -> error("no setting is stored as ${value::class.simpleName}")
+            }
+        }
+    }
+
     val devModeEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[DEV_MODE_ENABLED] ?: false
     }

@@ -3178,6 +3178,13 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+        SettingItem(
+            title = stringResource(R.string.assistant_title),
+            subtitle = stringResource(R.string.assistant_summary),
+            onClick = { navController.navigateTool(Screen.Assistant) },
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         SettingsGroupHeader(stringResource(R.string.settings_diagnostics))
         SettingItem(
             title = stringResource(R.string.settings_view_debug_log),

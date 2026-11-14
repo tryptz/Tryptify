@@ -329,6 +329,37 @@ SDK at 3.3.0 has no builder for server-side refusal fallbacks, so none is
 sent. The assistant asks before every change; an "auto" mode, when there is
 one, must go back to asking when the app closes (the owner's rule).
 
+**The assistant** (Settings › System › Assistant; `data/assistant/Assistant.kt`,
+`AssistantTools`, `AssistantSettings`, `ui/assistant/`) is a conversation
+with the same key and model, in which Claude can act in the app through five
+tools: `get_settings`, `set_setting`, `open_screen`, `playback`,
+`now_playing`. What it knows of the app is the manual, which ships in the
+APK for it (`app/src/main/assets/assistant/manual.md`; `docs/manual.md`
+points there): keep the manual true to the app, since the assistant is told
+to say nothing the manual does not support.
+
+- **It asks before every change.** `set_setting`, `open_screen` and
+  `playback` each wait for the listener's Allow. Auto lets them through; it
+  is a field of the `Assistant` singleton, in memory only, so it is off
+  again whenever the app has closed. Never store it.
+- **What it may touch is a generated table**, `AssistantSettingKeys.kt`,
+  written by `tools/assistant_settings/generate.py` from
+  `SETTINGS_SYNC_KEYS`: the listener's own choices, never a sign-in. Whole
+  documents (`*_JSON`), addresses, user names and developer mode are left
+  out. Run the script after adding, removing or retyping a synced setting;
+  `AssistantTest` reads `PreferencesManager.kt` and fails when the table is
+  stale. The type matters: a value stored under the wrong type crashes the
+  app where the setting is next read, so `AssistantSettings.typed` refuses
+  what is not the key's own type.
+- **Switches and numbers can be changed; text settings are read only.**
+  Which texts a setting accepts is not known to the table. For anything it
+  cannot set, the assistant opens the screen and says what to tap.
+- A setting it changes is written to the DataStore directly, not through
+  its screen's view model: a screen that is open and holds its own copy
+  shows the change when it is next opened.
+- A turn that fails is taken back out of the conversation, so the next
+  request is one the API accepts; what was already done stays done.
+
 ## Tryptify Cloud
 
 The paid music storage. The server is `cloud/` in tryptz/tryptify-servers (a
