@@ -63,6 +63,13 @@ android {
         // The Theme Store's API (tryptify-servers/theme-store, a Railway Function). It
         // holds no secret: every call carries the listener's Supabase session,
         // which the server checks against the project's public keys.
+        // The commit the build was made from, for the About page: a screenshot
+        // of it says which build is on a phone. "unknown" outside a checkout.
+        val gitCommit = runCatching {
+            providers.exec { commandLine("git", "rev-parse", "--short=8", "HEAD") }
+                .standardOutput.asText.get().trim()
+        }.getOrDefault("").ifEmpty { "unknown" }
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
         buildConfigField(
             "String",
             "THEME_STORE_URL",

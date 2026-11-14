@@ -305,7 +305,9 @@ struct ObjectState {
   // extended-precision refinement of the last block (0..3 fifths of a step).
   int pos_bits[3] = {31, 31, 0};
   int ext_prec[3] = {0, 0, 0};
-  float distance = NAN;  // Table 15 factor, +inf at infinity, NaN = inside the room
+  // Table 15 factor; ObjectInfoBlock::kNoDistance = inside the room. Never NaN
+  // or infinite: see ObjectInfoBlock::distance().
+  float distance = ObjectInfoBlock::kNoDistance;
   bool screen_ref = false;
   float screen_factor = 0.0f;
   float depth_factor = 1.0f;
@@ -585,7 +587,7 @@ class ObjectAudioMetadata {
     if (status == 0) {  // Table 29 defaults (also what an inactive object gets)
       st.pos_bits[0] = 31; st.pos_bits[1] = 31; st.pos_bits[2] = 0;
       st.ext_prec[0] = st.ext_prec[1] = st.ext_prec[2] = 0;
-      st.distance = NAN;
+      st.distance = ObjectInfoBlock::kNoDistance;
       st.width = st.depth = st.height = 0.0f;
       st.zone_constraints_idx = 0;
       st.enable_elevation = true;
@@ -652,21 +654,21 @@ class ObjectAudioMetadata {
       const float iz = m1 * c.z + (1.0f - m1) * cr.z;
       return {m2 * ix + (1.0f - m2) * cr.x, c.y, m2 * iz + (1.0f - m2) * cr.z};
     }
-    if (!std::isnan(st.distance)) {
+    if (st.distance > 0.0f) {
       // Outside the room: extend the ray from O = (0.5, 0.5, 0) through C to
       // the room boundary I, then P = df * I + (1 - df) * O.
       const Vec3 o{0.5f, 0.5f, 0.0f};
       const Vec3 d{c.x - o.x, c.y - o.y, c.z - o.z};
-      float t = INFINITY;
+      const float kNowhere = 1e30f;  // a finite "no wall this way" (-ffast-math: no infinity)
+      float t = kNowhere;
       if (d.x > 1e-6f) t = std::fmin(t, (1.0f - o.x) / d.x);
       if (d.x < -1e-6f) t = std::fmin(t, (0.0f - o.x) / d.x);
       if (d.y > 1e-6f) t = std::fmin(t, (1.0f - o.y) / d.y);
       if (d.y < -1e-6f) t = std::fmin(t, (0.0f - o.y) / d.y);
       if (d.z > 1e-6f) t = std::fmin(t, (1.0f - o.z) / d.z);
       if (d.z < -1e-6f) t = std::fmin(t, (-1.0f - o.z) / d.z);
-      if (std::isfinite(t)) {
-        // Infinity only matters as a direction here; 100x the room is plenty.
-        const float df = std::isinf(st.distance) ? 100.0f : st.distance;
+      if (t < 0.5f * kNowhere) {
+        const float df = st.distance;
         const Vec3 i{o.x + t * d.x, o.y + t * d.y, o.z + t * d.z};
         return {df * i.x + (1.0f - df) * o.x, df * i.y + (1.0f - df) * o.y, df * i.z + (1.0f - df) * o.z};
       }

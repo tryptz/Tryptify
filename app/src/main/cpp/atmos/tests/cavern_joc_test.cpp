@@ -21,6 +21,11 @@
 
 #include "cavern/joint_object_coding.h"
 #include "cavern/joint_object_coding_applier.h"
+// A number a test compares must be a number: under -ffast-math (the
+// *_fastmath build, and the phone's) a comparison with NaN is whatever the
+// compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
+// bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
+#include "../../dsp/util/finite.h"
 
 namespace tf {
 namespace atmos {
@@ -122,7 +127,7 @@ void check(bool c, const char* e, int line) {
 #define CHECK(c) check((c), #c, __LINE__)
 void check_near(float a, float b, float tol, const char* e, int line) {
   ++g_checks;
-  if (std::fabs(a - b) > tol) { ++g_fail; std::printf("  FAIL %s:%d %s (%.4f vs %.4f)\n", __FILE__, line, e, a, b); }
+  if (!dspIsFinite(a) || !dspIsFinite(b) || std::fabs(a - b) > tol) { ++g_fail; std::printf("  FAIL %s:%d %s (%.4f vs %.4f)\n", __FILE__, line, e, a, b); }
 }
 #define CHECK_NEAR(a, b, t) check_near((a), (b), (t), #a " ~= " #b, __LINE__)
 

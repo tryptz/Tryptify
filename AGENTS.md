@@ -92,8 +92,34 @@ with the NDK and run under qemu for both ARM ABIs when the NDK and
 `qemu-user-static` are present (`apt-get install qemu-user-static`);
 otherwise that step says it skipped.
 
+**The same flag bit the Atmos renderer, in the other direction: a value, not
+a guard.** `monochrome_atmos_jni` is `-O3 -ffast-math`, and every header
+under `cpp/atmos/` is compiled into it. An object's OAMD distance used to be
+NaN for "none signalled, the object is inside the room" and +infinity for
+"at infinity", told apart with `std::isnan` / `std::isinf`. On the phone
+those tests were folded away: every object "had a distance", its position was
+worked out from the NaN, and every dynamic object's position was NaN. They
+all played from one speaker and none ever moved ("the centre sounds left",
+"0 moving" in the log), on phones only: no host build had the flag, so all
+of `atmos/tests` passed. Found from a phone's log on 2026-11-13, reproduced
+by building the same check with `-O3 -ffast-math`.
+
+So, in native code that the phone builds with `-ffast-math`:
+
+- Never use NaN or infinity as a value: no sentinel, no "unlimited", no
+  default. Use a plain number outside the real range, or a bool
+  (`ObjectInfoBlock::kNoDistance`, `kDistanceAtInfinity`).
+- Never test with `isnan` / `isinf` / `isfinite`; `dspIsFinite` and the rest
+  of `dsp/util/finite.h` if a test is really needed.
+- `atmos/tests` builds every test twice, the second time as `<name>_fastmath`
+  with the phone's flags, and its `check_near` helpers refuse a NaN through
+  `dspIsFinite`: a plain comparison with NaN is also folded under the flag,
+  and without that a NaN passed every `CHECK_NEAR` (the first fast-math run
+  of the old code passed 41 of 41; with the helper it fails 10). A new test
+  file's own comparison helper needs the same.
+
 Four more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, nineteen tests; the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, twenty-one tests, each built a second time with the phone's `-ffast-math`; the
 script above runs only `channel_placer_test` from it), Trypt Mania's game
 engine (`glyph/tests/`, held to the same rules as its Kotlin twin), the
 motion blur behind the note trails and the lyric glide (`motion/tests/`) and

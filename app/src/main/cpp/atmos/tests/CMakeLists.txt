@@ -21,4 +21,15 @@ foreach(src ${ATMOS_TESTS})
   target_compile_options(${name} PRIVATE -Wall)
   target_link_libraries(${name} PRIVATE Threads::Threads)
   add_test(NAME ${name} COMMAND ${name})
+  # And again as the phone builds it. monochrome_atmos_jni is -O3 -ffast-math,
+  # under which the compiler takes every float for finite and folds isnan /
+  # isinf / isfinite away. The object positions once hung on a NaN sentinel:
+  # every host test passed, and on a phone every Atmos object's position was
+  # NaN (they all played from one speaker and none moved). Nothing here may
+  # mean anything by a NaN or an infinity; this build is what holds it to that.
+  add_executable(${name}_fastmath ${src})
+  target_include_directories(${name}_fastmath PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+  target_compile_options(${name}_fastmath PRIVATE -O3 -ffast-math -Wno-nan-infinity-disabled)
+  target_link_libraries(${name}_fastmath PRIVATE Threads::Threads)
+  add_test(NAME ${name}_fastmath COMMAND ${name}_fastmath)
 endforeach()

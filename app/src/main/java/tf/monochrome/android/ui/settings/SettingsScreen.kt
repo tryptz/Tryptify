@@ -3243,7 +3243,8 @@ private fun AboutTab(viewModel: SettingsViewModel) {
         ) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = stringResource(R.string.settings_version_line, BuildConfig.VERSION_NAME),
+                // The commit beside the version: two builds of one version are told apart by it.
+                text = stringResource(R.string.settings_version_line, "${BuildConfig.VERSION_NAME} (${BuildConfig.GIT_COMMIT})"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.settingsAnchor(stringResource(R.string.search_version)),

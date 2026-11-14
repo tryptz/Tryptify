@@ -84,7 +84,18 @@ class ObjectInfoBlock {
   int pos_x_bits() const { return pos_bits_[0]; }
   int pos_y_bits() const { return pos_bits_[1]; }
   int pos_z_bits() const { return pos_bits_[2]; }
-  // Distance factor (Table 15), +inf for b_object_at_infinity, NaN if unsignalled.
+  // Distance factor (Table 15), kDistanceAtInfinity for b_object_at_infinity,
+  // kNoDistance when none is signalled (the object is inside the room).
+  //
+  // Plain numbers on purpose. These were NaN and +infinity, told apart with
+  // isnan/isinf, and the phone's build of this code is -ffast-math, under
+  // which the compiler takes every float for finite and folds those tests
+  // away: every object "had a distance", its position was worked out from
+  // the NaN, and on a phone every dynamic object's position was NaN. They
+  // all played from one speaker and never moved. No host test saw it, as no
+  // host build has that flag (AGENTS.md says as much of dsp/util/finite.h).
+  static constexpr float kNoDistance = -1.0f;
+  static constexpr float kDistanceAtInfinity = 100.0f;  // 100 rooms away: a direction
   float distance() const { return distance_; }
   int zone_constraints_idx() const { return zone_idx_; }
   bool enable_elevation() const { return enable_elevation_; }
@@ -201,12 +212,12 @@ class ObjectInfoBlock {
       }
       if (br.read_bit()) {                 // distance specified
         if (br.read_bit()) {               // infinite distance
-          distance_ = INFINITY;
+          distance_ = kDistanceAtInfinity;
         } else {
           distance_ = kDistanceFactors[br.read(4)];
         }
       } else {
-        distance_ = std::nanf("");
+        distance_ = kNoDistance;
       }
     }
     if ((blocks & 2) != 0) {  // zone constraints (clause 5.6.1.6)
@@ -265,7 +276,7 @@ class ObjectInfoBlock {
   int pos_bits_[3] = {0, 0, 0};
   int ext_prec_[3] = {0, 0, 0};
   float gain_ = -1.0f;
-  float distance_ = 0.0f;
+  float distance_ = kNoDistance;
   float size_ = -1.0f;
   float width_ = 0.0f, depth_ = 0.0f, height_ = 0.0f;
   int zone_idx_ = 0;

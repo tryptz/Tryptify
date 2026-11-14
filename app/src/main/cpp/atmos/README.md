@@ -227,6 +227,20 @@ The earlier render (`set_virtual_room(false)`: each object through the HRIR of
 its direction, no equalizer, no room) keeps its level with 3 dB taken off its
 sum, as it has no limiter.
 
+## Positions were NaN on phones (fixed 1.9.52)
+
+The JNI library is built `-O3 -ffast-math`. `ObjectState::distance` was NaN
+for "inside the room" and tested with `std::isnan`, which that flag folds
+away: on a phone every dynamic object took the distance branch, and its room
+position came out NaN. The panner then put every object on one speaker, the
+map drew none, and nothing was ever seen to move, while all of this
+directory's host tests passed. The distance is now a plain number
+(`ObjectInfoBlock::kNoDistance`, `kDistanceAtInfinity`), no NaN or infinity
+is used anywhere here, every test is also built with the phone's flags
+(`<name>_fastmath`), and the tests' comparisons refuse a NaN through
+`dsp/util/finite.h`. On a real TIDAL stream built with those flags: 0 moving
+objects and NaN positions before, 14 moving after, as on the host.
+
 ## JOC decode fixes
 
 Measured against the stream's own 5.1 with the reference check below, or on

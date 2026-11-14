@@ -17,6 +17,11 @@
 #include "../emdf.h"
 #include "../oamd.h"
 #include "../vbap.h"
+// A number a test compares must be a number: under -ffast-math (the
+// *_fastmath build, and the phone's) a comparison with NaN is whatever the
+// compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
+// bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
+#include "../../dsp/util/finite.h"
 
 namespace {
 
@@ -34,7 +39,7 @@ void check(bool cond, const char* expr, const char* file, int line) {
 void check_near(float a, float b, float tol, const char* expr, const char* file,
                 int line) {
   ++g_checks;
-  if (std::fabs(a - b) > tol) {
+  if (!dspIsFinite(a) || !dspIsFinite(b) || std::fabs(a - b) > tol) {
     ++g_failures;
     std::printf("  FAIL %s:%d  %s  (%.6f vs %.6f)\n", file, line, expr, a, b);
   }

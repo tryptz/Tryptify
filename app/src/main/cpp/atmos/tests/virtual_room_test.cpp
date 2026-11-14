@@ -16,12 +16,17 @@
 
 #include "render/virtual_room.h"
 #include "speaker_renderer.h"
+// A number a test compares must be a number: under -ffast-math (the
+// *_fastmath build, and the phone's) a comparison with NaN is whatever the
+// compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
+// bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
+#include "../../dsp/util/finite.h"
 
 namespace {
 int g_fail = 0, g_checks = 0;
 void check_near(double a, double b, double tol, const char* e, int line) {
   ++g_checks;
-  if (!(std::fabs(a - b) <= tol)) {
+  if (!dspIsFinite(a) || !dspIsFinite(b) || !(std::fabs(a - b) <= tol)) {
     ++g_fail;
     std::printf("  FAIL %s:%d %s (%.6f vs %.6f)\n", __FILE__, line, e, a, b);
   }

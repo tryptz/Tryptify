@@ -67,6 +67,15 @@ compaction, so anything that must not be forgotten belongs here, not in chat.
 - Run `./gradlew :app:compileDebugKotlin` and `./gradlew :app:testDebugUnitTest`
   before pushing.
 - Don't name PCSX2 in the UI. CRT-Royale is the one look named after its shader.
+- **No NaN or infinity as a value in native code.** The phone builds the
+  Atmos JNI library (and others) with `-ffast-math`, under which the compiler
+  takes every float for finite and deletes `isnan` / `isinf` / `isfinite`
+  tests. Never use NaN or infinity as a marker ("not set", "no limit"): use a
+  plain number or a bool. To test finiteness at all, use `dspIsFinite` and
+  friends (`dsp/util/finite.h`). On 2026-11-13 a NaN meaning "inside the
+  room" made every Atmos object's position NaN on phones only, while every
+  host test passed. Details and the tests that hold it: AGENTS.md, "Build and
+  test".
 
 ## Release APK
 

@@ -258,6 +258,8 @@ class AtmosAudioProcessor @Inject constructor(
 
     private fun forgetMix() {
         placed = 0
+        placeFrames = 0
+        java.util.Arrays.fill(placePeaks, 0f)
         java.util.Arrays.fill(moved, false)
         noteMix(null)
     }
@@ -291,6 +293,38 @@ class AtmosAudioProcessor @Inject constructor(
         takeMeter(AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS))
     }
 
+    // Where every object is and how loud, into the log: two seconds into a
+    // stream (positions have arrived, levels mean something) and then every
+    // ten. Peaks are held between lines. With this a log says whether a
+    // stream's objects are where the mix put them, and which carry sound.
+    private val placePeaks = FloatArray(MAX_OBJECTS)
+    private var placeFrames = 0
+
+    private fun logPlaces(count: Int) {
+        val n = AtmosNative.OBJECT_METER_FIELDS
+        for (i in 0 until count) {
+            if (meterScratch[i * n + 3] > placePeaks[i]) placePeaks[i] = meterScratch[i * n + 3]
+        }
+        placeFrames++
+        if (placeFrames != PLACES_FIRST && placeFrames % PLACES_EVERY != 0) return
+        val text = StringBuilder("places:")
+        for (i in 0 until count) {
+            val at = i * n
+            val kind = when (meterScratch[at + 4]) { 2f -> "LFE"; 1f -> "bed"; else -> "obj" }
+            val db = if (meterScratch[at + 3] < 0f) "n/a" else {
+                val peak = placePeaks[i]
+                if (peak <= 1e-6f) "-inf" else String.format(java.util.Locale.ROOT, "%.0f", 20f * kotlin.math.log10(peak))
+            }
+            text.append(String.format(
+                java.util.Locale.ROOT, " %d:%s(%.2f,%.2f,%.2f)%s%s",
+                i, kind, meterScratch[at], meterScratch[at + 1], meterScratch[at + 2],
+                if (i < moved.size && moved[i]) "~" else "", "[$db]",
+            ))
+            placePeaks[i] = 0f
+        }
+        android.util.Log.i(TAG, text.toString())
+    }
+
     /** [count] objects are in meterScratch: which move, and the meter if it is on. */
     private fun takeMeter(count: Int) {
         if (count <= 0) { meterCount = 0; noteMix(null); return }
@@ -316,6 +350,7 @@ class AtmosAudioProcessor @Inject constructor(
         }
         if (count > placed) placed = count
         noteMix(ObjectMix(count, moving, lfe))
+        logPlaces(count)
         if (!meterOn) return
         for (i in 0 until count) {
             val at = i * n
@@ -995,6 +1030,8 @@ class AtmosAudioProcessor @Inject constructor(
         const val MAX_OBJECTS = 16
         // A step of the position's coding is 1/62 of the room: past this it moved.
         const val MOVED = 0.02f
+        const val PLACES_FIRST = 62    // 2 s of frames
+        const val PLACES_EVERY = 312   // 10 s
         const val TAG = "AtmosProcessor"
         const val STATS_EVERY = 300L     // ~9.6 s of frames
         // Anchored-clock vs tapped-timestamp divergence that forces a re-anchor.
