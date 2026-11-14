@@ -99,7 +99,6 @@ class AudioPipelineViewModel @Inject constructor(
 
     private fun rendering(outcome: AtmosAudioProcessor.Outcome?): Boolean =
         outcome == AtmosAudioProcessor.Outcome.OBJECTS_ROOM ||
-            outcome == AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL ||
             outcome == AtmosAudioProcessor.Outcome.OBJECTS_SPEAKERS
 
     /**
@@ -110,7 +109,6 @@ class AudioPipelineViewModel @Inject constructor(
     private fun atmosStage(sourceChannels: Int?, outcome: AtmosAudioProcessor.Outcome?): AtmosStage? {
         if (sourceChannels == null || sourceChannels <= 2) return null
         return when {
-            outcome == AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL -> AtmosStage.OBJECTS_BINAURAL
             outcome == AtmosAudioProcessor.Outcome.OBJECTS_ROOM -> AtmosStage.OBJECTS_ROOM
             outcome == AtmosAudioProcessor.Outcome.OBJECTS_SPEAKERS -> AtmosStage.OBJECTS_SPEAKERS
             outcome == AtmosAudioProcessor.Outcome.BED_ROOM -> AtmosStage.BED_ROOM

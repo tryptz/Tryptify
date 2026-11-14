@@ -281,12 +281,6 @@ data class RendererProfile(
     val hrtfAuto: Boolean = true,
     /** HRTF/AutoEQ measurement id for the binaural back-end; null = built-in set. */
     val hrtfProfileId: String? = null,
-    /**
-     * With the HRTF on: pan objects and beds onto a virtual 15.1.12 speaker
-     * room and render its speakers to the ears (true), or send each object
-     * through the HRTF of its own direction, with no room (false).
-     */
-    val virtualRoom: Boolean = true,
     /** How much of the virtual room's reflections and tail there is, 0..1. */
     val roomAmount: Float = DEFAULT_ROOM_AMOUNT,
     /** Binaural render wet amount for headphones (0 = dry, 1 = full HRTF). */

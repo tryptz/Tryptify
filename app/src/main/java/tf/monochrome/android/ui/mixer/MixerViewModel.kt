@@ -53,7 +53,7 @@ class MixerViewModel @Inject constructor(
 
     /** Set while Atmos objects are being rendered, which places the track by itself. */
     val atmosRenderingObjects: StateFlow<Boolean> = atmosProcessor.outcome
-        .map { it == tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL }
+        .map { it == tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome.OBJECTS_ROOM }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     // The detector only measures while someone is watching; the map is.

@@ -122,7 +122,7 @@ class VirtualRoom {
     reset_history();
 
     build(sets_[0], &kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
-    active_.store(next_version(active_.load(std::memory_order_acquire)) | 0u,
+    active_.store(next_version(active_.load(std::memory_order_acquire)),
                   std::memory_order_seq_cst);
     applied_ = ~0u;
   }
@@ -539,8 +539,8 @@ class VirtualRoom {
   // The top octave a measured set lacks, added to `gain_db`. The baked KEMAR
   // set (a small loudspeaker, 44.1 kHz) is, over every direction and through
   // its equalizer, 5 dB down at 15 kHz, 9 at 16 and 14 at 18, and the
-  // equalizer stops correcting there: the owner saw everything cut above
-  // 15 kHz. As much as the set is under its own 8-13 kHz at each kHz from 14
+  // equalizer stops correcting there, so nothing above 15 kHz came through.
+  // As much as the set is under its own 8-13 kHz at each kHz from 14
   // to 20, a line between those, held to 20.5 kHz and gone by 22 (there is
   // nothing above to bring back). Never a cut, never over kTopBoostDb.
   static constexpr double kTopFromHz = 13000.0;

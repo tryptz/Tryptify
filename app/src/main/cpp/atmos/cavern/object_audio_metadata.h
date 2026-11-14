@@ -193,8 +193,7 @@ class OAElementMD {
   void block_update_info(BitReader& br, int blk) {
     // In samples: block_offset_factor counts in units of 32 (clause 5.6.2;
     // Dolby's 7.1.4 tones carry sample_offset 11 and factor 27, and their
-    // first ramp starts at 875 = 11 + 27 * 32). The factor used to be added
-    // as it was.
+    // first ramp starts at 875 = 11 + 27 * 32).
     block_offset_factor_[blk] =
         static_cast<short>(br.read(6) * 32 + sample_offset_);
     const int ramp_code = static_cast<int>(br.read(2));

@@ -1,15 +1,13 @@
-// Runtime SOFA HRTF loader. Uses libmysofa to parse a user-supplied .sofa from
-// memory, then reproduces tools/bake_hrir.c's onset-aligned decomposition so the
-// loaded HRTF drops into the renderer with the exact same grid, tap count and
-// ITD-as-delay convention as the baked MIT KEMAR default. Runs off the audio
-// thread (allocates, calls libmysofa); it only touches the renderer through the
-// double-buffered set_runtime_hrir, which is safe against the audio thread.
+// Runtime SOFA HRTF loader. Parses a listener's .sofa from memory with
+// libmysofa and reproduces tools/bake_hrir.c's onset-aligned decomposition,
+// so a loaded set has the grid, tap count and delay convention of the baked
+// MIT KEMAR table. Allocates and calls libmysofa: loader thread.
 #include "sofa_loader.h"
 
 #include <cmath>
 #include <vector>
 
-#include "hrir_renderer.h"  // BinauralRenderer + grid constants (via hrir_table.h)
+#include "hrir_table.h"  // the grid a loaded set is laid out on
 #include "mysofa.h"
 
 namespace tf {
@@ -30,8 +28,8 @@ int find_onset(const float* h, int n) {
 
 }  // namespace
 
-bool load_sofa_into_renderer(render::BinauralRenderer& renderer, const char* data,
-                             long size) {
+bool load_sofa_tables(const char* data, long size, std::vector<float>& tab,
+                      std::vector<float>& del) {
   using namespace render;
   if (data == nullptr || size <= 0) return false;
 
@@ -70,8 +68,8 @@ bool load_sofa_into_renderer(render::BinauralRenderer& renderer, const char* dat
 
   // Pass 2: onset-aligned taps + delays, flattened [el][az][ear][tap] to match
   // the baked table layout the renderer indexes.
-  std::vector<float> tab(static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2 * kHrirTaps, 0.0f);
-  std::vector<float> del(static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2, 0.0f);
+  tab.assign(static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2 * kHrirTaps, 0.0f);
+  del.assign(static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2, 0.0f);
   for (int e = 0; e < kHrirElCount; ++e)
     for (int a = 0; a < kHrirAzCount; ++a) {
       query(e, a);
@@ -89,7 +87,6 @@ bool load_sofa_into_renderer(render::BinauralRenderer& renderer, const char* dat
     }
 
   mysofa_close(easy);
-  renderer.set_runtime_hrir(tab, del);
   return true;
 }
 

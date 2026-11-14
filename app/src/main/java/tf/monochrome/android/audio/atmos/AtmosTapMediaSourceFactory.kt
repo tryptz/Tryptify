@@ -117,11 +117,9 @@ internal class TapMediaPeriod(
         positionUs: Long,
     ): Long {
         // The period under this one is handed back its OWN streams, never the
-        // wrappers: it casts the ones it is asked to keep to its own class.
-        // (Passed the wrappers, any reselection of tracks on a playing song
-        // threw a ClassCastException inside the player and the song started
-        // over. Nothing reselected tracks mid-song until the Atmos settings
-        // began to; it crashed the first time one was switched.)
+        // wrappers: it casts the ones it is asked to keep to its own class,
+        // and a reselection of tracks on a playing song (a changed Atmos
+        // setting) would throw inside the player.
         val inner = arrayOfNulls<SampleStream>(streams.size)
         for (i in streams.indices) inner[i] = (streams[i] as? TapSampleStream)?.delegate ?: streams[i]
         val result = delegate.selectTracks(

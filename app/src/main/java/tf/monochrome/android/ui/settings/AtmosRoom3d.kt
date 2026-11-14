@@ -36,11 +36,11 @@ import kotlin.math.sin
  * back, z 0 at ear level to 1 at the ceiling). The eye is behind and above
  * the listener, turned [yaw] radians about the room's centre.
  */
-internal class AtmosRoomView(private val yaw: Float, private val pitch: Float = PITCH) {
+internal class AtmosRoomView(yaw: Float) {
     private val cy = cos(yaw)
     private val sy = sin(yaw)
-    private val cp = cos(pitch)
-    private val sp = sin(pitch)
+    private val cp = cos(PITCH)
+    private val sp = sin(PITCH)
 
     /** Sideways (right is up), upwards, and how big things there are drawn (1 at the centre). */
     class Point(val x: Float, val y: Float, val scale: Float, val depth: Float)
@@ -69,6 +69,9 @@ internal class AtmosRoomView(private val yaw: Float, private val pitch: Float = 
 /** 0..1 from a linear peak, over the meters' 60 dB. */
 internal fun atmosMeterLevel(peak: Float): Float =
     ((20f * log10(peak.coerceAtLeast(1e-6f)) + 60f) / 60f).coerceIn(0f, 1f)
+
+/** How bright an object is drawn: its level, or half for one that is watched and has none. */
+internal fun atmosObjectLevel(peak: Float): Float = if (peak < 0f) 0.5f else atmosMeterLevel(peak)
 
 /**
  * How bright a room speaker is drawn: its level when the room plays, half as
@@ -108,8 +111,8 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
         }
         val speaker = (0 until count).firstOrNull { s ->
             val f = s * AtmosNative.ROOM_FIELDS
-            if (name == "LFE") layout[f + 3] == 1f
-            else place != null && layout[f + 3] != 1f &&
+            if (name == "LFE") isLfe(layout, f)
+            else place != null && !isLfe(layout, f) &&
                 layout[f] == place.first && layout[f + 1] == place.second && layout[f + 2] == place.third
         } ?: return@forEachIndexed
         val db = peaksDb.getOrElse(c) { -120f }
@@ -232,7 +235,7 @@ internal fun AtmosRoom3d(
                         val i = order[n]
                         if (i < count) {
                             val f = i * AtmosNative.ROOM_FIELDS
-                            val lfe = layout[f + 3] == 1f
+                            val lfe = isLfe(layout, f)
                             val high = layout[f + 2] > 0f
                             val p = view.project(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
                             val glow = levels?.getOrNull(i)?.let(::atmosSpeakerGlow) ?: 0f
@@ -243,8 +246,7 @@ internal fun AtmosRoom3d(
                             val x = o.x(k).coerceIn(0f, 1f)
                             val y = o.y(k).coerceIn(0f, 1f)
                             val z = o.z(k).coerceIn(0f, 1f)
-                            val raw = o.level(k)
-                            val level = if (raw < 0f) 0.5f else atmosMeterLevel(raw)
+                            val level = atmosObjectLevel(o.level(k))
                             val p = view.project(x, y, z)
                             val pos = at(p)
                             val tint = if (z > 0.25f) heightTint else onSurface
@@ -268,8 +270,11 @@ internal fun AtmosRoom3d(
 }
 
 /** The LFE has no place of its own in the mix: it stands on the floor under the screen. */
-private fun speakerX(layout: FloatArray, f: Int) = if (layout[f + 3] == 1f) 0.36f else layout[f]
-private fun speakerY(layout: FloatArray, f: Int) = if (layout[f + 3] == 1f) 0f else layout[f + 1]
+private fun speakerX(layout: FloatArray, f: Int) = if (isLfe(layout, f)) 0.36f else layout[f]
+private fun speakerY(layout: FloatArray, f: Int) = if (isLfe(layout, f)) 0f else layout[f + 1]
+
+/** Whether the speaker whose fields start at [f] is the LFE. */
+private fun isLfe(layout: FloatArray, f: Int) = layout[f + 3] == 1f
 
 /** One speaker: a ring that is always there, filled and haloed as it plays. */
 private fun DrawScope.drawRoomSpeaker(pos: Offset, unit: Float, tint: Color, glow: Float, lfe: Boolean) {

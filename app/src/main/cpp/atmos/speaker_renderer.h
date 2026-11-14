@@ -44,7 +44,7 @@
 #include <vector>
 
 #include "cavern/object_audio_metadata.h"  // cavern::ObjectState, ReferenceChannel
-#include "vbap.h"                          // Vec3, direction_from_angles, dot, normalize
+#include "vbap.h"                          // Vec3
 
 namespace tf {
 namespace atmos {
@@ -434,17 +434,16 @@ class SpeakerRenderer {
     const size_t width = static_cast<size_t>(max_objects_) * channels_;
     // Where every object is going.
     Event* ev = nullptr;
-    if (!has_state_) {
-      target_ = &ramp_to_;
-    } else {
-      if (event_count_ == kEvents) begin(samples);  // never in practice: the oldest takes hold now
+    std::vector<float>* target = &ramp_to_;
+    if (has_state_) {
+      if (event_count_ == kEvents) begin();  // never in practice: the oldest takes hold now
       ev = &events_[(event_first_ + event_count_) % kEvents];
-      target_ = &ev->gains;
+      target = &ev->gains;
     }
-    std::fill(target_->begin(), target_->end(), 0.0f);
+    std::fill(target->begin(), target->end(), 0.0f);
     for (int o = 0; o < objs; ++o) {
       if (pcm[o] == nullptr || states[o] == nullptr) continue;
-      float* g = target_->data() + static_cast<size_t>(o) * channels_;
+      float* g = target->data() + static_cast<size_t>(o) * channels_;
       const bool lfe_obj = o == lfe_index;
       object_gains(*states[o], lfe_obj, g);
       if (lfe_obj) for (int c = 0; c < channels_; ++c) g[c] *= lfe_gain;
@@ -467,7 +466,7 @@ class SpeakerRenderer {
 
     int t = 0;
     while (t < samples) {
-      while (event_count_ > 0 && events_[event_first_].wait <= 0) begin(samples);
+      while (event_count_ > 0 && events_[event_first_].wait <= 0) begin();
       int seg = samples - t;
       if (event_count_ > 0 && events_[event_first_].wait < seg) seg = events_[event_first_].wait;
       if (ramp_pos_ < ramp_len_ && ramp_len_ - ramp_pos_ < seg) seg = ramp_len_ - ramp_pos_;
@@ -501,8 +500,7 @@ class SpeakerRenderer {
   // speaker when present, panned from its nominal position when not. ADDS
   // into `out`. The frames-without-JOC path. Decoder order: FL FR FC LFE SL SR
   // for 5.1, and FL FR FC LFE BL BR SL SR for 7.1, the rears before the sides
-  // (FFmpeg's order and Android's; this had them the other way round, and a
-  // 7.1 bed's side and rear surrounds changed places).
+  // (FFmpeg's order and Android's).
   void render_bed(const float* const* bed, int bed_channels, float lfe_gain, int samples, float* out) {
     const int ch = std::min(bed_channels, 8);
     const float inv = 1.0f / static_cast<float>(samples);
@@ -606,9 +604,7 @@ class SpeakerRenderer {
   }
 
   // Samples the object's box and power-sums the panned gains, scaled by
-  // `weight`. An object with no size is a point. (Anything inside the room
-  // used to be spread as well, upward too: a floor object a quarter in from a
-  // corner put a fifth of its power in the ceiling.)
+  // `weight`. An object with no size is a point, wherever in the room it is.
   void spread(const BalancePanner& panner, const cavern::ObjectState& st, const Vec3& centre,
               float weight, float* gains) const {
     if (weight <= 0.0f) return;
@@ -675,7 +671,7 @@ class SpeakerRenderer {
   }
 
   // The oldest update takes hold: from wherever the gains are now, to it.
-  void begin(int samples) {
+  void begin() {
     Event& e = events_[event_first_];
     const float w = weight(ramp_pos_);
     for (size_t i = 0; i < ramp_from_.size(); ++i) {
@@ -684,14 +680,12 @@ class SpeakerRenderer {
     ramp_to_.swap(e.gains);
     ramp_pos_ = 0;
     ramp_len_ = e.ramp < 1 ? 1 : e.ramp;
-    (void)samples;
     event_first_ = (event_first_ + 1) % kEvents;
     --event_count_;
   }
 
   int max_objects_ = 0;
   std::vector<float> ramp_from_, ramp_to_;
-  std::vector<float>* target_ = nullptr;
   int ramp_pos_ = 1, ramp_len_ = 1;
   bool has_state_ = false;
   Event events_[kEvents];

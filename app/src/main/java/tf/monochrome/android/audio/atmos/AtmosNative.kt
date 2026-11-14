@@ -4,11 +4,10 @@ package tf.monochrome.android.audio.atmos
  * JNI bridge to the clean-room Atmos metadata/object native code (the
  * Cavern-ported EMDF / OAMD / JOC chain in cpp/atmos).
  *
- * Under the Atmos renderer plan's Option B, the E-AC-3 core is decoded to bed
- * PCM by Media3's [androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer] (NextLib);
- * this native side does the object work. The sample tap uses [nativeParseAtmos]
- * to detect Atmos frames and read their object count; the JOC QMF upmix surface
- * is added as the AtmosAudioProcessor lands.
+ * The E-AC-3 core is decoded to bed PCM by Media3's
+ * [androidx.media3.decoder.ffmpeg.FfmpegAudioRenderer] (NextLib); this native
+ * side does the object work. The sample tap uses [nativeParseAtmos] to find
+ * Atmos frames and count their objects; the pipeline rebuilds and renders them.
  */
 object AtmosNative {
     @Volatile private var available: Boolean = false
@@ -35,31 +34,7 @@ object AtmosNative {
      */
     external fun nativeParseAtmos(frame: ByteArray): Int
 
-    // ── Object reconstruction engine (P1) ────────────────────────────────
-    /** Creates a native object-upmix engine; returns a handle (0 on failure). */
-    external fun nativeEngineCreate(): Long
-
-    /** Destroys a native engine handle from [nativeEngineCreate]. */
-    external fun nativeEngineDestroy(engine: Long)
-
-    /**
-     * Upmixes one E-AC-3 frame's bed PCM into objects.
-     *
-     * @param engine handle from [nativeEngineCreate]
-     * @param frame the raw E-AC-3 access unit (carries the JOC/OAMD side-data)
-     * @param bedInterleaved channels*samples floats, interleaved, decoder order
-     * @return object count (>= 1) or -1 if the frame has no JOC. Object PCM stays
-     *   native for the HRTF render stage.
-     */
-    external fun nativeUpmixFrame(
-        engine: Long,
-        frame: ByteArray,
-        bedInterleaved: FloatArray,
-        channels: Int,
-        samples: Int,
-    ): Int
-
-    // ── Full render pipeline (P1 upmix -> P2 binaural render) ─────────────
+    // ── The render pipeline ──────────────────────────────────────────────
     /** Creates the end-to-end render pipeline; returns a handle (0 on failure). */
     external fun nativePipelineCreate(sampleRate: Int, maxObjects: Int): Long
 
@@ -155,12 +130,11 @@ object AtmosNative {
     ): Int
 
     /**
-     * How the headphone render places sound. [enabled]: objects and beds are
-     * panned onto a virtual 15.1.12 speaker room, and its speakers are what
-     * the ears hear, with [room] (0..1) of the room's reflections and tail.
-     * Off: every object through the HRIR of its own direction, no room.
+     * How much of the virtual room's reflections and tail the headphone
+     * render has, 0..1. (Objects and beds are panned onto the room's 15.1.12
+     * speakers, and its speakers are what the ears hear.)
      */
-    external fun nativeSetVirtualRoom(pipeline: Long, enabled: Boolean, room: Float)
+    external fun nativeSetRoomAmount(pipeline: Long, room: Float)
 
     /**
      * Objects rendered in the last frame (the LFE included), or 0 when the
@@ -213,4 +187,12 @@ object AtmosNative {
     const val ROOM_FIELDS = 4
     const val ROOM_MAX_SPEAKERS = 32
     const val OBJECT_METER_FIELDS = 5
+
+    /** An object's fifth meter field: what it is (AtmosPipeline::kMeterBed, kMeterLfe). */
+    const val METER_KIND_BED = 1f
+    const val METER_KIND_LFE = 2f
+
+    /** [nativeDebugInfo]'s field count (ObjectEngine::kDebugFields) and its held-frames field. */
+    const val DEBUG_FIELDS = 10
+    const val DEBUG_HELD_FRAMES = 8
 }

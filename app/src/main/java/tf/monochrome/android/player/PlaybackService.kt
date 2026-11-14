@@ -198,7 +198,7 @@ class PlaybackService : MediaSessionService() {
         if (player.playbackState == Player.STATE_IDLE || player.currentMediaItem == null) return
         val parameters = player.trackSelectionParameters
         if (C.TRACK_TYPE_AUDIO in parameters.disabledTrackTypes) return
-        android.util.Log.i("AtmosProcessor", "reconfiguring the audio chain for the playing song (${channels}ch source)")
+        android.util.Log.i(tf.monochrome.android.audio.atmos.AtmosAudioProcessor.TAG, "reconfiguring the audio chain for the playing song (${channels}ch source)")
         runCatching {
             player.trackSelectionParameters =
                 parameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
@@ -1393,18 +1393,9 @@ class PlaybackService : MediaSessionService() {
     private fun registerOutputChannelTracking() {
         val audioManager = getSystemService(android.media.AudioManager::class.java) ?: return
         fun refresh() {
-            val external = setOf(
-                android.media.AudioDeviceInfo.TYPE_HDMI,
-                android.media.AudioDeviceInfo.TYPE_HDMI_ARC,
-                android.media.AudioDeviceInfo.TYPE_USB_DEVICE,
-                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
-            ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
-                setOf(android.media.AudioDeviceInfo.TYPE_HDMI_EARC)
-            } else {
-                emptySet()
-            }
-            val channels = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
-                .filter { it.type in external }
+            val outputs = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+            val channels = outputs
+                .filter { it.type in EXTERNAL_OUTPUT_TYPES }
                 .mapNotNull { it.channelCounts.maxOrNull() }
                 .maxOrNull()
             outputChannelCount.value = channels
@@ -1412,26 +1403,15 @@ class PlaybackService : MediaSessionService() {
             // Headphones, for the binaural render's automatic setting: a
             // wired or Bluetooth pair, or a USB output of two channels (a
             // DAC; a wider one is a speaker interface).
-            val headphoneTypes = setOf(
-                android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-                android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
-                android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
-                android.media.AudioDeviceInfo.TYPE_HEARING_AID,
-            ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
-                setOf(android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)
-            } else {
-                emptySet()
-            }
-            val headphones = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).any {
-                it.type in headphoneTypes ||
+            val headphones = outputs.any {
+                it.type in HEADPHONE_TYPES ||
                     (it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE && (it.channelCounts.maxOrNull() ?: 2) <= 2)
             }
             if (headphonesConnected.value != headphones || !outputsLogged) {
                 outputsLogged = true
                 android.util.Log.i(
-                    "AtmosProcessor",
-                    "outputs: " + audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
+                    tf.monochrome.android.audio.atmos.AtmosAudioProcessor.TAG,
+                    "outputs: " + outputs
                         .joinToString { "type${it.type}/${it.channelCounts.maxOrNull() ?: 0}ch" } +
                         " -> headphones=$headphones",
                 )
@@ -2272,6 +2252,31 @@ class PlaybackService : MediaSessionService() {
             tf.monochrome.android.domain.model.PlaybackSource.RadioStream
 
     private companion object {
+        /** Outputs that may carry more than two channels: their channel count is the device's. */
+        val EXTERNAL_OUTPUT_TYPES: Set<Int> = setOf(
+            android.media.AudioDeviceInfo.TYPE_HDMI,
+            android.media.AudioDeviceInfo.TYPE_HDMI_ARC,
+            android.media.AudioDeviceInfo.TYPE_USB_DEVICE,
+            android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+        ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
+            setOf(android.media.AudioDeviceInfo.TYPE_HDMI_EARC)
+        } else {
+            emptySet()
+        }
+
+        /** Outputs that are a pair of headphones whatever their channel count says. */
+        val HEADPHONE_TYPES: Set<Int> = setOf(
+            android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            android.media.AudioDeviceInfo.TYPE_USB_HEADSET,
+            android.media.AudioDeviceInfo.TYPE_HEARING_AID,
+        ) + if (android.os.Build.VERSION.SDK_INT >= 31) {
+            setOf(android.media.AudioDeviceInfo.TYPE_BLE_HEADSET)
+        } else {
+            emptySet()
+        }
+
         /** Retries a failing position before moving past it. */
         const val MAX_CONSECUTIVE_PLAYER_ERRORS = 2
 

@@ -878,12 +878,7 @@ private fun SpeakerLayoutMap(
                                 // parked ones are the mix's bed, and where it
                                 // stands is the point. One that is watched and
                                 // not rendered has no level: drawn half bright.
-                                val raw = o.level(i)
-                                val level = if (raw < 0f) {
-                                    0.5f
-                                } else {
-                                    ((20f * kotlin.math.log10(raw.coerceAtLeast(1e-6f)) + 60f) / 60f).coerceIn(0f, 1f)
-                                }
+                                val level = atmosObjectLevel(o.level(i))
                                 val up = o.z(i).coerceIn(0f, 1f)
                                 val pos = Offset(
                                     cx + (o.x(i).coerceIn(0f, 1f) * 2f - 1f) * half * 0.92f,

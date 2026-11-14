@@ -12,27 +12,10 @@
 #include <vector>
 
 #include "object_engine.h"
+#include "bit_writer.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
-
-struct BitWriter {
-  std::vector<uint8_t> bytes;
-  size_t count = 0;
-  void put_bit(int bit) {
-    if ((count & 7u) == 0) bytes.push_back(0);
-    if (bit & 1) bytes.back() |= (1u << (7u - (count & 7u)));
-    ++count;
-  }
-  void put(unsigned n, uint32_t v) {
-    for (int i = (int)n - 1; i >= 0; --i) put_bit((v >> i) & 1u);
-  }
-};
 
 using namespace tf::atmos;
 
@@ -79,7 +62,7 @@ void test_upmix_smoke() {
   const float* obj0 = engine.object_channel(0);
   CHECK(obj0 != nullptr);
   bool finite = true;
-  for (int i = 0; i < samples; ++i) if (!std::isfinite(obj0[i])) finite = false;
+  for (int i = 0; i < samples; ++i) if (!dspIsFinite(obj0[i])) finite = false;
   CHECK(finite);
   CHECK(engine.object_channel(1) == nullptr);  // out of range
 
@@ -145,7 +128,7 @@ void test_metadata_hold() {
   const float* held = engine.object_channel(0);
   CHECK(held != nullptr);
   bool finite = true;
-  for (int i = 0; i < samples; ++i) if (!std::isfinite(held[i])) finite = false;
+  for (int i = 0; i < samples; ++i) if (!dspIsFinite(held[i])) finite = false;
   CHECK(finite);
 
   // ...but frames with no readable syncframe header can't vouch that the

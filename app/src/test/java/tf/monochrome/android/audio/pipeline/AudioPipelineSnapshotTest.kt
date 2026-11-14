@@ -377,11 +377,11 @@ class AudioPipelineSnapshotTest {
         val snapshot = buildAudioPipelineSnapshot(
             AudioPipelineInputs(
                 chain = ChainInput(sampleRate = 48000, channelCount = 6, layoutName = "5.1", isFloat = true),
-                atmos = AtmosStage.OBJECTS_BINAURAL,
+                atmos = AtmosStage.OBJECTS_ROOM,
                 outputChannels = 2,
             )
         )
-        assertEquals("Objects rendered to binaural stereo", snapshot.field(PipelineStage.DSP, "Atmos").display)
+        assertEquals("Objects on 15.1.12 virtual speakers, binaural", snapshot.field(PipelineStage.DSP, "Atmos").display)
         assertEquals("2 (Stereo)", snapshot.field(PipelineStage.OUTPUT, "Channels Out").display)
     }
 

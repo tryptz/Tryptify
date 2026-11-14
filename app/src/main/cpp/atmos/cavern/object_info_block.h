@@ -87,13 +87,9 @@ class ObjectInfoBlock {
   // Distance factor (Table 15), kDistanceAtInfinity for b_object_at_infinity,
   // kNoDistance when none is signalled (the object is inside the room).
   //
-  // Plain numbers on purpose. These were NaN and +infinity, told apart with
-  // isnan/isinf, and the phone's build of this code is -ffast-math, under
-  // which the compiler takes every float for finite and folds those tests
-  // away: every object "had a distance", its position was worked out from
-  // the NaN, and on a phone every dynamic object's position was NaN. They
-  // all played from one speaker and never moved. No host test saw it, as no
-  // host build has that flag (AGENTS.md says as much of dsp/util/finite.h).
+  // Plain numbers on purpose, never NaN or infinity: the phone builds this
+  // with -ffast-math, which folds isnan / isinf away (AGENTS.md, "Build and
+  // test").
   static constexpr float kNoDistance = -1.0f;
   static constexpr float kDistanceAtInfinity = 100.0f;  // 100 rooms away: a direction
   float distance() const { return distance_; }

@@ -23,14 +23,9 @@
 #include <vector>
 
 #include "render/hrir_renderer.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
 
 using namespace tf::atmos::render;
 constexpr int kFrame = 1536;
@@ -149,7 +144,7 @@ void test_loads_while_rendering() {
   bool finite = true;
   int rendered = 0;
   while (!done.load() || rendered < 8) {
-    for (float v : frame(*r)) finite = finite && std::isfinite(v);
+    for (float v : frame(*r)) finite = finite && dspIsFinite(v);
     ++rendered;
   }
   loader.join();

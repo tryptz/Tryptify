@@ -143,13 +143,14 @@ worth knowing when debugging:
   readable header fall back to a 32-frame expiry.
 - **Both output paths are latency-aligned.** The object render's bed passes
   through QMF analysis+synthesis — a measured 577-sample delay (pinned by
-  `cavern_qmf_test`). The fallback ITU downmix runs every frame behind the
-  same delay, and render<->downmix switches are equal-power crossfades, so a
-  seam is neither a timbre cut nor a time jump.
-- **Motion is crossfaded.** The HRIR renderer dual-convolves against the
-  previous and current interpolated IR on any direction change (raised-cosine
-  blend, per-sample ITD ramp), and object positions use the OAMD frame's LAST
-  info block. Per-object OAMD gains are applied with per-frame ramps.
+  `cavern_qmf_test`). The decoded bed, which plays while there are no
+  objects, runs every frame behind the same delay on the same speakers, and a
+  switch between the two is an equal-power crossfade, so a seam is neither a
+  timbre cut nor a time jump.
+- **Motion is ramped.** An object's speaker gains move to each update's
+  target over the update's own ramp (`SpeakerRenderer::render`), object
+  positions use the OAMD frame's last info block, and per-object OAMD gains
+  are applied with per-frame ramps.
 - **DRC is honest.** The FFmpeg bed decode always applies Line-mode `dynrng`
   (drc_scale=1.0, no NextLib option surface). OFF adds nothing on top;
   LIGHT/STANDARD are the renderer's own leveling; HEAVY applies the stream's
@@ -163,7 +164,9 @@ worth knowing when debugging:
 
 Host tests live in `tests/` (each file states its compile line); the render
 suite is `hrtf_render_test`, `hrtf_motion_test`, `hrtf_polish_test`,
-`atmos_pipeline_test`, `object_engine_test`.
+`virtual_room_test`, `atmos_room_pipeline_test`, `object_engine_test`. The
+tests share `tests/check.h` (CHECK and CHECK_NEAR, which refuse a NaN under
+the phone's flags), `tests/bit_writer.h` and `tests/joc_frame.h`.
 
 ## Loudspeaker render (5.1 .. 9.1.6)
 
@@ -188,7 +191,7 @@ accepts 1-8, 10, 12 and 24 channels).
   swept against the core: the best of 0..512.
 - **Object properties (TS 103 420 clause 5.2)**: size (box sampling, power
   sum), divergence (power-preserving centre + two sides, BS.2127-style), zone
-  constraints (one hull per constraint over the permitted speakers, speaker ->
+  constraints (the panner over the permitted speakers only, speaker ->
   zone map of Table A.7), channel lock (nearest speaker). Bed objects play from
   their own channel when the layout has it; the LFE object goes to the LFE.
 - **Fallback**: frames without JOC play the decoded bed on the layout, delayed
@@ -198,8 +201,8 @@ Host tests: `speaker_renderer_test`, `atmos_speaker_pipeline_test`.
 
 ## Headphone render: the 15.1.12 virtual room
 
-With the HRTF on, `AtmosPipeline::set_virtual_room` (the default from the app)
-renders headphones as a room of speakers instead of one HRIR an object:
+With the HRTF on, `AtmosPipeline::process_frame` renders headphones as a
+room of speakers (`set_room_amount` says how much of the room is heard):
 
 1. Objects and beds are panned onto `OutputLayout::k15_1_12` by the same
    `SpeakerRenderer` as real speakers: fifteen at ear level (0, 15, 30, 60, 90,
@@ -223,9 +226,10 @@ renders; `atmos_room_pipeline_test` the pipeline's path through it. Nothing
 here has been judged by ear: the room's reflections and tail are starting
 values.
 
-The earlier render (`set_virtual_room(false)`: each object through the HRIR of
-its direction, no equalizer, no room) keeps its level with 3 dB taken off its
-sum, as it has no limiter.
+The render before it (each object through the HRIR of its own direction, no
+equalizer, no room) is gone from the pipeline: nothing called it once the
+room was the headphone render. `BinauralRenderer` (`render/hrir_renderer.h`)
+stays for the mixer's spatial map (`render/channel_placer.h`).
 
 ## The virtual room's low end (fixed 1.9.52)
 

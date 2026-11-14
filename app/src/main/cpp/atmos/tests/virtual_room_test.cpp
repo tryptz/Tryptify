@@ -20,23 +20,9 @@
 // *_fastmath build, and the phone's) a comparison with NaN is whatever the
 // compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
 // bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
-#include "../../dsp/util/finite.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check_near(double a, double b, double tol, const char* e, int line) {
-  ++g_checks;
-  if (!dspIsFinite(a) || !dspIsFinite(b) || !(std::fabs(a - b) <= tol)) {
-    ++g_fail;
-    std::printf("  FAIL %s:%d %s (%.6f vs %.6f)\n", __FILE__, line, e, a, b);
-  }
-}
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK_NEAR(a, b, t) check_near((a), (b), (t), #a " ~= " #b, __LINE__)
-#define CHECK(c) check((c), #c, __LINE__)
 
 using namespace tf::atmos;
 using render::RoomSpeaker;
@@ -427,7 +413,7 @@ void test_limiter() {
   std::printf("   peak %.4f (ceiling %.4f)\n", peak, VirtualRoom::kCeiling);
   CHECK(peak <= VirtualRoom::kCeiling * 1.00001f);
   CHECK(peak > 0.8f * VirtualRoom::kCeiling);
-  for (int i = 0; i < 2 * total; ++i) CHECK(std::isfinite(out[i]));
+  for (int i = 0; i < 2 * total; ++i) CHECK(dspIsFinite(out[i]));
 }
 
 void test_reset_and_silence() {
@@ -628,7 +614,7 @@ void test_set_swap() {
   for (int f = 0; f < 400; ++f) {
     room.render(feeds.data() + static_cast<size_t>(f % 40) * 1536 * count, 1536, out.data());
     for (float x : out) {
-      if (!std::isfinite(x)) finite = false;
+      if (!dspIsFinite(x)) finite = false;
       peak = std::fmax(peak, std::fabs(x));
     }
   }

@@ -143,7 +143,6 @@ enum class SpatialAudio(val label: String) {
 
 /** What the Atmos stage did with a multichannel source. */
 enum class AtmosStage(val label: String) {
-    OBJECTS_BINAURAL("Objects rendered to binaural stereo"),
     OBJECTS_ROOM("Objects on 15.1.12 virtual speakers, binaural"),
     OBJECTS_SPEAKERS("Objects rendered to the output's speakers"),
 

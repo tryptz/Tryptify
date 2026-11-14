@@ -25,7 +25,8 @@
 // *_fastmath build, and the phone's) a comparison with NaN is whatever the
 // compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
 // bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
-#include "../../dsp/util/finite.h"
+#include "bit_writer.h"
+#include "check.h"
 
 namespace tf {
 namespace atmos {
@@ -119,31 +120,6 @@ struct JointObjectCodingProbe {
 }  // namespace tf
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
-void check_near(float a, float b, float tol, const char* e, int line) {
-  ++g_checks;
-  if (!dspIsFinite(a) || !dspIsFinite(b) || std::fabs(a - b) > tol) { ++g_fail; std::printf("  FAIL %s:%d %s (%.4f vs %.4f)\n", __FILE__, line, e, a, b); }
-}
-#define CHECK_NEAR(a, b, t) check_near((a), (b), (t), #a " ~= " #b, __LINE__)
-
-// MSB-first bit writer matching tf::atmos::BitReader.
-struct BitWriter {
-  std::vector<uint8_t> bytes;
-  size_t count = 0;
-  void put_bit(int bit) {
-    if ((count & 7u) == 0) bytes.push_back(0);
-    if (bit & 1) bytes.back() |= (1u << (7u - (count & 7u)));
-    ++count;
-  }
-  void put(unsigned n, uint32_t v) {
-    for (int i = (int)n - 1; i >= 0; --i) put_bit((v >> i) & 1u);
-  }
-};
 
 // Find the root->leaf bit path for a symbol in a JOC Huffman table.
 bool huff_path(const int (*table)[2], int symbol, std::vector<int>& bits) {
@@ -462,7 +438,7 @@ void test_end_to_end() {
   bool finite = true;
   for (int ts = 0; ts < 1536 / 64; ++ts) {
     const auto& out = applier.apply(input, joc, ts);
-    for (float v : out[0]) if (!std::isfinite(v)) finite = false;
+    for (float v : out[0]) if (!dspIsFinite(v)) finite = false;
   }
   CHECK(finite);
   // All-zero source symbols dequantize to a zero matrix, so zero input -> zero out.

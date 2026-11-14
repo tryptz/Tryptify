@@ -35,13 +35,16 @@ class AtmosFrameBuffer @Inject constructor() {
     private val lock = Any()
     private val frames = ArrayDeque<TappedFrame>()
 
+    /** Whether a frame at [timeUs] carries on from [last] (no seek, no other song between). */
+    private fun follows(last: TappedFrame, timeUs: Long) =
+        timeUs >= last.timeUs && timeUs - last.timeUs <= CONTINUOUS_US
+
     /** Records a raw E-AC-3 access unit at its presentation time. */
     fun put(timeUs: Long, bytes: ByteArray) {
         // Every frame of an Atmos stream carries the count; one in 32 (a
         // second) is plenty, and a stream's first frame is always looked at.
-        val last = synchronized(lock) { frames.lastOrNull() }
-        val jumped = last == null || timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US
-        if (jumped || ++sinceProbe >= PROBE_EVERY) {
+        val before = synchronized(lock) { frames.lastOrNull() }
+        if (before == null || !follows(before, timeUs) || ++sinceProbe >= PROBE_EVERY) {
             sinceProbe = 0
             val objects = if (AtmosNative.isAvailable) {
                 runCatching { AtmosNative.nativeParseAtmos(bytes) }.getOrDefault(-1)
@@ -54,7 +57,7 @@ class AtmosFrameBuffer @Inject constructor() {
             // A frame that does not follow the last one (a seek, another
             // song) starts afresh: what is buffered belongs to somewhere else.
             val last = frames.lastOrNull()
-            if (last != null && (timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US)) {
+            if (last != null && !follows(last, timeUs)) {
                 android.util.Log.i("AtmosTap", "jump ${last.timeUs}us -> ${timeUs}us: dropped ${frames.size} tapped frames")
                 frames.clear()
             }

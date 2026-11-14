@@ -110,9 +110,8 @@ class ObjectEngine {
     // JointObjectCodingTables.inputMatrix) — no LFE. The decoded bed is in
     // decoder order, FL FR FC LFE SL SR for a 5.1 core, so for a bed that
     // carries an LFE (4+ channels) JOC channel ch reads decoder channel ch,
-    // skipping index 3. Feeding the bed straight through (as this did) handed
-    // JOC the LFE as its left surround and the left surround as its right
-    // surround.
+    // skipping index 3; fed the bed straight through, JOC would take the LFE
+    // for its left surround and the left surround for its right.
     //
     // A 7.1 core (joc_dmx_config_idx 1) comes out of the decoder as FL FR FC
     // LFE BL BR SL SR, the rears before the sides (FFmpeg's order, and
@@ -262,20 +261,13 @@ class ObjectEngine {
     if (applier_) applier_->reset();
   }
 
-  // Render-space position of object `obj` (x = left..right, y = down..up,
-  // z = back..front), from the resolved OAMD state: the LAST info block's
-  // target — which the renderer's motion crossfade glides toward — after the
-  // spec's differential, distance and screen transforms. Bed objects sit at
-  // their channel's speaker. The origin (center) if there is no state yet.
-  Vec3 object_position(int obj) const {
-    const cavern::ObjectState* st = object_state(obj);
-    return st ? st->render : Vec3{};
-  }
+
+ public:
+  // The QMF analysis and synthesis round trip, in samples, as measured
+  // (cavern_qmf_test): what the objects are behind the decoded bed by.
+  static constexpr int kQmfLatency = 577;
 
  private:
-  // Measured QMF analysis+synthesis round trip (cavern_qmf_test), matching
-  // AtmosPipeline::kQmfLatency.
-  static constexpr int kQmfLatency = 577;
 
   // OAMD object index -> its PCM (JOC object storage, or the spliced LFE).
   float* mutable_channel(int obj) const {

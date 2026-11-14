@@ -17,14 +17,9 @@
 #include <vector>
 
 #include "render/hrir_renderer.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
 
 using tf::atmos::render::BinauralRenderer;
 constexpr int kFrame = 1536;

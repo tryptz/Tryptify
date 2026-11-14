@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "cavern/quadrature_mirror_filterbank.h"
+#include "../../dsp/util/finite.h"
 
 namespace {
 
@@ -171,7 +172,7 @@ int main() {
     qmf.process_inverse(qmf.out_real(), qmf.out_imaginary(), frameOut.data());
     for (int i = 0; i < kSub; ++i) {
       const float v = frameOut[i];
-      if (!std::isfinite(v)) allFinite = false;
+      if (!dspIsFinite(v)) allFinite = false;
       out[f * kSub + i] = v;
     }
   }

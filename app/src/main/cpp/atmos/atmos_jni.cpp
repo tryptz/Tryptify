@@ -1,12 +1,7 @@
-// JNI surface for the clean-room Atmos metadata/object code (the Cavern-ported
-// EMDF/OAMD/JOC chain). Under plan Option B the E-AC-3 core is decoded by
-// Media3's FfmpegAudioRenderer (NextLib); this native side does the object work
-// — parse the Atmos side-data out of a raw E-AC-3 frame, and (as the surface
-// grows) run the JOC QMF upmix on the decoded bed PCM.
-//
-// This first entry point lets the Kotlin sample-tap probe a frame: it walks the
-// EMDF container in the frame's aux data and reports the OAMD object count, which
-// is what the AtmosAudioProcessor keys its per-frame upmix on.
+// The Atmos code's JNI surface (AtmosNative.kt). The E-AC-3 core is decoded
+// by Media3's FfmpegAudioRenderer; this side does the object work on each
+// frame: read its Atmos metadata, rebuild the objects from the decoded bed
+// and render them (AtmosPipeline).
 #include <android/log.h>
 #include <jni.h>
 
@@ -18,12 +13,46 @@
 #include "object_engine.h"
 
 namespace {
-inline tf::atmos::ObjectEngine* engine_of(jlong ptr) {
-  return reinterpret_cast<tf::atmos::ObjectEngine*>(ptr);
+
+using tf::atmos::AtmosPipeline;
+
+inline AtmosPipeline* pipeline_of(jlong ptr) { return reinterpret_cast<AtmosPipeline*>(ptr); }
+
+// A frame and its interleaved bed, copied into the pipeline's own buffers:
+// the audio thread allocates nothing once they have grown. False when the
+// bed is shorter than channels * samples.
+struct FrameIn {
+  const uint8_t* frame;
+  size_t frame_size;
+  const float* bed;
+};
+bool read_frame(JNIEnv* env, AtmosPipeline* pipe, jbyteArray frame, jfloatArray bed,
+                jint channels, jint samples, FrameIn& in) {
+  const jsize flen = env->GetArrayLength(frame);
+  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
+  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
+  const jsize blen = env->GetArrayLength(bed);
+  if (blen < static_cast<jsize>(channels) * samples) return false;
+  std::vector<float>& bbuf = pipe->bed_scratch(static_cast<size_t>(blen));
+  env->GetFloatArrayRegion(bed, 0, blen, bbuf.data());
+  in = {fbuf.data(), static_cast<size_t>(flen), bbuf.data()};
+  return true;
 }
-inline tf::atmos::AtmosPipeline* pipeline_of(jlong ptr) {
-  return reinterpret_cast<tf::atmos::AtmosPipeline*>(ptr);
+
+// Objects' meter fields into `out`, as many as it and kMaxMeterObjects hold:
+// `fill(buffer, capacity)` writes them and returns how many.
+constexpr int kMaxMeterObjects = 32;
+template <typename Fill>
+jint write_object_meter(JNIEnv* env, jfloatArray out, Fill fill) {
+  constexpr int kFields = AtmosPipeline::kMeterFields;
+  float buf[kMaxMeterObjects * kFields];
+  int capacity = env->GetArrayLength(out) / kFields;
+  if (capacity > kMaxMeterObjects) capacity = kMaxMeterObjects;
+  const int count = fill(buf, capacity);
+  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
+  return count;
 }
+
 }  // namespace
 
 extern "C" {
@@ -47,51 +76,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeParseAtmos(
   return (emdf.oamd().valid() && objects > 0) ? objects : -1;
 }
 
-// ── Object reconstruction engine (P1) ────────────────────────────────────
-JNIEXPORT jlong JNICALL
-Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeEngineCreate(
-    JNIEnv* /*env*/, jclass /*clazz*/) {
-  return reinterpret_cast<jlong>(new tf::atmos::ObjectEngine());
-}
-
-JNIEXPORT void JNICALL
-Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeEngineDestroy(
-    JNIEnv* /*env*/, jclass /*clazz*/, jlong engine) {
-  delete engine_of(engine);
-}
-
-// Upmixes one E-AC-3 frame's bed PCM into objects. `bedInterleaved` is
-// channels * samples floats (interleaved, decoder channel order). Returns the
-// object count (>= 1), or -1 if the frame has no JOC. The object PCM stays in
-// the native engine for the HRTF render stage (P2). First-cut marshaling; the
-// audio-thread-optimized path (direct buffers, reused scratch) lands with P4.
-JNIEXPORT jint JNICALL
-Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeUpmixFrame(
-    JNIEnv* env, jclass /*clazz*/, jlong engine, jbyteArray frame,
-    jfloatArray bedInterleaved, jint channels, jint samples) {
-  tf::atmos::ObjectEngine* eng = engine_of(engine);
-  if (eng == nullptr || channels <= 0 || samples <= 0) return -1;
-
-  const jsize flen = env->GetArrayLength(frame);
-  std::vector<uint8_t> fbuf(static_cast<size_t>(flen));
-  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
-
-  const jsize blen = env->GetArrayLength(bedInterleaved);
-  if (blen < static_cast<jsize>(channels) * samples) return -1;
-  std::vector<float> interleaved(static_cast<size_t>(blen));
-  env->GetFloatArrayRegion(bedInterleaved, 0, blen, interleaved.data());
-
-  std::vector<std::vector<float>> planar(channels, std::vector<float>(samples));
-  for (int i = 0; i < samples; ++i)
-    for (int c = 0; c < channels; ++c)
-      planar[c][i] = interleaved[static_cast<size_t>(i) * channels + c];
-  std::vector<const float*> ptrs(channels);
-  for (int c = 0; c < channels; ++c) ptrs[c] = planar[c].data();
-
-  return eng->upmix_frame(fbuf.data(), fbuf.size(), ptrs.data(), channels, samples);
-}
-
-// ── Full render pipeline (P1 upmix -> P2 binaural render) ─────────────────
+// ── The render pipeline ──────────────────────────────────────────────────
 JNIEXPORT jlong JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineCreate(
     JNIEnv* /*env*/, jclass /*clazz*/, jint sampleRate, jint maxObjects) {
@@ -111,7 +96,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineDestroy(
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePipelineFlush(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe != nullptr) pipe->flush_state();
 }
 
@@ -123,7 +108,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRenderParams(
     jfloat binauralStrength, jboolean heightVirtualization, jfloat lfeGainDb,
     jboolean bassManagement, jint crossoverHz, jint drcMode,
     jboolean dialogNormalization) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return;
   pipe->set_params(mode, downmix, binauralStrength,
                    heightVirtualization == JNI_TRUE, lfeGainDb,
@@ -137,7 +122,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRenderParams(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLoadSofa(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray sofa) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr || sofa == nullptr) return 0;
   const jsize len = env->GetArrayLength(sofa);
   if (len <= 0) return 0;
@@ -149,37 +134,27 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLoadSofa(
 JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeClearSofa(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe != nullptr) pipe->clear_sofa();
 }
 
 // Renders one E-AC-3 frame's Atmos content to interleaved binaural stereo.
 // `bedInterleaved` is channels*samples floats; `stereoOut` receives 2*samples
-// floats when the pipeline produced output (object render OR its latency-
-// matched fallback downmix — path switches crossfade inside the pipeline).
-// Returns 1 (output written) or -1 (inactive — the caller folds down itself).
+// floats when the pipeline produced output (the objects, or the bed while
+// there are none; the pipeline crossfades between them). Returns 1 (output
+// written) or -1 (inactive: the caller folds down itself). Audio thread.
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame,
     jfloatArray bedInterleaved, jint channels, jint samples, jfloatArray stereoOut) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr || channels <= 0 || samples <= 0) return -1;
 
-  // Runs on the audio thread: use the pipeline's reusable scratch so there is no
-  // per-frame heap allocation (that alone was enough to cause micro-stutter).
-  const jsize flen = env->GetArrayLength(frame);
-  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
-  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
-
-  const jsize blen = env->GetArrayLength(bedInterleaved);
-  if (blen < static_cast<jsize>(channels) * samples) return -1;
-  std::vector<float>& bbuf = pipe->bed_scratch(static_cast<size_t>(blen));
-  env->GetFloatArrayRegion(bedInterleaved, 0, blen, bbuf.data());
-
-  std::vector<float>& sbuf = pipe->stereo_scratch(static_cast<size_t>(2) * samples);
-  const int rc = pipe->process_frame_interleaved(
-      fbuf.data(), static_cast<size_t>(flen), bbuf.data(), channels, samples,
-      sbuf.data());
+  FrameIn in;
+  if (!read_frame(env, pipe, frame, bedInterleaved, channels, samples, in)) return -1;
+  std::vector<float>& sbuf = pipe->out_scratch(static_cast<size_t>(2) * samples);
+  const int rc = pipe->process_frame_interleaved(in.frame, in.frame_size, in.bed, channels,
+                                                 samples, sbuf.data());
   // Truncation should never happen (DD+ JOC practice is <=16 objects) but must
   // never be silent if it does. One log per process lifetime.
   static bool truncation_warned = false;
@@ -203,36 +178,29 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrame(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetOutputLayout(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jint layoutId) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return 0;
   return pipe->set_output_layout(layoutId);
 }
 
 // Renders one E-AC-3 frame to the loudspeaker layout set above. `out` receives
 // outChannels*samples interleaved floats in Android channel-mask order when
-// the pipeline produced output. Returns 1 (written) or -1 (inactive — the
-// caller plays the bed itself). Same no-allocation marshaling as
-// nativeProcessFrame.
+// the pipeline produced output. Returns 1 (written) or -1 (inactive: the
+// caller plays the bed itself). Audio thread.
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrameSpeakers(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame,
     jfloatArray bedInterleaved, jint channels, jint samples, jfloatArray out,
     jint outChannels) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr || channels <= 0 || samples <= 0) return -1;
   if (outChannels != pipe->output_channels()) return -1;  // layout/buffer mismatch
-  const jsize flen = env->GetArrayLength(frame);
-  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
-  env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
-  const jsize blen = env->GetArrayLength(bedInterleaved);
-  if (blen < static_cast<jsize>(channels) * samples) return -1;
-  std::vector<float>& bbuf = pipe->bed_scratch(static_cast<size_t>(blen));
-  env->GetFloatArrayRegion(bedInterleaved, 0, blen, bbuf.data());
+  FrameIn in;
+  if (!read_frame(env, pipe, frame, bedInterleaved, channels, samples, in)) return -1;
   const size_t n = static_cast<size_t>(outChannels) * samples;
-  // The stereo scratch is just a float buffer; it grows once to the layout size.
-  std::vector<float>& obuf = pipe->stereo_scratch(n);
-  const int rc = pipe->process_frame_speakers_interleaved(
-      fbuf.data(), static_cast<size_t>(flen), bbuf.data(), channels, samples, obuf.data());
+  std::vector<float>& obuf = pipe->out_scratch(n);
+  const int rc = pipe->process_frame_speakers_interleaved(in.frame, in.frame_size, in.bed,
+                                                          channels, samples, obuf.data());
   if (rc == 1) {
     if (env->GetArrayLength(out) < static_cast<jsize>(n)) return -1;
     env->SetFloatArrayRegion(out, 0, static_cast<jsize>(n), obuf.data());
@@ -240,14 +208,13 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeProcessFrameSpeakers(
   return rc;
 }
 
-// Chooses how the headphone render places sound: on the 15.1.12 virtual room
-// (render/virtual_room.h) or each object through its own direction's HRIR.
-// `room` is the amount of the room's reflections and tail, 0 to 1.
+// How much of the virtual room's reflections and tail the headphone render
+// has, 0 to 1.
 JNIEXPORT void JNICALL
-Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetVirtualRoom(
-    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jboolean enabled, jfloat room) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
-  if (pipe != nullptr) pipe->set_virtual_room(enabled == JNI_TRUE, room);
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetRoomAmount(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jfloat room) {
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) pipe->set_room_amount(room);
 }
 
 // Objects rendered in the last frame, or 0 when the decoded bed played
@@ -255,7 +222,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetVirtualRoom(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLastObjectCount(
     JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   return pipe != nullptr ? pipe->last_objects() : 0;
 }
 
@@ -265,16 +232,11 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeLastObjectCount(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeObjectMeter(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jfloatArray out) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return 0;
-  constexpr int kFields = tf::atmos::AtmosPipeline::kMeterFields;
-  constexpr int kMax = 32;
-  float buf[kMax * kFields];
-  int room = env->GetArrayLength(out) / kFields;
-  if (room > kMax) room = kMax;
-  const int count = pipe->object_meter(buf, room);
-  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
-  return count;
+  return write_object_meter(env, out, [pipe](float* buf, int capacity) {
+    return pipe->object_meter(buf, capacity);
+  });
 }
 
 // Reads a frame's object metadata without rendering (the object render is
@@ -283,20 +245,15 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeObjectMeter(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeTrackObjects(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame, jfloatArray out) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return 0;
   const jsize flen = env->GetArrayLength(frame);
   std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
   if (flen > 0) env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
   pipe->track_metadata(fbuf.data(), static_cast<size_t>(flen));
-  constexpr int kFields = tf::atmos::AtmosPipeline::kMeterFields;
-  constexpr int kMax = 32;
-  float buf[kMax * kFields];
-  int room = env->GetArrayLength(out) / kFields;
-  if (room > kMax) room = kMax;
-  const int count = pipe->track_meter(buf, room);
-  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
-  return count;
+  return write_object_meter(env, out, [pipe](float* buf, int capacity) {
+    return pipe->track_meter(buf, capacity);
+  });
 }
 
 // The last frame's metadata as the engine saw it (ObjectEngine::debug), for
@@ -304,7 +261,7 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeTrackObjects(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeDebugInfo(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jintArray out) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   constexpr int kFields = tf::atmos::ObjectEngine::kDebugFields;
   if (pipe == nullptr || env->GetArrayLength(out) < kFields) return 0;
   jint buf[kFields];
@@ -320,12 +277,12 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeDebugInfo(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomLayout(
     JNIEnv* env, jclass /*clazz*/, jfloatArray out) {
-  constexpr int kFields = tf::atmos::AtmosPipeline::kRoomFields;
-  constexpr int kMax = tf::atmos::AtmosPipeline::kRoomMeterMax;
+  constexpr int kFields = AtmosPipeline::kRoomFields;
+  constexpr int kMax = AtmosPipeline::kRoomMeterMax;
   float buf[kMax * kFields];
-  int room = env->GetArrayLength(out) / kFields;
-  if (room > kMax) room = kMax;
-  const int count = tf::atmos::AtmosPipeline::room_layout(buf, room);
+  int capacity = env->GetArrayLength(out) / kFields;
+  if (capacity > kMax) capacity = kMax;
+  const int count = AtmosPipeline::room_layout(buf, capacity);
   if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
   return count;
 }
@@ -336,13 +293,13 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomLayout(
 JNIEXPORT jint JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomMeter(
     JNIEnv* env, jclass /*clazz*/, jlong pipeline, jboolean tracked, jfloatArray out) {
-  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  AtmosPipeline* pipe = pipeline_of(pipeline);
   if (pipe == nullptr) return 0;
-  constexpr int kMax = tf::atmos::AtmosPipeline::kRoomMeterMax;
+  constexpr int kMax = AtmosPipeline::kRoomMeterMax;
   float buf[kMax];
-  int room = env->GetArrayLength(out);
-  if (room > kMax) room = kMax;
-  const int count = pipe->room_meter(buf, room, tracked == JNI_TRUE);
+  int capacity = env->GetArrayLength(out);
+  if (capacity > kMax) capacity = kMax;
+  const int count = pipe->room_meter(buf, capacity, tracked == JNI_TRUE);
   if (count > 0) env->SetFloatArrayRegion(out, 0, count, buf);
   return count;
 }

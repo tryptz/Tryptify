@@ -2,7 +2,7 @@
 //
 //   c++ -std=c++17 -I.. atmos_speaker_pipeline_test.cpp -o spkpipe && ./spkpipe
 //
-// Mirrors atmos_pipeline_test for the multichannel output: passthrough (-1),
+// The multichannel output: passthrough (-1),
 // the bed fallback delayed by exactly the QMF round-trip and routed to the
 // matching speaker, the fallback->render seam starting on the fallback signal,
 // a JOC frame rendering finite output on every layout, and flush clearing the
@@ -17,61 +17,12 @@
 // *_fastmath build, and the phone's) a comparison with NaN is whatever the
 // compiler likes, so a NaN could pass every CHECK_NEAR. This looks at the
 // bits behind a barrier the compiler cannot see through (dsp/util/finite.h).
-#include "../../dsp/util/finite.h"
+#include "joc_frame.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-void check_near(float a, float b, float t, const char* e, int line) {
-  ++g_checks;
-  if (!dspIsFinite(a) || !dspIsFinite(b) || !(std::fabs(a - b) <= t)) { ++g_fail; std::printf("  FAIL %s:%d %s (%.4f vs %.4f)\n", __FILE__, line, e, a, b); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
-#define CHECK_NEAR(a, b, t) check_near((a), (b), (t), #a " ~= " #b, __LINE__)
-
-struct BitWriter {
-  std::vector<uint8_t> bytes;
-  size_t count = 0;
-  void bit(int b) {
-    if ((count & 7u) == 0) bytes.push_back(0);
-    if (b & 1) bytes.back() |= (1u << (7u - (count & 7u)));
-    ++count;
-  }
-  void put(unsigned n, uint32_t v) { for (int i = (int)n - 1; i >= 0; --i) bit((v >> i) & 1u); }
-};
 
 using namespace tf::atmos;
-
-// Same JOC-only EMDF frame as atmos_pipeline_test (5 channels, 1 object).
-void write_joc(BitWriter& bw) {
-  bw.put(3, 0); bw.put(6, 0); bw.put(3, 0);
-  bw.put(3, 4); bw.put(5, 0); bw.put(10, 0);
-  bw.bit(1); bw.put(3, 0); bw.bit(0); bw.put(1, 0); bw.bit(0); bw.put(1, 0);
-  for (int i = 0; i < 5; ++i) bw.bit(0);
-}
-void write_emdf_joc_frame(BitWriter& bw) {
-  BitWriter probe; write_joc(probe);
-  const unsigned payload_bytes = (unsigned)((probe.count + 7) / 8);
-  bw.put(8, 0x00); bw.put(8, 0x11);
-  bw.put(8, 0x58); bw.put(8, 0x38);
-  bw.put(16, 6 + payload_bytes);
-  bw.put(2, 0); bw.put(3, 0);
-  bw.put(5, 14);
-  bw.bit(0);
-  bw.bit(0); bw.bit(0); bw.bit(0);
-  bw.bit(1);
-  bw.put(8, payload_bytes); bw.bit(0);
-  const size_t body_start = bw.count;
-  write_joc(bw);
-  while (bw.count < body_start + payload_bytes * 8) bw.bit(0);
-  // The end of the container: no more payloads, then emdf_protection (an
-  // 8-bit primary field, no secondary one), padded to the byte. The decoder
-  // takes a container only when it ends where its length says it does.
-  bw.put(5, 0); bw.put(2, 1); bw.put(2, 0); bw.put(8, 0xA5); bw.put(7, 0);
-}
 
 constexpr int kSamples = 1536;
 
@@ -155,7 +106,7 @@ void test_joc_every_layout() {
     const int rc = pipe.process_frame_speakers(fw.bytes.data(), fw.bytes.size(), ptrs.data(), 5, kSamples, out.data());
     CHECK(rc == 1);
     bool finite = true;
-    for (float v : out) if (!std::isfinite(v)) finite = false;
+    for (float v : out) if (!dspIsFinite(v)) finite = false;
     CHECK(finite);
   }
 }

@@ -112,14 +112,15 @@ So, in native code that the phone builds with `-ffast-math`:
 - Never test with `isnan` / `isinf` / `isfinite`; `dspIsFinite` and the rest
   of `dsp/util/finite.h` if a test is really needed.
 - `atmos/tests` builds every test twice, the second time as `<name>_fastmath`
-  with the phone's flags, and its `check_near` helpers refuse a NaN through
-  `dspIsFinite`: a plain comparison with NaN is also folded under the flag,
-  and without that a NaN passed every `CHECK_NEAR` (the first fast-math run
-  of the old code passed 41 of 41; with the helper it fails 10). A new test
-  file's own comparison helper needs the same.
+  with the phone's flags, and `CHECK_NEAR` (`tests/check.h`, which every
+  test there includes) refuses a NaN through `dspIsFinite`: a plain
+  comparison with NaN is also folded under the flag, and without that a NaN
+  passed every `CHECK_NEAR` (the first fast-math run of the old code passed
+  41 of 41; with the helper it fails 10). A test that asks whether a value
+  is finite uses `dspIsFinite` too, never `std::isfinite`.
 
 Four more native suites are CMake projects of their own, built and run on the
-desktop the same way: the Atmos renderer's (`atmos/tests/`, twenty-one tests, each built a second time with the phone's `-ffast-math`; the
+desktop the same way: the Atmos renderer's (`atmos/tests/`, twenty tests, each built a second time with the phone's `-ffast-math`; the
 script above runs only `channel_placer_test` from it), Trypt Mania's game
 engine (`glyph/tests/`, held to the same rules as its Kotlin twin), the
 motion blur behind the note trails and the lyric glide (`motion/tests/`) and

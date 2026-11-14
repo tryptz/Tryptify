@@ -229,12 +229,10 @@ class AtmosRendererTest {
     }
 
     @Test
-    fun `the virtual room is on by default, at a quarter, and a stored profile without it gets it`() {
-        assertTrue(RendererProfile.DEFAULT.virtualRoom)
+    fun `the room is at a quarter by default, and a stored profile without it gets that`() {
         assertEquals(0.25f, RendererProfile.DEFAULT.roomAmount, 0f)
         val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         val old = json.decodeFromString<RendererProfile>("""{"hrtfEnabled":true,"binauralStrength":0.5}""")
-        assertTrue(old.virtualRoom)
         assertEquals(0.25f, old.roomAmount, 0f)
         assertEquals(1f, old.copy(roomAmount = 7f).clamped().roomAmount, 0f)
         assertEquals(0f, old.copy(roomAmount = -1f).clamped().roomAmount, 0f)

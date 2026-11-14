@@ -1,20 +1,21 @@
-// Runtime SOFA HRTF loader (declaration). Defined in sofa_loader.cpp, which is
-// the ONLY translation unit that pulls in libmysofa — the header-only renderer
-// and the static self-check lib never link it. Loads a user-supplied .sofa from
-// an in-memory buffer, resamples + onset-aligns it to the baked table's grid
-// (identical processing to tools/bake_hrir.c), and installs it into the renderer
-// via BinauralRenderer::set_runtime_hrir. Returns false on any parse failure.
+// Runtime SOFA HRTF loader (declaration). Defined in sofa_loader.cpp, the only
+// translation unit that pulls in libmysofa: the header-only render and the
+// host tests never link it. Reads a listener's .sofa from memory, resamples
+// it to 48 kHz and onset-aligns it onto the baked table's grid (the same
+// steps as tools/bake_hrir.c).
 #ifndef TF_ATMOS_RENDER_SOFA_LOADER_H
 #define TF_ATMOS_RENDER_SOFA_LOADER_H
 
+#include <vector>
+
 namespace tf {
 namespace atmos {
-namespace render {
-class BinauralRenderer;
-}
 
-bool load_sofa_into_renderer(render::BinauralRenderer& renderer, const char* data,
-                             long size);
+// `taps` and `delays` come out laid out as kHrirData and kHrirDelay
+// ([elevation][azimuth][ear]), ready for VirtualRoom::set_hrir. False when
+// the file cannot be read as an HRTF set. Allocates; loader thread.
+bool load_sofa_tables(const char* data, long size, std::vector<float>& taps,
+                      std::vector<float>& delays);
 
 }  // namespace atmos
 }  // namespace tf

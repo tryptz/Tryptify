@@ -12,27 +12,10 @@
 #include <vector>
 
 #include "cavern/enhanced_ac3.h"
+#include "bit_writer.h"
+#include "check.h"
 
 namespace {
-int g_fail = 0, g_checks = 0;
-void check(bool c, const char* e, int line) {
-  ++g_checks;
-  if (!c) { ++g_fail; std::printf("  FAIL %s:%d %s\n", __FILE__, line, e); }
-}
-#define CHECK(c) check((c), #c, __LINE__)
-
-struct BitWriter {
-  std::vector<uint8_t> bytes;
-  size_t count = 0;
-  void bit(int b) {
-    if ((count & 7u) == 0) bytes.push_back(0);
-    if (b & 1) bytes.back() |= (1u << (7u - (count & 7u)));
-    ++count;
-  }
-  void put(unsigned n, uint32_t v) {
-    for (int i = (int)n - 1; i >= 0; --i) bit((v >> i) & 1u);
-  }
-};
 
 using namespace tf::atmos;
 using namespace tf::atmos::cavern;

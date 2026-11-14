@@ -33,7 +33,7 @@ import javax.inject.Singleton
  * tap ([AtmosTapMediaSourceFactory]) preserved and calls
  * [AtmosNative.nativeProcessFrame], which reconstructs the objects (JOC) and
  * renders them to binaural stereo via the native pipeline. Frames without JOC
- * (plain multichannel) fall back to an ITU stereo downmix, so audio never drops.
+ * (plain multichannel) play their bed through the same render, so audio never drops.
  *
  * Active only for >2-channel input; stereo/mono passes straight through
  * (configure returns NOT_SET), leaving non-Atmos playback untouched.
@@ -100,17 +100,14 @@ class AtmosAudioProcessor @Inject constructor(
     /**
      * Last custom-SOFA apply outcome, for the renderer UI: path → accepted.
      * Null while no custom SOFA is selected (built-in HRTF) or before the
-     * first apply. Rejections were previously logcat-only, so the screen
-     * claimed "custom" while the render actually ran the baked KEMAR set.
+     * first apply. A rejected file means the render is running the built-in
+     * set, and the screen has to say so.
      */
     private val _sofaStatus = MutableStateFlow<Pair<String, Boolean>?>(null)
     val sofaStatus: StateFlow<Pair<String, Boolean>?> = _sofaStatus.asStateFlow()
 
     /** What the last frames of a multichannel stream actually got. */
     enum class Outcome {
-        /** JOC objects reconstructed, each through the HRTF of its own direction. */
-        OBJECTS_BINAURAL,
-
         /** JOC objects panned onto the 15.1.12 virtual room, its speakers to the ears. */
         OBJECTS_ROOM,
 
@@ -138,8 +135,7 @@ class AtmosAudioProcessor @Inject constructor(
         fun z(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 2]
         /** The decaying peak, or under zero when the object is watched and not rendered. */
         fun level(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 3]
-        fun isBed(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 1f
-        fun isLfe(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 2f
+        fun isLfe(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == AtmosNative.METER_KIND_LFE
     }
 
     /**
@@ -180,7 +176,7 @@ class AtmosAudioProcessor @Inject constructor(
 
     // The object meter, read only while something shows it (the Atmos page).
     // The audio thread writes positions and holds each object's peak in
-    // meterFields; a publisher reads them ten times a second and lets the
+    // meterFields; a publisher reads them thirty times a second and lets the
     // peaks fall. The unguarded float races are harmless for a meter.
     private val meterSubscribers = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var meterOn = false
@@ -220,15 +216,14 @@ class AtmosAudioProcessor @Inject constructor(
                     } else {
                         null
                     }
-                    // About 14 dB a second, as the channel meter falls. Thirty
-                    // times a second, a frame of the stream: objects move.
+                    // Thirty times a second, a frame of the stream: objects move.
                     for (i in 0 until count) {
                         val at = i * AtmosNative.OBJECT_METER_FIELDS + 3
-                        if (meterFields[at] > 0f) meterFields[at] *= 0.896f
+                        if (meterFields[at] > 0f) meterFields[at] *= METER_FALL
                     }
                     val speakers = speakerCount
                     _speakers.value = if (speakers > 0) speakerLevels.copyOf(speakers) else null
-                    for (i in 0 until speakers) if (speakerLevels[i] > 0f) speakerLevels[i] *= 0.896f
+                    for (i in 0 until speakers) if (speakerLevels[i] > 0f) speakerLevels[i] *= METER_FALL
                     kotlinx.coroutines.delay(33)
                 }
             }
@@ -283,15 +278,16 @@ class AtmosAudioProcessor @Inject constructor(
 
     // The engine's metadata state, logged when it changes (not the held-frame
     // count, which ticks) so a log shows where a stream's objects went.
-    private val debugNow = IntArray(10)
-    private val debugLast = IntArray(10) { -1 }
+    private val debugNow = IntArray(AtmosNative.DEBUG_FIELDS)
+    private val debugLast = IntArray(AtmosNative.DEBUG_FIELDS) { -1 }
 
     private fun logMetadata() {
-        if (pipeline == 0L || AtmosNative.nativeDebugInfo(pipeline, debugNow) < 10) return
+        if (pipeline == 0L || AtmosNative.nativeDebugInfo(pipeline, debugNow) < AtmosNative.DEBUG_FIELDS) return
         var changed = false
-        for (i in 0 until 10) if (i != 8 && debugNow[i] != debugLast[i]) changed = true
+        val held = AtmosNative.DEBUG_HELD_FRAMES
+        for (i in debugNow.indices) if (i != held && debugNow[i] != debugLast[i]) changed = true
         // Held frames: only that the container went missing or came back.
-        if ((debugNow[8] > 0) != (debugLast[8] > 0)) changed = true
+        if ((debugNow[held] > 0) != (debugLast[held] > 0)) changed = true
         if (!changed) return
         System.arraycopy(debugNow, 0, debugLast, 0, 10)
         android.util.Log.i(
@@ -344,7 +340,11 @@ class AtmosAudioProcessor @Inject constructor(
         val text = StringBuilder("places:")
         for (i in 0 until count) {
             val at = i * n
-            val kind = when (meterScratch[at + 4]) { 2f -> "LFE"; 1f -> "bed"; else -> "obj" }
+            val kind = when (meterScratch[at + 4]) {
+                AtmosNative.METER_KIND_LFE -> "LFE"
+                AtmosNative.METER_KIND_BED -> "bed"
+                else -> "obj"
+            }
             val db = if (meterScratch[at + 3] < 0f) "n/a" else {
                 val peak = placePeaks[i]
                 if (peak <= 1e-6f) "-inf" else String.format(java.util.Locale.ROOT, "%.0f", 20f * kotlin.math.log10(peak))
@@ -368,7 +368,7 @@ class AtmosAudioProcessor @Inject constructor(
         var lfe = false
         for (i in 0 until count) {
             val at = i * n
-            if (meterScratch[at + 4] == 2f) { lfe = true; continue }
+            if (meterScratch[at + 4] == AtmosNative.METER_KIND_LFE) { lfe = true; continue }
             if (i >= placed) {
                 firstPlace[i * 3] = meterScratch[at]
                 firstPlace[i * 3 + 1] = meterScratch[at + 1]
@@ -450,9 +450,8 @@ class AtmosAudioProcessor @Inject constructor(
         // choice) — the pipeline declines the frame (process() returns -1)
         // and the fixed-matrix fold-down handles it, with headphone shaping
         // left entirely to the built-in AutoEQ chain. Strength 0 alone is
-        // NOT a plain fold — the native dry path is an ITD-only render that
-        // still places objects with per-ear arrival-time delays — hence the
-        // hard demotion.
+        // not that fold: the room at strength 0 still pans every speaker
+        // feed to the ears, so HRTF off has to demote the mode.
         val strength = if (cur.hrtfEnabled) cur.binauralStrength else 0f
         val downmix = if (cur.hrtfEnabled) {
             StereoDownmixMode.BINAURAL
@@ -467,9 +466,7 @@ class AtmosAudioProcessor @Inject constructor(
             cur.mode
         }
         // The room first: the render params below hand it the strength as well.
-        // It is the headphone render; the one-HRIR-an-object render it
-        // replaced stays in the native code, unused from here.
-        AtmosNative.nativeSetVirtualRoom(p, true, cur.roomAmount)
+        AtmosNative.nativeSetRoomAmount(p, cur.roomAmount)
         AtmosNative.nativeSetRenderParams(
             p,
             mode.ordinal,
@@ -581,7 +578,7 @@ class AtmosAudioProcessor @Inject constructor(
             // Not rendering: the sound goes on as it came, sample for sample,
             // and this stage only watches the stream's metadata go by, so the
             // Atmos page can still draw where the objects are and how they
-            // move. (It used to leave the chain, and nothing could be shown.)
+            // move.
             pendingFormat = inputAudioFormat
             pendingLayout = ChannelLayout.STEREO
             pendingWatching = true
@@ -688,14 +685,13 @@ class AtmosAudioProcessor @Inject constructor(
             } else -1
             // The native side answers 1 for its bed fallback too (a stream
             // with no JOC, or none yet): only its object count says which it
-            // was. This used to report "objects rendered" for both.
+            // was.
             val objects = if (rc == 1) AtmosNative.nativeLastObjectCount(pipeline) else 0
-            val room = true
             noteOutcome(
                 when {
                     rc != 1 -> Outcome.BED_FOLDED
-                    objects > 0 -> if (room) Outcome.OBJECTS_ROOM else Outcome.OBJECTS_BINAURAL
-                    else -> if (room) Outcome.BED_ROOM else Outcome.BED_FOLDED
+                    objects > 0 -> Outcome.OBJECTS_ROOM
+                    else -> Outcome.BED_ROOM
                 }
             )
             noteFrame(objects)
@@ -716,14 +712,17 @@ class AtmosAudioProcessor @Inject constructor(
                         "noFrame=$noFrameCount lastFrameBytes=$lastFrameBytes " +
                         "anchorUs=$anchorUs")
             }
-            writeStereoFrame(out, isFloat)
+            writeFrame(out, isFloat, stereo, 2 * FRAME_SAMPLES)
         }
+        publish(out, outFrames, channels)
+    }
+
+    /** Hands [out] on and keeps the part of a frame that is left over for the next call. */
+    private fun publish(out: ByteBuffer, outFrames: Int, channels: Int) {
         // Absolute puts don't move position; set the window explicitly.
         out.limit(outWritePos)
         out.position(0)
         outputBuffer = out
-
-        // Keep the sub-frame remainder for the next call.
         val consumed = outFrames * FRAME_SAMPLES
         val remain = bedSamples - consumed
         if (remain > 0) System.arraycopy(bed, consumed * channels, bed, 0, remain * channels)
@@ -903,13 +902,7 @@ class AtmosAudioProcessor @Inject constructor(
             toSinkOrder(layout)
             writeFrame(out, isFloat, sinkFrame, sinkChannels * FRAME_SAMPLES)
         }
-        out.limit(outWritePos)
-        out.position(0)
-        outputBuffer = out
-        val consumed = outFrames * FRAME_SAMPLES
-        val remain = bedSamples - consumed
-        if (remain > 0) System.arraycopy(bed, consumed * channels, bed, 0, remain * channels)
-        bedSamples = remain
+        publish(out, outFrames, channels)
     }
 
     /** Scatters [speakerOut] (speaker order) into the padded sink frame. */
@@ -979,20 +972,8 @@ class AtmosAudioProcessor @Inject constructor(
         return outputScratch
     }
 
-    private fun writeStereoFrame(out: ByteBuffer, isFloat: Boolean) {
-        if (isFloat) {
-            for (i in 0 until 2 * FRAME_SAMPLES) { out.putFloat(outWritePos, stereo[i]); outWritePos += 4 }
-        } else {
-            for (i in 0 until 2 * FRAME_SAMPLES) {
-                val s = (stereo[i] * 32768f).toInt().coerceIn(-32768, 32767).toShort()
-                out.putShort(outWritePos, s); outWritePos += 2
-            }
-        }
-    }
-
     // Fold-down for frames the pipeline declines (no JOC / HRTF off /
-    // passthrough): the ONE fixed matrix (matches native
-    // AtmosPipeline::render_downmix and the peqdb Downmix Renderer's ADC2
+    // passthrough): the ONE fixed matrix (the peqdb Downmix Renderer's ADC2
     // direct matrix) — sides/backs hard-panned at unity, FC at 0.70710678 to
     // both, LFE at 2.26464431 to both. Channel order follows the decoder's
     // (FL FR FC LFE SL SR BL BR).
@@ -1060,11 +1041,14 @@ class AtmosAudioProcessor @Inject constructor(
     private var noFrameCount = 0L
     private var lastFrameBytes = 0
 
-    private companion object {
+    internal companion object {
         const val FRAME_SAMPLES = 1536   // 6 blocks * 256 samples per E-AC-3 frame
         const val MAX_OBJECTS = 16
         // A step of the position's coding is 1/62 of the room: past this it moved.
         const val MOVED = 0.02f
+
+        /** What a held meter peak keeps of itself each 33 ms: about 29 dB a second. */
+        const val METER_FALL = 0.896f
         const val PLACES_FIRST = 62    // 2 s of frames
         const val PLACES_EVERY = 312   // 10 s
         const val TAG = "AtmosProcessor"
