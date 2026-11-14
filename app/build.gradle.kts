@@ -428,6 +428,8 @@ dependencies {
     implementation(libs.supabase.compose.auth)
     implementation(libs.supabase.compose.auth.ui)
     implementation(libs.supabase.postgrest)
+    // The Claude API, for the assistant: called with the listener's own key.
+    implementation(libs.anthropic.java)
 
     // Glance Widgets
     implementation(libs.glance.appwidget)

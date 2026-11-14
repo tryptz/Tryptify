@@ -303,6 +303,32 @@ stream to that server's origin only: the API client's network interceptor
 (`NetworkModule`, per redirect hop) and the players' data sources
 (`PlaybackService`, `SongPreview`). `ApiServerTest` holds the origin match.
 
+## The listener's Claude API key is a device secret
+
+The assistant calls the Claude API with the listener's own key
+(`data/assistant/`), typed once into the Ask Claude sheet. It is kept in the
+DataStore key `claude_api_key`, deliberately not in `SETTINGS_SYNC_KEYS`, is
+never in the APK, and `LogRedactor` takes any `sk-ant-…` out of every log
+line (`ClaudeEqTest`). Nothing reads it back to the page: the sheet knows
+only whether one is saved. Never add a build-time key, a key in a test, or a
+call that sends the key anywhere but Anthropic's API through the official
+SDK (`com.anthropic:anthropic-java`; its jar carries its own R8 rules).
+
+**Ask Claude on the AutoEQ screen** (`ui/eq/AskClaudeEqSheet.kt`,
+`ClaudeEq`, `ClaudeEqClient`): the listener gives a picture of a frequency
+response graph, a wish in words, or both, optionally with the filters in
+use, and Claude answers with filters in a fixed JSON shape (structured
+output; the model is `claude-opus-5-5`). The answer is a proposal: nothing
+changes until Apply, which takes the road an imported profile takes
+(`EqViewModel.importApoProfile`: saved as a preset, preamp held to the
+headroom). Whatever comes back is held to `ClaudeEq`'s limits before it is
+shown (10 filters, ±12 dB, Q 0.2 to 10, 20 Hz to 20 kHz, a preamp that is
+never a boost): the prompt states the same limits, and a test holds the two
+together. A refusal or a cut-off answer is said as such, never parsed. The
+SDK at 3.3.0 has no builder for server-side refusal fallbacks, so none is
+sent. The assistant asks before every change; an "auto" mode, when there is
+one, must go back to asking when the app closes (the owner's rule).
+
 ## Tryptify Cloud
 
 The paid music storage. The server is `cloud/` in tryptz/tryptify-servers (a

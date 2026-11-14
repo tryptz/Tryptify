@@ -10,6 +10,7 @@ paging = "3.3.5"
 ktor = "3.0.3"
 coil = "3.0.4"
 supabase = "3.4.1"
+anthropic = "3.3.0"
 lifecycle = "2.8.7"
 navigation = "2.8.5"
 workmanager = "2.10.0"
@@ -128,6 +129,7 @@ kotlinx-coroutines = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 kotlinx-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 
 # Supabase
+anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabase" }
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-compose-auth = { group = "io.github.jan-tennert.supabase", name = "compose-auth" }

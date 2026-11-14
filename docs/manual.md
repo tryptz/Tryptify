@@ -70,6 +70,7 @@ A USB DAC is driven bit-perfect by the app's own driver when one is plugged in.
 | AutoEQ | `Settings › Equalizer › AutoEQ headphone profile` | Corrects your headphones from 4,000+ measurements against 10 targets |
 | Equalizer | `Settings › Equalizer › Equalizer` | Bands by hand |
 | Parametric EQ | `Settings › Equalizer › Parametric EQ` | Filters by frequency, gain and width |
+| Ask Claude | AutoEQ screen › Ask Claude | Lays out or adjusts the filters from a picture of a frequency response graph, or from what you say you want; needs your own Claude API key, entered there once. It proposes, and nothing changes until Apply |
 | System-wide AutoEQ | `Settings › Equalizer › System-wide AutoEQ` | The correction for other apps too |
 | Mixer | `Settings › Audio › Mixer`, or Mixer in the player | A console of buses and processors with loudness meters |
 | Music links | On sliders and mixer knobs | Makes a control move with the kick, vocals, snare or hi-hats |

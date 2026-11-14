@@ -23,6 +23,8 @@ object LogRedactor {
     )
     private val bearer = Regex("""(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]{8,}""")
     private val jwt = Regex("""eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}""")
+    /** A Claude API key, wherever it turns up. */
+    private val claudeKey = Regex("""sk-ant-[A-Za-z0-9_-]{8,}""")
 
     /** [secrets] in full, each to what may be shown of it (a server's host for its secret address). */
     fun redact(text: String, secrets: Map<String, String> = builtInSecrets): String {
@@ -32,6 +34,7 @@ object LogRedactor {
         // Every log line comes through here, and nearly none has a sign-in in
         // it: a plain substring test says so before a regex scans the line.
         if ("eyJ" in out) out = jwt.replace(out, HIDDEN)
+        if ("sk-ant-" in out) out = claudeKey.replace(out, HIDDEN)
         if (out.contains("bearer", ignoreCase = true)) out = bearer.replace(out) { it.groupValues[1] + HIDDEN }
         if ('=' in out) out = param.replace(out) { it.groupValues[1] + HIDDEN }
         return out

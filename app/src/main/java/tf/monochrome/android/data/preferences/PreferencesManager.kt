@@ -228,6 +228,9 @@ class PreferencesManager @Inject constructor(
         private val API_SERVERS = stringPreferencesKey("api_servers")
         // Device-local, like the Subsonic sign-in: never in SETTINGS_SYNC_KEYS.
         private val API_SERVER_PASSWORDS = stringPreferencesKey("api_server_passwords")
+        // The listener's own Claude API key, for the assistant. Device-local
+        // like every sign-in: never in SETTINGS_SYNC_KEYS.
+        private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -1161,6 +1164,16 @@ class PreferencesManager @Inject constructor(
                 .orEmpty()
             val next = if (password == null) current - url else current + (url to password)
             if (next.isEmpty()) prefs.remove(API_SERVER_PASSWORDS) else prefs[API_SERVER_PASSWORDS] = json.encodeToString(next)
+        }
+    }
+
+    /** The listener's own Claude API key, empty when none is saved. A device secret: see AGENTS.md. */
+    val claudeApiKey: Flow<String> = dataStore.data.map { prefs -> prefs[CLAUDE_API_KEY].orEmpty() }
+
+    /** Saves the Claude API key, or forgets it when blank. */
+    suspend fun setClaudeApiKey(key: String) {
+        dataStore.edit { prefs ->
+            if (key.isBlank()) prefs.remove(CLAUDE_API_KEY) else prefs[CLAUDE_API_KEY] = key.trim()
         }
     }
 

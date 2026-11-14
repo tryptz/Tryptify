@@ -148,6 +148,7 @@ fun EqualizerScreen(
     var showTargetNameDialog by rememberSaveable { mutableStateOf(false) }
     var importForRight by rememberSaveable { mutableStateOf(false) }
     var showProfileImport by rememberSaveable { mutableStateOf(false) }
+    var showAskClaude by rememberSaveable { mutableStateOf(false) }
     var showHelp by rememberSaveable { mutableStateOf(false) }
     var showNothingExport by rememberSaveable { mutableStateOf(false) }
     var headphoneSelectForRight by rememberSaveable { mutableStateOf(false) }
@@ -721,6 +722,11 @@ fun EqualizerScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(stringResource(R.string.eq_import_eq_profile_apo_txt_csv))
                     }
+                    // Claude lays out the filters from a picture of a graph or
+                    // a wish in words; it proposes, the listener applies.
+                    TextButton(onClick = { showAskClaude = true }) {
+                        Text(stringResource(R.string.eq_ask_claude))
+                    }
                 }
               }
             }
@@ -1252,6 +1258,18 @@ fun EqualizerScreen(
             bands = activeBands + toneControls.toBands(),
             name = activePreset?.name ?: "Tryptify",
             onDismiss = { showNothingExport = false },
+        )
+    }
+
+    if (showAskClaude) {
+        val claudeName = stringResource(R.string.eq_claude_preset_name)
+        AskClaudeEqSheet(
+            currentBands = activeBands,
+            currentPreamp = currentPreamp,
+            // The same road an imported profile takes: saved as a preset, its
+            // preamp held to the headroom, and the equaliser switched on.
+            onApply = { profile -> viewModel.importApoProfile(profile, null, claudeName) },
+            onDismiss = { showAskClaude = false },
         )
     }
 
