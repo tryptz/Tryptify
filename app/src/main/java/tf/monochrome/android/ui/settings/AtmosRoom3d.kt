@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
@@ -444,6 +445,7 @@ private fun AtmosRoomCanvas(
     val afterglow = remember { Afterglow() }
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
+    val places = remember { RoomPlaces() }
     val grain = remember { CanvasGrain() }
     val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
@@ -457,6 +459,7 @@ private fun AtmosRoomCanvas(
                     val amount = liveAmount.coerceIn(0f, 1f)
                     val sound = liveOptions.sound
                     val compact = liveOptions.compact
+                    places.of(room, layout, count)
                     val view = AtmosRoomView(yaw.floatValue, room)
                     clock.longValue  // read: see rememberGrainClock
                     // The whole room at any turn: its near corners come out
@@ -584,19 +587,24 @@ private fun AtmosRoomCanvas(
                     // The sound, as grain: round each speaker that plays, where the
                     // loudest of late turn on a surface, and what the room holds.
                     grain.clear(RoomGrain.reach(room), if (sound) amount * held else 0f)
-                    if (sound) for (i in 0 until count) {
-                        val f = i * AtmosNative.ROOM_FIELDS
-                        val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
-                        grain.addSpeaker(s[0], s[1], if (isLfe(layout, f)) LFE_HEIGHT else s[2], air.levels[i], high = layout[f + 2] > 0f)
+                    val o = liveObjects
+                    if (sound) {
+                        for (i in 0 until count) {
+                            val high = layout[i * AtmosNative.ROOM_FIELDS + 2] > 0f
+                            grain.addSpeaker(places.x(i), places.y(i), places.z(i), air.levels[i], high)
+                        }
+                        if (o != null) for (k in 0 until o.count) {
+                            if (o.isLfe(k)) continue
+                            val s = room.place(o.x(k), o.y(k), o.z(k))
+                            grain.addObject(s[0], s[1], s[2], atmosObjectLevel(o.level(k)), high = o.z(k) > 0.25f)
+                        }
                     }
                     if (sound && amount > 0f) {
                         pickLoudest(air.levels, layout, count, loudest)
                         for (i in loudest) {
                             if (i < 0) continue
-                            val f = i * AtmosNative.ROOM_FIELDS
-                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                            for (r in room.firstReflections(s[0], s[1], s[2])) {
-                                grain.addTurn(r.x, r.y, r.z, air.levels[i] * amount * room.directOver(s, r))
+                            for (r in places.turns(i)) {
+                                grain.addTurn(r.x, r.y, r.z, air.levels[i] * amount * places.directOver(i, r))
                             }
                         }
                     }
@@ -608,13 +616,12 @@ private fun AtmosRoomCanvas(
                         val f = i * AtmosNative.ROOM_FIELDS
                         val glow = glows[i]
                         val tint = if (layout[f + 2] > 0f) heightTint else accent
-                        val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                        val from = at(s[0], s[1], s[2])
+                        val from = at(places.x(i), places.y(i), places.z(i))
                         drawLine(tint.copy(alpha = 0.18f * glow), from, seat, strokeWidth = 5f)
                         drawLine(tint.copy(alpha = 0.75f * glow), from, seat, strokeWidth = 1.5f)
                         if (amount <= 0f) continue
-                        for (r in room.firstReflections(s[0], s[1], s[2])) {
-                            val strength = glow * amount * room.directOver(s, r)
+                        for (r in places.turns(i)) {
+                            val strength = glow * amount * places.directOver(i, r)
                             if (strength < 0.03f) continue
                             val p = view.project(r.x, r.y, r.z)
                             val spot = at(p)
@@ -642,15 +649,12 @@ private fun AtmosRoomCanvas(
                         drawPath(path, onSurface.copy(alpha = 0.6f), style = Stroke(width = 1.5f))
                     }
 
-                    val o = liveObjects
                     val objectCount = min(o?.count ?: 0, MAX_ITEMS - count)
                     val items = count + objectCount
                     for (i in 0 until items) {
                         order[i] = i
                         depths[i] = if (i < count) {
-                            val f = i * AtmosNative.ROOM_FIELDS
-                            val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
-                            view.project(s[0], s[1], if (isLfe(layout, f)) LFE_HEIGHT else s[2]).depth
+                            view.project(places.x(i), places.y(i), places.z(i)).depth
                         } else {
                             val k = i - count
                             val s = room.place(o!!.x(k), o.y(k), o.z(k))
@@ -669,10 +673,8 @@ private fun AtmosRoomCanvas(
                             val f = i * AtmosNative.ROOM_FIELDS
                             val lfe = isLfe(layout, f)
                             val high = layout[f + 2] > 0f
-                            val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
-                            val p = view.project(s[0], s[1], if (lfe) LFE_HEIGHT else s[2])
-                            val glow = levels?.getOrNull(i)?.let(::atmosSpeakerGlow) ?: 0f
-                            drawRoomSpeaker(at(p), unit * p.scale, if (high) heightTint else accent, glow, lfe)
+                            val p = view.project(places.x(i), places.y(i), places.z(i))
+                            drawRoomSpeaker(at(p), unit * p.scale, if (high) heightTint else accent, glows[i], lfe)
                         } else {
                             val k = i - count
                             if (o!!.isLfe(k)) continue  // the LFE has no place: its speaker shows it
@@ -824,6 +826,11 @@ private class CanvasGrain {
         if (level > 0.01f) add(x, y, z, level * kotlin.math.sqrt(level), reach * (RoomGrain.NEAR + level), high)
     }
 
+    /** An object of the mix: where it puts a sound, so where grain gathers too. */
+    fun addObject(x: Float, y: Float, z: Float, level: Float, high: Boolean) {
+        if (level > 0.01f) add(x, y, z, RoomGrain.OBJECT * level, reach * RoomGrain.TURNED * (0.5f + level), high)
+    }
+
     /** A spot where sound turns on a surface towards the listener. */
     fun addTurn(x: Float, y: Float, z: Float, strength: Float) {
         if (strength > 0.01f) add(x, y, z, strength, reach * RoomGrain.TURNED, false)
@@ -879,20 +886,15 @@ private class CanvasGrain {
             }
         }
         paint.strokeWidth = size
-        paint.color = android.graphics.Color.argb(
-            (RoomGrain.COVER * 255).toInt(), (tint.red * 255).toInt(), (tint.green * 255).toInt(), (tint.blue * 255).toInt(),
-        )
+        paint.color = tint.copy(alpha = RoomGrain.COVER).toArgb()
         canvas.drawPoints(low, 0, lows, paint)
-        paint.color = android.graphics.Color.argb(
-            (RoomGrain.COVER * 255).toInt(),
-            (highTint.red * 255).toInt(), (highTint.green * 255).toInt(), (highTint.blue * 255).toInt(),
-        )
+        paint.color = highTint.copy(alpha = RoomGrain.COVER).toArgb()
         canvas.drawPoints(above, 0, highs, paint)
     }
 
     private companion object {
         const val SPECKS = 6000
-        const val MAX_SOUNDS = AtmosNative.ROOM_MAX_SPEAKERS + RAYS * 6   // every speaker, and each loud one's six turns
+        const val MAX_SOUNDS = AtmosNative.ROOM_MAX_SPEAKERS + MAX_NUMBERS + RAYS * 6   // every speaker and object, and each loud speaker's six turns
     }
 }
 
@@ -934,17 +936,6 @@ private fun pickLoudest(glows: FloatArray, layout: FloatArray, count: Int, into:
         }
         if (into[slot] < 0 || glows[i] > glows[into[slot]]) into[slot] = i
     }
-}
-
-/**
- * How much of a speaker's level a first reflection [r] of it keeps: less the
- * longer its way round is than the straight one from the speaker at [s].
- */
-private fun RoomShape.directOver(s: FloatArray, r: RoomShape.Reflection): Float {
-    val dx = s[0] - listenerX
-    val dy = s[1] - listenerY
-    val dz = s[2] - earHeight
-    return (kotlin.math.sqrt(dx * dx + dy * dy + dz * dz) / r.path).coerceIn(0f, 1f)
 }
 
 private fun DrawScope.drawLabel(label: androidx.compose.ui.text.TextLayoutResult, at: Offset, dx: Float, dy: Float) {

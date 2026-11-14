@@ -20,7 +20,9 @@ the right. The room's size can be given (the built-in room's otherwise):
 import os,re,skia,math,numpy as np,sys
 HERE=os.path.dirname(os.path.abspath(__file__))
 kt=open(os.path.join(HERE,'../../app/src/main/java/tf/monochrome/android/ui/settings/AtmosRoomShader.kt')).read()
-src=re.search(r'private const val ROOM_SRC = """\n(.*?)"""',kt,re.S).group(1)
+src=re.search(r'internal const val ROOM_SRC = """\n(.*?)"""',kt,re.S).group(1)
+# RoomGrain's measures, read from the Kotlin so this cannot drift from the app.
+G={n:float(v) for n,v in re.findall(r'const val (\w+) = ([\d.]+)f',kt[kt.index('internal object RoomGrain'):])}
 eff=skia.RuntimeEffect.MakeForShader(src)
 # Skia packs a runtime effect's uniforms in the order they are declared, four bytes a float, no padding.
 sizes={'float':1,'float2':2,'float3':3,'float4':4}
@@ -52,12 +54,12 @@ for i,(x,y,z,lfe) in enumerate(L):
 fl=[i for i,(x,y,z,lfe) in enumerate(L) if x==0 and y==0 and z==0 and not lfe][0]; spk[fl][3]=1.0
 sr=[i for i,(x,y,z,lfe) in enumerate(L) if x==1 and y==0.5 and z==0 and not lfe][0]; spk[sr][3]=0.5
 # The grain's measures, as RoomGrain has them; one spot where the loud speaker's sound turns, on the floor.
-cell=max(RW,RD,2*RH)/52; unit=max(1.0,cell/(5.5/52))
+cell=max(RW,RD,2*RH)/G['ACROSS']; unit=max(1.0,cell/(5.5/G['ACROSS']))
 src4=np.zeros((12,4),'f4'); src4[0]=((spk[fl][0]+RW*0.44)/2,(spk[fl][1]+RD*0.6)/2,0.0,0.5); ray=np.zeros((3,4),'f4'); ray[0]=(*spk[fl][:3],1.0)
 obj=np.zeros((32,4),'f4'); obj[0]=(RW*0.9,RD*0.9,ear,0.9)
 for n,v in dict(uRes=(W,H),uEye=eye,uRight=right,uUp=up,uFwd=fwd,uFocal=[FOCAL],uRoom=(RW,RD,RH),uLean=[ear],uCeil=ceil,uCorner=[0.0],uListener=(RW*0.5,RD*0.5,ear),
-                uSpk=spk,uSpkKind=kind,uSpkAir=spk[:,3],uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uObjGrain=[0.55],uMirror=[0.6],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
-                uGrain=(cell,0.2*min(RW,RD),1.0),uCloud=(0.35,0.4,0.22),uGlow=[0.3],uConvex=[1.0],uUnit=[unit],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0]).items(): put(n,v)
+                uSpk=spk,uSpkKind=kind,uSpkAir=spk[:,3],uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uObjGrain=[G['OBJECT']],uMirror=[G['MIRROR']],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
+                uGrain=(cell,G['REACH']*min(RW,RD),G['COVER']),uCloud=(G['NEAR'],G['TURNED'],G['HELD']),uGlow=[0.3],uConvex=[1.0],uUnit=[unit],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0]).items(): put(n,v)
 shader=eff.makeShader(skia.Data.MakeWithCopy(bytes(buf)))
 surf=skia.Surface(W,H); c=surf.getCanvas(); c.clear(skia.Color(8,40,50)); p=skia.Paint(); p.setShader(shader); c.drawRect(skia.Rect.MakeWH(W,H),p)
 out=sys.argv[2] if len(sys.argv)>2 else 'room.png'

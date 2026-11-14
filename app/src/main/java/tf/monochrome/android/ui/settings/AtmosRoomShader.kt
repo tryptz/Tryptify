@@ -44,7 +44,7 @@ import kotlin.math.sqrt
  * Colours are the theme's; everything is laid front to back as tinted cover
  * (`under`), so it reads on a light theme as on a dark one.
  */
-private const val ROOM_SRC = """
+internal const val ROOM_SRC = """
 uniform float2 uRes;       // the picture, in pixels
 uniform float3 uEye;       // the camera, in metres
 uniform float3 uRight;     // its basis: right, up, forward
@@ -452,12 +452,15 @@ half4 main(float2 fragCoord) {
         // one turned away darker, and a wall is lighter towards its top, where
         // the glass catches it. The floor is lit round the listener and darker
         // against the walls, where light does not reach.
-        float2 nWall = normalize(float2(
-            plan(p + float3(0.02, 0.0, 0.0)) - plan(p - float3(0.02, 0.0, 0.0)),
-            plan(p + float3(0.0, 0.02, 0.0)) - plan(p - float3(0.0, 0.02, 0.0))) + 1e-6);
-        float facing = 0.5 + 0.5 * dot(nWall, normalize(float2(0.55, 0.8)));
-        float upWall = clamp(p.z / uRoom.z, 0.0, 1.0);
-        float wallLight = onWall * (0.02 + 0.05 * facing + 0.06 * upWall * upWall);
+        float wallLight = 0.0;
+        if (onWall > 0.0) {  // which way it faces is four more looks at the plan: not for the floor
+            float2 nWall = normalize(float2(
+                plan(p + float3(0.02, 0.0, 0.0)) - plan(p - float3(0.02, 0.0, 0.0)),
+                plan(p + float3(0.0, 0.02, 0.0)) - plan(p - float3(0.0, 0.02, 0.0))) + 1e-6);
+            float facing = 0.5 + 0.5 * dot(nWall, normalize(float2(0.55, 0.8)));
+            float upWall = clamp(p.z / uRoom.z, 0.0, 1.0);
+            wallLight = onWall * (0.02 + 0.05 * facing + 0.06 * upWall * upWall);
+        }
         float tucked = onFloor * (1.0 - smoothstep(0.0, 0.12 * min(uRoom.x, uRoom.y), toWall));
         float floorLight = onFloor * (0.05 + 0.05 * near);
         float fill = floorLight + wallLight + onCeiling * 0.02;
@@ -673,7 +676,7 @@ internal class RoomShader {
         shader.setFloatUniform("uMark", scene.marks)
         shader.setFloatUniform("uMarkCount", scene.markCount.toFloat())
         shader.setFloatUniform("uGrain", RoomGrain.cell(shape), RoomGrain.reach(shape), if (scene.sounds(glow)) RoomGrain.COVER else 0f)
-        shader.setFloatUniform("uConvex", if (shape.curve >= 1f) 1f else 0f)
+        shader.setFloatUniform("uConvex", if (shape.convex) 1f else 0f)
         shader.setFloatUniform("uCloud", RoomGrain.NEAR, RoomGrain.TURNED, RoomGrain.HELD)
         shader.setFloatUniform("uGlow", glow)
         shader.setFloatUniform("uUnit", RoomGrain.markScale(shape))

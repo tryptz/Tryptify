@@ -100,11 +100,12 @@ class RoomCameraTest {
         // A cloud reaches as far across a hall as across a booth, as a share of it.
         assertEquals(RoomGrain.reach(RoomShape.BUILT_IN) / 5f, RoomGrain.reach(hall) / 23f, 1e-5f)
         // However a room is proportioned, a ray crosses no more cells than the
-        // shader walks (its CELLS, 138): the cells across, along and up it.
+        // shader walks (its CELLS): the cells across, along and up it.
+        val walked = Regex("const int CELLS = (\\d+);").find(ROOM_SRC)!!.groupValues[1].toFloat()
         for (room in listOf(hall, RoomShape.BUILT_IN, RoomShape(30f, 30f, 12f), RoomShape(2f, 30f, 12f), RoomShape(30f, 2f, 2f))) {
             val cell = RoomGrain.cell(room)
             assertTrue((room.width + room.depth + room.height) / cell <= 2.5f * RoomGrain.ACROSS + 1e-3f)
         }
-        assertTrue(2.5f * RoomGrain.ACROSS <= 138f)
+        assertTrue(2.5f * RoomGrain.ACROSS <= walked)
     }
 }

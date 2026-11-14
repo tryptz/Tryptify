@@ -253,6 +253,14 @@ data class RoomShape(
     /** The height the walls lean from, in metres. */
     val leanStart: Float get() = (leanFrom ?: earHeight).coerceIn(0f, height)
 
+    /**
+     * Whether no wall bends outwards, so that a straight line is inside the
+     * room once at most: walls that lean in straight ([curve] 1) or bow in
+     * as they rise (over 1) do not, ones that flare in quickly and then
+     * stand (under 1) do. Rounded corners never do.
+     */
+    val convex: Boolean get() = curve >= 1f
+
     /** The share of the floor's width each side wall has leaned in by at [z] metres up. */
     fun leanX(z: Float): Float = (1f - ceilingWidth.coerceIn(MIN_CEILING, 1f)) / 2f * rise(z)
 
