@@ -136,6 +136,7 @@ class AtmosAudioProcessor @Inject constructor(
         fun x(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS]
         fun y(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 1]
         fun z(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 2]
+        /** The decaying peak, or under zero when the object is watched and not rendered. */
         fun level(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 3]
         fun isBed(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 1f
         fun isLfe(i: Int) = fields[i * AtmosNative.OBJECT_METER_FIELDS + 4] == 2f
@@ -206,11 +207,13 @@ class AtmosAudioProcessor @Inject constructor(
                     } else {
                         null
                     }
-                    // About 14 dB a second, as the channel meter falls.
+                    // About 14 dB a second, as the channel meter falls. Thirty
+                    // times a second, a frame of the stream: objects move.
                     for (i in 0 until count) {
-                        meterFields[i * AtmosNative.OBJECT_METER_FIELDS + 3] *= 0.72f
+                        val at = i * AtmosNative.OBJECT_METER_FIELDS + 3
+                        if (meterFields[at] > 0f) meterFields[at] *= 0.896f
                     }
-                    kotlinx.coroutines.delay(100)
+                    kotlinx.coroutines.delay(33)
                 }
             }
         }
@@ -285,7 +288,12 @@ class AtmosAudioProcessor @Inject constructor(
         noteObjects(objects)
         logMetadata()
         if (objects <= 0 || pipeline == 0L) { meterCount = 0; return }
-        val count = AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS)
+        takeMeter(AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS))
+    }
+
+    /** [count] objects are in meterScratch: which move, and the meter if it is on. */
+    private fun takeMeter(count: Int) {
+        if (count <= 0) { meterCount = 0; noteMix(null); return }
         val n = AtmosNative.OBJECT_METER_FIELDS
         // Which objects move: against where each one was first seen.
         var moving = 0
@@ -314,7 +322,10 @@ class AtmosAudioProcessor @Inject constructor(
             meterFields[at] = meterScratch[at]
             meterFields[at + 1] = meterScratch[at + 1]
             meterFields[at + 2] = meterScratch[at + 2]
-            if (i >= meterCount || meterScratch[at + 3] > meterFields[at + 3]) meterFields[at + 3] = meterScratch[at + 3]
+            // A level under zero is "not known" (watched, not rendered): kept as it is.
+            if (meterScratch[at + 3] < 0f || i >= meterCount || meterScratch[at + 3] > meterFields[at + 3]) {
+                meterFields[at + 3] = meterScratch[at + 3]
+            }
             meterFields[at + 4] = meterScratch[at + 4]
         }
         meterCount = count
@@ -489,16 +500,25 @@ class AtmosAudioProcessor @Inject constructor(
                     (why?.let { "OUT of the chain: $it" } ?: "IN the chain (mode=${profile.mode})"),
             )
         }
-        if (inputAudioFormat.channelCount <= 2 ||
-            !AtmosNative.isAvailable ||
-            (profile.mode == RendererMode.PASSTHROUGH && !speakers.isMultichannel)
-        ) {
+        if (inputAudioFormat.channelCount <= 2 || !AtmosNative.isAvailable) {
             pendingFormat = AudioFormat.NOT_SET
             inputFormat = AudioFormat.NOT_SET
             pendingLayout = ChannelLayout.STEREO
             activeLayout = ChannelLayout.STEREO
+            pendingWatching = false
             return AudioFormat.NOT_SET
         }
+        if (profile.mode == RendererMode.PASSTHROUGH && !speakers.isMultichannel) {
+            // Not rendering: the sound goes on as it came, sample for sample,
+            // and this stage only watches the stream's metadata go by, so the
+            // Atmos page can still draw where the objects are and how they
+            // move. (It used to leave the chain, and nothing could be shown.)
+            pendingFormat = inputAudioFormat
+            pendingLayout = ChannelLayout.STEREO
+            pendingWatching = true
+            return inputAudioFormat
+        }
+        pendingWatching = false
         pendingFormat = inputAudioFormat
         // Takes effect at flush(), like the format: the previous stream may
         // still be draining through queueInput until then. DefaultAudioSink
@@ -516,7 +536,35 @@ class AtmosAudioProcessor @Inject constructor(
      * Whether the stream just configured goes through this stage, for the
      * stages after it (read in their own configure, which follows this one's).
      */
-    val rendersConfiguredStream: Boolean get() = pendingFormat != AudioFormat.NOT_SET
+    val rendersConfiguredStream: Boolean get() = pendingFormat != AudioFormat.NOT_SET && !pendingWatching
+
+    // Watching: in the chain only to read object metadata, the sound untouched.
+    @Volatile private var pendingWatching = false
+    private var watching = false
+    private var watchedSamples = 0
+
+    /** The sound on as it came, and a frame's metadata read for every frame of it. */
+    private fun watch(inputBuffer: ByteBuffer) {
+        val bytes = inputBuffer.remaining()
+        if (bytes == 0) { outputBuffer = AudioProcessor.EMPTY_BUFFER; return }
+        val frameBytes = (if (inputFormat.encoding == C.ENCODING_PCM_FLOAT) 4 else 2) * inputFormat.channelCount
+        val out = acquireOutput(bytes)
+        out.put(inputBuffer)
+        out.flip()
+        outputBuffer = out
+        watchedSamples += bytes / frameBytes
+        while (watchedSamples >= FRAME_SAMPLES) {
+            watchedSamples -= FRAME_SAMPLES
+            val raw = nextRawFrame()
+            val count = if (pipeline != 0L) {
+                AtmosNative.nativeTrackObjects(pipeline, raw, meterScratch).coerceIn(0, MAX_OBJECTS)
+            } else {
+                0
+            }
+            logMetadata()
+            takeMeter(count)
+        }
+    }
 
     /**
      * What decides, when a stream is configured, whether this stage is in the
@@ -530,6 +578,7 @@ class AtmosAudioProcessor @Inject constructor(
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         if (inputFormat == AudioFormat.NOT_SET) return
+        if (watching) { watch(inputBuffer); return }
         val channels = inputFormat.channelCount
         val isFloat = inputFormat.encoding == C.ENCODING_PCM_FLOAT
         val bytesPerSample = if (isFloat) 4 else 2
@@ -660,6 +709,9 @@ class AtmosAudioProcessor @Inject constructor(
         val formatChanged = inputFormat == AudioFormat.NOT_SET ||
             inputFormat.sampleRate != pendingFormat.sampleRate
         inputFormat = pendingFormat
+        watching = pendingWatching
+        watchedSamples = 0
+        if (watching) { noteOutcome(null); noteObjects(0) }
         val layout = pendingLayout
         activeLayout = layout
         if (formatChanged) {

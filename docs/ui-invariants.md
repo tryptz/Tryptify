@@ -3334,6 +3334,12 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
 - The pipeline sheet's Channels row splits the objects: "(9 parked as the
   bed, 6 moving, LFE)". A music stream sends its bed as objects that stay at
   speaker positions; counted as parked until one is seen to move.
+- **Objects are on the map whether or not they are rendered.** With Binaural
+  render off the Atmos stage watches the stream (`AtmosAudioProcessor.watch`,
+  `nativeTrackObjects`) and the dots are still there, half bright (no audio,
+  no level), under `atmos_live_watched`. Every object is drawn, a silent one
+  dim: do not hide objects under a level again, the parked ones are the bed
+  and where it stands is what the owner asked to see.
 - The object meter runs only while the page is started
   (`acquireObjectMeter` beside the channel detector's `acquire`).
 

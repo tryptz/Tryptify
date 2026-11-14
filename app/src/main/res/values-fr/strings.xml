@@ -1444,6 +1444,7 @@
     <string name="atmos_binaural_auto">Automatique : activé au casque, sous la forme d\'une salle virtuelle 15.1.12 d\'enceintes autour de vous. Sur le haut-parleur du téléphone, Atmos est réduit en stéréo.</string>
     <string name="atmos_room_amount">Salle</string>
     <string name="atmos_live_objects">En direct : Dolby Atmos · %1$d objets sur un cœur %2$s · %3$s. Chaque point est un objet, là où le mixage le place.</string>
+    <string name="atmos_live_watched">En direct : Dolby Atmos · %1$d objets sur un cœur %2$s · %3$s. Chaque point est l\'endroit où le mixage place un objet ; ils ne sont pas rendus (rendu binaural désactivé), vous entendez donc le cœur réduit en stéréo.</string>
     <string name="atmos_live_not_rendering">En direct : cœur %1$s · %2$s. Les objets Atmos ne sont pas rendus : le rendu binaural (ci-dessous) est désactivé pour cette sortie, seul le cœur est joué, réduit en stéréo.</string>
     <string name="atmos_live_no_objects">En direct : %1$s · %2$s. Ce flux ne contient aucun objet Atmos pour l\'instant, ses canaux sont donc joués tels quels.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s a été REJETÉ par le chargeur SOFA. Le rendu utilise à la place la HRTF KEMAR intégrée. Le fichier est peut-être tronqué, non pris en charge ou pas au format SOFA.</string>

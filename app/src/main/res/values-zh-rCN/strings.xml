@@ -1360,6 +1360,7 @@
     <string name="atmos_binaural_auto">自动：使用耳机时开启，呈现为环绕你的 15.1.12 虚拟扬声器房间。使用手机扬声器时，Atmos 会缩混为立体声。</string>
     <string name="atmos_room_amount">房间感</string>
     <string name="atmos_live_objects">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是一个对象，位于混音放置它的位置。</string>
+    <string name="atmos_live_watched">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是混音放置对象的位置；它们未被渲染（双耳渲染已关闭），你听到的是缩混为立体声的核心。</string>
     <string name="atmos_live_not_rendering">实时：%1$s 核心 · %2$s。Atmos 对象未被渲染：此输出的双耳渲染（见下方）已关闭，因此只播放缩混为立体声的核心。</string>
     <string name="atmos_live_no_objects">实时：%1$s · %2$s。此流目前不含 Atmos 对象，因此其声道按原样播放。</string>
     <string name="atmos_sofa_rejected">⚠ %1$s 被 SOFA 加载器拒绝。渲染改用内置的 KEMAR HRTF。该文件可能不完整、不受支持，或不是 SOFA 文件。</string>

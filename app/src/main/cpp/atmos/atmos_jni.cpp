@@ -277,6 +277,28 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeObjectMeter(
   return count;
 }
 
+// Reads a frame's object metadata without rendering (the object render is
+// off) and writes where the objects are into `out`, five floats each as
+// nativeObjectMeter does, the level -1. Returns the object count.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeTrackObjects(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jbyteArray frame, jfloatArray out) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return 0;
+  const jsize flen = env->GetArrayLength(frame);
+  std::vector<uint8_t>& fbuf = pipe->frame_scratch(static_cast<size_t>(flen));
+  if (flen > 0) env->GetByteArrayRegion(frame, 0, flen, reinterpret_cast<jbyte*>(fbuf.data()));
+  pipe->track_metadata(fbuf.data(), static_cast<size_t>(flen));
+  constexpr int kFields = tf::atmos::AtmosPipeline::kMeterFields;
+  constexpr int kMax = 32;
+  float buf[kMax * kFields];
+  int room = env->GetArrayLength(out) / kFields;
+  if (room > kMax) room = kMax;
+  const int count = pipe->track_meter(buf, room);
+  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
+  return count;
+}
+
 // The last frame's metadata as the engine saw it (ObjectEngine::debug), for
 // the app's log. Returns how many ints were written.
 JNIEXPORT jint JNICALL

@@ -404,6 +404,11 @@ fun AtmosRendererScreen(
                     // read as if that were all of it. While objects render, say so.
                     val o = objects
                     when {
+                        // Watched and not rendered: the dots are where the
+                        // mix puts its objects, and the line says they are
+                        // not what is being heard.
+                        o != null && outcome == null ->
+                            stringResource(R.string.atmos_live_watched, o.count, d.layoutName, rate)
                         o != null -> stringResource(R.string.atmos_live_objects, o.count, d.layoutName, rate)
                         // More than stereo and no objects on the map: say which
                         // of the two reasons it is, instead of "6 ch" and nothing.
@@ -837,9 +842,16 @@ private fun SpeakerLayoutMap(
                         liveObjects?.let { o ->
                             for (i in 0 until o.count) {
                                 if (o.isLfe(i)) continue
-                                val level = ((20f * kotlin.math.log10(o.level(i).coerceAtLeast(1e-6f)) + 60f) / 60f)
-                                    .coerceIn(0f, 1f)
-                                if (level <= 0.02f) continue
+                                // Every object is drawn, a silent one dim: the
+                                // parked ones are the mix's bed, and where it
+                                // stands is the point. One that is watched and
+                                // not rendered has no level: drawn half bright.
+                                val raw = o.level(i)
+                                val level = if (raw < 0f) {
+                                    0.5f
+                                } else {
+                                    ((20f * kotlin.math.log10(raw.coerceAtLeast(1e-6f)) + 60f) / 60f).coerceIn(0f, 1f)
+                                }
                                 val up = o.z(i).coerceIn(0f, 1f)
                                 val pos = Offset(
                                     cx + (o.x(i).coerceIn(0f, 1f) * 2f - 1f) * half * 0.92f,

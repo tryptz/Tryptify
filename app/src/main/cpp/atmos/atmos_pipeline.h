@@ -136,6 +136,31 @@ class AtmosPipeline {
     room_.set_hrir_baked();
   }
 
+  // Reads one frame's object metadata without rendering anything (the
+  // listener has the object render off): returns the object count, 0 for
+  // none. track_meter() then gives where they are.
+  int track_metadata(const uint8_t* frame, size_t frame_size) {
+    tracked_ = engine_.track_metadata(frame, frame_size);
+    return tracked_;
+  }
+
+  // As object_meter(), for objects that are tracked and not rendered: there
+  // is no audio to take a level from, so the level field is -1.
+  int track_meter(float* out, int max_objects) const {
+    const int count = tracked_ < max_objects ? tracked_ : max_objects;
+    const int lfe = engine_.metadata_lfe();
+    for (int o = 0; o < count; ++o) {
+      float* f = out + static_cast<size_t>(o) * kMeterFields;
+      const cavern::ObjectState* st = engine_.object_state(o);
+      f[0] = st ? st->room.x : 0.5f;
+      f[1] = st ? st->room.y : 0.5f;
+      f[2] = st ? st->room.z : 0.0f;
+      f[3] = -1.0f;
+      f[4] = o == lfe ? 2.0f : ((st && st->is_bed) ? 1.0f : 0.0f);
+    }
+    return count;
+  }
+
   // The engine's view of the last frame's metadata (ObjectEngine::debug).
   void debug(int* out) const { engine_.debug(out); }
 
@@ -725,6 +750,7 @@ class AtmosPipeline {
   bool height_ = true;
   float strength_ = 1.0f;
   int last_objects_ = 0;
+  int tracked_ = 0;  // objects of the last track_metadata()
   int max_objects_ = 16;
   int mode_ = kObjectRender;
   int downmix_ = kBinaural;

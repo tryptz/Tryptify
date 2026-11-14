@@ -457,6 +457,24 @@ class AudioPipelineSnapshotTest {
     }
 
     @Test
+    fun `watched and not rendered, the objects are still told apart`() {
+        val snapshot = buildAudioPipelineSnapshot(
+            AudioPipelineInputs(
+                chain = ChainInput(sampleRate = 48_000, channelCount = 6, layoutName = "5.1", isFloat = true),
+                atmos = AtmosStage.PASSTHROUGH,
+                atmosStreamObjects = 16,
+                atmosMoving = 4,
+                atmosLfe = true,
+                atmosWatched = true,
+            )
+        )
+        assertEquals(
+            "6 (5.1 core) + 16 Atmos objects, not rendered (11 parked as the bed, 4 moving, LFE)",
+            snapshot.field(PipelineStage.TRACK, "Channels").display,
+        )
+    }
+
+    @Test
     fun `a stereo track has no Atmos row at all`() {
         val snapshot = buildAudioPipelineSnapshot(
             AudioPipelineInputs(

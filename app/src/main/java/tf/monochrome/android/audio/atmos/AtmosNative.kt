@@ -184,5 +184,14 @@ object AtmosNative {
      */
     external fun nativeDebugInfo(pipeline: Long, out: IntArray): Int
 
+    /**
+     * Reads [frame]'s object metadata without rendering anything, for when the
+     * object render is off: where the stream's objects are, into [out] as
+     * [nativeObjectMeter] writes them, with a level of -1 (there is no audio
+     * to take one from). An empty [frame] keeps the last one's. Returns the
+     * object count, 0 for a stream with none.
+     */
+    external fun nativeTrackObjects(pipeline: Long, frame: ByteArray, out: FloatArray): Int
+
     const val OBJECT_METER_FIELDS = 5
 }

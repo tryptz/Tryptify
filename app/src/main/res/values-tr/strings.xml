@@ -1402,6 +1402,7 @@
     <string name="atmos_binaural_auto">Otomatik: kulaklıkla açık, çevrenizde 15.1.12 sanal hoparlör odası olarak. Telefonun hoparlöründe Atmos stereoya indirgenir.</string>
     <string name="atmos_room_amount">Oda</string>
     <string name="atmos_live_objects">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta bir nesnedir, miksin koyduğu yerde.</string>
+    <string name="atmos_live_watched">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta, miksin bir nesneyi koyduğu yerdir; işlenmiyorlar (binaural işleme kapalı), bu yüzden stereoya indirgenmiş çekirdeği duyuyorsunuz.</string>
     <string name="atmos_live_not_rendering">Canlı: %1$s çekirdek · %2$s. Atmos nesneleri işlenmiyor: bu çıkış için binaural işleme (aşağıda) kapalı, bu yüzden yalnızca stereoya indirgenmiş çekirdek çalıyor.</string>
     <string name="atmos_live_no_objects">Canlı: %1$s · %2$s. Bu akış şu anda Atmos nesnesi taşımıyor, bu yüzden kanalları olduğu gibi çalıyor.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s, SOFA yükleyicisi tarafından REDDEDİLDİ. Oluşturma bunun yerine dahili KEMAR HRTF’yi kullanıyor. Dosya eksik, desteklenmeyen veya SOFA olmayan bir dosya olabilir.</string>

@@ -1444,6 +1444,7 @@
     <string name="atmos_binaural_auto">Automático: activado con auriculares, como una sala virtual 15.1.12 de altavoces a tu alrededor. En el altavoz del teléfono, Atmos se reduce a estéreo.</string>
     <string name="atmos_room_amount">Sala</string>
     <string name="atmos_live_objects">En directo: Dolby Atmos · %1$d objetos sobre un núcleo %2$s · %3$s. Cada punto es un objeto, donde lo coloca la mezcla.</string>
+    <string name="atmos_live_watched">En directo: Dolby Atmos · %1$d objetos sobre un núcleo %2$s · %3$s. Cada punto es donde la mezcla coloca un objeto; no se están renderizando (el renderizado binaural está desactivado), así que oyes el núcleo reducido a estéreo.</string>
     <string name="atmos_live_not_rendering">En directo: núcleo %1$s · %2$s. Los objetos Atmos no se están renderizando: el renderizado binaural (abajo) está desactivado para esta salida, así que solo suena el núcleo, reducido a estéreo.</string>
     <string name="atmos_live_no_objects">En directo: %1$s · %2$s. Esta transmisión no lleva objetos Atmos ahora mismo, así que sus canales suenan tal cual.</string>
     <string name="atmos_sofa_rejected">⚠ El cargador SOFA RECHAZÓ %1$s. El renderizado usa en su lugar la HRTF KEMAR integrada. Puede que el archivo esté truncado, no sea compatible o no sea SOFA.</string>

@@ -1402,6 +1402,7 @@
     <string name="atmos_binaural_auto">Automatisch: mit Kopfhörern an, als virtueller 15.1.12-Raum aus Lautsprechern um dich herum. Über den Lautsprecher des Telefons wird Atmos auf Stereo heruntergemischt.</string>
     <string name="atmos_room_amount">Raum</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d Objekte auf einem %2$s-Kern · %3$s. Jeder Punkt ist ein Objekt, dort, wo der Mix es platziert.</string>
+    <string name="atmos_live_watched">Live: Dolby Atmos · %1$d Objekte auf einem %2$s-Kern · %3$s. Jeder Punkt ist der Ort, an den der Mix ein Objekt setzt; sie werden nicht gerendert (binaurales Rendering ist aus), du hörst also den auf Stereo heruntergemischten Kern.</string>
     <string name="atmos_live_not_rendering">Live: %1$s-Kern · %2$s. Atmos-Objekte werden nicht gerendert: Binaurales Rendering (unten) ist für diesen Ausgang aus, daher spielt nur der auf Stereo heruntergemischte Kern.</string>
     <string name="atmos_live_no_objects">Live: %1$s · %2$s. Dieser Stream enthält gerade keine Atmos-Objekte, daher spielen seine Kanäle unverändert.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s wurde vom SOFA-Loader ABGELEHNT. Der Render nutzt stattdessen die eingebaute KEMAR-HRTF. Die Datei ist vielleicht abgeschnitten, nicht unterstützt oder keine SOFA-Datei.</string>

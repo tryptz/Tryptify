@@ -1403,6 +1403,7 @@
     <string name="atmos_binaural_auto">Automatic: on with headphones, as a 15.1.12 virtual room of speakers around you. On the phone\'s speaker Atmos is folded to stereo.</string>
     <string name="atmos_room_amount">Room</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d objects on a %2$s core · %3$s. Each dot is an object, where the mix puts it.</string>
+    <string name="atmos_live_watched">Live: Dolby Atmos · %1$d objects on a %2$s core · %3$s. Each dot is where the mix puts an object; they are not being rendered (Binaural render is off), so you hear the core folded to stereo.</string>
     <string name="atmos_live_not_rendering">Live: %1$s core · %2$s. Atmos objects are not being rendered: Binaural render (below) is off for this output, so only the core is playing, folded to stereo.</string>
     <string name="atmos_live_no_objects">Live: %1$s · %2$s. This stream is carrying no Atmos objects right now, so its channels are playing as they are.</string>
     <string name="atmos_sofa_rejected">⚠ %1$s was REJECTED by the SOFA loader. The render is using the built-in KEMAR HRTF instead. The file may be truncated, unsupported, or not a SOFA.</string>

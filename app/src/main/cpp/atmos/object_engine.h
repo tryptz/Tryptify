@@ -71,6 +71,23 @@ class ObjectEngine {
     return upmix(emdf_.joc(), bed, bed_channels, frame_samples);
   }
 
+  // Reads a frame's metadata and nothing else: no bed, no upmix. For a
+  // listener who is not rendering the objects but wants to see where they
+  // are. Returns how many objects the stream's OAMD describes (0 for none).
+  int track_metadata(const uint8_t* frame, size_t frame_size) {
+    if (frame_size > 0) {
+      BitReader reader(frame, frame_size);
+      emdf_.decode(reader);
+      if (emdf_.has_objects()) held_frames_ = 0;
+    }
+    if (!emdf_.oamd().valid() || held_frames_ >= kMaxHeldFrames) return 0;
+    return emdf_.oamd().state_count();
+  }
+  // The OAMD slot of the LFE bed object as the metadata has it, or -1.
+  int metadata_lfe() const {
+    return emdf_.oamd().valid() ? emdf_.oamd().get_lfe_position() : -1;
+  }
+
   // One more upmix from the held JOC/OAMD, ignoring the hold expiry. The
   // pipeline uses it to render the fade-out half of a render→downmix seam
   // after upmix_frame() has already returned -1 for the same frame — without

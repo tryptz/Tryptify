@@ -97,6 +97,11 @@ class AudioPipelineViewModel @Inject constructor(
         val outputChannels: Int?,
     )
 
+    private fun rendering(outcome: AtmosAudioProcessor.Outcome?): Boolean =
+        outcome == AtmosAudioProcessor.Outcome.OBJECTS_ROOM ||
+            outcome == AtmosAudioProcessor.Outcome.OBJECTS_BINAURAL ||
+            outcome == AtmosAudioProcessor.Outcome.OBJECTS_SPEAKERS
+
     /**
      * The Atmos row, for a multichannel source only. The processor reports
      * what it did once frames flow; before that, and when it is out of the
@@ -236,10 +241,14 @@ class AudioPipelineViewModel @Inject constructor(
             // from the tap after the Atmos and downmix stages.
             spatialAudio = outputProbe.spatialAudio(live.chain?.sampleRate, poll.outputChannels),
             atmos = atmosStage(live.chain?.channelCount, live.atmos),
-            atmosObjects = live.atmosMix?.count ?: 0,
+            // Rendered objects, or the same objects watched while the sound
+            // goes on unrendered; failing both, the count off the frames.
+            atmosObjects = if (rendering(live.atmos)) live.atmosMix?.count ?: 0 else 0,
             atmosMoving = live.atmosMix?.moving ?: 0,
             atmosLfe = live.atmosMix?.lfe ?: false,
-            atmosStreamObjects = atmosFrames.streamObjects.value,
+            atmosStreamObjects = live.atmosMix?.count?.takeIf { !rendering(live.atmos) }
+                ?: atmosFrames.streamObjects.value,
+            atmosWatched = live.atmosMix != null && !rendering(live.atmos),
             outputChannels = poll.outputChannels,
         )
     }

@@ -211,6 +211,8 @@ data class AudioPipelineInputs(
     val atmosLfe: Boolean = false,
     /** Objects the stream carries, whether or not they are rendered; 0 for none. */
     val atmosStreamObjects: Int = 0,
+    /** The unrendered objects are being watched, so which are parked and which move is known. */
+    val atmosWatched: Boolean = false,
     /** Channels leaving the chain for the platform; null before a stream. */
     val outputChannels: Int? = null,
     /** The EBU R128 meter at the end of the chain; null before it has measured anything. */
@@ -256,6 +258,8 @@ internal fun atmosChannels(
     objects: Int,
     moving: Int = 0,
     lfe: Boolean = false,
+    rendered: Boolean = true,
+    counted: Boolean = true,
 ): String? {
     val core = channels(count, layout?.takeIf { it.isNotBlank() }?.let { "$it core" }) ?: return null
     if (objects <= 0) return core
@@ -267,7 +271,8 @@ internal fun atmosChannels(
         if (moving > 0) add("$moving moving")
         if (lfe) add("LFE")
     }
-    return "$core + $objects Atmos objects" + if (parts.isEmpty()) "" else " (${parts.joinToString(", ")})"
+    return "$core + $objects Atmos objects" + (if (rendered) "" else ", not rendered") +
+        if (!counted || parts.isEmpty()) "" else " (${parts.joinToString(", ")})"
 }
 
 /**
@@ -372,9 +377,13 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
                         )
                     } else if (input.atmosStreamObjects > 0 && (count ?: 0) > 2) {
                         // An Atmos stream with nothing rendering its objects:
-                        // still an Atmos stream, and said to be.
-                        channels(count, input.chain?.layoutName?.takeIf { it.isNotBlank() }?.let { "$it core" })
-                            ?.let { "$it + ${input.atmosStreamObjects} Atmos objects, not rendered" }
+                        // still an Atmos stream, and said to be, with what
+                        // its objects are when they are being watched.
+                        atmosChannels(
+                            count, input.chain?.layoutName, input.atmosStreamObjects,
+                            input.atmosMoving, input.atmosLfe,
+                            rendered = false, counted = input.atmosWatched,
+                        )
                     } else {
                         channels(count, input.chain?.layoutName)
                     }
