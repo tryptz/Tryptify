@@ -177,6 +177,7 @@ class VirtualRoom {
     std::fill(predelay_.begin(), predelay_.end(), 0.0f);
     predelay_pos_ = 0;
     std::memset(z_, 0, sizeof(z_));
+    std::memset(shelf_z_, 0, sizeof(shelf_z_));
     std::memset(align_, 0, sizeof(align_));
     align_pos_ = 0;
     std::memset(look_l_, 0, sizeof(look_l_));
@@ -209,6 +210,12 @@ class VirtualRoom {
       convolve_block(set, len, wet_.data() + 2 * b);
     }
     dfe_fir_.process(wet_.data(), n);
+    for (int i = 0; i < n; ++i) {
+      wet_[2 * i] = biquad(set.shelf, shelf_z_, wet_[2 * i]);
+      wet_[2 * i + 1] = biquad(set.shelf, shelf_z_ + 2, wet_[2 * i + 1]);
+    }
+    // Rung out is silent: the shelf's memory never lingers as denormals.
+    for (float& z : shelf_z_) if (std::fabs(z) < 1e-25f) z = 0.0f;
     finish(n, room, dry_on, out);
     renders_.fetch_add(1, std::memory_order_release);
   }
@@ -222,6 +229,13 @@ class VirtualRoom {
     lookup(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], speakers_[s].azimuth,
            speakers_[s].elevation, hl, hr, dl, dr);
     delayed_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, ir);
+  }
+
+  // The low shelf render() runs after the equalizer for the set in use
+  // (see design_bass_shelf): {b0, b1, b2, a1, a2}.
+  void bass_shelf(float* c) const {
+    const FilterSet& set = sets_[active_.load(std::memory_order_acquire) & 1u];
+    std::copy(set.shelf, set.shelf + 5, c);
   }
 
   // The diffuse-field equalizer render() would use for an HRIR set laid out
@@ -291,6 +305,8 @@ class VirtualRoom {
   static constexpr double kPiD = 3.14159265358979323846;
   static constexpr float kRad = kPiF / 180.0f;
   static constexpr int kDesignN = 4096;
+  static constexpr double kShelfHz = 120.0;
+  static constexpr double kMaxShelfDb = 9.0;
 
   // The room. Four groups of speakers (front and back, left and right) each
   // send four early reflections out of other speakers, so they arrive
@@ -311,6 +327,7 @@ class VirtualRoom {
   struct FilterSet {
     std::vector<fft::Complex> spec;  // [speaker][ear][bin], scaled by 1/kFft
     std::vector<float> dfe;          // kDfeTaps
+    float shelf[5] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};  // the low end the set lacks
   };
   struct Reflection { int delay; float gain; int speaker; };
   struct Line { std::vector<float> buf; int pos = 0; float gain = 0.0f; float damp = 0.0f; };
@@ -361,7 +378,65 @@ class VirtualRoom {
       }
     }
     std::copy(dfe, dfe + kDfeTaps, set.dfe.begin());
+    design_bass_shelf(data, dfe, static_cast<float>(sample_rate_), set.shelf);
   }
+
+ public:
+  // A measured HRIR set often lacks its low end: the loudspeaker it was
+  // measured with did (the baked KEMAR set is 5 dB down at 60 Hz, 3 at
+  // 120), and a head does nothing to sound that long. The equalizer is too
+  // short to put it all back, so a low shelf does: by as much as the set,
+  // through its equalizer, is quieter at 40-70 Hz than at 300-630 Hz, taken
+  // over every direction. Nothing for a set whose low end is level, never
+  // more than kMaxShelfDb, never a cut. {b0, b1, b2, a1, a2}.
+  static void design_bass_shelf(const float* data, const float* dfe, float sample_rate,
+                                float* c) {
+    static const double lo_hz[] = {40.0, 50.0, 60.0, 70.0};
+    static const double ref_hz[] = {300.0, 400.0, 500.0, 630.0};
+    auto level_db = [&](const double* hz, int n) {
+      double sum = 0.0;
+      for (int i = 0; i < n; ++i) {
+        const double w = 2.0 * kPiD * hz[i] / 48000.0;  // the table's own rate
+        double power = 0.0, wsum = 0.0;
+        for (int e = 0; e < kHrirElCount; ++e) {
+          const double we = std::cos((kHrirElMin + e * kHrirElStep) * kPiD / 180.0);
+          for (int a = 0; a < kHrirAzCount * 2; ++a) {
+            const float* h = data + (static_cast<size_t>(e) * kHrirAzCount * 2 + a) * kHrirTaps;
+            power += we * tone_power(h, kHrirTaps, w);
+            wsum += we;
+          }
+        }
+        sum += 10.0 * std::log10(std::max(power / wsum * tone_power(dfe, kDfeTaps, w), 1e-12));
+      }
+      return sum / n;
+    };
+    double gain_db = level_db(ref_hz, 4) - level_db(lo_hz, 4);
+    if (gain_db > kMaxShelfDb) gain_db = kMaxShelfDb;
+    if (gain_db < 0.25) {  // level already
+      c[0] = 1.0f; c[1] = c[2] = c[3] = c[4] = 0.0f;
+      return;
+    }
+    const double a = std::pow(10.0, gain_db / 40.0);
+    const double w0 = 2.0 * kPiD * kShelfHz / sample_rate;
+    const double cw = std::cos(w0), al = std::sin(w0) * 0.70710678118654752;
+    const double ra = 2.0 * std::sqrt(a) * al;
+    const double a0 = (a + 1.0) + (a - 1.0) * cw + ra;
+    c[0] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw + ra) / a0);
+    c[1] = static_cast<float>(2.0 * a * ((a - 1.0) - (a + 1.0) * cw) / a0);
+    c[2] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw - ra) / a0);
+    c[3] = static_cast<float>(-2.0 * ((a - 1.0) + (a + 1.0) * cw) / a0);
+    c[4] = static_cast<float>(((a + 1.0) + (a - 1.0) * cw - ra) / a0);
+  }
+  static double tone_power(const float* h, int n, double w) {
+    double re = 0.0, im = 0.0;
+    for (int t = 0; t < n; ++t) {
+      re += h[t] * std::cos(w * t);
+      im -= h[t] * std::sin(w * t);
+    }
+    return re * re + im * im;
+  }
+
+ private:
 
   // The HRIR pair for a direction, bilinear across the grid, and the two
   // onset delays: BinauralRenderer::lookup_hrir, for a set given by pointer.
@@ -806,6 +881,7 @@ class VirtualRoom {
   // high-pass (0-7), the bass (8-11), the LFE (12-15), the tail's low cut (16).
   float lp_c_[5] = {}, hp_c_[5] = {}, lfe_c_[5] = {}, tail_hp_c_[5] = {};
   float z_[18] = {};
+  float shelf_z_[4] = {};
   // mono, LFE and the dry pair, kSincDelay samples behind.
   float align_[kSincDelay][4] = {};
   int align_pos_ = 0;

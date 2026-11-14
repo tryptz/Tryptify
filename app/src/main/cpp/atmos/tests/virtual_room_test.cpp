@@ -219,10 +219,18 @@ void test_null() {
       }
     }
     double worst = 0.0, peak = 0.0;
+    float shelf[5];
+    room.bass_shelf(shelf);
+    double s1 = 0.0, s2 = 0.0;
     for (int n = 0; n + VirtualRoom::kLookahead < total; ++n) {
       double z = 0.0;
       const int jmax = n < kDfeTaps - 1 ? n : kDfeTaps - 1;
       for (int j = 0; j <= jmax; ++j) z += kDfe[j] * y[n - j];
+      // The low shelf, then the trim.
+      const double x = z;
+      z = shelf[0] * x + s1;
+      s1 = shelf[1] * x - shelf[3] * z + s2;
+      s2 = shelf[2] * x - shelf[4] * z;
       z *= VirtualRoom::kTrim;
       const double d = std::fabs(got[2 * (n + VirtualRoom::kLookahead) + ear] - z);
       if (d > worst) worst = d;
@@ -363,10 +371,11 @@ void test_room() {
     return energy(x, 0, from, to) + energy(x, 1, from, to);
   };
   // No room: when the filters have rung out there is nothing at all.
-  // (A block's rounding takes one more block and the equalizer to clear.)
+  // (A block's rounding takes one more block and the equalizer to clear,
+  // and the low shelf's memory 200 ms more to fall to nothing.)
   const int rung = burst + VirtualRoom::kIrLen + 2 * kDfeTaps + 2 * VirtualRoom::kBlock;
   bool silent = true;
-  for (int i = rung; i < total; ++i) if (dry[2 * i] != 0.0f || dry[2 * i + 1] != 0.0f) silent = false;
+  for (int i = rung + 9600; i < total; ++i) if (dry[2 * i] != 0.0f || dry[2 * i + 1] != 0.0f) silent = false;
   CHECK(silent);
   // A room: sound after the burst, dying away, and no louder than the room
   // was asked to be.
@@ -444,6 +453,57 @@ void test_reset_and_silence() {
   std::vector<float> none(static_cast<size_t>(3072) * count, 0.0f);
   const std::vector<float> quiet = run(room, none, count, {1536});
   for (float x : quiet) CHECK(x == 0.0f);
+}
+
+// The level a steady tone from one speaker comes out at, both ears together.
+double tone_level_db(VirtualRoom& room, int count, int speaker, double hz) {
+  const int total = 48000;
+  std::vector<float> feeds(static_cast<size_t>(total) * count, 0.0f);
+  for (int i = 0; i < total; ++i) {
+    feeds[static_cast<size_t>(i) * count + speaker] =
+        0.05f * static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * hz * i / 48000.0));
+  }
+  room.reset_history();
+  const std::vector<float> out = run(room, feeds, count, {1536});
+  double e = 0.0;
+  for (int i = 24000; i < total; ++i) e += out[2 * i] * out[2 * i] + out[2 * i + 1] * out[2 * i + 1];
+  return 10.0 * std::log10(e / 24000.0 + 1e-30);
+}
+
+void test_low_end() {
+  std::printf("-- the low end the measured set lacks is put back\n");
+  const std::vector<RoomSpeaker> v = room_layout();
+  const int count = static_cast<int>(v.size());
+  VirtualRoom room;
+  room.configure(48000, v);
+  room.set_params(1.0f, 0.0f);
+  room.set_bass_management(false, 80);
+  // The baked set is 5 dB short at 60 Hz: the shelf is there, and bounded.
+  float shelf[5];
+  room.bass_shelf(shelf);
+  const double dc = 20.0 * std::log10((shelf[0] + shelf[1] + shelf[2]) / (1.0 + shelf[3] + shelf[4]));
+  std::printf("   shelf %.2f dB\n", dc);
+  CHECK(dc > 4.0 && dc < 7.0);
+  // A speaker's bass comes out as loud as its low mids, with no help from
+  // the crossover: before the shelf 60 Hz was 5 dB under 400 Hz.
+  // The speakers ahead: a head already makes a side speaker's near ear
+  // louder at 400 Hz than in the bass.
+  const int used[] = {speaker_at(v, 0.0f, 0.0f), speaker_at(v, -30.0f, 0.0f), speaker_at(v, 30.0f, 0.0f)};
+  for (int s : used) {
+    const double mid = tone_level_db(room, count, s, 400.0);
+    for (double hz : {50.0, 80.0, 120.0, 200.0}) {
+      const double d = tone_level_db(room, count, s, hz) - mid;
+      std::printf("   speaker %d, %3.0f Hz against 400 Hz: %+.2f dB\n", s, hz, d);
+      CHECK(std::fabs(d) < 2.0);
+    }
+  }
+  // A set whose low end is level gets no shelf: one tap for every direction.
+  std::vector<float> flat(static_cast<size_t>(render::kHrirElCount) * render::kHrirAzCount * 2 * render::kHrirTaps, 0.0f);
+  for (size_t i = 0; i < flat.size(); i += render::kHrirTaps) flat[i] = 1.0f;
+  std::vector<float> one(kDfeTaps, 0.0f);
+  one[0] = 1.0f;
+  VirtualRoom::design_bass_shelf(flat.data(), one.data(), 48000.0f, shelf);
+  CHECK(shelf[0] == 1.0f && shelf[1] == 0.0f && shelf[2] == 0.0f && shelf[3] == 0.0f && shelf[4] == 0.0f);
 }
 
 void test_equalizer_design() {
@@ -534,6 +594,7 @@ int main() {
   test_room();
   test_limiter();
   test_reset_and_silence();
+  test_low_end();
   test_equalizer_design();
   test_set_swap();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);

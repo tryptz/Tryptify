@@ -227,6 +227,27 @@ The earlier render (`set_virtual_room(false)`: each object through the HRIR of
 its direction, no equalizer, no room) keeps its level with 3 dB taken off its
 sum, as it has no limiter.
 
+## The virtual room's low end (fixed 1.9.52)
+
+The baked KEMAR set was measured with a small loudspeaker and rolls off
+below 300 Hz: through its equalizer, every direction was 3 dB down at 120 Hz
+and 5 dB at 60 Hz, more than the 512-tap equalizer can put back. With bass
+management on, the crossover hid it below 80 Hz and left a hole from there
+to 250 Hz; with it off the whole low end was thin, and the render sounded as
+if part of the mix was not playing. `VirtualRoom::design_bass_shelf` measures
+that shortfall for the set in use (40-70 Hz against 300-630 Hz, all
+directions, through the equalizer) and a low shelf at 120 Hz after the
+equalizer puts it back: 5.4 dB for the baked set, nothing for a set whose
+low end is level, never more than 9 dB. Level to within 1.5 dB from 50 Hz up
+for the speakers ahead (`test_low_end`). On a real TIDAL stream the render's
+80-630 Hz is now within 1 dB of the stream's own stereo fold.
+
+What is still different from that fold, and is how loudspeakers in front of
+a listener sound, not a fault: above 1 kHz the render is 3 to 6 dB under it,
+and up to 10 dB in the 5-10 kHz octave, because sound panned between two
+speakers reaches each ear from both and partly cancels there, and KEMAR's
+ear has a deep notch near 8 kHz for sound from straight ahead.
+
 ## Positions were NaN on phones (fixed 1.9.52)
 
 The JNI library is built `-O3 -ffast-math`. `ObjectState::distance` was NaN
