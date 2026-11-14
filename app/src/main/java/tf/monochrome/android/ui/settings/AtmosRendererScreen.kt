@@ -18,7 +18,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
@@ -830,14 +829,14 @@ fun AtmosRendererScreen(
             RoomThumbnail(
                 visible = showsRoom && !roomInView,
                 onClick = { scope.launch { scroll.animateScrollTo(0) } },
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier.align(Alignment.TopCenter),
             ) { roomView(Modifier.fillMaxSize(), true) }
         }
     }
 }
 
 /**
- * The room as a small picture in the page's top corner, for when the page
+ * The room as a picture at the top of the page, for when the page
  * has scrolled past the room itself: what the settings further down do can
  * still be watched. A tap goes back up to the room. It is a picture, not a
  * pane of glass: plain surface colour behind it, so it reads over the rows
@@ -851,7 +850,7 @@ private fun RoomThumbnail(
     room: @Composable () -> Unit,
 ) {
     val millis = tf.monochrome.android.ui.theme.motionMillis(180)
-    val corner = TransformOrigin(1f, 0f)
+    val corner = TransformOrigin(0.5f, 0f)
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
@@ -861,8 +860,8 @@ private fun RoomThumbnail(
         val shape = RoundedCornerShape(14.dp)
         Box(
             modifier = Modifier
-                .padding(top = 8.dp, end = 12.dp)
-                .width(ROOM_THUMBNAIL_WIDTH)
+                .padding(top = 8.dp)
+                .fillMaxWidth(ROOM_THUMBNAIL_SHARE)
                 .aspectRatio(1.15f)
                 .shadow(8.dp, shape)
                 .clip(shape)
@@ -878,8 +877,8 @@ private fun RoomThumbnail(
 /** The built-in room's tail, in seconds (VirtualRoom::kTailSeconds). */
 private const val BUILT_IN_ROOM_DECAY = 0.32f
 
-/** The corner picture of the room: about the size of a video that plays on over another app. */
-private val ROOM_THUMBNAIL_WIDTH = 156.dp
+/** The picture of the room at the top: nearly as wide as the room itself in the page (the owner's choice). */
+private const val ROOM_THUMBNAIL_SHARE = 0.82f
 
 @Composable
 private fun SectionHeader(title: String) {

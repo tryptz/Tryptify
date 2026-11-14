@@ -56,7 +56,7 @@ cell=max(RW,RD,2*RH)/52; unit=max(1.0,cell/(5.5/52))
 src4=np.zeros((12,4),'f4'); src4[0]=((spk[fl][0]+RW*0.44)/2,(spk[fl][1]+RD*0.6)/2,0.0,0.5); ray=np.zeros((3,4),'f4'); ray[0]=(*spk[fl][:3],1.0)
 obj=np.zeros((32,4),'f4'); obj[0]=(RW*0.9,RD*0.9,ear,0.9)
 for n,v in dict(uRes=(W,H),uEye=eye,uRight=right,uUp=up,uFwd=fwd,uFocal=[FOCAL],uRoom=(RW,RD,RH),uLean=[ear],uCeil=ceil,uCorner=[0.0],uListener=(RW*0.5,RD*0.5,ear),
-                uSpk=spk,uSpkKind=kind,uSpkAir=spk[:,3],uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
+                uSpk=spk,uSpkKind=kind,uSpkAir=spk[:,3],uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uObjGrain=[0.55],uMirror=[0.6],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
                 uGrain=(cell,0.2*min(RW,RD),1.0),uCloud=(0.35,0.4,0.22),uGlow=[0.3],uConvex=[1.0],uUnit=[unit],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0]).items(): put(n,v)
 shader=eff.makeShader(skia.Data.MakeWithCopy(bytes(buf)))
 surf=skia.Surface(W,H); c=surf.getCanvas(); c.clear(skia.Color(8,40,50)); p=skia.Paint(); p.setShader(shader); c.drawRect(skia.Rect.MakeWH(W,H),p)

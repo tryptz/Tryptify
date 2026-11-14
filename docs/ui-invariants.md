@@ -3445,7 +3445,20 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   meter's reading, and a speck fades in over a tenth of the way: the grain
   swells and thins, it does not flicker. No halo round a speaker, no light
   on the walls, no wash: a speaker's ring fills as it plays, and its sound
-  is the grain. The cells follow the room's size (`RoomGrain.ACROSS` of
+  is the grain. The objects gather grain too (`uObjGrain`, `RoomGrain.OBJECT`),
+  since they are where the mix puts its sounds; with the sound not shown
+  they gather none.
+- **The room is a lit, glossy thing, not lines alone** (the owner: "make
+  that room more interesting"). The walls are shaded by which way they
+  face a light from above, ahead and to the left, and lighter towards
+  their top; the floor is lit round the listener and darker where it
+  meets the walls. The grid is a faint line every metre, stronger near the
+  listener, and a firmer one every five in a room over 8 m: a hall's floor
+  was a dense mesh. The floor mirrors what plays above it, the lit
+  speakers and the objects, blurred with their height (`mirrored`,
+  `RoomGrain.MIRROR`): a reflection of what is lit, not light of its own,
+  so a silent room's floor shows nothing. It costs about a seventh more a
+  frame than without, measured as above. The cells follow the room's size (`RoomGrain.ACROSS` of
   them over its longest way; 52, down from 64, which cost a fifth more to walk), so a booth and a hall get the same picture.
   Nothing moves them but the levels: the clock only redraws the room
   between the meter's readings, and with reduced motion it stands still and
@@ -3469,10 +3482,12 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   readings stops. The speakers still light as they play and the objects
   stay where the mix puts them: the room is still the channel map. It is
   the page's alone and changes nothing that is heard.
-- **Scrolled past, the room stays as a small picture in the top right
-  corner** (`RoomThumbnail`, 156 dp wide, the size of a video playing on
-  over another app; the owner asked for it, to watch the room while
-  setting what is further down the page). It comes when none of the room
+- **Scrolled past, the room stays as a picture at the top of the page,
+  centred** (`RoomThumbnail`, `ROOM_THUMBNAIL_SHARE` 0.82 of the page's
+  width; the owner asked for it, to watch the room while setting what is
+  further down the page. It began 156 dp wide in the top right corner, the
+  size of a video playing on over another app, and the owner asked for it
+  almost as big as the room and in the middle). It comes when none of the room
   is on screen and goes when any of it is, and a tap scrolls back up to
   the room. Only one of the two is ever drawn: the room's place in the
   page is kept empty while the picture shows, or the shader would run
@@ -3480,8 +3495,8 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `compact`: no object numbers, no measurements, and a drag does not turn
   it. It is a picture on plain surface colour with an outline, not a
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
-  see-through thing over it. It covers the right end of the rows under
-  it, their switches included; scrolling moves them out from under it.
+  see-through thing over it. It covers the rows under it, most of their
+  width; scrolling moves them out from under it.
 - **Trapezoid panning** is a switch with its summary and, when on, three
   sliders: Ceiling width, Ceiling depth, Wall curve. It is off unless the
   listener turns it on: on, objects no longer play exactly where the mix

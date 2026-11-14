@@ -62,6 +62,8 @@ uniform float uSpkAir[32];   // its level averaged over a second or so: the grai
 uniform float uSpkCount;
 uniform float4 uObj[32];   // each object: where, and its level; under zero, a height object
 uniform float uObjCount;
+uniform float uMirror;     // how much the floor mirrors what plays above it
+uniform float uObjGrain;   // how much grain an object at full level gathers: 0 with the sound not shown
 uniform float4 uSrc[12];   // where the loudest speakers' sound turns on a surface, and how strong
 uniform float uSrcCount;
 uniform float4 uRay[3];    // the loudest speakers, for their ray to the listener
@@ -135,6 +137,16 @@ float4 sound(float3 p) {
         sum += w;
         tint += (uSpkKind[i] == 1.0 ? uTertiary : uPrimary) * w;
     }
+    // The objects: where the mix puts its sounds, so where the grain gathers too.
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uObjCount) break;
+        float level = abs(uObj[i].w);
+        float reach = uGrain.y * uCloud.y * (0.5 + level);
+        float3 to = p - uObj[i].xyz;
+        float w = uObjGrain * level * fade(dot(to, to) / (reach * reach));
+        sum += w;
+        tint += (uObj[i].w < 0.0 ? uTertiary : uPrimary) * w;
+    }
     for (int i = 0; i < 12; i++) {
         if (float(i) >= uSrcCount) break;
         float reach = uGrain.y * uCloud.y;
@@ -174,6 +186,40 @@ float4 under(float4 acc, float3 tint, float cover) {
     float a = clamp(cover, 0.0, 1.0) * (1.0 - acc.a);
     return float4(acc.rgb + tint * a, acc.a + a);
 }
+
+// What the floor gives back at p, for a ray coming down along rd: the
+// speakers that play and the objects, as a glossy floor mirrors them,
+// blurred and fainter the further they are from it.
+float4 mirrored(float3 p, float3 rd) {
+    float3 rr = float3(rd.xy, -rd.z);
+    float4 back = float4(0.0);
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uSpkCount) break;
+        float level = uSpk[i].w;
+        if (level < 0.02) continue;
+        float3 to = uSpk[i].xyz - p;
+        float along = dot(to, rr);
+        if (along <= 0.0) continue;
+        float blur = (0.05 + 0.025 * along) * uUnit;
+        float d2 = dot(to, to) - along * along;
+        if (d2 > 9.0 * blur * blur) continue;
+        float3 tint = uSpkKind[i] == 1.0 ? uTertiary : uPrimary;
+        back = under(back, tint, level * 0.85 * fade(d2 / (blur * blur)));
+    }
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uObjCount) break;
+        float level = abs(uObj[i].w);
+        float3 to = uObj[i].xyz - p;
+        float along = dot(to, rr);
+        if (along <= 0.0) continue;
+        float blur = (0.04 + 0.02 * along) * uUnit;
+        float d2 = dot(to, to) - along * along;
+        if (d2 > 9.0 * blur * blur) continue;
+        back = under(back, uObj[i].w < 0.0 ? uTertiary : uInk, level * 0.35 * fade(d2 / (blur * blur)));
+    }
+    return back;
+}
+
 
 half4 main(float2 fragCoord) {
     float2 uv = (fragCoord - 0.5 * uRes) / uRes.y;
@@ -392,15 +438,39 @@ half4 main(float2 fragCoord) {
         float corner = uCorner < 0.05 ? 1.0 - smoothstep(0.0, line * 1.6, -min(side.x, side.y)) : 0.0;
         edge = max(edge, onWall * max(corner, max(1.0 - smoothstep(0.0, line * 1.6, p.z),
                                                 1.0 - smoothstep(0.0, line * 1.6, uRoom.z - p.z))));
-        // The floor's metre grid.
+        // The floor's grid: a line every metre, and a stronger one every five
+        // in a room big enough to have them. Both fade away from the listener,
+        // so a hall's floor is a floor and not a mesh.
+        float2 seat = p.xy - uListener.xy;
+        float near = fade(dot(seat, seat) / (0.35 * dot(uRoom.xy, uRoom.xy)));
         float2 cell = abs(fract(p.xy + 0.5) - 0.5);
-        float grid = uGrid * onFloor * (1.0 - smoothstep(0.0, line, min(cell.x, cell.y))) * 0.5;
-        float fill = onFloor * 0.07 + onWall * 0.035 + onCeiling * 0.02;
+        float2 cell5 = abs(fract(p.xy / 5.0 + 0.5) - 0.5) * 5.0;
+        float minor = 1.0 - smoothstep(0.0, line, min(cell.x, cell.y));
+        float major = max(uRoom.x, uRoom.y) > 8.0 ? 1.0 - smoothstep(0.0, line * 1.3, min(cell5.x, cell5.y)) : 0.0;
+        float grid = uGrid * onFloor * max(minor * (0.12 + 0.3 * near), major * 0.75);
+        // Light from above, ahead and to the left: a wall facing it is lighter,
+        // one turned away darker, and a wall is lighter towards its top, where
+        // the glass catches it. The floor is lit round the listener and darker
+        // against the walls, where light does not reach.
+        float2 nWall = normalize(float2(
+            plan(p + float3(0.02, 0.0, 0.0)) - plan(p - float3(0.02, 0.0, 0.0)),
+            plan(p + float3(0.0, 0.02, 0.0)) - plan(p - float3(0.0, 0.02, 0.0))) + 1e-6);
+        float facing = 0.5 + 0.5 * dot(nWall, normalize(float2(0.55, 0.8)));
+        float upWall = clamp(p.z / uRoom.z, 0.0, 1.0);
+        float wallLight = onWall * (0.02 + 0.05 * facing + 0.06 * upWall * upWall);
+        float tucked = onFloor * (1.0 - smoothstep(0.0, 0.12 * min(uRoom.x, uRoom.y), toWall));
+        float floorLight = onFloor * (0.05 + 0.05 * near);
+        float fill = floorLight + wallLight + onCeiling * 0.02;
         // The listener's shadow on the floor.
-        float2 fromSeat = (p.xy - uListener.xy) / uUnit;
+        float2 fromSeat = seat / uUnit;
         float shadow = onFloor * fade(dot(fromSeat, fromSeat) / 0.05);
         acc = under(acc, uInk, (edge * 0.55 + grid * 0.22) * weight);
-        acc = under(acc, uInk, (fill - shadow * 0.04) * weight);
+        // The floor is glossy: what plays above it shows in it.
+        if (pass == 0 && onFloor > 0.5) {
+            float4 back = mirrored(p, rd);
+            acc = under(acc, back.rgb / max(back.a, 1e-4), back.a * uMirror * weight);
+        }
+        acc = under(acc, uInk, (fill - shadow * 0.04 - tucked * 0.03) * weight);
     }
     return half4(acc);
 }
@@ -486,6 +556,7 @@ internal class RoomScene {
     var speakerCount = 0
     val objects = FloatArray(MAX_OBJECTS * 4)        // x, y, z, level; under zero for a height object
     var objectCount = 0
+    var objectGrain = true                           // whether the objects gather grain (the sound is shown)
     val sources = FloatArray(MAX_SOURCES * 4)        // where sound turns on a surface: x, y, z, strength
     var sourceCount = 0
     val rays = FloatArray(MAX_RAYS * 4)              // the loudest speakers: x, y, z, level
@@ -526,7 +597,7 @@ internal class RoomScene {
 
     /** Whether there is any sound to draw as grain, with [held] of the room's own. */
     fun sounds(held: Float): Boolean {
-        if (held > 0.004f || sourceCount > 0) return true
+        if (held > 0.004f || sourceCount > 0 || (objectGrain && objectCount > 0)) return true
         for (i in 0 until speakerCount) if (speakerAir[i] > 0.01f) return true
         return false
     }
@@ -594,6 +665,8 @@ internal class RoomShader {
         shader.setFloatUniform("uSpkCount", scene.speakerCount.toFloat())
         shader.setFloatUniform("uObj", scene.objects)
         shader.setFloatUniform("uObjCount", scene.objectCount.toFloat())
+        shader.setFloatUniform("uMirror", RoomGrain.MIRROR)
+        shader.setFloatUniform("uObjGrain", if (scene.objectGrain) RoomGrain.OBJECT else 0f)
         shader.setFloatUniform("uSrc", scene.sources)
         shader.setFloatUniform("uSrcCount", scene.sourceCount.toFloat())
         shader.setFloatUniform("uRay", scene.rays)
@@ -632,6 +705,8 @@ internal object RoomGrain {
     const val COVER = 1f        // a speck's cover at its middle; it is soft from there out
     const val NEAR = 0.35f      // a speaker's reach as it falls silent, of its reach at full level
     const val TURNED = 0.4f     // the reach of a spot where sound turns, of the same
+    const val MIRROR = 0.6f     // how much of what plays above it the floor shows
+    const val OBJECT = 0.55f    // the grain round an object at full level, of a speaker's
     const val HELD = 0.22f      // the grain through the whole room when it holds all it can, at Room 100%
 }
 

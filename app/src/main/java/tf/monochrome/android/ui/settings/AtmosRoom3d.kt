@@ -299,6 +299,7 @@ private fun AtmosRoomGpu(
                     clock.longValue  // read: see rememberGrainClock
 
                     scene.clear()
+                    scene.objectGrain = sound
                     air.tick(playing = levels != null)
                     var peak = 0f
                     for (i in 0 until count) {
