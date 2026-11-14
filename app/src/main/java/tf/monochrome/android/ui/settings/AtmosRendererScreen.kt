@@ -452,18 +452,24 @@ fun AtmosRendererScreen(
             }
             // The room that is heard: the listener's own at once, a
             // measured one when its file gives a size, else the built-in.
-            val shape = when (profile.roomKind) {
-                RoomKind.CUSTOM -> RoomShape.of(profile.customRoom)
-                RoomKind.MEASURED -> room?.let { RoomShape.of(it) }
-                else -> null
-            } ?: RoomShape.BUILT_IN
+            // Made when the room changes, not at every reading of the meter:
+            // the drawing keeps what it works out for a room while it is the same one.
+            val envelope = profile.panEnvelope.clamped()
+            val shape = remember(profile.roomKind, profile.customRoom, room, envelope) {
+                val own = when (profile.roomKind) {
+                    RoomKind.CUSTOM -> RoomShape.of(profile.customRoom)
+                    RoomKind.MEASURED -> room?.let { RoomShape.of(it) }
+                    else -> null
+                } ?: RoomShape.BUILT_IN
+                // Its walls lean as the panning envelope does, when that is on:
+                // the view shows the space objects may use.
+                own.within(envelope)
+            }
             AtmosRoom3d(
                 layout = roomLayout,
                 speakers = roomSpeakers ?: fromChannels,
                 objects = objects,
-                // Its walls lean as the panning envelope does, when that is on:
-                // the view shows the space objects may use.
-                shape = shape.within(profile.panEnvelope.clamped()),
+                shape = shape,
                 roomAmount = profile.roomAmount,
                 decaySeconds = room?.decaySeconds?.takeIf { it > 0f } ?: BUILT_IN_ROOM_DECAY,
                 modifier = modifier,

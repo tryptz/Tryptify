@@ -3446,10 +3446,23 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   swells and thins, it does not flicker. No halo round a speaker, no light
   on the walls, no wash: a speaker's ring fills as it plays, and its sound
   is the grain. The cells follow the room's size (`RoomGrain.ACROSS` of
-  them over its longest way), so a booth and a hall get the same picture.
+  them over its longest way; 52, down from 64, which cost a fifth more to walk), so a booth and a hall get the same picture.
   Nothing moves them but the levels: the clock only redraws the room
   between the meter's readings, and with reduced motion it stands still and
   the room is drawn as each reading comes.
+- **The room's shader is kept cheap, and these are what keep it so.** A
+  pixel whose ray misses the room's box returns at once. In a room no wall
+  of which bends outwards (`uConvex`, wall curve 1 or more) the walls are
+  found by narrowing in on the ray's nearest approach, with no march; the
+  36 steps are only for a wall that bends out. A speaker or object far
+  from the ray is passed over before any `exp`. The grain's cells are
+  walked only when there is sound to show (`RoomScene.sounds`). Straight
+  walls take no `pow`. The page keeps where the speakers stand and where
+  their sound turns for as long as the room is the same one (`RoomPlaces`),
+  and makes the room's `RoomShape` when the room changes, not at each
+  reading of the meter. Measured with Skia's CPU renderer on the check
+  frame, a frame took 38% less than before these; nobody has measured it
+  on a phone.
 - **Show sound in the room** (`RendererProfile.roomSound`, the switch under
   the room) turns the drawing of the sound off: no grain, no rays, no
   turning spots, and the clock that redraws the room between the meter's

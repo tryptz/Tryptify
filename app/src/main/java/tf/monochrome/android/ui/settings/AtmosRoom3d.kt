@@ -280,6 +280,7 @@ private fun AtmosRoomGpu(
     val afterglow = remember { Afterglow() }
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
+    val places = remember { RoomPlaces() }
     val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
@@ -293,6 +294,7 @@ private fun AtmosRoomGpu(
                     val levels = liveSpeakers
                     val o = liveObjects
                     val sound = liveOptions.sound
+                    places.of(room, layout, count)
                     val camera = RoomCamera(yaw.floatValue, room, size.width, size.height)
                     clock.longValue  // read: see rememberGrainClock
 
@@ -304,14 +306,13 @@ private fun AtmosRoomGpu(
                         val glow = levels?.getOrNull(i)?.let(::atmosSpeakerGlow) ?: 0f
                         glows[i] = glow
                         peak = maxOf(peak, glow)
-                        val s = room.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
                         val kind = when {
                             isLfe(layout, f) -> RoomScene.KIND_LFE
                             layout[f + 2] > 0f -> RoomScene.KIND_HEIGHT
                             else -> RoomScene.KIND_EAR
                         }
                         scene.addSpeaker(
-                            s[0], s[1], if (kind == RoomScene.KIND_LFE) LFE_HEIGHT else s[2],
+                            places.x(i), places.y(i), places.z(i),
                             level = glow, air = if (sound) air.follow(i, glow) else 0f, kind = kind,
                         )
                     }
@@ -327,9 +328,7 @@ private fun AtmosRoomGpu(
                         pickLoudest(glows, layout, count, loudest)
                         loudest.forEachIndexed { slot, i ->
                             if (i < 0) return@forEachIndexed
-                            val f = i * AtmosNative.ROOM_FIELDS
-                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                            scene.setRay(slot, s[0], s[1], s[2], glows[i])
+                            scene.setRay(slot, places.x(i), places.y(i), places.z(i), glows[i])
                         }
                     }
                     // And the loudest of late: with some room, grain where their
@@ -338,10 +337,10 @@ private fun AtmosRoomGpu(
                         pickLoudest(air.levels, layout, count, loudest)
                         for (i in loudest) {
                             if (i < 0) continue
-                            val f = i * AtmosNative.ROOM_FIELDS
-                            val s = room.place(layout[f], layout[f + 1], layout[f + 2])
-                            for (r in room.firstReflections(s[0], s[1], s[2])) {
-                                scene.addSource(r.x, r.y, r.z, air.levels[i] * amount * room.directOver(s, r))
+                            val turns = places.turns(i)
+                            for (k in turns.indices) {
+                                val r = turns[k]
+                                scene.addSource(r.x, r.y, r.z, air.levels[i] * amount * places.directOver(i, r))
                             }
                         }
                     }
@@ -706,6 +705,50 @@ private fun AtmosRoomCanvas(
                     drawCircle(onSurface.copy(alpha = 0.85f), head, seat)
                 },
         )
+    }
+}
+
+/**
+ * Where the layout's speakers stand in a room, and where each one's sound
+ * turns on a surface towards the listener: worked out when the room or the
+ * layout changes and kept, not thirty times a second.
+ */
+private class RoomPlaces {
+    private var shape: RoomShape? = null
+    private var layout: FloatArray? = null
+    private var at = FloatArray(0)
+    private var turns = arrayOfNulls<List<RoomShape.Reflection>>(0)
+
+    fun of(shape: RoomShape, layout: FloatArray, count: Int) {
+        if (shape == this.shape && layout === this.layout) return
+        this.shape = shape
+        this.layout = layout
+        at = FloatArray(count * 3)
+        turns = arrayOfNulls(count)
+        for (i in 0 until count) {
+            val f = i * AtmosNative.ROOM_FIELDS
+            val s = shape.place(speakerX(layout, f), speakerY(layout, f), layout[f + 2])
+            at[i * 3] = s[0]
+            at[i * 3 + 1] = s[1]
+            at[i * 3 + 2] = if (isLfe(layout, f)) LFE_HEIGHT else s[2]
+        }
+    }
+
+    fun x(i: Int) = at[i * 3]
+    fun y(i: Int) = at[i * 3 + 1]
+    fun z(i: Int) = at[i * 3 + 2]
+
+    /** Speaker [i]'s first reflections to the listener. */
+    fun turns(i: Int): List<RoomShape.Reflection> =
+        turns[i] ?: shape!!.firstReflections(x(i), y(i), z(i)).also { turns[i] = it }
+
+    /** How much of speaker [i]'s level its reflection [r] keeps: less the longer its way round is than the straight one. */
+    fun directOver(i: Int, r: RoomShape.Reflection): Float {
+        val room = shape!!
+        val dx = x(i) - room.listenerX
+        val dy = y(i) - room.listenerY
+        val dz = z(i) - room.earHeight
+        return (kotlin.math.sqrt(dx * dx + dy * dy + dz * dz) / r.path).coerceIn(0f, 1f)
     }
 }
 

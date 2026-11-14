@@ -70,6 +70,7 @@ uniform float uMarkCount;
 uniform float3 uGrain;     // the grain: a cell's side, how far a loud speaker's cloud reaches, a speck's cover
 uniform float3 uCloud;     // of that reach: a silent speaker's, a turning spot's; and the grain a full room holds
 uniform float uGlow;       // what the room still holds, times the Room amount: the grain through all of it
+uniform float uConvex;     // 1: no wall bends outwards, so a ray is inside the room once at most
 uniform float uUnit;       // how many times their size in the built-in room the marks are drawn
 uniform float3 uPrimary;   // the theme: speakers and waves,
 uniform float3 uTertiary;  // heights,
@@ -77,7 +78,7 @@ uniform float3 uInk;       // the room's lines and the listener,
 uniform float uGrid;       // and whether the floor has a metre grid
 
 const int STEPS = 36;    // along a ray, looking for the walls
-const int CELLS = 168;   // the most grain cells a ray goes through
+const int CELLS = 138;   // the most grain cells a ray goes through
 
 // Three numbers in 0..1 that are a cell's own.
 float3 hash3(float3 p) {
@@ -95,7 +96,8 @@ float fade(float x) {
 
 // How far in the walls have leaned at height z: 0 up to where they start, 1 at the ceiling.
 float rise(float z) {
-    return pow(clamp((z - uLean) / max(uRoom.z - uLean, 0.001), 0.0, 1.0), uCeil.z);
+    float r = clamp((z - uLean) / max(uRoom.z - uLean, 0.001), 0.0, 1.0);
+    return uCeil.z == 1.0 ? r : pow(r, uCeil.z);
 }
 
 // Half the room's width and depth at height z.
@@ -196,6 +198,8 @@ half4 main(float2 fragCoord) {
     tmax = max(t0, t1);
     float wNear = max(max(tmin.x, tmin.y), max(tmin.z, 0.0));
     float wFar = min(tmax.x, min(tmax.y, tmax.z));
+    // Nothing of the room is outside that box: most of the picture's corners stop here.
+    if (wFar <= wNear) return half4(0.0);
     float pixel = 1.0 / (uFocal * uRes.y);  // a pixel's width, a metre off
 
     // The listener: a head, which hides what is behind it. Its edge is soft
@@ -214,30 +218,39 @@ half4 main(float2 fragCoord) {
     float exitT = -1.0;   // where the ray last leaves the room: the wall that is seen
     float enterT = -1.0;  // where it first comes in: the wall that is looked through
     float cover = 0.0;    // how much of the pixel the room takes: all of it inside, less across its outline
-    if (wFar > wNear) {
-        float dt = (wFar - wNear) / float(STEPS);
+    {
         float lastIn = -1.0;
         float firstIn = -1.0;
         float least = 1e6;      // the nearest the ray comes to being inside (under zero: it is), and where
-        float tLeast = wNear;
-        for (int i = 0; i < STEPS; i++) {
-            float t = wNear + (float(i) + 0.5) * dt;
-            float d = room(ro + rd * t);
-            if (d < least) {
-                least = d;
-                tLeast = t;
+        float tLeast = 0.5 * (wNear + wFar);
+        // Where to look for that: all of the ray, in a room no wall of which
+        // bends outwards, since how far outside it is then falls and rises
+        // once along it; else round the best of even steps, which also say
+        // where it first and last is inside.
+        float a = wNear;
+        float b = wFar;
+        float span = wFar - wNear;
+        if (uConvex < 0.5) {
+            span /= float(STEPS);
+            for (int i = 0; i < STEPS; i++) {
+                float t = wNear + (float(i) + 0.5) * span;
+                float d = room(ro + rd * t);
+                if (d < least) {
+                    least = d;
+                    tLeast = t;
+                }
+                if (d < 0.0) {
+                    if (firstIn < 0.0) firstIn = t;
+                    lastIn = t;
+                }
             }
-            if (d < 0.0) {
-                if (firstIn < 0.0) firstIn = t;
-                lastIn = t;
-            }
+            a = tLeast - span;
+            b = tLeast + span;
         }
-        // Nearer than the steps can say: a ray that clips a corner between two
-        // of them is in the room all the same. Without this the outline came
-        // out in stairs, a step of the march to each.
-        float a = tLeast - dt;
-        float b = tLeast + dt;
-        for (int i = 0; i < 8; i++) {
+        // Nearer than steps can say: a ray that clips a corner between two of
+        // them is in the room all the same. Without this the outline came out
+        // in stairs, a step of the march to each.
+        for (int i = 0; i < 12; i++) {
             float m1 = a + (b - a) / 3.0;
             float m2 = b - (b - a) / 3.0;
             if (room(ro + rd * m1) < room(ro + rd * m2)) b = m2; else a = m1;
@@ -254,24 +267,26 @@ half4 main(float2 fragCoord) {
             lastIn = tLeast;
         }
         if (lastIn > 0.0) {
-            // The wall itself, between the last step inside and the next one.
+            // The wall itself: between the last place known to be inside and
+            // the next step, or the box's end.
             a = lastIn;
-            b = min(lastIn + dt, wFar + 0.01);
-            for (int i = 0; i < 8; i++) {
+            b = min(lastIn + span, wFar + 0.01);
+            for (int i = 0; i < 11; i++) {
                 float m = 0.5 * (a + b);
                 if (room(ro + rd * m) < 0.0) a = m; else b = m;
             }
             exitT = 0.5 * (a + b);
-            a = max(firstIn - dt, wNear - 0.01);
+            a = max(firstIn - span, wNear - 0.01);
             b = firstIn;
-            for (int i = 0; i < 8; i++) {
+            for (int i = 0; i < 11; i++) {
                 float m = 0.5 * (a + b);
                 if (room(ro + rd * m) < 0.0) b = m; else a = m;
             }
             enterT = 0.5 * (a + b);
         }
     }
-    if (tFar > tNear) {
+    // The grain, when there is any sound to show.
+    if (tFar > tNear && uGrain.z > 0.0) {
         float stop = headT > 0.0 ? min(tFar, headT) : tFar;
         // The grain, cell by cell from the near wall to the far one. A speck
         // keeps clear of its cell's sides by more than its own size, so the
@@ -316,6 +331,7 @@ half4 main(float2 fragCoord) {
         float kind = uSpkKind[i];
         float3 tint = kind == 1.0 ? uTertiary : uPrimary;
         float size = (kind == 2.0 ? 0.085 : 0.062) * uUnit;
+        if (d2 > 4.0 * size * size) continue;  // too far from the ray to show: most of them, at any pixel
         // A ring that is always there, filled as the speaker plays: its sound is the grain round it.
         float off = (sqrt(d2) - size) / (0.012 * uUnit);
         float ring = fade(off * off);
@@ -328,10 +344,12 @@ half4 main(float2 fragCoord) {
         float3 tint = uObj[i].w < 0.0 ? uTertiary : uInk;
         float size = (0.05 + 0.06 * level) * uUnit;
         float d2 = passes(ro, rd, uObj[i].xyz, limit);
+        float footD2 = passes(ro, rd, float3(uObj[i].xy, 0.01), limit);
+        if (min(d2, footD2) > 60.0 * size * size) continue;
         float core = fade(d2 / (size * size)) * (0.45 + 0.55 * level);
         float halo = fade(d2 / (size * size * 9.0)) * level * 0.35;
         // Its place on the floor, so its height can be read.
-        float foot = fade(passes(ro, rd, float3(uObj[i].xy, 0.01), limit) / (0.0012 * uUnit * uUnit)) * 0.35;
+        float foot = fade(footD2 / (0.0012 * uUnit * uUnit)) * 0.35;
         lights = under(lights, tint, core + halo + foot);
     }
     for (int i = 0; i < 3; i++) {
@@ -506,6 +524,13 @@ internal class RoomScene {
         if (sources[weakest * 4 + 3] < strength) put(sources, weakest, x, y, z, strength)
     }
 
+    /** Whether there is any sound to draw as grain, with [held] of the room's own. */
+    fun sounds(held: Float): Boolean {
+        if (held > 0.004f || sourceCount > 0) return true
+        for (i in 0 until speakerCount) if (speakerAir[i] > 0.01f) return true
+        return false
+    }
+
     fun setRay(i: Int, x: Float, y: Float, z: Float, level: Float) {
         if (i in 0 until MAX_RAYS) put(rays, i, x, y, z, level)
     }
@@ -574,7 +599,8 @@ internal class RoomShader {
         shader.setFloatUniform("uRay", scene.rays)
         shader.setFloatUniform("uMark", scene.marks)
         shader.setFloatUniform("uMarkCount", scene.markCount.toFloat())
-        shader.setFloatUniform("uGrain", RoomGrain.cell(shape), RoomGrain.reach(shape), RoomGrain.COVER)
+        shader.setFloatUniform("uGrain", RoomGrain.cell(shape), RoomGrain.reach(shape), if (scene.sounds(glow)) RoomGrain.COVER else 0f)
+        shader.setFloatUniform("uConvex", if (shape.curve >= 1f) 1f else 0f)
         shader.setFloatUniform("uCloud", RoomGrain.NEAR, RoomGrain.TURNED, RoomGrain.HELD)
         shader.setFloatUniform("uGlow", glow)
         shader.setFloatUniform("uUnit", RoomGrain.markScale(shape))
@@ -601,7 +627,7 @@ internal object RoomGrain {
     /** How many times their size in the built-in room the marks are drawn, so they are that size on the page. */
     fun markScale(shape: RoomShape): Float = (cell(shape) / cell(RoomShape.BUILT_IN)).coerceAtLeast(1f)
 
-    const val ACROSS = 64f      // cells; the shader's CELLS is the most a ray can cross of them
+    const val ACROSS = 52f      // cells; the shader's CELLS is the most a ray can cross of them
     const val REACH = 0.2f      // of the room's shorter side
     const val COVER = 1f        // a speck's cover at its middle; it is soft from there out
     const val NEAR = 0.35f      // a speaker's reach as it falls silent, of its reach at full level
