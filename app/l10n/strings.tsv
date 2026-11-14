@@ -3445,3 +3445,13 @@ atmos_envelope_summary	The higher a sound is, the less of the room's width and d
 atmos_envelope_width	Ceiling width	顶部宽度	天井の幅	Largeur au plafond	Ancho del techo	Tavan genişliği	Deckenbreite	Larghezza del soffitto
 atmos_envelope_depth	Ceiling depth	顶部进深	天井の奥行き	Profondeur au plafond	Fondo del techo	Tavan derinliği	Deckentiefe	Profondità del soffitto
 atmos_envelope_curve	Wall curve	墙面曲线	壁のカーブ	Courbe des murs	Curva de las paredes	Duvar eğrisi	Wandkrümmung	Curva delle pareti
+atmos_room_presets	Presets	预设	プリセット	Préréglages	Preajustes	Ön ayarlar	Voreinstellungen	Preimpostazioni
+atmos_room_preset_booth	Vocal booth	人声录音间	ボーカルブース	Cabine voix	Cabina de voz	Vokal kabini	Gesangskabine	Cabina voce
+atmos_room_preset_home	Home studio	家庭录音室	ホームスタジオ	Home studio	Estudio casero	Ev stüdyosu	Heimstudio	Home studio
+atmos_room_preset_control	Control room	控制室	コントロールルーム	Régie	Sala de control	Kontrol odası	Regieraum	Regia
+atmos_room_preset_live	Live room	录音棚大厅	ライブルーム	Salle de prise	Sala de grabación	Kayıt salonu	Aufnahmeraum	Sala di ripresa
+atmos_room_preset_small_club	Small club	小型俱乐部	小さなクラブ	Petit club	Club pequeño	Küçük kulüp	Kleiner Club	Piccolo club
+atmos_room_preset_large_club	Large club	大型俱乐部	大きなクラブ	Grand club	Club grande	Büyük kulüp	Großer Club	Grande club
+atmos_room_preset_hall	Concert hall	音乐厅	コンサートホール	Salle de concert	Sala de conciertos	Konser salonu	Konzertsaal	Sala da concerto
+atmos_room_preset_chapel	Stone chapel	石砌礼拜堂	石造りの礼拝堂	Chapelle en pierre	Capilla de piedra	Taş şapel	Steinkapelle	Cappella in pietra
+atmos_room_preset_round	Round room	圆形房间	円形の部屋	Salle ronde	Sala redonda	Yuvarlak oda	Runder Raum	Stanza rotonda

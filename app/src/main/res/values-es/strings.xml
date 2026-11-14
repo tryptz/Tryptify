@@ -3576,4 +3576,14 @@
     <string name="atmos_envelope_width">Ancho del techo</string>
     <string name="atmos_envelope_depth">Fondo del techo</string>
     <string name="atmos_envelope_curve">Curva de las paredes</string>
+    <string name="atmos_room_presets">Preajustes</string>
+    <string name="atmos_room_preset_booth">Cabina de voz</string>
+    <string name="atmos_room_preset_home">Estudio casero</string>
+    <string name="atmos_room_preset_control">Sala de control</string>
+    <string name="atmos_room_preset_live">Sala de grabación</string>
+    <string name="atmos_room_preset_small_club">Club pequeño</string>
+    <string name="atmos_room_preset_large_club">Club grande</string>
+    <string name="atmos_room_preset_hall">Sala de conciertos</string>
+    <string name="atmos_room_preset_chapel">Capilla de piedra</string>
+    <string name="atmos_room_preset_round">Sala redonda</string>
 </resources>

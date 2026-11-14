@@ -3420,4 +3420,14 @@
     <string name="atmos_envelope_width">顶部宽度</string>
     <string name="atmos_envelope_depth">顶部进深</string>
     <string name="atmos_envelope_curve">墙面曲线</string>
+    <string name="atmos_room_presets">预设</string>
+    <string name="atmos_room_preset_booth">人声录音间</string>
+    <string name="atmos_room_preset_home">家庭录音室</string>
+    <string name="atmos_room_preset_control">控制室</string>
+    <string name="atmos_room_preset_live">录音棚大厅</string>
+    <string name="atmos_room_preset_small_club">小型俱乐部</string>
+    <string name="atmos_room_preset_large_club">大型俱乐部</string>
+    <string name="atmos_room_preset_hall">音乐厅</string>
+    <string name="atmos_room_preset_chapel">石砌礼拜堂</string>
+    <string name="atmos_room_preset_round">圆形房间</string>
 </resources>

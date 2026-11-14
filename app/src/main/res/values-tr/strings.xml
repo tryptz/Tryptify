@@ -3498,4 +3498,14 @@
     <string name="atmos_envelope_width">Tavan genişliği</string>
     <string name="atmos_envelope_depth">Tavan derinliği</string>
     <string name="atmos_envelope_curve">Duvar eğrisi</string>
+    <string name="atmos_room_presets">Ön ayarlar</string>
+    <string name="atmos_room_preset_booth">Vokal kabini</string>
+    <string name="atmos_room_preset_home">Ev stüdyosu</string>
+    <string name="atmos_room_preset_control">Kontrol odası</string>
+    <string name="atmos_room_preset_live">Kayıt salonu</string>
+    <string name="atmos_room_preset_small_club">Küçük kulüp</string>
+    <string name="atmos_room_preset_large_club">Büyük kulüp</string>
+    <string name="atmos_room_preset_hall">Konser salonu</string>
+    <string name="atmos_room_preset_chapel">Taş şapel</string>
+    <string name="atmos_room_preset_round">Yuvarlak oda</string>
 </resources>

@@ -3576,4 +3576,14 @@
     <string name="atmos_envelope_width">Larghezza del soffitto</string>
     <string name="atmos_envelope_depth">Profondità del soffitto</string>
     <string name="atmos_envelope_curve">Curva delle pareti</string>
+    <string name="atmos_room_presets">Preimpostazioni</string>
+    <string name="atmos_room_preset_booth">Cabina voce</string>
+    <string name="atmos_room_preset_home">Home studio</string>
+    <string name="atmos_room_preset_control">Regia</string>
+    <string name="atmos_room_preset_live">Sala di ripresa</string>
+    <string name="atmos_room_preset_small_club">Piccolo club</string>
+    <string name="atmos_room_preset_large_club">Grande club</string>
+    <string name="atmos_room_preset_hall">Sala da concerto</string>
+    <string name="atmos_room_preset_chapel">Cappella in pietra</string>
+    <string name="atmos_room_preset_round">Stanza rotonda</string>
 </resources>

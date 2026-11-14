@@ -3433,8 +3433,15 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   with it off.
 - **The Room controls** (`AtmosRoomSection`) sit under the Room amount:
   Built-in room, each measured room that was added (with a delete), and My
-  room with its Width, Depth, Height and Damping and the room's lowest modes
-  (c / 2L, `atmos_room_modes`). The line under them is the room in use, with
+  room with its presets (`RoomPreset`: typical sizes for kinds of room,
+  named for the kind and never for a real venue, whose dimensions nobody
+  here has verified), its Width, Depth, Height and Damping, its shape
+  (Roundness, Ceiling width, Ceiling depth) and the room's lowest modes
+  (c / 2L, `atmos_room_modes`). A preset only fills those values: every one
+  stays the listener's to change, and a changed room is no preset's (its
+  chip is no longer selected). The room is drawn as it is described, leaning
+  from its floor; its sound is the box's of the same volume
+  (`CustomRoom.equivalentBox`), and its size line gives the size as set. The line under them is the room in use, with
   its measured decay; while it is being worked out it reads
   `atmos_room_working`. The room database is the HRTF browser over the
   collection's room folders (`SofaBrowser`, `SofaHrtfApi.ROOM_FOLDERS`); a

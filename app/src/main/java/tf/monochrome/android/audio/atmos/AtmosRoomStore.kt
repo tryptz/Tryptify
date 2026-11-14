@@ -102,11 +102,13 @@ class AtmosRoomStore @Inject constructor(@ApplicationContext context: Context) {
         AtmosRoom.of(floats)
     }.getOrNull()
 
+    /** The sound of [room]: worked out for the box that holds as much air (see [CustomRoom.equivalentBox]). */
     private fun build(room: CustomRoom): AtmosRoom? {
         if (!AtmosNative.isAvailable) return null
+        val box = room.equivalentBox()
         return AtmosRoom.of(
             runCatching {
-                AtmosNative.nativeBuildBoxRoom(room.width, room.depth, room.height, room.damping)
+                AtmosNative.nativeBuildBoxRoom(box.width, box.depth, box.height, box.damping)
             }.getOrNull()
         )
     }

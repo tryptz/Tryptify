@@ -46,7 +46,8 @@ uniform float3 uUp;
 uniform float3 uFwd;
 uniform float uFocal;      // focal length over the picture's height
 uniform float3 uRoom;      // width, depth, height
-uniform float uEar;        // ear height: the walls lean from here up
+uniform float uEar;        // ear height: where the waves' sheet is
+uniform float uLean;       // the height the walls lean from
 uniform float3 uCeil;      // ceiling width and depth as shares of the floor's; the walls' curve
 uniform float uCorner;     // corner radius
 uniform float3 uListener;
@@ -76,9 +77,9 @@ float hash(float2 p) {
     return fract((q.x + q.y) * q.z);
 }
 
-// How tFar in the walls have leaned at height z: 0 to ear height, 1 at the ceiling.
+// How far in the walls have leaned at height z: 0 up to where they start, 1 at the ceiling.
 float rise(float z) {
-    return pow(clamp((z - uEar) / max(uRoom.z - uEar, 0.001), 0.0, 1.0), uCeil.z);
+    return pow(clamp((z - uLean) / max(uRoom.z - uLean, 0.001), 0.0, 1.0), uCeil.z);
 }
 
 // Half the room's width and depth at height z.
@@ -115,7 +116,7 @@ float waves(float3 p) {
     return most > 0.0 ? sum / most : 0.0;
 }
 
-// A point of light seen along the ray: the square of how tFar the ray passes from it.
+// A point of light seen along the ray: the square of how far the ray passes from it.
 float passes(float3 ro, float3 rd, float3 p, float limit) {
     float3 to = p - ro;
     float along = dot(to, rd);
@@ -123,7 +124,7 @@ float passes(float3 ro, float3 rd, float3 p, float limit) {
     return dot(to, to) - along * along;
 }
 
-// How tFar the ray passes from the line a..b, squared.
+// How far the ray passes from the line a..b, squared.
 float passesLine(float3 ro, float3 rd, float3 a, float3 b) {
     float3 u = b - a;
     float3 w = ro - a;
@@ -201,7 +202,7 @@ half4 main(float2 fragCoord) {
             if (ts > 0.0 && ts < stop && room(p) < 0.0) {
                 float w = waves(p) * 2.6;
                 float crest = smoothstep(0.15, 0.75, w);
-                // Fainter tNear the walls, so the sheet has no edge.
+                // Fainter near the walls, so the sheet has no edge.
                 float inside = smoothstep(0.0, 0.5, -plan(p));
                 acc = under(acc, uPrimary, crest * uField * 0.9 * inside);
             }
@@ -299,7 +300,7 @@ half4 main(float2 fragCoord) {
         // The floor's metre grid.
         float2 cell = abs(fract(p.xy + 0.5) - 0.5);
         float grid = uGrid * onFloor * (1.0 - smoothstep(0.0, line, min(cell.x, cell.y))) * 0.5;
-        // The speakers' light on the surface tNear them.
+        // The speakers' light on the surface near them.
         float pool = 0.0;
         float3 poolTint = float3(0.0);
         for (int i = 0; i < 32; i++) {
@@ -502,6 +503,7 @@ internal class RoomShader {
         shader.setFloatUniform("uFocal", RoomCamera.FOCAL)
         shader.setFloatUniform("uRoom", shape.width, shape.depth, shape.height)
         shader.setFloatUniform("uEar", shape.earHeight)
+        shader.setFloatUniform("uLean", shape.leanStart)
         shader.setFloatUniform("uCeil", shape.ceilingWidth, shape.ceilingDepth, shape.curve)
         shader.setFloatUniform("uCorner", shape.cornerRadius)
         shader.setFloatUniform("uListener", shape.listenerX, shape.listenerY, shape.earHeight)

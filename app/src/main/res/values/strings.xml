@@ -3501,4 +3501,14 @@
     <string name="atmos_envelope_width">Ceiling width</string>
     <string name="atmos_envelope_depth">Ceiling depth</string>
     <string name="atmos_envelope_curve">Wall curve</string>
+    <string name="atmos_room_presets">Presets</string>
+    <string name="atmos_room_preset_booth">Vocal booth</string>
+    <string name="atmos_room_preset_home">Home studio</string>
+    <string name="atmos_room_preset_control">Control room</string>
+    <string name="atmos_room_preset_live">Live room</string>
+    <string name="atmos_room_preset_small_club">Small club</string>
+    <string name="atmos_room_preset_large_club">Large club</string>
+    <string name="atmos_room_preset_hall">Concert hall</string>
+    <string name="atmos_room_preset_chapel">Stone chapel</string>
+    <string name="atmos_room_preset_round">Round room</string>
 </resources>

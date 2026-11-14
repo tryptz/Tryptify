@@ -18,8 +18,10 @@ enum class RoomKind {
 /**
  * A room the listener describes: its size in metres, how much of the sound
  * its walls take up ([damping], 0..1: bare concrete is near 0.03, a furnished
- * living room about 0.25, a studio 0.5 and over), and how rounded its corners
- * are ([roundness], 0 a box to 1 as round as its floor plan allows).
+ * living room about 0.25, a studio 0.5 and over), how rounded its corners
+ * are ([roundness], 0 a box to 1 as round as its floor plan allows), and how
+ * its walls lean ([ceilingWidth] and [ceilingDepth]: the ceiling's size as a
+ * share of the floor's, 1 for upright walls).
  */
 @Serializable
 data class CustomRoom(
@@ -28,6 +30,8 @@ data class CustomRoom(
     val height: Float = 2.7f,
     val damping: Float = 0.25f,
     val roundness: Float = 0f,
+    val ceilingWidth: Float = 1f,
+    val ceilingDepth: Float = 1f,
 ) {
     fun clamped(): CustomRoom {
         fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
@@ -37,7 +41,40 @@ data class CustomRoom(
             height = height.c(MIN_HEIGHT, MAX_HEIGHT, 2.7f),
             damping = damping.c(MIN_DAMPING, MAX_DAMPING, 0.25f),
             roundness = roundness.c(0f, 1f, 0f),
+            ceilingWidth = ceilingWidth.c(MIN_CEILING, 1f, 1f),
+            ceilingDepth = ceilingDepth.c(MIN_CEILING, 1f, 1f),
         )
+    }
+
+    /** Whether the room is a plain box: square corners, upright walls. */
+    val isBox: Boolean get() = roundness <= 0f && ceilingWidth >= 1f && ceilingDepth >= 1f
+
+    /** The room's volume in cubic metres: its floor plan at each height, added up. */
+    fun volume(): Float {
+        val r = clamped()
+        var sum = 0.0
+        for (i in 0 until VOLUME_STEPS) {
+            val up = (i + 0.5f) / VOLUME_STEPS
+            val w = r.width * (1f - (1f - r.ceilingWidth) * up)
+            val d = r.depth * (1f - (1f - r.ceilingDepth) * up)
+            val corner = r.roundness * minOf(w, d) / 2f
+            sum += w * d - (4f - Math.PI.toFloat()) * corner * corner
+        }
+        return (sum / VOLUME_STEPS * r.height).toFloat()
+    }
+
+    /**
+     * The box of this room's volume, height and proportions. The render works
+     * a room's sound out for a box (`render/box_room.h`); a room that leans
+     * or is rounded is given the box that holds as much air, which rings for
+     * as long and as densely, though its reflections come from where a box's
+     * walls would be.
+     */
+    fun equivalentBox(): CustomRoom {
+        val r = clamped()
+        if (r.isBox) return r
+        val scale = kotlin.math.sqrt(r.volume() / (r.width * r.depth * r.height))
+        return CustomRoom(width = r.width * scale, depth = r.depth * scale, height = r.height, damping = r.damping)
     }
 
     /**
@@ -58,8 +95,27 @@ data class CustomRoom(
         const val MAX_HEIGHT = 12f
         const val MIN_DAMPING = 0.05f
         const val MAX_DAMPING = 0.7f
+        const val MIN_CEILING = 0.3f
         const val SPEED_OF_SOUND = 343f
+        private const val VOLUME_STEPS = 16
     }
+}
+
+/**
+ * A room to start from: typical sizes for a kind of room, not a survey of
+ * any one. Choosing one fills the listener's room with its values, which
+ * stay theirs to change.
+ */
+enum class RoomPreset(val room: CustomRoom) {
+    BOOTH(CustomRoom(width = 2.0f, depth = 2.4f, height = 2.3f, damping = 0.55f)),
+    HOME(CustomRoom(width = 3.6f, depth = 4.6f, height = 2.5f, damping = 0.32f)),
+    CONTROL(CustomRoom(width = 5.5f, depth = 7.0f, height = 3.2f, damping = 0.45f)),
+    LIVE(CustomRoom(width = 9f, depth = 12f, height = 5.5f, damping = 0.25f)),
+    SMALL_CLUB(CustomRoom(width = 10f, depth = 16f, height = 4f, damping = 0.30f)),
+    LARGE_CLUB(CustomRoom(width = 20f, depth = 30f, height = 9f, damping = 0.25f)),
+    HALL(CustomRoom(width = 22f, depth = 30f, height = 12f, damping = 0.18f, ceilingWidth = 0.8f)),
+    CHAPEL(CustomRoom(width = 8f, depth = 22f, height = 11f, damping = 0.06f, roundness = 0.2f, ceilingWidth = 0.6f)),
+    ROUND(CustomRoom(width = 9f, depth = 9f, height = 4.5f, damping = 0.20f, roundness = 1f)),
 }
 
 /**
@@ -163,6 +219,12 @@ data class RoomShape(
     val ceilingWidth: Float = 1f,
     val ceilingDepth: Float = 1f,
     val curve: Float = 1f,
+    /**
+     * The height the walls lean from; null is ear height, which is where the
+     * panning envelope begins to narrow. A room that is itself a trapezoid
+     * leans from its floor (0).
+     */
+    val leanFrom: Float? = null,
     val listenerX: Float = width / 2f,
     val listenerY: Float = depth / 2f,
     val earHeight: Float = minOf(EAR_HEIGHT, height / 2f),
@@ -173,10 +235,13 @@ data class RoomShape(
 ) {
     /** How far up the leaning part of the walls [z] metres is: 0 at ear height and below, 1 at the ceiling. */
     private fun rise(z: Float): Float {
-        val span = height - earHeight
+        val span = height - leanStart
         if (span <= 0f) return 0f
-        return Math.pow(((z - earHeight) / span).coerceIn(0f, 1f).toDouble(), curve.coerceIn(0.25f, 4f).toDouble()).toFloat()
+        return Math.pow(((z - leanStart) / span).coerceIn(0f, 1f).toDouble(), curve.coerceIn(0.25f, 4f).toDouble()).toFloat()
     }
+
+    /** The height the walls lean from, in metres. */
+    val leanStart: Float get() = (leanFrom ?: earHeight).coerceIn(0f, height)
 
     /** The share of the floor's width each side wall has leaned in by at [z] metres up. */
     fun leanX(z: Float): Float = (1f - ceilingWidth.coerceIn(MIN_CEILING, 1f)) / 2f * rise(z)
@@ -187,10 +252,13 @@ data class RoomShape(
     /** Whether the walls stand upright. */
     val upright: Boolean get() = ceilingWidth >= 1f && ceilingDepth >= 1f
 
-    /** This room with its walls leaning as [envelope] says, if it is on. */
+    /**
+     * This room with its walls leaning as [envelope] says, if it is on. A
+     * room whose own walls lean keeps them: they are where its walls are.
+     */
     fun within(envelope: PanEnvelope): RoomShape =
-        if (!envelope.enabled) this
-        else copy(ceilingWidth = envelope.ceilingWidth, ceilingDepth = envelope.ceilingDepth, curve = envelope.curve)
+        if (!envelope.enabled || (leanFrom != null && !upright)) this
+        else copy(ceilingWidth = envelope.ceilingWidth, ceilingDepth = envelope.ceilingDepth, curve = envelope.curve, leanFrom = null)
 
     /** How far a corner is rounded, in metres: up to half the shorter side. */
     val cornerRadius: Float get() = roundness.coerceIn(0f, 1f) * minOf(width, depth) / 2f
@@ -239,8 +307,9 @@ data class RoomShape(
      */
     fun wallHeights(): FloatArray = when {
         upright -> floatArrayOf(0f, height)
-        curve == 1f -> floatArrayOf(0f, earHeight, height)
-        else -> FloatArray(WALL_STEPS + 2) { if (it == 0) 0f else earHeight + (height - earHeight) * (it - 1) / WALL_STEPS }
+        curve == 1f && leanStart <= 0f -> floatArrayOf(0f, height)
+        curve == 1f -> floatArrayOf(0f, leanStart, height)
+        else -> FloatArray(WALL_STEPS + 2) { if (it == 0) 0f else leanStart + (height - leanStart) * (it - 1) / WALL_STEPS }
     }
 
     /** The floor's outline, clockwise from the front left: four corners, or their arcs. */
@@ -275,10 +344,10 @@ data class RoomShape(
      * image of the source in the surface, and where the line from it to the
      * listener goes through the surface. A source that stands on a surface
      * has none off it, and a turn that would fall outside the surface is not
-     * one. A leaning wall is taken as the flat one through its foot at ear
-     * height and its top at the ceiling (below ear height it stands upright,
-     * and a curved one is near that); rounded corners move the points very
-     * little.
+     * one. A leaning wall is taken as the flat one through its foot, where
+     * the lean begins, and its top at the ceiling (below that it stands
+     * upright, and a curved one is near that); rounded corners move the points
+     * very little.
      */
     fun firstReflections(sx: Float, sy: Float, sz: Float): List<Reflection> {
         val listener = floatArrayOf(listenerX, listenerY, earHeight)
@@ -317,12 +386,13 @@ data class RoomShape(
         val source = floatArrayOf(sx, sy, sz)
         val inX = leanX(height) * width   // how far a side wall is in at the ceiling
         val inY = leanY(height) * depth
-        val up = height - earHeight       // over which it leans
+        val foot = leanStart
+        val up = height - foot            // over which it leans
         val surfaces = arrayOf(
-            floatArrayOf(0f, 0f, earHeight, up, 0f, -inX),        // the left wall
-            floatArrayOf(width, 0f, earHeight, -up, 0f, -inX),    // the right wall
-            floatArrayOf(0f, 0f, earHeight, 0f, up, -inY),        // the wall ahead
-            floatArrayOf(0f, depth, earHeight, 0f, -up, -inY),    // the wall behind
+            floatArrayOf(0f, 0f, foot, up, 0f, -inX),        // the left wall
+            floatArrayOf(width, 0f, foot, -up, 0f, -inX),    // the right wall
+            floatArrayOf(0f, 0f, foot, 0f, up, -inY),        // the wall ahead
+            floatArrayOf(0f, depth, foot, 0f, -up, -inY),    // the wall behind
             floatArrayOf(0f, 0f, 0f, 0f, 0f, 1f),                 // the floor
             floatArrayOf(0f, 0f, height, 0f, 0f, -1f),            // the ceiling
         )
@@ -390,6 +460,9 @@ data class RoomShape(
                 depth = r.depth,
                 height = r.height,
                 roundness = r.roundness,
+                ceilingWidth = r.ceilingWidth,
+                ceilingDepth = r.ceilingDepth,
+                leanFrom = 0f,
                 listenerX = r.width * 0.44f,
                 listenerY = r.depth * 0.6f,
                 earHeight = ear,

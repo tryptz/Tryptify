@@ -47,7 +47,7 @@ for i,(x,y,z,lfe) in enumerate(L):
 fl=[i for i,(x,y,z,lfe) in enumerate(L) if x==0 and y==0 and z==0 and not lfe][0]; spk[fl][3]=1.0
 src4=np.zeros((12,4),'f4'); src4[0]=(*spk[fl][:3],1.0); ray=np.zeros((3,4),'f4'); ray[0]=(*spk[fl][:3],1.0)
 obj=np.zeros((32,4),'f4'); obj[0]=(RW*0.9,RD*0.9,ear,0.9)
-for n,v in dict(uRes=(W,H),uTime=[0.3],uEye=eye,uRight=right,uUp=up,uFwd=fwd,uFocal=[FOCAL],uRoom=(RW,RD,RH),uEar=[ear],uCeil=ceil,uCorner=[0.0],uListener=(2.5,2.5,ear),
+for n,v in dict(uRes=(W,H),uTime=[0.3],uEye=eye,uRight=right,uUp=up,uFwd=fwd,uFocal=[FOCAL],uRoom=(RW,RD,RH),uEar=[ear],uLean=[ear],uCeil=ceil,uCorner=[0.0],uListener=(2.5,2.5,ear),
                 uSpk=spk,uSpkKind=kind,uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
                 uWave=(1.3,1.0),uField=[0.42],uGlow=[0.3],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0]).items(): put(n,v)
 shader=eff.makeShader(skia.Data.MakeWithCopy(bytes(buf)))

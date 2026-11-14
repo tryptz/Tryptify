@@ -3576,4 +3576,14 @@
     <string name="atmos_envelope_width">Largeur au plafond</string>
     <string name="atmos_envelope_depth">Profondeur au plafond</string>
     <string name="atmos_envelope_curve">Courbe des murs</string>
+    <string name="atmos_room_presets">Préréglages</string>
+    <string name="atmos_room_preset_booth">Cabine voix</string>
+    <string name="atmos_room_preset_home">Home studio</string>
+    <string name="atmos_room_preset_control">Régie</string>
+    <string name="atmos_room_preset_live">Salle de prise</string>
+    <string name="atmos_room_preset_small_club">Petit club</string>
+    <string name="atmos_room_preset_large_club">Grand club</string>
+    <string name="atmos_room_preset_hall">Salle de concert</string>
+    <string name="atmos_room_preset_chapel">Chapelle en pierre</string>
+    <string name="atmos_room_preset_round">Salle ronde</string>
 </resources>

@@ -3420,4 +3420,14 @@
     <string name="atmos_envelope_width">天井の幅</string>
     <string name="atmos_envelope_depth">天井の奥行き</string>
     <string name="atmos_envelope_curve">壁のカーブ</string>
+    <string name="atmos_room_presets">プリセット</string>
+    <string name="atmos_room_preset_booth">ボーカルブース</string>
+    <string name="atmos_room_preset_home">ホームスタジオ</string>
+    <string name="atmos_room_preset_control">コントロールルーム</string>
+    <string name="atmos_room_preset_live">ライブルーム</string>
+    <string name="atmos_room_preset_small_club">小さなクラブ</string>
+    <string name="atmos_room_preset_large_club">大きなクラブ</string>
+    <string name="atmos_room_preset_hall">コンサートホール</string>
+    <string name="atmos_room_preset_chapel">石造りの礼拝堂</string>
+    <string name="atmos_room_preset_round">円形の部屋</string>
 </resources>

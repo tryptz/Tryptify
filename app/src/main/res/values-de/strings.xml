@@ -3498,4 +3498,14 @@
     <string name="atmos_envelope_width">Deckenbreite</string>
     <string name="atmos_envelope_depth">Deckentiefe</string>
     <string name="atmos_envelope_curve">Wandkrümmung</string>
+    <string name="atmos_room_presets">Voreinstellungen</string>
+    <string name="atmos_room_preset_booth">Gesangskabine</string>
+    <string name="atmos_room_preset_home">Heimstudio</string>
+    <string name="atmos_room_preset_control">Regieraum</string>
+    <string name="atmos_room_preset_live">Aufnahmeraum</string>
+    <string name="atmos_room_preset_small_club">Kleiner Club</string>
+    <string name="atmos_room_preset_large_club">Großer Club</string>
+    <string name="atmos_room_preset_hall">Konzertsaal</string>
+    <string name="atmos_room_preset_chapel">Steinkapelle</string>
+    <string name="atmos_room_preset_round">Runder Raum</string>
 </resources>

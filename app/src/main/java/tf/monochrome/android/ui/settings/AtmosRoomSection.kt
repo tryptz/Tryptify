@@ -1,8 +1,14 @@
 package tf.monochrome.android.ui.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.unit.dp
+import tf.monochrome.android.domain.model.RoomPreset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -62,6 +68,24 @@ internal fun AtmosRoomSection(
         if (profile.roomKind == RoomKind.CUSTOM) {
             val custom = profile.customRoom.clamped()
             fun set(next: CustomRoom) = onProfile(profile.copy(customRoom = next))
+            // Rooms to start from. Each fills the values below, which stay the listener's to change.
+            Text(
+                stringResource(R.string.atmos_room_presets),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RoomPreset.entries.forEach { preset ->
+                    FilterChip(
+                        selected = custom == preset.room.clamped(),
+                        onClick = { set(preset.room) },
+                        label = { Text(stringResource(presetName(preset))) },
+                    )
+                }
+            }
             LabeledSlider(
                 title = stringResource(R.string.atmos_room_width),
                 valueText = metres(custom.width),
@@ -90,6 +114,28 @@ internal fun AtmosRoomSection(
                 range = CustomRoom.MIN_DAMPING..CustomRoom.MAX_DAMPING,
                 onValueChange = { set(custom.copy(damping = it)) },
             )
+            // Its shape: rounded corners, and walls that lean in to a smaller ceiling.
+            LabeledSlider(
+                title = stringResource(R.string.atmos_room_roundness),
+                valueText = "${(custom.roundness * 100).toInt()}%",
+                value = custom.roundness,
+                range = 0f..1f,
+                onValueChange = { set(custom.copy(roundness = it)) },
+            )
+            LabeledSlider(
+                title = stringResource(R.string.atmos_envelope_width),
+                valueText = "${(custom.ceilingWidth * 100).toInt()}%",
+                value = custom.ceilingWidth,
+                range = CustomRoom.MIN_CEILING..1f,
+                onValueChange = { set(custom.copy(ceilingWidth = it)) },
+            )
+            LabeledSlider(
+                title = stringResource(R.string.atmos_envelope_depth),
+                valueText = "${(custom.ceilingDepth * 100).toInt()}%",
+                value = custom.ceilingDepth,
+                range = CustomRoom.MIN_CEILING..1f,
+                onValueChange = { set(custom.copy(ceilingDepth = it)) },
+            )
             val modes = custom.modesHz()
             RoomNote(stringResource(R.string.atmos_room_modes, hz(modes[0]), hz(modes[1]), hz(modes[2])))
         }
@@ -97,6 +143,15 @@ internal fun AtmosRoomSection(
         when {
             profile.roomKind == RoomKind.BUILT_IN -> Unit
             room == null -> RoomNote(stringResource(R.string.atmos_room_working))
+            // The listener's room is the size they gave it; its sound is a box's of the same volume.
+            profile.roomKind == RoomKind.CUSTOM -> profile.customRoom.clamped().let { c ->
+                RoomNote(
+                    stringResource(
+                        R.string.atmos_room_size,
+                        number(c.width), number(c.depth), number(c.height), seconds(room.decaySeconds),
+                    )
+                )
+            }
             !room.sized -> RoomNote(stringResource(R.string.atmos_room_unsized, seconds(room.decaySeconds)))
             room.height <= 0f -> RoomNote(
                 stringResource(R.string.atmos_room_plan, number(room.width), number(room.depth), seconds(room.decaySeconds))
@@ -145,6 +200,18 @@ private fun RoomNote(text: String) {
 
 @Composable
 private fun metres(value: Float) = stringResource(R.string.atmos_room_metres, number(value))
+
+private fun presetName(preset: RoomPreset): Int = when (preset) {
+    RoomPreset.BOOTH -> R.string.atmos_room_preset_booth
+    RoomPreset.HOME -> R.string.atmos_room_preset_home
+    RoomPreset.CONTROL -> R.string.atmos_room_preset_control
+    RoomPreset.LIVE -> R.string.atmos_room_preset_live
+    RoomPreset.SMALL_CLUB -> R.string.atmos_room_preset_small_club
+    RoomPreset.LARGE_CLUB -> R.string.atmos_room_preset_large_club
+    RoomPreset.HALL -> R.string.atmos_room_preset_hall
+    RoomPreset.CHAPEL -> R.string.atmos_room_preset_chapel
+    RoomPreset.ROUND -> R.string.atmos_room_preset_round
+}
 
 private fun number(value: Float) = String.format(Locale.getDefault(), "%.1f", value)
 private fun seconds(value: Float) = String.format(Locale.getDefault(), "%.2f", value)

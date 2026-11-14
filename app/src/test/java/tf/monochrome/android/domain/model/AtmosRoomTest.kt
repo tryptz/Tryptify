@@ -197,6 +197,58 @@ class AtmosRoomTest {
     }
 
     @Test
+    fun `a room of any shape sounds as the box that holds as much air`() {
+        // A box is its own.
+        val box = CustomRoom(width = 6f, depth = 8f, height = 3f)
+        assertTrue(box.isBox)
+        assertEquals(144f, box.volume(), 0.01f)
+        assertEquals(box, box.equivalentBox())
+        // Walls leaning to a ceiling half the size each way: 7/12 of the box
+        // (a frustum), and its box keeps the height and the proportions.
+        val leaning = box.copy(ceilingWidth = 0.5f, ceilingDepth = 0.5f)
+        assertFalse(leaning.isBox)
+        assertEquals(144f * 7f / 12f, leaning.volume(), 0.3f)
+        val same = leaning.equivalentBox()
+        assertTrue(same.isBox)
+        assertEquals(3f, same.height, 0f)
+        assertEquals(leaning.volume(), same.width * same.depth * same.height, 0.01f)
+        assertEquals(6f / 8f, same.width / same.depth, 1e-4f)
+        assertEquals(leaning.damping, same.damping, 0f)
+        // A fully round room on a square plan is a cylinder: pi r squared h.
+        val round = CustomRoom(width = 8f, depth = 8f, height = 4f, roundness = 1f)
+        assertEquals((Math.PI * 16.0 * 4.0).toFloat(), round.volume(), 0.05f)
+        assertTrue(round.equivalentBox().width < 8f)
+        // It is drawn as it is, leaning from its floor, whatever it sounds as.
+        val shape = RoomShape.of(leaning)
+        assertEquals(0f, shape.leanStart, 0f)
+        assertEquals(0.5f, shape.ceilingWidth, 0f)
+        assertEquals(0.125f, shape.leanX(1.5f), 1e-6f)              // half way up, half way in
+        assertEquals(listOf(0f, 3f), shape.wallHeights().toList())
+        assertEquals(1f, RoomShape.of(round).roundness, 0f)
+        // Its own lean is its walls: the panning envelope does not redraw them.
+        val envelope = PanEnvelope(enabled = true, ceilingWidth = 0.9f)
+        assertEquals(0.5f, shape.within(envelope).ceilingWidth, 0f)
+        assertEquals(0.9f, RoomShape.of(box).within(envelope).ceilingWidth, 0f)
+        assertEquals(RoomShape.EAR_HEIGHT, RoomShape.of(box).within(envelope).leanStart, 0f)
+    }
+
+    @Test
+    fun `every preset is a room that can be made, and no two are the same`() {
+        val rooms = RoomPreset.entries.map { it.room }
+        assertEquals(rooms.size, rooms.toSet().size)
+        for (preset in RoomPreset.entries) {
+            assertEquals("${preset.name} is out of range", preset.room, preset.room.clamped())
+            assertTrue(preset.room.volume() > 5f)
+        }
+        // Choosing one and changing a value leaves a room that is no preset's: it is the listener's.
+        val edited = RoomPreset.CONTROL.room.copy(width = 6.1f)
+        assertTrue(RoomPreset.entries.none { it.room == edited })
+        // A stored room from before shapes stands upright with square corners.
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        assertTrue(json.decodeFromString<CustomRoom>("""{"width":4.0,"depth":5.0,"height":2.5,"damping":0.3}""").isBox)
+    }
+
+    @Test
     fun `a room's file name is its name and nothing a path could use`() {
         assertEquals("OfficeII.room", AtmosRoomStore.fileName("OfficeII.sofa"))
         assertEquals("BRIR_CR1 KU-MICS.L.room", AtmosRoomStore.fileName("BRIR_CR1 KU-MICS.L"))
