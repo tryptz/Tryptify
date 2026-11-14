@@ -3591,4 +3591,9 @@
     <string name="atmos_room_preset_hall">Salle de concert</string>
     <string name="atmos_room_preset_chapel">Chapelle en pierre</string>
     <string name="atmos_room_preset_round">Salle ronde</string>
+    <string name="debug_live_log">Journal en direct</string>
+    <string name="debug_live_log_on">Journal en direct activé pour 30 minutes : le journal de l\'app est envoyé à votre compte au fur et à mesure, où un développeur qui vous aide peut le lire.</string>
+    <string name="debug_live_log_off">Journal en direct désactivé</string>
+    <string name="debug_live_log_signed_out">Connectez-vous pour utiliser le journal en direct</string>
+    <string name="debug_live_log_failed">Le journal en direct s\'est arrêté : le serveur ne l\'a pas accepté</string>
 </resources>

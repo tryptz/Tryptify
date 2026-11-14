@@ -3513,4 +3513,9 @@
     <string name="atmos_room_preset_hall">Konser salonu</string>
     <string name="atmos_room_preset_chapel">Taş şapel</string>
     <string name="atmos_room_preset_round">Yuvarlak oda</string>
+    <string name="debug_live_log">Canlı günlük</string>
+    <string name="debug_live_log_on">Canlı günlük 30 dakikalığına açık: uygulamanın günlüğü yazıldıkça hesabına gönderilir, sana yardım eden bir geliştirici orada okuyabilir.</string>
+    <string name="debug_live_log_off">Canlı günlük kapalı</string>
+    <string name="debug_live_log_signed_out">Canlı günlüğü kullanmak için oturum aç</string>
+    <string name="debug_live_log_failed">Canlı günlük durdu: sunucu kabul etmedi</string>
 </resources>

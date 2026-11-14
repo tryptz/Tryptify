@@ -18,6 +18,7 @@ class DebugLogBuffer @Inject constructor() {
 
     private val lock = Any()
     private val entries = ArrayDeque<DebugLogEntry>(INITIAL_CAPACITY)
+    private var appended = 0L   // lines ever taken: a line's number is its place in that count
 
     /**
      * Coalescing change notification. `extraBufferCapacity` + DROP_OLDEST so a
@@ -46,6 +47,7 @@ class DebugLogBuffer @Inject constructor() {
         }
         synchronized(lock) {
             entries.addLast(clean)
+            appended++
             while (entries.size > MAX_ENTRIES) entries.removeFirst()
         }
         _updates.tryEmit(Unit)
@@ -54,6 +56,25 @@ class DebugLogBuffer @Inject constructor() {
     fun snapshot(): List<DebugLogEntry> = synchronized(lock) { entries.toList() }
 
     fun size(): Int = synchronized(lock) { entries.size }
+
+    /** How many lines have ever been taken: the number the next one will have. */
+    fun appended(): Long = synchronized(lock) { appended }
+
+    /** Lines read by number: [entries], the number to ask from next time, and how many had already gone. */
+    class Lines(val entries: List<DebugLogEntry>, val next: Long, val missed: Long)
+
+    /**
+     * Up to [limit] lines from number [from] on, for a reader that follows
+     * the log (see [LiveLog]). Lines the buffer has let go of since are
+     * counted in [Lines.missed], not handed over.
+     */
+    fun since(from: Long, limit: Int): Lines = synchronized(lock) {
+        val oldest = appended - entries.size
+        val start = from.coerceIn(oldest, appended)
+        val count = minOf(limit.toLong(), appended - start).toInt()
+        val first = (start - oldest).toInt()
+        Lines(List(count) { entries[first + it] }, start + count, (start - from).coerceAtLeast(0))
+    }
 
     fun clear() {
         synchronized(lock) { entries.clear() }

@@ -16,12 +16,19 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import tf.monochrome.android.debug.DebugLogBuffer
 import tf.monochrome.android.debug.DebugLogEntry
+import tf.monochrome.android.debug.LiveLog
 import javax.inject.Inject
 
 @HiltViewModel
 class DebugLogViewModel @Inject constructor(
     private val buffer: DebugLogBuffer,
+    private val liveLog: LiveLog,
 ) : ViewModel() {
+
+    /** Whether the log is being sent as it is written (see [LiveLog]). */
+    val live: StateFlow<LiveLog.State> = liveLog.state
+
+    fun setLive(on: Boolean) = if (on) liveLog.start() else liveLog.stop()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()

@@ -3591,4 +3591,9 @@
     <string name="atmos_room_preset_hall">Sala da concerto</string>
     <string name="atmos_room_preset_chapel">Cappella in pietra</string>
     <string name="atmos_room_preset_round">Stanza rotonda</string>
+    <string name="debug_live_log">Log in diretta</string>
+    <string name="debug_live_log_on">Log in diretta attivo per 30 minuti: il log dell\'app viene inviato al tuo account mentre viene scritto, dove uno sviluppatore che ti aiuta può leggerlo.</string>
+    <string name="debug_live_log_off">Log in diretta disattivato</string>
+    <string name="debug_live_log_signed_out">Accedi per usare il log in diretta</string>
+    <string name="debug_live_log_failed">Il log in diretta si è fermato: il server non lo ha accettato</string>
 </resources>

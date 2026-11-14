@@ -3591,4 +3591,9 @@
     <string name="atmos_room_preset_hall">Sala de conciertos</string>
     <string name="atmos_room_preset_chapel">Capilla de piedra</string>
     <string name="atmos_room_preset_round">Sala redonda</string>
+    <string name="debug_live_log">Registro en vivo</string>
+    <string name="debug_live_log_on">Registro en vivo activado durante 30 minutos: el registro de la app se envía a tu cuenta según se escribe, donde un desarrollador que te ayuda puede leerlo.</string>
+    <string name="debug_live_log_off">Registro en vivo desactivado</string>
+    <string name="debug_live_log_signed_out">Inicia sesión para usar el registro en vivo</string>
+    <string name="debug_live_log_failed">El registro en vivo se detuvo: el servidor no lo aceptó</string>
 </resources>

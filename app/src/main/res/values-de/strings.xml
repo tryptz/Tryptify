@@ -3513,4 +3513,9 @@
     <string name="atmos_room_preset_hall">Konzertsaal</string>
     <string name="atmos_room_preset_chapel">Steinkapelle</string>
     <string name="atmos_room_preset_round">Runder Raum</string>
+    <string name="debug_live_log">Live-Protokoll</string>
+    <string name="debug_live_log_on">Live-Protokoll für 30 Minuten an: Das Protokoll der App wird laufend an dein Konto gesendet, wo ein Entwickler, der dir hilft, es lesen kann.</string>
+    <string name="debug_live_log_off">Live-Protokoll aus</string>
+    <string name="debug_live_log_signed_out">Melde dich an, um das Live-Protokoll zu nutzen</string>
+    <string name="debug_live_log_failed">Das Live-Protokoll wurde gestoppt: Der Server hat es nicht angenommen</string>
 </resources>

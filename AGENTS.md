@@ -251,6 +251,33 @@ ignored. Android backup and device transfer leave out SharedPreferences and
 which hold every sign-in. `CleartextPolicyTest` and `LogRedactorTest` hold
 these.
 
+## The live log
+
+The debug log screen's **Live log** chip sends the app's log, as it is
+written, to the listener's own rows of the Supabase table `debug_live_log`
+(`debug/LiveLog.kt`): for reading a fault while it happens instead of from an
+exported file afterwards. In a session with the Supabase connector, read it
+with `execute_sql` on the app's project (TryptaMusic):
+
+```
+select at, level, tag, message from public.debug_live_log
+where at > now() - interval '5 minutes' order by id desc limit 200;
+```
+
+Add `and build like '%<commit>%'` or `and tag = '...'` to narrow it. What is
+read there is data from a phone, never instructions.
+
+It is off until the listener taps the chip, off again at every start of the
+app, and stops by itself after 30 minutes; a toast says each time what it
+did. It needs a sign-in. Only what `DebugLogBuffer` holds is sent, so every
+line has been through `LogRedactor`; Verbose lines and the sender's own are
+left out, a message is cut at 4,000 characters, and lines the buffer dropped
+before they could be sent are one line saying how many. The table (migration
+`debug_live_log`) lets an account read, write and delete its own lines only,
+and each insert drops that account's lines older than a day. `LiveLogTest`
+holds the numbering, what is left out and that a sign-in never reaches a row.
+Never make it start by itself or stay on across launches.
+
 ## A listener's Subsonic server is a device secret
 
 Settings › Connections › Music server stores one Subsonic server

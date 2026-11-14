@@ -3435,4 +3435,9 @@
     <string name="atmos_room_preset_hall">音乐厅</string>
     <string name="atmos_room_preset_chapel">石砌礼拜堂</string>
     <string name="atmos_room_preset_round">圆形房间</string>
+    <string name="debug_live_log">实时日志</string>
+    <string name="debug_live_log_on">实时日志已开启 30 分钟：应用日志会实时发送到你的账号，协助你的开发者可以读取。</string>
+    <string name="debug_live_log_off">实时日志已关闭</string>
+    <string name="debug_live_log_signed_out">登录后才能使用实时日志</string>
+    <string name="debug_live_log_failed">实时日志已停止：服务器未接收</string>
 </resources>

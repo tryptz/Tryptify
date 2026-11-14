@@ -3435,4 +3435,9 @@
     <string name="atmos_room_preset_hall">コンサートホール</string>
     <string name="atmos_room_preset_chapel">石造りの礼拝堂</string>
     <string name="atmos_room_preset_round">円形の部屋</string>
+    <string name="debug_live_log">ライブログ</string>
+    <string name="debug_live_log_on">ライブログを30分間オンにしました：アプリのログは書かれるたびにあなたのアカウントに送られ、サポートする開発者が読めます。</string>
+    <string name="debug_live_log_off">ライブログをオフにしました</string>
+    <string name="debug_live_log_signed_out">ライブログを使うにはサインインしてください</string>
+    <string name="debug_live_log_failed">ライブログを停止しました：サーバーが受け取りませんでした</string>
 </resources>

@@ -1,5 +1,8 @@
 package tf.monochrome.android.ui.debug
 
+import androidx.compose.ui.res.stringResource
+import tf.monochrome.android.R
+import tf.monochrome.android.debug.LiveLog
 import tf.monochrome.android.ui.navigation.popBackStackSafe
 import android.content.Context
 import android.content.Intent
@@ -71,6 +74,22 @@ fun DebugLogScreen(
     val levelFilter by viewModel.levelFilter.collectAsStateWithLifecycle()
     val totalSize by viewModel.totalSize.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // The live log says what it did: it sends the log off the phone, which
+    // nobody should find out from a chip's colour alone.
+    val live by viewModel.live.collectAsStateWithLifecycle()
+    var liveSaid by remember { mutableStateOf(live) }
+    LaunchedEffect(live) {
+        if (live == liveSaid) return@LaunchedEffect
+        liveSaid = live
+        val said = when (live) {
+            LiveLog.State.ON -> R.string.debug_live_log_on
+            LiveLog.State.OFF -> R.string.debug_live_log_off
+            LiveLog.State.SIGNED_OUT -> R.string.debug_live_log_signed_out
+            LiveLog.State.FAILED -> R.string.debug_live_log_failed
+        }
+        Toast.makeText(context, said, Toast.LENGTH_LONG).show()
+    }
 
     var showClearConfirm by remember { mutableStateOf(false) }
     if (showClearConfirm) {
@@ -203,6 +222,12 @@ fun DebugLogScreen(
                             onClick = { viewModel.setLevelFilter(option) },
                         )
                     }
+                    tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                        label = stringResource(R.string.debug_live_log),
+                        selected = live == LiveLog.State.ON,
+                        accent = MaterialTheme.colorScheme.primary,
+                        onClick = { viewModel.setLive(live != LiveLog.State.ON) },
+                    )
                 }
             },
         ) { searchTopInset ->

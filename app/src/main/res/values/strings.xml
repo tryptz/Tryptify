@@ -3517,4 +3517,9 @@
     <string name="atmos_room_preset_chapel">Stone chapel</string>
     <string name="atmos_room_preset_round">Round room</string>
     <string name="atmos_room_preset_stereo" translatable="false">Stereo Montréal</string>
+    <string name="debug_live_log">Live log</string>
+    <string name="debug_live_log_on">Live log on for 30 minutes: the app\'s log goes to your account as it is written, where a developer helping you can read it.</string>
+    <string name="debug_live_log_off">Live log off</string>
+    <string name="debug_live_log_signed_out">Sign in to use the live log</string>
+    <string name="debug_live_log_failed">The live log stopped: the server did not take it</string>
 </resources>
