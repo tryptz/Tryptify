@@ -3442,6 +3442,7 @@
     <string name="atmos_ear_q">Q</string>
     <string name="atmos_ear_band">高さの帯域</string>
     <string name="atmos_ear_pad_help">調整パッド。点をドラッグ：左右は耳の大きさ、上下は音量。白いハンドルを斜めにドラッグすると Q が変わります。</string>
+    <string name="atmos_ear_not_heard">今は聞こえません：バーチャルルームを通る音がありません。チューナーはヘッドホンでの Atmos とサラウンドの曲に効きます。ステレオの曲はルームを通りません。</string>
     <string name="atmos_room_presets">プリセット</string>
     <string name="atmos_room_preset_booth">ボーカルブース</string>
     <string name="atmos_room_preset_home">ホームスタジオ</string>

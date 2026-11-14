@@ -180,6 +180,35 @@ class StereoUpmixerTest {
         assertTrue(AudioProcessor.EMPTY_BUFFER === p.getOutput())
     }
 
+    @Test
+    fun `turned on while out of the chain it asks to be configured, once`() {
+        val p = UpmixProcessor()
+        var asked = 0
+        p.onNeedsConfigure = { asked++ }
+        p.setEnabled(true)
+        assertEquals(1, asked)
+        // Where it cannot join (the fold is off), a configure leaves it out of the chain...
+        p.foldEnabled = false
+        assertEquals(AudioFormat.NOT_SET, p.configure(AudioFormat(rate, 2, C.ENCODING_PCM_FLOAT)))
+        // ...and the mix, loaded again by that configure, says once more that it is on.
+        // That is not being turned on: asking again here took the song's audio track
+        // out and put it back every two seconds, for ever.
+        repeat(5) { p.setEnabled(true) }
+        assertEquals(1, asked)
+        // Off and on again is the listener's doing, and asks.
+        p.setEnabled(false)
+        p.setEnabled(true)
+        assertEquals(2, asked)
+        // In the chain already, there is nothing to ask for.
+        p.foldEnabled = true
+        p.setEnabled(false)
+        assertEquals(16, p.apply { setEnabled(true) }.configure(AudioFormat(rate, 2, C.ENCODING_PCM_FLOAT)).channelCount)
+        val before = asked
+        p.setEnabled(false)
+        p.setEnabled(true)
+        assertEquals(before, asked)
+    }
+
     private companion object {
         const val BLOCK = 1024
     }

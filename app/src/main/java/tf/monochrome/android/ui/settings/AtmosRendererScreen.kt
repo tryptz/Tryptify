@@ -801,6 +801,8 @@ fun AtmosRendererScreen(
                     tune = profile.earTune,
                     // A new head has its own curve: the graph is asked for again.
                     head = profile.hrtfProfileId,
+                    // The room's meter answers only while a song plays through the room.
+                    heard = roomSpeakers != null,
                     onTune = viewModel::tuneEar,
                     curve = viewModel::earCurve,
                 )

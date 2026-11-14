@@ -73,11 +73,18 @@ import kotlin.math.roundToInt
  * drawing of the settings: it is the filter that plays, asked of the renderer
  * ([curve]) for a sound from above at the nearer ear, as the head has it and
  * as the tuning makes it. Everything is heard while it is dragged ([onTune]).
+ *
+ * It is heard only in what plays through the virtual room: an Atmos or a
+ * surround song on headphones. A stereo song does not go through the room,
+ * and then the pad moves and the graph with it and nothing is heard, which
+ * reads as a control that is broken (the owner, 2026-11-14, on a stereo
+ * song). So while nothing plays through the room ([heard] false) it says so.
  */
 @Composable
 internal fun EarTunerSection(
     tune: EarTune,
     head: String?,
+    heard: Boolean,
     onTune: (EarTune) -> Unit,
     curve: suspend (EarTune, FloatArray) -> FloatArray?,
 ) {
@@ -91,6 +98,12 @@ internal fun EarTunerSection(
                 stringResource(R.string.atmos_ear_tuner_summary),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!heard) Text(
+                stringResource(R.string.atmos_ear_not_heard),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.tertiary,
             )
             var held by remember { mutableStateOf(PadHold.NONE) }
             var curves by remember { mutableStateOf<FloatArray?>(null) }

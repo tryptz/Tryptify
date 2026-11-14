@@ -3559,6 +3559,11 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
     at ear level (`EarTune::height_share`). On the speakers above alone it
     was heard only where a mix has something overhead, and the owner took
     the control for broken. Never narrow it to the height speakers again.
+  - **It says when it is not heard.** The tuner acts on what plays through
+    the virtual room; a stereo song does not. While the room's meter has
+    nothing (`heard` false) a line in the tertiary colour says so
+    (`atmos_ear_not_heard`). Without it the pad and the graph move over a
+    stereo song and nothing changes, and the control reads as broken.
   - **It is heard while it is dragged**: `AtmosRendererViewModel.tuneEar`
     hands each move to the renderer at once, ahead of the profile's save,
     which waits for the hand to rest. Never route it through the save alone.

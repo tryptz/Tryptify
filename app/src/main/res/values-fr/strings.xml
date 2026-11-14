@@ -3598,6 +3598,7 @@
     <string name="atmos_ear_q">Q</string>
     <string name="atmos_ear_band">Bande de hauteur</string>
     <string name="atmos_ear_pad_help">Pavé de réglage. Faites glisser le point : de côté pour la taille de l’oreille, de haut en bas pour le volume. Faites glisser la poignée blanche le long de sa diagonale pour Q.</string>
+    <string name="atmos_ear_not_heard">Inaudible pour l’instant : rien ne passe par la pièce virtuelle. Le réglage agit sur les titres Atmos et surround au casque. Un titre stéréo ne passe pas par la pièce.</string>
     <string name="atmos_room_presets">Préréglages</string>
     <string name="atmos_room_preset_booth">Cabine voix</string>
     <string name="atmos_room_preset_home">Home studio</string>

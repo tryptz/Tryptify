@@ -46,9 +46,18 @@ class UpmixProcessor @Inject constructor() : AudioProcessor {
     private var out = FloatArray(0)
 
     fun setEnabled(on: Boolean) {
+        val was = enabled
         enabled = on
         upmixer?.enabled = on
-        if (on && pendingFormat == AudioFormat.NOT_SET) onNeedsConfigure?.invoke()
+        // Only when it is turned on, never when it is merely said again to be
+        // on. Configuring the chain again rebuilds the mixer's engine, which
+        // loads the mix again and says "the upmix is on" once more; where the
+        // upmix cannot join the stream (the fold is off, or the Atmos stage
+        // has it), it was out of the chain each time, asked for another
+        // configure, and the song's audio track was taken out and put back
+        // every two seconds for as long as it played (the live log,
+        // 2026-11-14: 22 times in a minute).
+        if (on && !was && pendingFormat == AudioFormat.NOT_SET) onNeedsConfigure?.invoke()
     }
 
     /**

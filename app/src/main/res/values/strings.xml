@@ -3523,6 +3523,7 @@
     <string name="atmos_ear_q">Q</string>
     <string name="atmos_ear_band">Height band</string>
     <string name="atmos_ear_pad_help">Tuning pad. Drag the dot: sideways is ear size, up and down is volume. Drag the white handle along its diagonal for Q.</string>
+    <string name="atmos_ear_not_heard">Not heard right now: nothing is playing through the virtual room. The tuner works on Atmos and surround songs on headphones. A stereo song does not go through the room.</string>
     <string name="atmos_room_presets">Presets</string>
     <string name="atmos_room_preset_booth">Vocal booth</string>
     <string name="atmos_room_preset_home">Home studio</string>

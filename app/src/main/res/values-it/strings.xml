@@ -3598,6 +3598,7 @@
     <string name="atmos_ear_q">Q</string>
     <string name="atmos_ear_band">Banda dell’altezza</string>
     <string name="atmos_ear_pad_help">Riquadro di regolazione. Trascina il punto: di lato è la dimensione dell’orecchio, su e giù è il volume. Trascina la maniglia bianca lungo la sua diagonale per Q.</string>
+    <string name="atmos_ear_not_heard">Ora non si sente: nulla sta passando per la stanza virtuale. La regolazione agisce sui brani Atmos e surround in cuffia. Un brano stereo non passa per la stanza.</string>
     <string name="atmos_room_presets">Preimpostazioni</string>
     <string name="atmos_room_preset_booth">Cabina voce</string>
     <string name="atmos_room_preset_home">Home studio</string>
