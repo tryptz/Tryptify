@@ -62,7 +62,11 @@ class LiveLog @Inject constructor(
             return
         }
         _state.value = State.ON
-        job = scope.launch { _state.value = send(uid) }
+        // With the log, every moment the app stops drawing: what a stutter looks like from here.
+        FrameStallLog.start()
+        job = scope.launch {
+            _state.value = try { send(uid) } finally { FrameStallLog.stop() }
+        }
     }
 
     fun stop() {

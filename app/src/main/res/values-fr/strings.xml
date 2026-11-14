@@ -3638,4 +3638,10 @@
     <string name="assistant_start_over">Recommencer</string>
     <string name="assistant_err_too_long">Cela a demandé plus d\'étapes qu\'un tour n\'en permet. Redemandez, ou recommencez.</string>
     <string name="assistant_err_other">Claude n\'a pas pu traiter cette demande</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">Le plus capable, et le plus cher des trois</string>
+    <string name="assistant_model_sonnet_note">Entre les deux : environ la moitié du prix d\'Opus</string>
+    <string name="assistant_model_haiku_note">Le plus rapide et de loin le moins cher ; moins soigneux avec les images et les longues demandes</string>
 </resources>

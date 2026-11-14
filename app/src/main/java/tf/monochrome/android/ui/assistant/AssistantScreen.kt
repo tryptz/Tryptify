@@ -65,6 +65,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import tf.monochrome.android.R
 import tf.monochrome.android.data.assistant.Assistant
+import tf.monochrome.android.data.assistant.ClaudeModel
+import androidx.compose.material3.FilterChip
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.ui.navigation.LocalBottomChromeInset
 import tf.monochrome.android.ui.navigation.Screen
@@ -91,6 +93,10 @@ class AssistantViewModel @Inject constructor(
     val hasKey: StateFlow<Boolean> = preferences.claudeApiKey.map { it.isNotEmpty() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val auto: StateFlow<Boolean> = assistant.auto
+    val model: StateFlow<ClaudeModel> = preferences.claudeModel.map { ClaudeModel.of(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ClaudeModel.DEFAULT)
+
+    fun setModel(model: ClaudeModel) = viewModelScope.launch { preferences.setClaudeModel(model.stored) }
 
     private val conversation = Assistant.Conversation()
     private var nextId = 0L
@@ -290,6 +296,8 @@ fun AssistantScreen(
             }
             Switch(checked = auto, onCheckedChange = viewModel::setAuto)
         }
+        val model by viewModel.model.collectAsStateWithLifecycle()
+        ClaudeModelChips(model = model, onModel = viewModel::setModel, modifier = Modifier.padding(horizontal = 20.dp))
 
         LazyColumn(
             state = list,
@@ -346,6 +354,43 @@ fun AssistantScreen(
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.assistant_send))
             }
         }
+    }
+}
+
+/** Which model the key is spent on: the most able, the middle one, or the cheapest. One choice for the whole app. */
+@Composable
+fun ClaudeModelChips(model: ClaudeModel, onModel: (ClaudeModel) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (option in ClaudeModel.entries) {
+                FilterChip(
+                    selected = option == model,
+                    onClick = { onModel(option) },
+                    label = {
+                        Text(
+                            stringResource(
+                                when (option) {
+                                    ClaudeModel.OPUS -> R.string.assistant_model_opus
+                                    ClaudeModel.SONNET -> R.string.assistant_model_sonnet
+                                    ClaudeModel.HAIKU -> R.string.assistant_model_haiku
+                                }
+                            )
+                        )
+                    },
+                )
+            }
+        }
+        Text(
+            stringResource(
+                when (model) {
+                    ClaudeModel.OPUS -> R.string.assistant_model_opus_note
+                    ClaudeModel.SONNET -> R.string.assistant_model_sonnet_note
+                    ClaudeModel.HAIKU -> R.string.assistant_model_haiku_note
+                }
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

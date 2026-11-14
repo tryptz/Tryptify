@@ -3560,4 +3560,10 @@
     <string name="assistant_start_over">Baştan başla</string>
     <string name="assistant_err_too_long">Bu, bir turun izin verdiğinden fazla adım gerektirdi. Tekrar sor ya da baştan başla.</string>
     <string name="assistant_err_other">Claude bu isteği işleyemedi</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">En yeteneklisi ve üçü arasında en pahalısı</string>
+    <string name="assistant_model_sonnet_note">Arada: Opus\'un yaklaşık yarı fiyatı</string>
+    <string name="assistant_model_haiku_note">En hızlısı ve açık ara en ucuzu; resimlerde ve uzun isteklerde daha az titiz</string>
 </resources>

@@ -231,6 +231,8 @@ class PreferencesManager @Inject constructor(
         // The listener's own Claude API key, for the assistant. Device-local
         // like every sign-in: never in SETTINGS_SYNC_KEYS.
         private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
+        // Which model that key is spent on. With the key, on this device only.
+        private val CLAUDE_MODEL = stringPreferencesKey("claude_model")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -1169,6 +1171,13 @@ class PreferencesManager @Inject constructor(
 
     /** The listener's own Claude API key, empty when none is saved. A device secret: see AGENTS.md. */
     val claudeApiKey: Flow<String> = dataStore.data.map { prefs -> prefs[CLAUDE_API_KEY].orEmpty() }
+
+    /** The model the assistant uses (`ClaudeModel.stored`); empty until one is chosen. */
+    val claudeModel: Flow<String> = dataStore.data.map { prefs -> prefs[CLAUDE_MODEL].orEmpty() }
+
+    suspend fun setClaudeModel(stored: String) {
+        dataStore.edit { it[CLAUDE_MODEL] = stored }
+    }
 
     /** Saves the Claude API key, or forgets it when blank. */
     suspend fun setClaudeApiKey(key: String) {

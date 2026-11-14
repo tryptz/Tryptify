@@ -42,7 +42,7 @@ class ClaudeEqClient @Inject constructor() {
     }
 
     /** [jpeg] is the picture, already made small enough to send, or null for none. */
-    suspend fun ask(apiKey: String, jpeg: ByteArray?, request: String): Result = withContext(Dispatchers.IO) {
+    suspend fun ask(apiKey: String, model: ClaudeModel, jpeg: ByteArray?, request: String): Result = withContext(Dispatchers.IO) {
         try {
             val content = buildList {
                 if (jpeg != null) {
@@ -62,7 +62,7 @@ class ClaudeEqClient @Inject constructor() {
                 add(ContentBlockParam.ofText(TextBlockParam.builder().text(request).build()))
             }
             val params = MessageCreateParams.builder()
-                .model(MODEL)
+                .model(model.id)
                 .maxTokens(MAX_TOKENS)
                 .system(ClaudeEq.SYSTEM)
                 .outputConfig(
@@ -118,7 +118,6 @@ class ClaudeEqClient @Inject constructor() {
     }
 
     private companion object {
-        const val MODEL = "claude-opus-5-5"
         const val MAX_TOKENS = 16_000L
     }
 }

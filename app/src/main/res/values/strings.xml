@@ -3564,4 +3564,10 @@
     <string name="assistant_start_over">Start over</string>
     <string name="assistant_err_too_long">That took more steps than one turn allows. Ask again, or start over.</string>
     <string name="assistant_err_other">Claude could not take that request</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">Most able, and the most expensive of the three</string>
+    <string name="assistant_model_sonnet_note">In between: about half the price of Opus</string>
+    <string name="assistant_model_haiku_note">Fastest and by far the cheapest; less careful with pictures and long requests</string>
 </resources>

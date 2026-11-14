@@ -3560,4 +3560,10 @@
     <string name="assistant_start_over">Neu beginnen</string>
     <string name="assistant_err_too_long">Das brauchte mehr Schritte, als eine Runde erlaubt. Frag erneut oder beginne neu.</string>
     <string name="assistant_err_other">Claude konnte diese Anfrage nicht verarbeiten</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">Am fähigsten und das teuerste der drei</string>
+    <string name="assistant_model_sonnet_note">Dazwischen: etwa der halbe Preis von Opus</string>
+    <string name="assistant_model_haiku_note">Am schnellsten und mit Abstand am günstigsten; bei Bildern und langen Anfragen weniger sorgfältig</string>
 </resources>

@@ -59,6 +59,8 @@ import kotlinx.coroutines.withContext
 import tf.monochrome.android.R
 import tf.monochrome.android.data.assistant.ClaudeEq
 import tf.monochrome.android.data.assistant.ClaudeEqClient
+import tf.monochrome.android.data.assistant.ClaudeModel
+import tf.monochrome.android.ui.assistant.ClaudeModelChips
 import tf.monochrome.android.data.import_.ParsedEqProfile
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.EqBand
@@ -92,6 +94,11 @@ class AskClaudeEqViewModel @Inject constructor(
 
     fun forgetKey() = viewModelScope.launch { preferences.setClaudeApiKey("") }
 
+    val model: StateFlow<ClaudeModel> = preferences.claudeModel.map { ClaudeModel.of(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ClaudeModel.DEFAULT)
+
+    fun setModel(model: ClaudeModel) = viewModelScope.launch { preferences.setClaudeModel(model.stored) }
+
     /** Asks for filters from [picture], [wish] and, when given, the filters in use. */
     fun ask(picture: Uri?, wish: String, current: List<EqBand>?, currentPreamp: Float) {
         if (picture == null && wish.isBlank()) {
@@ -106,7 +113,8 @@ class AskClaudeEqViewModel @Inject constructor(
                 _state.value = AskClaudeState.Failed(R.string.eq_claude_err_picture)
                 return@launch
             }
-            _state.value = when (val result = client.ask(key, jpeg, ClaudeEq.request(wish, current, currentPreamp))) {
+            val model = ClaudeModel.of(preferences.claudeModel.first())
+            _state.value = when (val result = client.ask(key, model, jpeg, ClaudeEq.request(wish, current, currentPreamp))) {
                 is ClaudeEqClient.Result.Proposed ->
                     if (result.proposal.profile.bands.isEmpty() && result.proposal.summary.isEmpty()) {
                         AskClaudeState.Failed(R.string.eq_claude_err_answer)
@@ -218,6 +226,8 @@ fun AskClaudeEqSheet(
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                val model by viewModel.model.collectAsStateWithLifecycle()
+                ClaudeModelChips(model = model, onModel = viewModel::setModel)
                 if (currentBands.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = fromCurrent, onCheckedChange = { fromCurrent = it })

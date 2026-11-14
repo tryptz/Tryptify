@@ -278,6 +278,11 @@ and each insert drops that account's lines older than a day. `LiveLogTest`
 holds the numbering, what is left out and that a sign-in never reaches a row.
 Never make it start by itself or stay on across launches.
 
+While it is on, `FrameStallLog` adds a line (tag `FrameStall`) for every
+gap of 120 ms or more between two frames, with the screen it happened on:
+"no frame for 840 ms on equalizer". It is how a reported stutter is seen
+from a session, with its length and place, before anyone names a cause.
+
 ## A listener's Subsonic server is a device secret
 
 Settings › Connections › Music server stores one Subsonic server
@@ -338,6 +343,10 @@ APK for it (`app/src/main/assets/assistant/manual.md`; `docs/manual.md`
 points there): keep the manual true to the app, since the assistant is told
 to say nothing the manual does not support.
 
+- **The model is the listener's choice** (`ClaudeModel`: Opus, Sonnet or
+  Haiku 5.5; the DataStore key `claude_model`, device-local with the key),
+  one choice for the assistant and Ask Claude, picked by chips on both.
+  Opus until they choose: what they ask is billed to their key.
 - **It asks before every change.** `set_setting`, `open_screen` and
   `playback` each wait for the listener's Allow. Auto lets them through; it
   is a field of the `Assistant` singleton, in memory only, so it is off

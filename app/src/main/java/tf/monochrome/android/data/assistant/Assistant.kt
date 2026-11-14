@@ -82,11 +82,12 @@ class Assistant @Inject constructor(
         if (key.isEmpty()) return@withContext Failure.NO_KEY
         val before = conversation.messages.size
         conversation.messages += MessageParam.ofUser(text)
+        val model = ClaudeModel.of(preferences.claudeModel.first()).id
         val client = AnthropicOkHttpClient.builder().apiKey(key).build()
         try {
             repeat(MAX_STEPS) {
                 val params = MessageCreateParams.builder()
-                    .model(MODEL)
+                    .model(model)
                     .maxTokens(MAX_TOKENS)
                     // The manual and the tools never change within a conversation: cached after the first request.
                     .systemOfTextBlockParams(
@@ -208,7 +209,6 @@ class Assistant @Inject constructor(
     }
 
     private companion object {
-        const val MODEL = "claude-opus-5-5"
         const val MAX_TOKENS = 16_000L
         const val MAX_STEPS = 12   // requests in one turn: a turn that needs more has lost its way
     }

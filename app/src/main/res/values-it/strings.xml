@@ -3638,4 +3638,10 @@
     <string name="assistant_start_over">Ricomincia</string>
     <string name="assistant_err_too_long">Ha richiesto più passaggi di quanti un turno ne consenta. Chiedi di nuovo o ricomincia.</string>
     <string name="assistant_err_other">Claude non ha potuto elaborare la richiesta</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">Il più capace e il più costoso dei tre</string>
+    <string name="assistant_model_sonnet_note">Una via di mezzo: circa la metà del prezzo di Opus</string>
+    <string name="assistant_model_haiku_note">Il più veloce e di gran lunga il più economico; meno accurato con immagini e richieste lunghe</string>
 </resources>

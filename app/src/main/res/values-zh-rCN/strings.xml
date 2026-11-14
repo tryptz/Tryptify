@@ -3482,4 +3482,10 @@
     <string name="assistant_start_over">重新开始</string>
     <string name="assistant_err_too_long">这次所需步骤超出了单轮上限。请再问一次，或重新开始。</string>
     <string name="assistant_err_other">Claude 无法处理该请求</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">能力最强，也是三者中最贵的</string>
+    <string name="assistant_model_sonnet_note">居中：价格约为 Opus 的一半</string>
+    <string name="assistant_model_haiku_note">最快且便宜得多；处理图片和长请求时不那么细致</string>
 </resources>

@@ -3482,4 +3482,10 @@
     <string name="assistant_start_over">最初から</string>
     <string name="assistant_err_too_long">1 回のやり取りの上限を超えました。もう一度聞くか、最初からやり直してください。</string>
     <string name="assistant_err_other">Claude はそのリクエストを処理できませんでした</string>
+    <string name="assistant_model_opus">Opus</string>
+    <string name="assistant_model_sonnet">Sonnet</string>
+    <string name="assistant_model_haiku">Haiku</string>
+    <string name="assistant_model_opus_note">最も高性能で、3 つの中で最も高価</string>
+    <string name="assistant_model_sonnet_note">中間：Opus の約半額</string>
+    <string name="assistant_model_haiku_note">最速で圧倒的に安価。画像や長い依頼では精度がやや落ちます</string>
 </resources>

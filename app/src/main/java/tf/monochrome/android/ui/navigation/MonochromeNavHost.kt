@@ -272,6 +272,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
     val currentDestination = navBackStackEntry?.destination
 
     val playerViewModel: PlayerViewModel = hiltViewModel()
+    // Which screen is on show, for the live log's record of stalls.
+    androidx.compose.runtime.LaunchedEffect(navController) {
+        navController.currentBackStackEntryFlow.collect {
+            tf.monochrome.android.debug.FrameStallLog.screen = it.destination.route ?: "?"
+        }
+    }
 
     // TIDAL could not play a song Qobuz has. Asked here, at the root, so the
     // question reaches the listener wherever they are — the skip that caused

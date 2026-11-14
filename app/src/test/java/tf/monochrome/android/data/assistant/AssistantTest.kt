@@ -98,6 +98,16 @@ class AssistantTest {
     }
 
     @Test
+    fun `the model is the listener's choice, and Opus until they make one`() {
+        assertEquals(ClaudeModel.OPUS, ClaudeModel.of(""))
+        assertEquals(ClaudeModel.OPUS, ClaudeModel.of("something older"))
+        for (model in ClaudeModel.entries) assertEquals(model, ClaudeModel.of(model.stored))
+        assertEquals("claude-haiku-5-5", ClaudeModel.HAIKU.id)
+        // A model's name is never a setting the assistant can reach, nor is the key.
+        assertFalse("claude_model" in ASSISTANT_SETTING_KEYS)
+    }
+
+    @Test
     fun `what was read is said plainly, defaults and strangers included`() {
         val text = AssistantTools.describeValues(listOf("gapless_playback", "crossfade_duration", "made_up"), mapOf("gapless_playback" to false))
         assertEquals("gapless_playback: false\ncrossfade_duration: default (never changed)\nmade_up: there is no such setting in the list", text)
