@@ -315,4 +315,36 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeDebugInfo(
   return kFields;
 }
 
+// The virtual room's speakers for the Atmos page (AtmosPipeline::room_layout):
+// four floats each into `out`. Returns how many were written. Any thread.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomLayout(
+    JNIEnv* env, jclass /*clazz*/, jfloatArray out) {
+  constexpr int kFields = tf::atmos::AtmosPipeline::kRoomFields;
+  constexpr int kMax = tf::atmos::AtmosPipeline::kRoomMeterMax;
+  float buf[kMax * kFields];
+  int room = env->GetArrayLength(out) / kFields;
+  if (room > kMax) room = kMax;
+  const int count = tf::atmos::AtmosPipeline::room_layout(buf, room);
+  if (count > 0) env->SetFloatArrayRegion(out, 0, count * kFields, buf);
+  return count;
+}
+
+// How hard each of the room's speakers was driven in the last frame
+// (AtmosPipeline::room_meter), one float a speaker into `out`; `tracked` for
+// a frame that was only watched. Returns the speaker count. Audio thread.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomMeter(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jboolean tracked, jfloatArray out) {
+  tf::atmos::AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe == nullptr) return 0;
+  constexpr int kMax = tf::atmos::AtmosPipeline::kRoomMeterMax;
+  float buf[kMax];
+  int room = env->GetArrayLength(out);
+  if (room > kMax) room = kMax;
+  const int count = pipe->room_meter(buf, room, tracked == JNI_TRUE);
+  if (count > 0) env->SetFloatArrayRegion(out, 0, count, buf);
+  return count;
+}
+
 }  // extern "C"

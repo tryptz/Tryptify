@@ -161,6 +161,75 @@ class AtmosPipeline {
     return count;
   }
 
+  // The virtual room's speakers, for the Atmos page's room: four floats a
+  // speaker into `out`, where it stands (x 0..1 left to right, y 0..1 front
+  // to back, z 0 at ear level to 1 at the ceiling) and 1 for the LFE.
+  // Returns how many were written.
+  static constexpr int kRoomFields = 4;
+  static int room_layout(float* out, int max_speakers) {
+    const std::vector<SpeakerDef> v = layout_speakers(OutputLayout::k15_1_12);
+    const int n = static_cast<int>(v.size()) < max_speakers ? static_cast<int>(v.size()) : max_speakers;
+    for (int s = 0; s < n; ++s) {
+      out[s * kRoomFields] = v[s].x;
+      out[s * kRoomFields + 1] = v[s].y;
+      out[s * kRoomFields + 2] = v[s].z;
+      out[s * kRoomFields + 3] = is_lfe(v[s]) ? 1.0f : 0.0f;
+    }
+    return n;
+  }
+
+  // How hard each of the room's speakers was driven in the last frame, one
+  // float a speaker in room_layout()'s order. When the room rendered the
+  // frame it is the peak of that speaker's feed. Otherwise (real speakers,
+  // or objects only watched) it is where the objects would go on the room's
+  // speakers: each object's peak through its panning gains; a watched
+  // object has no level, so its gains alone, negated to say so. Returns the
+  // speaker count, 0 when there is nothing to show. Audio thread,
+  // allocation-free.
+  static constexpr int kRoomMeterMax = 32;
+  int room_meter(float* out, int max_speakers, bool tracked) const {
+    const int ch = room_path_.renderer.channels();
+    if (ch <= 0 || ch > kRoomMeterMax || max_speakers < ch) return 0;
+    if (!tracked && room_rendered_ > 0) {
+      for (int s = 0; s < ch; ++s) out[s] = 0.0f;
+      const float* f = room_feeds_.data();
+      for (int i = 0; i < room_rendered_; ++i, f += ch) {
+        for (int s = 0; s < ch; ++s) {
+          const float a = f[s] < 0.0f ? -f[s] : f[s];
+          if (a > out[s]) out[s] = a;
+        }
+      }
+      return ch;
+    }
+    int count = tracked ? tracked_ : last_objects_;
+    if (count > max_objects_) count = max_objects_;
+    if (count <= 0) return 0;
+    const int lfe = tracked ? engine_.metadata_lfe() : engine_.lfe_object_index();
+    const int samples = engine_.frame_samples();
+    float gains[kRoomMeterMax], power[kRoomMeterMax];
+    for (int s = 0; s < ch; ++s) power[s] = 0.0f;
+    for (int o = 0; o < count; ++o) {
+      const cavern::ObjectState* st = engine_.object_state(o);
+      if (st == nullptr) continue;
+      float peak = 1.0f;
+      if (!tracked) {
+        peak = 0.0f;
+        const float* pcm = engine_.object_channel(o);
+        for (int i = 0; pcm != nullptr && i < samples; ++i) {
+          const float a = pcm[i] < 0.0f ? -pcm[i] : pcm[i];
+          if (a > peak) peak = a;
+        }
+      }
+      room_path_.renderer.object_gains(*st, o == lfe, gains);
+      for (int s = 0; s < ch; ++s) power[s] += gains[s] * gains[s] * peak * peak;
+    }
+    for (int s = 0; s < ch; ++s) {
+      const float level = std::sqrt(power[s]);
+      out[s] = tracked ? -level : level;
+    }
+    return ch;
+  }
+
   // The engine's view of the last frame's metadata (ObjectEngine::debug).
   void debug(int* out) const { engine_.debug(out); }
 
@@ -257,6 +326,7 @@ class AtmosPipeline {
   int process_frame_speakers(const uint8_t* frame, size_t frame_size, const float* const* bed,
                              int bed_channels, int samples, float* out) {
     const int ch = spk_path_.renderer.channels();
+    room_rendered_ = 0;
     if (mode_ == kPassthrough || ch <= 0 || bed_channels <= 0 || samples <= 0) return -1;
     dialnorm_gain_ = 1.0f;
     frame_has_compr_ = false;
@@ -278,7 +348,7 @@ class AtmosPipeline {
                     int bed_channels, int samples, float* out) {
     // Passthrough / non-binaural fold-downs are the caller's job (it already
     // has a fixed-matrix downmix); returning -1 selects that path.
-    if (mode_ == kPassthrough || downmix_ != kBinaural) return -1;
+    if (mode_ == kPassthrough || downmix_ != kBinaural) { room_rendered_ = 0; return -1; }
     // One BSI parse serves both dialogue normalization (the stream's own
     // dialnorm) and RF-mode DRC (the stream's own compr gain word).
     dialnorm_gain_ = 1.0f;
@@ -294,9 +364,11 @@ class AtmosPipeline {
       render_layout(room_path_, frame, frame_size, bed, bed_channels, samples, !height_,
                     room_feeds_.data());
       room_.render(room_feeds_.data(), samples, out);
+      room_rendered_ = samples;
       apply_post(out, samples);
       return 1;
     }
+    room_rendered_ = 0;
     if (mode_ == kBedHrtf) {
       last_objects_ = 0;
       const int rc = render_bed(bed, bed_channels, samples, out);
@@ -746,6 +818,7 @@ class AtmosPipeline {
   std::vector<float> trims_;  // the stream's surround trim, linear, an object
   std::vector<cavern::ObjectState> flat_states_;  // objects at ear level (height off)
   bool virtual_room_ = false;  // the caller turns it on (set_virtual_room)
+  int room_rendered_ = 0;      // frames of room_feeds_ the last frame left, 0 if it did not render
   float room_amount_ = 0.25f;
   bool height_ = true;
   float strength_ = 1.0f;

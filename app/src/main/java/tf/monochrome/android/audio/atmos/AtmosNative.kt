@@ -193,5 +193,24 @@ object AtmosNative {
      */
     external fun nativeTrackObjects(pipeline: Long, frame: ByteArray, out: FloatArray): Int
 
+    /**
+     * The virtual room's speakers (15.1.12): [ROOM_FIELDS] floats each into
+     * [out], where the speaker stands (x 0..1 left to right, y 0..1 front to
+     * back, z 0 at ear level to 1 at the ceiling) and 1 for the LFE. Returns
+     * how many were written.
+     */
+    external fun nativeRoomLayout(out: FloatArray): Int
+
+    /**
+     * How hard each of the room's speakers was driven in the last frame, one
+     * float a speaker into [out], in [nativeRoomLayout]'s order: the peak of
+     * its feed when the room rendered the frame, else where the objects
+     * would go on it; under zero when the objects are only watched
+     * ([tracked]) and have no level. Returns the speaker count, 0 for none.
+     */
+    external fun nativeRoomMeter(pipeline: Long, tracked: Boolean, out: FloatArray): Int
+
+    const val ROOM_FIELDS = 4
+    const val ROOM_MAX_SPEAKERS = 32
     const val OBJECT_METER_FIELDS = 5
 }

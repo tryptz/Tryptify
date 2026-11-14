@@ -3342,6 +3342,28 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   and where it stands is what the owner asked to see.
 - The object meter runs only while the page is started
   (`acquireObjectMeter` beside the channel detector's `acquire`).
+- **On headphones the map is the 15.1.12 room, in three dimensions**
+  (`AtmosRoom3d`, `ui/settings/AtmosRoom3d.kt`). A flat map of the decoded
+  5.1 core under the objects read as "only the core is playing" (the owner's
+  report, with a picture of Dolby's renderer beside it). The room is the one
+  the binaural render plays in: its 28 speakers where they stand
+  (`AtmosNative.nativeRoomLayout`, never a second table in Kotlin), ear level
+  in the accent, heights in the tertiary tint, each a ring that fills and
+  glows as it is driven (`AtmosAudioProcessor.speakers`,
+  `nativeRoomMeter`: the peak of that speaker's own feed while the room
+  renders). The objects float at their x, y and height, numbered, with a
+  line down to the floor. With the render off the speakers show where the
+  watched objects would go (a value under zero, drawn part lit by
+  `atmosSpeakerGlow`), and for a stream with no objects its own channels on
+  the speakers a bed plays from (`roomLevelsFromChannels`). Do not go back
+  to drawing the core's six speakers there.
+- A sideways drag turns the room; up and down still scrolls the page
+  (`detectHorizontalDragGestures`, not a free drag). It never turns by
+  itself, so it needs no reduce-motion case.
+- The LFE has no place in a mix: its speaker is drawn on the floor under the
+  screen, and an LFE object gets no dot.
+- With real speakers chosen (`speakerRender`) the flat map of that layout
+  stays: those are the speakers that play.
 
 ## The visualizer has two compositions, and only one at a time
 

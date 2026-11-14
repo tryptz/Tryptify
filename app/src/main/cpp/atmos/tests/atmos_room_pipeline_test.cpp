@@ -214,6 +214,50 @@ void test_modes_still_decline() {
   CHECK(pipe.last_objects() == 0);
 }
 
+void test_room_meter() {
+  std::printf("Room: the meter says which of the room's speakers play\n");
+  const int samples = 1536;
+  float layout[AtmosPipeline::kRoomMeterMax * AtmosPipeline::kRoomFields];
+  const int count = AtmosPipeline::room_layout(layout, AtmosPipeline::kRoomMeterMax);
+  CHECK(count == 28);
+  int lfes = 0, left_front = -1, heights = 0;
+  for (int s = 0; s < count; ++s) {
+    const float* f = layout + s * AtmosPipeline::kRoomFields;
+    CHECK(f[0] >= 0.0f && f[0] <= 1.0f && f[1] >= 0.0f && f[1] <= 1.0f && f[2] >= 0.0f && f[2] <= 1.0f);
+    if (f[3] == 1.0f) { ++lfes; continue; }
+    if (f[2] > 0.0f) ++heights;
+    if (f[0] == 0.0f && f[1] == 0.0f && f[2] == 0.0f) left_front = s;
+  }
+  CHECK(lfes == 1);
+  CHECK(heights == 12);
+  CHECK(left_front >= 0);
+
+  AtmosPipeline pipe; pipe.configure(48000, 16);
+  pipe.set_virtual_room(true, 0.0f);
+  float meter[AtmosPipeline::kRoomMeterMax];
+  // Nothing rendered yet, nothing watched: nothing to show.
+  CHECK(pipe.room_meter(meter, AtmosPipeline::kRoomMeterMax, false) == 0);
+  CHECK(pipe.room_meter(meter, AtmosPipeline::kRoomMeterMax, true) == 0);
+  // The bed mode, the left front channel alone: that speaker and no other.
+  pipe.set_params(/*mode=*/2, /*downmix=*/0, 1.0f, true, 0.0f, false, 80, 0, false);
+  const std::vector<uint8_t> plain = plain_frame();
+  Bed bed(6, samples);
+  for (int i = 0; i < samples; ++i) bed.ch[0][i] = 0.2f * std::sin(i * 0.21f);
+  std::vector<float> out(2 * samples, 0.0f);
+  CHECK(pipe.process_frame(plain.data(), plain.size(), bed.ptrs.data(), 6, samples, out.data()) == 1);
+  CHECK(pipe.room_meter(meter, AtmosPipeline::kRoomMeterMax, false) == count);
+  for (int s = 0; s < count; ++s) {
+    if (s == left_front) CHECK(meter[s] > 0.19f && meter[s] < 0.21f);
+    else CHECK(meter[s] == 0.0f);
+  }
+  // Too small a buffer is refused, and a frame the room did not render
+  // leaves nothing to show.
+  CHECK(pipe.room_meter(meter, count - 1, false) == 0);
+  pipe.set_params(/*mode=*/0, /*downmix=*/0, 1.0f, true, 0.0f, false, 80, 0, false);
+  CHECK(pipe.process_frame(plain.data(), plain.size(), bed.ptrs.data(), 6, samples, out.data()) == -1);
+  CHECK(pipe.room_meter(meter, AtmosPipeline::kRoomMeterMax, false) == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -223,6 +267,7 @@ int main() {
   test_seam_has_no_step();
   test_flush_and_switching_back();
   test_modes_still_decline();
+  test_room_meter();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);
   return g_fail == 0 ? 0 : 1;
 }

@@ -189,6 +189,19 @@ class AtmosAudioProcessor @Inject constructor(
     @Volatile private var meterCount = 0
     private var meterJob: kotlinx.coroutines.Job? = null
     private val _objects = MutableStateFlow<ObjectMeter?>(null)
+    private val speakerScratch = FloatArray(AtmosNative.ROOM_MAX_SPEAKERS)
+    private val speakerLevels = FloatArray(AtmosNative.ROOM_MAX_SPEAKERS)
+    @Volatile private var speakerCount = 0
+    private val _speakers = MutableStateFlow<FloatArray?>(null)
+
+    /**
+     * How hard each speaker of the 15.1.12 room is driven, in
+     * [AtmosNative.nativeRoomLayout]'s order, while [acquireObjectMeter] is
+     * held: a decaying peak, or under zero for objects that are watched and
+     * not rendered (how much of them the speaker would carry). Null when
+     * nothing plays through or towards the room.
+     */
+    val speakers: StateFlow<FloatArray?> = _speakers.asStateFlow()
 
     /** The objects being rendered, while [acquireObjectMeter] is held; null when none are. */
     val objects: StateFlow<ObjectMeter?> = _objects.asStateFlow()
@@ -213,6 +226,9 @@ class AtmosAudioProcessor @Inject constructor(
                         val at = i * AtmosNative.OBJECT_METER_FIELDS + 3
                         if (meterFields[at] > 0f) meterFields[at] *= 0.896f
                     }
+                    val speakers = speakerCount
+                    _speakers.value = if (speakers > 0) speakerLevels.copyOf(speakers) else null
+                    for (i in 0 until speakers) if (speakerLevels[i] > 0f) speakerLevels[i] *= 0.896f
                     kotlinx.coroutines.delay(33)
                 }
             }
@@ -227,6 +243,7 @@ class AtmosAudioProcessor @Inject constructor(
             meterJob?.cancel()
             meterJob = null
             _objects.value = null
+            _speakers.value = null
         }
     }
 
@@ -289,8 +306,25 @@ class AtmosAudioProcessor @Inject constructor(
     private fun noteFrame(objects: Int) {
         noteObjects(objects)
         logMetadata()
-        if (objects <= 0 || pipeline == 0L) { meterCount = 0; return }
+        if (pipeline == 0L) { meterCount = 0; speakerCount = 0; return }
+        takeSpeakers(tracked = false)
+        if (objects <= 0) { meterCount = 0; return }
         takeMeter(AtmosNative.nativeObjectMeter(pipeline, meterScratch).coerceIn(0, MAX_OBJECTS))
+    }
+
+    /** The room's speakers for the frame just rendered or watched, if the meter is on. */
+    private fun takeSpeakers(tracked: Boolean) {
+        if (!meterOn || pipeline == 0L) { speakerCount = 0; return }
+        val count = AtmosNative.nativeRoomMeter(pipeline, tracked, speakerScratch)
+            .coerceIn(0, AtmosNative.ROOM_MAX_SPEAKERS)
+        for (i in 0 until count) {
+            val now = speakerScratch[i]
+            // Under zero is "would carry this much" (watched): kept as it is.
+            if (now < 0f || i >= speakerCount || speakerLevels[i] < 0f || now > speakerLevels[i]) {
+                speakerLevels[i] = now
+            }
+        }
+        speakerCount = count
     }
 
     // Where every object is and how loud, into the log: two seconds into a
@@ -598,6 +632,7 @@ class AtmosAudioProcessor @Inject constructor(
             }
             logMetadata()
             takeMeter(count)
+            takeSpeakers(tracked = true)
         }
     }
 

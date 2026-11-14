@@ -130,6 +130,18 @@ class AtmosRendererViewModel @Inject constructor(
     val objects: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.ObjectMeter?> =
         atmosProcessor.objects
 
+    /** How hard each speaker of the 15.1.12 room is driven; null when nothing plays through it. */
+    val speakers: StateFlow<FloatArray?> = atmosProcessor.speakers
+
+    /** The 15.1.12 room's speakers, as [tf.monochrome.android.audio.atmos.AtmosNative.nativeRoomLayout] gives them; empty without the native library. */
+    val roomLayout: FloatArray by lazy {
+        val native = tf.monochrome.android.audio.atmos.AtmosNative
+        if (!native.isAvailable) return@lazy FloatArray(0)
+        val buf = FloatArray(native.ROOM_MAX_SPEAKERS * native.ROOM_FIELDS)
+        val count = runCatching { native.nativeRoomLayout(buf) }.getOrDefault(0)
+        buf.copyOf(count.coerceIn(0, native.ROOM_MAX_SPEAKERS) * native.ROOM_FIELDS)
+    }
+
     /** What the Atmos stage did with the stream playing; null when it is out of the chain. */
     val outcome: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome?> =
         atmosProcessor.outcome
@@ -360,6 +372,7 @@ fun AtmosRendererScreen(
     val sofaPresets by viewModel.sofaPresets.collectAsStateWithLifecycle()
     val detected by viewModel.channelState.collectAsStateWithLifecycle()
     val objects by viewModel.objects.collectAsStateWithLifecycle()
+    val roomSpeakers by viewModel.speakers.collectAsStateWithLifecycle()
     val outcome by viewModel.outcome.collectAsStateWithLifecycle()
 
     // Re-sync on every (re-)entry: the HRTF database screen writes the profile
@@ -425,15 +438,34 @@ fun AtmosRendererScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            SpeakerLayoutMap(
-                layout = if (profile.speakerRender) profile.layout else ChannelLayout.STEREO,
-                detected = d,
-                objects = objects,
-                accent = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.15f),
-            )
+            val roomLayout = viewModel.roomLayout
+            if (profile.speakerRender || roomLayout.isEmpty()) {
+                // Real speakers: the layout that is wired up, as it is driven.
+                SpeakerLayoutMap(
+                    layout = if (profile.speakerRender) profile.layout else ChannelLayout.STEREO,
+                    detected = d,
+                    objects = objects,
+                    accent = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.15f),
+                )
+            } else {
+                // Headphones: the 15.1.12 room the render plays in. With no
+                // object through or towards it, the stream's own channels
+                // on the speakers they would play from.
+                val fromChannels = remember(d, roomLayout) {
+                    d?.let { roomLevelsFromChannels(roomLayout, it.channelNames, it.peaksDb) }
+                }
+                AtmosRoom3d(
+                    layout = roomLayout,
+                    speakers = roomSpeakers ?: fromChannels,
+                    objects = objects,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1.15f),
+                )
+            }
             Spacer(Modifier.height(20.dp))
 
             // ── Built-in test track ────────────────────────────────────────
