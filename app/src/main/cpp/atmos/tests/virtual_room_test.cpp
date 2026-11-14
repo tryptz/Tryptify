@@ -221,11 +221,13 @@ void test_null() {
     double worst = 0.0, peak = 0.0;
     float shelf[5];
     room.bass_shelf(shelf);
+    std::vector<float> eq(kDfeTaps);
+    room.active_equalizer(eq.data());
     double s1 = 0.0, s2 = 0.0;
     for (int n = 0; n + VirtualRoom::kLookahead < total; ++n) {
       double z = 0.0;
       const int jmax = n < kDfeTaps - 1 ? n : kDfeTaps - 1;
-      for (int j = 0; j <= jmax; ++j) z += kDfe[j] * y[n - j];
+      for (int j = 0; j <= jmax; ++j) z += eq[j] * y[n - j];
       // The low shelf, then the trim.
       const double x = z;
       z = shelf[0] * x + s1;
@@ -506,6 +508,60 @@ void test_low_end() {
   CHECK(shelf[0] == 1.0f && shelf[1] == 0.0f && shelf[2] == 0.0f && shelf[3] == 0.0f && shelf[4] == 0.0f);
 }
 
+double fir_db(const float* h, int n, double hz) {
+  double re = 0.0, im = 0.0;
+  for (int t = 0; t < n; ++t) {
+    const double w = 2.0 * 3.14159265358979323846 * hz * t / 48000.0;
+    re += h[t] * std::cos(w);
+    im -= h[t] * std::sin(w);
+  }
+  return 10.0 * std::log10(re * re + im * im + 1e-30);
+}
+
+void test_tone_correction() {
+  std::printf("-- the tone correction: the stage ahead, and the top octave\n");
+  const int taps = VirtualRoom::kToneTaps;
+  float tone[VirtualRoom::kToneTaps];
+  VirtualRoom::design_tone_correction(&render::kHrirData[0][0][0][0], &render::kHrirDelay[0][0][0], kDfe, tone);
+  // Nothing below 500 Hz. Up to 12 kHz it is the stage's, inside its
+  // bounds, lifting the two dips of a sound panned between the front pair
+  // (about 1.5 kHz, and 5 to 10 kHz).
+  for (double hz : {60.0, 120.0, 250.0, 450.0}) CHECK(std::fabs(fir_db(tone, taps, hz)) < 0.3);
+  for (double hz = 500.0; hz < 12000.0; hz *= 1.05) {
+    const double g = fir_db(tone, taps, hz);
+    CHECK(g < VirtualRoom::kStageBoostDb + 0.5 && g > -VirtualRoom::kStageCutDb - 0.5);
+  }
+  std::printf("   1.5 kHz %+.1f dB, 7 kHz %+.1f dB, 16 kHz %+.1f dB, 18 kHz %+.1f dB\n",
+              fir_db(tone, taps, 1500.0), fir_db(tone, taps, 7000.0), fir_db(tone, taps, 16000.0),
+              fir_db(tone, taps, 18000.0));
+  CHECK(fir_db(tone, taps, 1500.0) > 1.0);
+  CHECK(fir_db(tone, taps, 7000.0) > 2.0);
+  // Above it, the top octave the baked set lacks (9 dB at 16 kHz, 14 at
+  // 18), never over its limit, and nothing where the set has nothing.
+  CHECK(fir_db(tone, taps, 16000.0) > 6.0);
+  CHECK(fir_db(tone, taps, 18000.0) > 9.0);
+  for (double hz = 12000.0; hz < 24000.0; hz += 250.0) CHECK(fir_db(tone, taps, hz) < VirtualRoom::kTopBoostDb + 0.7);
+  CHECK(std::fabs(fir_db(tone, taps, 23000.0)) < 1.0);
+  // The render uses it: the equalizer in use is the baked one through it.
+  const std::vector<RoomSpeaker> v = room_layout();
+  VirtualRoom room;
+  room.configure(48000, v);
+  std::vector<float> eq(kDfeTaps);
+  room.active_equalizer(eq.data());
+  for (double hz : {300.0, 2000.0, 7000.0, 17000.0}) {
+    CHECK_NEAR(fir_db(eq.data(), kDfeTaps, hz), fir_db(kDfe, kDfeTaps, hz) + fir_db(tone, taps, hz), 0.2);
+  }
+  // A set with no ears to it (one tap, no delay, every direction) has no
+  // dips to fill and no octave missing: no correction.
+  const size_t points = static_cast<size_t>(render::kHrirElCount) * render::kHrirAzCount * 2;
+  std::vector<float> flat(points * render::kHrirTaps, 0.0f), none(points, 0.0f);
+  for (size_t i = 0; i < flat.size(); i += render::kHrirTaps) flat[i] = 1.0f;
+  std::vector<float> one(kDfeTaps, 0.0f);
+  one[0] = 1.0f;
+  VirtualRoom::design_tone_correction(flat.data(), none.data(), one.data(), tone);
+  for (double hz = 100.0; hz < 23000.0; hz *= 1.3) CHECK(std::fabs(fir_db(tone, taps, hz)) < 0.3);
+}
+
 void test_equalizer_design() {
   std::printf("-- the equalizer a loaded set gets\n");
   // Worked out from the baked table, it is the baked equalizer.
@@ -595,6 +651,7 @@ int main() {
   test_limiter();
   test_reset_and_silence();
   test_low_end();
+  test_tone_correction();
   test_equalizer_design();
   test_set_swap();
   std::printf("=== %d checks, %d failures ===\n", g_checks, g_fail);

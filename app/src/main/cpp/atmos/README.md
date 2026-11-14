@@ -242,11 +242,43 @@ low end is level, never more than 9 dB. Level to within 1.5 dB from 50 Hz up
 for the speakers ahead (`test_low_end`). On a real TIDAL stream the render's
 80-630 Hz is now within 1 dB of the stream's own stereo fold.
 
-What is still different from that fold, and is how loudspeakers in front of
-a listener sound, not a fault: above 1 kHz the render is 3 to 6 dB under it,
-and up to 10 dB in the 5-10 kHz octave, because sound panned between two
-speakers reaches each ear from both and partly cancels there, and KEMAR's
-ear has a deep notch near 8 kHz for sound from straight ahead.
+## The stage ahead sounded hollow (fixed 1.9.52)
+
+Sound panned between the front pair reaches each ear from both speakers, a
+fraction of a millisecond apart, and partly cancels: measured through the
+room with noise, 6 dB down at 1.25-2.5 kHz and 7 dB at 5-10 kHz against its
+own low mids, with 2.5-5 kHz untouched between them; KEMAR's ear adds a
+notch near 8 kHz for the centre speaker. A real room's walls fill those dips
+in. The owner heard it as hollow highs. `VirtualRoom::design_tone_correction` (`front_stage_gain`) works
+out a correction for that stage from the set in use (the centre speaker,
+between the pair, hard to one side; each case's tone through the equalizer
+against its own 250-700 Hz, half-octave smoothed; 0.7 of the inverse, from
+500 Hz up, between -3 and +6 dB) and folds it into the equalizer. For the
+baked set: +3 dB at 1.25-1.6 kHz, -1.5 dB at 4 kHz, +6 dB at 8 kHz. Between
+the pair, the bands from 630 Hz to 10 kHz are now within 4 dB of each other
+where they spanned 7. It is a tone for the front stage: a sound from the
+side or behind gets the same lift and is that much brighter there. Not
+checked by ear here.
+
+## Nothing above 15 kHz (fixed 1.9.52)
+
+The baked KEMAR set (a small loudspeaker, measured at 44.1 kHz) falls away
+at the top: over every direction and through its equalizer it is 5 dB down
+at 15 kHz, 9 at 16, 14 at 18 and 18 at 20, and the equalizer's own limit
+stops it correcting there. White noise from any speaker of the room came out
+12 to 19 dB down from 17 to 20 kHz; the owner saw it on a spectrum as
+everything cut after 15 kHz. The stream itself is not cut there.
+`top_end_gain` measures how far the set in use is under its own 8-13 kHz at
+each kHz from 14 to 20 and the tone correction adds that back, up to 12 dB,
+held to 20.5 kHz and gone by 22 (a 44.1 kHz measurement has nothing above).
+After it the same noise is within 5 dB of the 4-8 kHz level up to 19 kHz. A
+set whose top is level gets nothing.
+
+The three corrections (`design_dfe`, `design_tone_correction`,
+`design_bass_shelf`) are one section of `virtual_room.h`, sharing
+`diffuse_level_db`, `smooth_power` and `min_phase_fir`; the tone correction
+is folded into the equalizer's 512 taps when a set is published, so the
+render runs no extra stage for it.
 
 ## Positions were NaN on phones (fixed 1.9.52)
 

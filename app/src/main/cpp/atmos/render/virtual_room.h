@@ -231,15 +231,14 @@ class VirtualRoom {
     delayed_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, ir);
   }
 
-  // The low shelf render() runs after the equalizer for the set in use
-  // (see design_bass_shelf): {b0, b1, b2, a1, a2}.
-  void bass_shelf(float* c) const {
-    const FilterSet& set = sets_[active_.load(std::memory_order_acquire) & 1u];
-    std::copy(set.shelf, set.shelf + 5, c);
-  }
+  // ── What a set needs put right ───────────────────────────────────────────
+  // Three corrections, each worked out from the HRIR set itself so that a
+  // loaded set gets its own. They allocate: loader thread, never render().
 
-  // The diffuse-field equalizer render() would use for an HRIR set laid out
-  // as the baked table: kDfeTaps taps.
+  // The diffuse-field equalizer for an HRIR set laid out as the baked table:
+  // the inverse of the set's power over every direction, third-octave
+  // smoothed and limited about the midrange. kDfeTaps taps, minimum phase.
+  // The same steps as tools/bake_dfe.cpp, which made the baked equalizer.
   static void design_dfe(const float* data, float* dfe) {
     const int n = kDesignN, half = n / 2;
     std::vector<std::complex<double>> x(n);
@@ -258,19 +257,9 @@ class VirtualRoom {
       }
     }
     for (double& p : power) p /= wsum;
-    // Third-octave smoothing, then the inverse, limited about the midrange:
-    // the same steps as tools/bake_dfe.cpp, which made the baked equalizer.
-    std::vector<double> prefix(half + 2, 0.0);
-    for (int k = 0; k <= half; ++k) prefix[k + 1] = prefix[k] + power[k];
     std::vector<double> gain_db(half + 1, 0.0);
-    const double lo_r = std::pow(2.0, -1.0 / 6.0), hi_r = std::pow(2.0, 1.0 / 6.0);
-    for (int k = 1; k <= half; ++k) {
-      int lo = static_cast<int>(std::ceil(k * lo_r)), hi = static_cast<int>(std::floor(k * hi_r));
-      if (lo < 1) lo = 1;
-      if (hi > half) hi = half;
-      const double smooth = hi >= lo ? (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1) : power[k];
-      gain_db[k] = -10.0 * std::log10(std::max(smooth, 1e-12)) - 3.0103;
-    }
+    smooth_power(power, 1.0 / 6.0, gain_db);
+    for (int k = 1; k <= half; ++k) gain_db[k] = -10.0 * std::log10(std::max(gain_db[k], 1e-12)) - 3.0103;
     gain_db[0] = gain_db[1];
     double ref = 0.0;
     int nref = 0;
@@ -285,19 +274,65 @@ class VirtualRoom {
       const double max_boost = 15.0 + (6.0 - 15.0) * t;
       gain_db[k] = ref + std::max(-15.0, std::min(max_boost, gain_db[k] - ref));
     }
-    // Minimum phase by the real cepstrum, faded over its last eighth.
-    for (int k = 0; k < n; ++k) x[k] = gain_db[k <= half ? k : n - k] / 20.0 * std::log(10.0);
-    design_fft(x, true);
-    for (int k = 1; k < half; ++k) { x[k] *= 2.0; x[n - k] = 0.0; }
-    design_fft(x, false);
-    for (auto& v : x) v = std::exp(v);
-    design_fft(x, true);
-    const int fade = kDfeTaps / 8;
-    for (int t = 0; t < kDfeTaps; ++t) {
-      double w = 1.0;
-      if (t >= kDfeTaps - fade) w = 0.5 + 0.5 * std::cos(kPiD * (t - (kDfeTaps - fade)) / fade);
-      dfe[t] = static_cast<float>(x[t].real() * w);
+    min_phase_fir(gain_db, kDfeTaps, kDfeTaps / 8, dfe);
+  }
+
+  // The tone the equalizer leaves wrong, as a short filter to convolve with
+  // it: the stage ahead (front_stage_gain) and the top octave
+  // (top_end_gain). kToneTaps taps, minimum phase, never over kTopBoostDb.
+  // `data` and `delay` as set_hrir() takes them.
+  static constexpr int kToneTaps = 128;
+  static constexpr double kStageAmount = 0.7;
+  static constexpr double kStageBoostDb = 6.0;
+  static constexpr double kStageCutDb = 3.0;
+  static constexpr double kTopBoostDb = 12.0;
+  static void design_tone_correction(const float* data, const float* delay, const float* dfe,
+                                     float* out) {
+    std::vector<double> gain_db(kDesignN / 2 + 1, 0.0);
+    front_stage_gain(data, delay, dfe, gain_db);
+    top_end_gain(data, dfe, gain_db);
+    for (double& g : gain_db) g = std::min(g, kTopBoostDb);
+    min_phase_fir(gain_db, kToneTaps, kToneTaps / 4, out);
+  }
+
+  // The low end a measured set lacks, as a low shelf {b0, b1, b2, a1, a2}:
+  // the loudspeaker it was measured with had little (the baked KEMAR set is
+  // 5 dB down at 60 Hz, 3 at 120), a head does nothing to sound that long,
+  // and the equalizer is too short to put it all back. As much as the set,
+  // through its equalizer, is quieter at 40-70 Hz than at 300-630 Hz.
+  // Nothing for a set whose low end is level, never over kMaxShelfDb, never
+  // a cut.
+  static void design_bass_shelf(const float* data, const float* dfe, float sample_rate,
+                                float* c) {
+    double lo = 0.0, ref = 0.0;
+    for (double hz : {40.0, 50.0, 60.0, 70.0}) lo += diffuse_level_db(data, dfe, hz) / 4.0;
+    for (double hz : {300.0, 400.0, 500.0, 630.0}) ref += diffuse_level_db(data, dfe, hz) / 4.0;
+    const double gain_db = std::min(ref - lo, kMaxShelfDb);
+    if (gain_db < 0.25) {  // level already
+      c[0] = 1.0f; c[1] = c[2] = c[3] = c[4] = 0.0f;
+      return;
     }
+    const double a = std::pow(10.0, gain_db / 40.0);
+    const double w0 = 2.0 * kPiD * kShelfHz / sample_rate;
+    const double cw = std::cos(w0), al = std::sin(w0) * 0.70710678118654752;
+    const double ra = 2.0 * std::sqrt(a) * al;
+    const double a0 = (a + 1.0) + (a - 1.0) * cw + ra;
+    c[0] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw + ra) / a0);
+    c[1] = static_cast<float>(2.0 * a * ((a - 1.0) - (a + 1.0) * cw) / a0);
+    c[2] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw - ra) / a0);
+    c[3] = static_cast<float>(-2.0 * ((a - 1.0) + (a + 1.0) * cw) / a0);
+    c[4] = static_cast<float>(((a + 1.0) + (a - 1.0) * cw - ra) / a0);
+  }
+
+  // What render() uses for the set in use: the equalizer with the tone
+  // correction folded in (kDfeTaps taps), and the low shelf after it.
+  void active_equalizer(float* out) const {
+    const FilterSet& set = sets_[active_.load(std::memory_order_acquire) & 1u];
+    std::copy(set.dfe.begin(), set.dfe.begin() + kDfeTaps, out);
+  }
+  void bass_shelf(float* c) const {
+    const FilterSet& set = sets_[active_.load(std::memory_order_acquire) & 1u];
+    std::copy(set.shelf, set.shelf + 5, c);
   }
 
  private:
@@ -377,55 +412,32 @@ class VirtualRoom {
         fft.forward(ir, spec + ear * kBins);
       }
     }
-    std::copy(dfe, dfe + kDfeTaps, set.dfe.begin());
+    // The equalizer, with the tone correction folded into it.
+    float tone[kToneTaps];
+    design_tone_correction(data, delay, dfe, tone);
+    for (int n = 0; n < kDfeTaps; ++n) {
+      double acc = 0.0;
+      for (int k = 0; k < kToneTaps && k <= n; ++k) acc += static_cast<double>(tone[k]) * dfe[n - k];
+      set.dfe[n] = static_cast<float>(acc);
+    }
     design_bass_shelf(data, dfe, static_cast<float>(sample_rate_), set.shelf);
   }
 
- public:
-  // A measured HRIR set often lacks its low end: the loudspeaker it was
-  // measured with did (the baked KEMAR set is 5 dB down at 60 Hz, 3 at
-  // 120), and a head does nothing to sound that long. The equalizer is too
-  // short to put it all back, so a low shelf does: by as much as the set,
-  // through its equalizer, is quieter at 40-70 Hz than at 300-630 Hz, taken
-  // over every direction. Nothing for a set whose low end is level, never
-  // more than kMaxShelfDb, never a cut. {b0, b1, b2, a1, a2}.
-  static void design_bass_shelf(const float* data, const float* dfe, float sample_rate,
-                                float* c) {
-    static const double lo_hz[] = {40.0, 50.0, 60.0, 70.0};
-    static const double ref_hz[] = {300.0, 400.0, 500.0, 630.0};
-    auto level_db = [&](const double* hz, int n) {
-      double sum = 0.0;
-      for (int i = 0; i < n; ++i) {
-        const double w = 2.0 * kPiD * hz[i] / 48000.0;  // the table's own rate
-        double power = 0.0, wsum = 0.0;
-        for (int e = 0; e < kHrirElCount; ++e) {
-          const double we = std::cos((kHrirElMin + e * kHrirElStep) * kPiD / 180.0);
-          for (int a = 0; a < kHrirAzCount * 2; ++a) {
-            const float* h = data + (static_cast<size_t>(e) * kHrirAzCount * 2 + a) * kHrirTaps;
-            power += we * tone_power(h, kHrirTaps, w);
-            wsum += we;
-          }
-        }
-        sum += 10.0 * std::log10(std::max(power / wsum * tone_power(dfe, kDfeTaps, w), 1e-12));
+  // ── Set design: the pieces ───────────────────────────────────────────────
+
+  // The set's level at `hz` over every direction, through `dfe`, in dB.
+  static double diffuse_level_db(const float* data, const float* dfe, double hz) {
+    const double w = 2.0 * kPiD * hz / 48000.0;  // the table's own rate
+    double power = 0.0, wsum = 0.0;
+    for (int e = 0; e < kHrirElCount; ++e) {
+      const double we = std::cos((kHrirElMin + e * kHrirElStep) * kPiD / 180.0);
+      for (int a = 0; a < kHrirAzCount * 2; ++a) {
+        const float* h = data + (static_cast<size_t>(e) * kHrirAzCount * 2 + a) * kHrirTaps;
+        power += we * tone_power(h, kHrirTaps, w);
+        wsum += we;
       }
-      return sum / n;
-    };
-    double gain_db = level_db(ref_hz, 4) - level_db(lo_hz, 4);
-    if (gain_db > kMaxShelfDb) gain_db = kMaxShelfDb;
-    if (gain_db < 0.25) {  // level already
-      c[0] = 1.0f; c[1] = c[2] = c[3] = c[4] = 0.0f;
-      return;
     }
-    const double a = std::pow(10.0, gain_db / 40.0);
-    const double w0 = 2.0 * kPiD * kShelfHz / sample_rate;
-    const double cw = std::cos(w0), al = std::sin(w0) * 0.70710678118654752;
-    const double ra = 2.0 * std::sqrt(a) * al;
-    const double a0 = (a + 1.0) + (a - 1.0) * cw + ra;
-    c[0] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw + ra) / a0);
-    c[1] = static_cast<float>(2.0 * a * ((a - 1.0) - (a + 1.0) * cw) / a0);
-    c[2] = static_cast<float>(a * ((a + 1.0) - (a - 1.0) * cw - ra) / a0);
-    c[3] = static_cast<float>(-2.0 * ((a - 1.0) + (a + 1.0) * cw) / a0);
-    c[4] = static_cast<float>(((a + 1.0) + (a - 1.0) * cw - ra) / a0);
+    return 10.0 * std::log10(std::max(power / wsum * tone_power(dfe, kDfeTaps, w), 1e-12));
   }
   static double tone_power(const float* h, int n, double w) {
     double re = 0.0, im = 0.0;
@@ -436,7 +448,122 @@ class VirtualRoom {
     return re * re + im * im;
   }
 
- private:
+  // `power` (bins 0..half) averaged over `octaves` either side of each bin.
+  static void smooth_power(const std::vector<double>& power, double octaves,
+                           std::vector<double>& out) {
+    const int half = static_cast<int>(power.size()) - 1;
+    std::vector<double> prefix(half + 2, 0.0);
+    for (int k = 0; k <= half; ++k) prefix[k + 1] = prefix[k] + power[k];
+    const double lo_r = std::pow(2.0, -octaves), hi_r = std::pow(2.0, octaves);
+    out[0] = power[0];
+    for (int k = 1; k <= half; ++k) {
+      int lo = static_cast<int>(std::ceil(k * lo_r)), hi = static_cast<int>(std::floor(k * hi_r));
+      if (lo < 1) lo = 1;
+      if (hi > half) hi = half;
+      out[k] = hi >= lo ? (prefix[hi + 1] - prefix[lo]) / (hi - lo + 1) : power[k];
+    }
+  }
+
+  // The minimum-phase filter with the magnitude `gain_db` (bins 0..half of
+  // kDesignN), by the real cepstrum: `taps` of it, the last `fade` faded out.
+  static void min_phase_fir(const std::vector<double>& gain_db, int taps, int fade, float* out) {
+    const int n = kDesignN, half = n / 2;
+    std::vector<std::complex<double>> x(n);
+    for (int k = 0; k < n; ++k) x[k] = gain_db[k <= half ? k : n - k] / 20.0 * std::log(10.0);
+    design_fft(x, true);
+    for (int k = 1; k < half; ++k) { x[k] *= 2.0; x[n - k] = 0.0; }
+    design_fft(x, false);
+    for (auto& v : x) v = std::exp(v);
+    design_fft(x, true);
+    for (int t = 0; t < taps; ++t) {
+      double w = 1.0;
+      if (t >= taps - fade) w = 0.5 + 0.5 * std::cos(kPiD * (t - (taps - fade)) / fade);
+      out[t] = static_cast<float>(x[t].real() * w);
+    }
+  }
+
+  // What two speakers ahead do to a mix, added to `gain_db`. Most of a music
+  // mix is ahead of the listener: the centre, sounds panned hard to one of
+  // the front pair, and above all sounds panned between the pair, which
+  // reach each ear from both speakers a fraction of a millisecond apart and
+  // partly cancel there (about 2 kHz, and again from 5 to 10 kHz). A room's
+  // walls fill those dips in; through bare ear filters the stage sounds
+  // hollow, and the diffuse-field equalizer, an average over every
+  // direction, does not see it. The correction: the tone of those three
+  // cases through the equalizer, each against its own 250-700 Hz and
+  // half-octave smoothed; kStageAmount of the inverse, between -kStageCutDb
+  // and +kStageBoostDb, from 500 Hz up to where top_end_gain() takes over.
+  static void front_stage_gain(const float* data, const float* delay, const float* dfe,
+                               std::vector<double>& gain_db) {
+    const int n = kDesignN, half = n / 2;
+    float hl[kHrirTaps], hr[kHrirTaps], dl, dr, ir[kIrLen];
+    std::vector<std::complex<double>> centre(n), near_side(n), far_side(n), eq(n);
+    auto left_ear = [&](float az, std::vector<std::complex<double>>& x) {
+      lookup(data, delay, az, 0.0f, hl, hr, dl, dr);
+      delayed_filter(hl, dl, ir);
+      for (int t = 0; t < n; ++t) x[t] = t < kIrLen ? ir[t] : 0.0;
+      design_fft(x, false);
+    };
+    left_ear(0.0f, centre);
+    left_ear(-30.0f, near_side);
+    left_ear(30.0f, far_side);
+    for (int t = 0; t < n; ++t) eq[t] = t < kDfeTaps ? dfe[t] : 0.0;
+    design_fft(eq, false);
+
+    std::vector<double> tone(half + 1, 0.0), power(half + 1), smooth(half + 1);
+    auto add = [&](double weight, const std::vector<std::complex<double>>& a,
+                   const std::vector<std::complex<double>>* b) {
+      double ref = 0.0;
+      int nref = 0;
+      for (int k = 0; k <= half; ++k) {
+        power[k] = std::norm((b ? a[k] + (*b)[k] : a[k]) * eq[k]);
+        const double f = k * 48000.0 / n;
+        if (f >= 250.0 && f <= 700.0) { ref += power[k]; ++nref; }
+      }
+      ref = std::max(ref / (nref > 0 ? nref : 1), 1e-12);
+      smooth_power(power, 0.25, smooth);
+      for (int k = 1; k <= half; ++k) tone[k] += weight * 10.0 * std::log10(std::max(smooth[k], 1e-12) / ref);
+    };
+    add(0.25, centre, nullptr);       // the centre speaker
+    add(0.50, near_side, &far_side);  // between the pair
+    add(0.25, near_side, nullptr);    // hard to one side, at the near ear
+    for (int k = 1; k <= half; ++k) {
+      const double f = k * 48000.0 / n;
+      const double g = std::max(-kStageCutDb, std::min(kStageBoostDb, -kStageAmount * tone[k]));
+      const double in = std::max(0.0, std::min(1.0, (f - 500.0) / 400.0));
+      const double out = std::max(0.0, std::min(1.0, (kTopFromHz + 1000.0 - f) / 2000.0));
+      gain_db[k] += g * in * out;
+    }
+  }
+
+  // The top octave a measured set lacks, added to `gain_db`. The baked KEMAR
+  // set (a small loudspeaker, 44.1 kHz) is, over every direction and through
+  // its equalizer, 5 dB down at 15 kHz, 9 at 16 and 14 at 18, and the
+  // equalizer stops correcting there: the owner saw everything cut above
+  // 15 kHz. As much as the set is under its own 8-13 kHz at each kHz from 14
+  // to 20, a line between those, held to 20.5 kHz and gone by 22 (there is
+  // nothing above to bring back). Never a cut, never over kTopBoostDb.
+  static constexpr double kTopFromHz = 13000.0;
+  static constexpr int kTopProbes = 7;
+  static void top_end_gain(const float* data, const float* dfe, std::vector<double>& gain_db) {
+    double ref = 0.0;
+    for (double hz : {8000.0, 10000.0, 12000.0, 13000.0}) ref += diffuse_level_db(data, dfe, hz) / 4.0;
+    double lack[kTopProbes + 1] = {0.0};  // at kTopFromHz, then each kHz above it
+    for (int i = 1; i <= kTopProbes; ++i) {
+      const double d = ref - diffuse_level_db(data, dfe, kTopFromHz + 1000.0 * i);
+      lack[i] = std::max(0.0, std::min(kTopBoostDb, d));
+    }
+    const int half = static_cast<int>(gain_db.size()) - 1;
+    for (int k = 1; k <= half; ++k) {
+      const double f = k * 48000.0 / kDesignN;
+      if (f <= kTopFromHz) continue;
+      const double at = std::min((f - kTopFromHz) / 1000.0, static_cast<double>(kTopProbes));
+      const int i = at < kTopProbes ? static_cast<int>(at) : kTopProbes - 1;
+      const double g = lack[i] + (lack[i + 1] - lack[i]) * (at - i);
+      gain_db[k] += g * std::max(0.0, std::min(1.0, (22000.0 - f) / 1500.0));
+    }
+  }
+
 
   // The HRIR pair for a direction, bilinear across the grid, and the two
   // onset delays: BinauralRenderer::lookup_hrir, for a set given by pointer.
