@@ -128,6 +128,21 @@ class AtmosPipeline {
   }
   void clear_sofa() { room_.set_hrir_baked(); }
 
+  // The listener's ears on top of the HRIR set (render::EarTune): the ear's
+  // size, and a bell on the speakers above ear level. Builds the room's
+  // filters again: off the audio thread.
+  void set_ear_tune(float size, float freq_hz, float gain_db, float q) {
+    render::EarTune t;
+    t.size = size; t.freq_hz = freq_hz; t.gain_db = gain_db; t.q = q;
+    room_.set_ear_tune(t);
+  }
+  // A speaker's response at one ear with a tuning, from the set in use, for
+  // the tuner's graph (render::VirtualRoom::ear_curve).
+  void ear_curve(const render::EarTune& tune, float az_deg, float el_deg, int ear,
+                 const float* hz, int n, float* db) const {
+    room_.ear_curve(tune, az_deg, el_deg, ear, hz, n, db);
+  }
+
   // Reads one frame's object metadata without rendering anything (the
   // listener has the object render off): returns the object count, 0 for
   // none. track_meter() then gives where they are.

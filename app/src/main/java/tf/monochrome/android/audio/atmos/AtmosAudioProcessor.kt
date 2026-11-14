@@ -85,6 +85,7 @@ class AtmosAudioProcessor @Inject constructor(
         profile = updated
         refreshSofa(updated.hrtfProfileId)
         refreshRoom(updated)
+        setEarTune(updated.earTune)
         pushParams()
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -402,6 +403,19 @@ class AtmosAudioProcessor @Inject constructor(
         meterCount = count
     }
 
+    // The ear tuner. What is wanted is taken at once; the pipeline is given
+    // it from this scope, one build at a time and always the latest, since a
+    // build takes tens of milliseconds and the listener drags.
+    @Volatile private var wantedEar = tf.monochrome.android.domain.model.EarTune()
+    // Declared ahead of the profile's collector below: its first value can
+    // arrive on another thread before this object is fully made.
+    private var appliedEar: tf.monochrome.android.domain.model.EarTune? = null  // under pipelineLock
+    private val earSignal = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+
+    init {
+        scope.launch { for (ignored in earSignal) applyEar() }
+    }
+
     init {
         preferences.rendererProfile
             .onEach { updated -> applyProfile(updated) }
@@ -440,6 +454,41 @@ class AtmosAudioProcessor @Inject constructor(
         val ok = AtmosNative.nativeSetRoom(p, room?.packed) == 1
         android.util.Log.i(TAG, "room -> ${room?.let { "decay ${it.decaySeconds}s, sized=${it.sized}" } ?: "built-in"} (${if (ok) "set" else "REFUSED"})")
         roomApplied = true
+    }
+
+    /**
+     * The listener's ears, heard as soon as the filters are built: the page
+     * calls this as its pad is dragged, ahead of the profile being saved.
+     */
+    fun setEarTune(tune: tf.monochrome.android.domain.model.EarTune) {
+        wantedEar = tune.clamped()
+        earSignal.trySend(Unit)
+    }
+
+    private fun applyEar() = synchronized(pipelineLock) {
+        val p = pipeline
+        val tune = wantedEar
+        if (p == 0L || tune == appliedEar) return@synchronized
+        AtmosNative.nativeSetEarTune(p, tune.size, tune.freqHz, tune.gainDb, tune.q)
+        appliedEar = tune
+    }
+
+    /**
+     * The ear tuner's graph: a sound from above at the nearer ear, as the
+     * HRTF in use has it and as [tune] makes it, [hz].size values of each in
+     * dB. Null when the native library is not there. It may wait for a build:
+     * not from the main thread.
+     */
+    fun earCurve(tune: tf.monochrome.android.domain.model.EarTune, hz: FloatArray): FloatArray? {
+        if (!AtmosNative.isAvailable) return null
+        val t = tune.clamped()
+        val out = FloatArray(hz.size * 2)
+        val n = synchronized(pipelineLock) {
+            runCatching {
+                AtmosNative.nativeEarCurve(pipeline, t.size, t.freqHz, t.gainDb, t.q, EAR_CURVE_AZ, EAR_CURVE_EL, hz, out)
+            }.getOrDefault(0)
+        }
+        return out.takeIf { n == hz.size }
     }
 
     /** Held while the native pipeline is made, destroyed, or given a room from another thread. */
@@ -524,6 +573,7 @@ class AtmosAudioProcessor @Inject constructor(
         )
         applySofa(p)
         applyRoom()
+        applyEar()
         android.util.Log.i(
             TAG,
             "params -> mode=$mode layout=${activeLayout.label} downmix=$downmix " +
@@ -833,6 +883,7 @@ class AtmosAudioProcessor @Inject constructor(
                 pipeline = AtmosNative.nativePipelineCreate(inputFormat.sampleRate, MAX_OBJECTS)
                 sofaApplied = false  // a fresh pipeline has the baked HRTF; re-apply any custom one
                 roomApplied = false  // and its own room
+                appliedEar = null    // and the set's own ears
             }
         } else if (pipeline != 0L) {
             AtmosNative.nativePipelineFlush(pipeline)
@@ -1093,6 +1144,9 @@ class AtmosAudioProcessor @Inject constructor(
     internal companion object {
         const val FRAME_SAMPLES = 1536   // 6 blocks * 256 samples per E-AC-3 frame
         const val MAX_OBJECTS = 16
+        // The direction the ear tuner's graph shows: the layout's top front left speaker.
+        const val EAR_CURVE_AZ = -45f
+        const val EAR_CURVE_EL = 60f
         // A step of the position's coding is 1/62 of the room: past this it moved.
         const val MOVED = 0.02f
 

@@ -240,6 +240,19 @@ class AtmosRendererViewModel @Inject constructor(
     fun reset() = update(RendererProfile.DEFAULT)
 
     /**
+     * The ear tuner as it is dragged: heard at once, ahead of [update]'s
+     * save, which waits for the hand to rest.
+     */
+    fun tuneEar(tune: tf.monochrome.android.domain.model.EarTune) {
+        atmosProcessor.setEarTune(tune)
+        update(profile.value.copy(earTune = tune))
+    }
+
+    /** The ear tuner's graph ([tf.monochrome.android.audio.atmos.AtmosAudioProcessor.earCurve]). */
+    suspend fun earCurve(tune: tf.monochrome.android.domain.model.EarTune, hz: FloatArray): FloatArray? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { atmosProcessor.earCurve(tune, hz) }
+
+    /**
      * Copies a user-picked .sofa (a SAF content URI) into app storage and points
      * the profile's hrtfProfileId at it, so [AtmosAudioProcessor] can load it as
      * the binaural HRTF. The copy is kept because the content URI grant is not
@@ -783,6 +796,13 @@ fun AtmosRendererScreen(
                         }
                     }
                 }
+                if (profile.hrtfEnabled || profile.hrtfAuto) EarTunerSection(
+                    tune = profile.earTune,
+                    // A new head has its own curve: the graph is asked for again.
+                    head = profile.hrtfProfileId,
+                    onTune = viewModel::tuneEar,
+                    curve = viewModel::earCurve,
+                )
                 // The space objects may use, for headphones and loudspeakers
                 // alike; the room above takes its shape.
                 val envelope = profile.panEnvelope.clamped()

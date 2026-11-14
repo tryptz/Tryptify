@@ -291,6 +291,8 @@ data class RendererProfile(
     val customRoom: CustomRoom = CustomRoom(),
     /** The space objects may use: off (the mix's own box), or narrowing with height. */
     val panEnvelope: PanEnvelope = PanEnvelope(),
+    /** The listener's own ears on top of the HRTF: the ear tuner. */
+    val earTune: EarTune = EarTune(),
     /**
      * Whether the page's 3D room draws the sound in it (the grain in the air
      * and the rays to the listener). Nothing that is heard: the page's alone.
@@ -319,6 +321,7 @@ data class RendererProfile(
             roomAmount = roomAmount.c(0f, 1f, DEFAULT_ROOM_AMOUNT),
             customRoom = customRoom.clamped(),
             panEnvelope = panEnvelope.clamped(),
+            earTune = earTune.clamped(),
             crossoverHz = crossoverHz.coerceIn(40, 200),
             lfeGainDb = lfeGainDb.c(-10f, 10f, 0f),
             downmixPreampDb = downmixPreampDb.c(-24f, 6f, 0f),

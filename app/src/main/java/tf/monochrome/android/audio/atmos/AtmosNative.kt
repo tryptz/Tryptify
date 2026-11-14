@@ -219,6 +219,32 @@ object AtmosNative {
         curve: Float,
     )
 
+    /**
+     * The listener's ears on top of the HRTF set
+     * ([tf.monochrome.android.domain.model.EarTune]). It builds the room's
+     * filters again, which takes a moment: never from the audio thread while
+     * it renders.
+     */
+    external fun nativeSetEarTune(pipeline: Long, size: Float, freqHz: Float, gainDb: Float, q: Float)
+
+    /**
+     * For the ear tuner's graph: what a speaker at ([azDeg], [elDeg]) puts at
+     * the nearer ear, in dB at each of [hz]. [out] gets the set as it is, then
+     * the same with the tuning: twice [hz]'s length. From [pipeline]'s set, or
+     * the built-in one for 0. Returns the points in each curve, 0 when refused.
+     */
+    external fun nativeEarCurve(
+        pipeline: Long,
+        size: Float,
+        freqHz: Float,
+        gainDb: Float,
+        q: Float,
+        azDeg: Float,
+        elDeg: Float,
+        hz: FloatArray,
+        out: FloatArray,
+    ): Int
+
     const val ROOM_FIELDS = 4
     const val ROOM_MAX_SPEAKERS = 32
     const val OBJECT_METER_FIELDS = 5

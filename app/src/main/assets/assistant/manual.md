@@ -89,6 +89,7 @@ Configuration page).
 | Build your own room | My room › Size and shape: presets, Width, Depth, Height, Damping, Roundness, Ceiling width, Ceiling depth |
 | Use your own ears' data | SOFA presets, Browse HRTF database, Load .sofa file (`Settings › Audio › HRTF database`) |
 | Keep high sounds overhead | Trapezoid panning, with Ceiling width, Ceiling depth, Wall curve |
+| Make height feel real for your own ears | Ear tuner (shown when Binaural render is on): drag the dot sideways for Ear size and up or down for the height band's Volume, pull the white handle on the ring for Q, and move Height band for its pitch. The graph shows the result; it is heard at once. Reset puts the head back as it is. |
 | Atmos on real speakers | Render Atmos to speakers |
 | Fold surround to stereo | Downmix multichannel to stereo (`Settings › Audio › Multichannel downmix`), with Downmix preamp |
 | Atmos mixes from TIDAL | TIDAL Dolby Atmos (`Settings › Audio › TIDAL Dolby Atmos`) |

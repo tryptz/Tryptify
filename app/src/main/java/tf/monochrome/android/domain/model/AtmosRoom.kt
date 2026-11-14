@@ -129,6 +129,46 @@ enum class RoomPreset(val room: CustomRoom) {
 }
 
 /**
+ * The listener's own ears on top of the HRTF in use (`EarTune` in
+ * `render/virtual_room.h`, which says why). [size] is the ear's size against
+ * the set's: over 1 a larger ear, every cue of the outer ear lower in pitch.
+ * The height band is one bell ([freqHz], [gainDb], [q]) on the speakers above
+ * ear level alone, in full at 60 degrees up. The defaults change nothing.
+ */
+@Serializable
+data class EarTune(
+    val size: Float = 1f,
+    val freqHz: Float = DEFAULT_HZ,
+    val gainDb: Float = 0f,
+    val q: Float = DEFAULT_Q,
+) {
+    fun clamped(): EarTune {
+        fun Float.c(min: Float, max: Float, fb: Float) = if (isFinite()) coerceIn(min, max) else fb
+        return copy(
+            size = size.c(MIN_SIZE, MAX_SIZE, 1f),
+            freqHz = freqHz.c(MIN_HZ, MAX_HZ, DEFAULT_HZ),
+            gainDb = gainDb.c(-MAX_DB, MAX_DB, 0f),
+            q = q.c(MIN_Q, MAX_Q, DEFAULT_Q),
+        )
+    }
+
+    /** Whether anything is heard of it: the frequency and Q alone change nothing. */
+    val shapes: Boolean get() = kotlin.math.abs(size - 1f) > 0.001f || kotlin.math.abs(gainDb) > 0.01f
+
+    companion object {
+        const val MIN_SIZE = 0.8f
+        const val MAX_SIZE = 1.25f
+        const val MIN_HZ = 3000f
+        const val MAX_HZ = 14000f
+        const val DEFAULT_HZ = 8000f
+        const val MAX_DB = 12f
+        const val MIN_Q = 0.5f
+        const val MAX_Q = 8f
+        const val DEFAULT_Q = 2f
+    }
+}
+
+/**
  * The panning envelope (`PanEnvelope` in `speaker_renderer.h`): with it on,
  * the room objects may use narrows as it rises. At ear level it is all of
  * the floor; at the ceiling [ceilingWidth] of the floor's width and

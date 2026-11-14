@@ -242,6 +242,46 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetPanEnvelope(
   pipe->set_pan_envelope(envelope);
 }
 
+// The listener's ears on top of the HRIR set (render::EarTune). It builds
+// the room's filters again, so it is called off the audio thread.
+JNIEXPORT void JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeSetEarTune(
+    JNIEnv* /*env*/, jclass /*clazz*/, jlong pipeline, jfloat size, jfloat freqHz, jfloat gainDb,
+    jfloat q) {
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) pipe->set_ear_tune(size, freqHz, gainDb, q);
+}
+
+// For the tuner's graph: what a speaker at (az, el) puts at the nearer ear,
+// in dB at each of `hz`. `out` gets the set as it is, then the same with the
+// tuning: twice `hz`'s length. From the pipeline's set, or the baked one
+// when there is no pipeline (nothing playing). Returns the points written
+// for each curve.
+JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeEarCurve(
+    JNIEnv* env, jclass /*clazz*/, jlong pipeline, jfloat size, jfloat freqHz, jfloat gainDb,
+    jfloat q, jfloat azDeg, jfloat elDeg, jfloatArray hz, jfloatArray out) {
+  if (hz == nullptr || out == nullptr) return 0;
+  const jsize n = env->GetArrayLength(hz);
+  if (n <= 0 || n > 512 || env->GetArrayLength(out) < 2 * n) return 0;
+  std::vector<float> f(static_cast<size_t>(n)), db(static_cast<size_t>(2 * n));
+  env->GetFloatArrayRegion(hz, 0, n, f.data());
+  tf::atmos::render::EarTune tune;
+  tune.size = size; tune.freq_hz = freqHz; tune.gain_db = gainDb; tune.q = q;
+  const tf::atmos::render::EarTune none;
+  const int ear = azDeg < 0.0f ? 0 : 1;
+  AtmosPipeline* pipe = pipeline_of(pipeline);
+  if (pipe != nullptr) {
+    pipe->ear_curve(none, azDeg, elDeg, ear, f.data(), n, db.data());
+    pipe->ear_curve(tune, azDeg, elDeg, ear, f.data(), n, db.data() + n);
+  } else {
+    tf::atmos::render::VirtualRoom::baked_ear_curve(none, azDeg, elDeg, ear, f.data(), n, db.data());
+    tf::atmos::render::VirtualRoom::baked_ear_curve(tune, azDeg, elDeg, ear, f.data(), n, db.data() + n);
+  }
+  env->SetFloatArrayRegion(out, 0, 2 * n, db.data());
+  return n;
+}
+
 // Objects rendered in the last frame, or 0 when the decoded bed played
 // instead (no JOC in the stream, none yet after a seek, or the bed mode).
 JNIEXPORT jint JNICALL

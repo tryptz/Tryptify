@@ -40,9 +40,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <thread>
 #include <vector>
 
+#include "../../dsp/util/finite.h"
 #include "../fft.h"
 #include "hrir_dfe.h"
 #include "hrir_table.h"
@@ -52,6 +54,64 @@
 namespace tf {
 namespace atmos {
 namespace render {
+
+// The listener's own ears, on top of whichever HRIR set is in use. A set is
+// somebody else's head: its left and right cues (level, time) carry over to
+// most listeners, its up and down cue does not, because that one is the
+// outer ear's own colouring of the top octaves and no two ears colour alike.
+// Heard through the wrong ear, "above" is only "a little brighter".
+//
+// Two things put that right by ear, while the music plays:
+//  - size: the ear's size against the set's. Every cue of the outer ear sits
+//    at a pitch that goes with its size, so a larger ear has them all lower.
+//    Each impulse response is stretched in time by `size` (over 1 a larger
+//    ear), which moves its whole spectrum down by the same ratio. The time
+//    between the ears is the head's, and is left as it is.
+//  - the height band: one bell (freq_hz, gain_db, q) on the speakers above
+//    ear level only, in full at 60 degrees up and less below (as the sine of
+//    the elevation), nothing at ear level. It makes the mark that says
+//    "above" stronger or weaker where the listener's own ear has it.
+//
+// The defaults change nothing, and then the filters are the set's own, bit
+// for bit.
+struct EarTune {
+  float size = 1.0f;
+  float freq_hz = 8000.0f;
+  float gain_db = 0.0f;
+  float q = 2.0f;
+
+  static constexpr float kMinSize = 0.8f, kMaxSize = 1.25f;
+  static constexpr float kMinHz = 3000.0f, kMaxHz = 14000.0f;
+  static constexpr float kMaxDb = 12.0f;
+  static constexpr float kMinQ = 0.5f, kMaxQ = 8.0f;
+
+  // Every field in its range; anything that is not a number is the default.
+  EarTune clamped() const {
+    EarTune t;
+    t.size = held(size, kMinSize, kMaxSize, 1.0f);
+    t.freq_hz = held(freq_hz, kMinHz, kMaxHz, 8000.0f);
+    t.gain_db = held(gain_db, -kMaxDb, kMaxDb, 0.0f);
+    t.q = held(q, kMinQ, kMaxQ, 2.0f);
+    return t;
+  }
+  bool sizes() const { return size < 0.999f || size > 1.001f; }
+  bool bands() const { return gain_db < -0.01f || gain_db > 0.01f; }
+  bool same(const EarTune& o) const {
+    return size == o.size && freq_hz == o.freq_hz && gain_db == o.gain_db && q == o.q;
+  }
+  // How much of the height band a speaker `el_deg` up gets, 0 to 1.
+  static float height_share(float el_deg) {
+    if (el_deg <= 0.0f) return 0.0f;
+    const float share = std::sin(el_deg * 0.01745329252f) / 0.8660254f;
+    return share > 1.0f ? 1.0f : share;
+  }
+
+ private:
+  static float held(float v, float lo, float hi, float fallback) {
+    if (!dspIsFinite(v)) return fallback;
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+};
 
 // One speaker of the room. Degrees; azimuth 0 ahead, positive to the right.
 struct RoomSpeaker {
@@ -124,7 +184,11 @@ class VirtualRoom {
     reserve(kTypicalFrame);
     reset_history();
 
-    build(sets_[0], &kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
+    {
+      std::lock_guard<std::mutex> lock(load_mutex_);
+      src_baked_ = true;
+      build(sets_[0], &kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
+    }
     active_.store(next_version(active_.load(std::memory_order_acquire)),
                   std::memory_order_seq_cst);
     applied_ = ~0u;
@@ -157,7 +221,44 @@ class VirtualRoom {
     if (count_ == 0 || data.size() < points * kHrirTaps || delay.size() < points) return;
     std::vector<float> dfe(kDfeTaps, 0.0f);
     design_dfe(data.data(), dfe.data());
-    publish(data.data(), delay.data(), dfe.data());
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    // Kept: the ear tuner builds the filters again from the set, whenever
+    // the listener moves it.
+    src_data_.assign(data.begin(), data.begin() + points * kHrirTaps);
+    src_delay_.assign(delay.begin(), delay.begin() + points);
+    src_dfe_ = dfe;
+    src_baked_ = false;
+    publish(src_data_.data(), src_delay_.data(), src_dfe_.data());
+  }
+
+  // The listener's ears on top of the set in use (EarTune). Builds the
+  // filters again, which allocates and takes a moment: a loader thread,
+  // never render(). Safe against set_hrir from another thread.
+  void set_ear_tune(const EarTune& tune) {
+    const EarTune t = tune.clamped();
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    if (t.same(tune_)) return;
+    tune_ = t;
+    if (count_ == 0) return;
+    publish(source_data(), source_delay(), source_dfe());
+  }
+  EarTune ear_tune() const {
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    return tune_;
+  }
+
+  // What a speaker at (az, el) puts at one ear (0 left, 1 right) with `tune`,
+  // in dB at each of `hz`: the set in use, not yet through the equalizer that
+  // every direction shares. For the tuner's graph; any thread but render().
+  void ear_curve(const EarTune& tune, float az_deg, float el_deg, int ear,
+                 const float* hz, int n, float* db) const {
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    curve_of(source_data(), source_delay(), tune.clamped(), sample_rate_, az_deg, el_deg, ear, hz, n, db);
+  }
+  // The same of the baked set, for when nothing is playing.
+  static void baked_ear_curve(const EarTune& tune, float az_deg, float el_deg, int ear,
+                              const float* hz, int n, float* db) {
+    curve_of(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], tune.clamped(), 48000, az_deg, el_deg, ear, hz, n, db);
   }
 
   // A measured or worked-out room in place of the built-in reflections and
@@ -181,6 +282,8 @@ class VirtualRoom {
   // Back to the baked set and its baked equalizer.
   void set_hrir_baked() {
     if (count_ == 0) return;
+    std::lock_guard<std::mutex> lock(load_mutex_);
+    src_baked_ = true;
     publish(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
   }
 
@@ -442,9 +545,9 @@ class VirtualRoom {
       }
       lookup(data, delay, speakers_[s].azimuth, speakers_[s].elevation, hl, hr, dl, dr);
       for (int ear = 0; ear < 2; ++ear) {
-        delayed_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, ir);
-        for (int k = 0; k < kIrLen; ++k) ir[k] *= scale;
-        for (int k = kIrLen; k < kFft; ++k) ir[k] = 0.0f;
+        tuned_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, tune_, sample_rate_,
+                     speakers_[s].elevation, ir);
+        for (int k = 0; k < kFilterLen; ++k) ir[k] *= scale;
         fft.forward(ir, spec + ear * kBins);
       }
     }
@@ -457,6 +560,91 @@ class VirtualRoom {
       set.dfe[n] = static_cast<float>(acc);
     }
     design_bass_shelf(data, dfe, static_cast<float>(sample_rate_), set.shelf);
+  }
+
+  // ── The listener's ears (EarTune) ────────────────────────────────────────
+
+  // The longest filter a block can take without its end wrapping round into
+  // its beginning: the transform less a block. The set's own filters are
+  // kIrLen; the height band's ringing has the rest.
+  static constexpr int kFilterLen = kFft - kBlock;
+
+  const float* source_data() const { return src_baked_ ? &kHrirData[0][0][0][0] : src_data_.data(); }
+  const float* source_delay() const { return src_baked_ ? &kHrirDelay[0][0][0] : src_delay_.data(); }
+  const float* source_dfe() const { return src_baked_ ? kDfe : src_dfe_.data(); }
+
+  // `h` (kHrirTaps, onset at tap 0) as a `size` times larger ear has it:
+  // stretched in time by `size`, so every feature of its spectrum is at
+  // 1/size of its pitch, at the same level. Band-limited (a Hann-windowed
+  // sinc, low-passed first when the ear is smaller and the response is
+  // squeezed). What a larger ear stretches past the last tap is dropped.
+  static void resized(const float* h, float size, float* out) {
+    const double step = 1.0 / size;                 // input samples per output sample
+    const double cut = size < 1.0f ? size : 1.0;    // of Nyquist
+    const double half = 8.0 / cut;                  // the window's half width, in input samples
+    for (int n = 0; n < kHrirTaps; ++n) {
+      const double x = n * step;
+      int k0 = static_cast<int>(std::floor(x - half)), k1 = static_cast<int>(std::ceil(x + half));
+      if (k0 < 0) k0 = 0;
+      if (k1 > kHrirTaps - 1) k1 = kHrirTaps - 1;
+      double acc = 0.0;
+      for (int k = k0; k <= k1; ++k) {
+        const double u = (x - k) * cut;
+        if (std::fabs(u) >= 8.0) continue;
+        const double sinc = std::fabs(u) < 1e-9 ? 1.0 : std::sin(kPiD * u) / (kPiD * u);
+        acc += h[k] * sinc * (0.5 + 0.5 * std::cos(kPiD * u / 8.0));
+      }
+      out[n] = static_cast<float>(acc * cut * step);
+    }
+  }
+
+  // An RBJ bell at `hz`, `db` up or down, in place over `x`.
+  static void bell(float* x, int n, double hz, double db, double q, int sample_rate) {
+    const double a = std::pow(10.0, db / 40.0);
+    const double w0 = 2.0 * kPiD * hz / sample_rate;
+    const double alpha = std::sin(w0) / (2.0 * q), c = std::cos(w0);
+    const double a0 = 1.0 + alpha / a;
+    const double b0 = (1.0 + alpha * a) / a0, b1 = -2.0 * c / a0, b2 = (1.0 - alpha * a) / a0;
+    const double a1 = -2.0 * c / a0, a2 = (1.0 - alpha / a) / a0;
+    double z1 = 0.0, z2 = 0.0;
+    for (int i = 0; i < n; ++i) {
+      const double in = x[i];
+      const double y = b0 * in + z1;
+      z1 = b1 * in - a1 * y + z2;
+      z2 = b2 * in - a2 * y;
+      x[i] = static_cast<float>(y);
+    }
+  }
+
+  // One ear's filter for a speaker `el_deg` up, as render() uses it: `h`
+  // through the listener's ear size, delayed as delayed_filter does it, then
+  // the height band. `ir` is kFft long, zero past kFilterLen. With nothing
+  // tuned it is delayed_filter's own answer, bit for bit.
+  static void tuned_filter(const float* h, float delay, const EarTune& tune, int sample_rate,
+                           float el_deg, float* ir) {
+    float sized[kHrirTaps];
+    if (tune.sizes()) {
+      resized(h, tune.size, sized);
+      h = sized;
+    }
+    delayed_filter(h, delay, ir);
+    for (int k = kIrLen; k < kFft; ++k) ir[k] = 0.0f;
+    const float share = EarTune::height_share(el_deg);
+    if (tune.bands() && share > 0.0f) {
+      bell(ir, kFilterLen, tune.freq_hz, tune.gain_db * share, tune.q, sample_rate);
+    }
+  }
+
+  static void curve_of(const float* data, const float* delay, const EarTune& tune, int sample_rate,
+                       float az_deg, float el_deg, int ear, const float* hz, int n, float* db) {
+    float hl[kHrirTaps], hr[kHrirTaps], dl, dr;
+    float ir[kFft];
+    lookup(data, delay, az_deg, el_deg, hl, hr, dl, dr);
+    tuned_filter(ear == 0 ? hl : hr, ear == 0 ? dl : dr, tune, sample_rate, el_deg, ir);
+    for (int i = 0; i < n; ++i) {
+      const double w = 2.0 * kPiD * hz[i] / sample_rate;
+      db[i] = static_cast<float>(10.0 * std::log10(tone_power(ir, kFilterLen, w) + 1e-12));
+    }
   }
 
   // ── Set design: the pieces ───────────────────────────────────────────────
@@ -1014,6 +1202,14 @@ class VirtualRoom {
   float room_ = 0.0f;
   bool bass_ = false;
   int crossover_hz_ = 80;
+
+  // The set the filters are built from, kept for the ear tuner to build them
+  // again, and the tuner itself. load_mutex_ is the loaders' own: render()
+  // never takes it.
+  mutable std::mutex load_mutex_;
+  bool src_baked_ = true;
+  std::vector<float> src_data_, src_delay_, src_dfe_;
+  EarTune tune_;
 
   // Filters: two sets, the published one's slot in bit 0 and a version above.
   FilterSet sets_[2];

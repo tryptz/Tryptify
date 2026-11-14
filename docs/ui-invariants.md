@@ -3519,6 +3519,34 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
   see-through thing over it. It covers the rows under it, most of their
   width; scrolling moves them out from under it.
+- **The ear tuner** (`AtmosEarTuner.kt`, under SOFA presets while the
+  binaural render is on or automatic) is one folding section, closed until
+  opened, saying "On" or "As the head" beside its title. Its design is the
+  owner's pick of four prototypes on 2026-11-14 ("A"), so keep its parts:
+  - **One card holds the graph and the pad**, the graph on top. The graph is
+    never a drawing of the settings: it is the filter that plays, asked of
+    the renderer (`AtmosAudioProcessor.earCurve`, `nativeEarCurve`) for the
+    layout's top front left speaker at the left ear, the head's own curve
+    dashed and quiet, the tuned one solid in the primary colour with a fade
+    under it, both against the head's level under 2.5 kHz. A pill with the
+    band's pitch marks where the height band is. `ear_tune_test` holds the
+    curve to what is heard.
+  - **The pad is a square** (`EarPadMap`, held by `EarTunerTest`): the dot is
+    ear size across (the head's own in the middle, smaller ears to the
+    left) and the height band's level up and down (more height up); the ring
+    round the dot is the band's width, set by the white handle on the ring's
+    diagonal, pulled along that diagonal alone. The handle's diagonal points
+    into the pad (it changes side past six tenths of the way across or
+    down), so it is never off the edge and out of reach. A ring in the
+    middle marks the head as it is, with a line from it to the dot.
+  - **The pad takes every move of a finger on it** (`change.consume()`), so
+    the page under it does not scroll while it is dragged.
+  - **It is heard while it is dragged**: `AtmosRendererViewModel.tuneEar`
+    hands each move to the renderer at once, ahead of the profile's save,
+    which waits for the hand to rest. Never route it through the save alone.
+  - The three values under the card are read-only, and the one being moved
+    is underlined. The band's pitch is the slider below, evenly by pitch.
+    Reset is the head as it is.
 - **Trapezoid panning** is a switch with its summary and, when on, three
   sliders: Ceiling width, Ceiling depth, Wall curve. It is off unless the
   listener turns it on: on, objects no longer play exactly where the mix
