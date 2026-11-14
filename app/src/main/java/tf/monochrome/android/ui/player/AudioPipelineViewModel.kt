@@ -52,6 +52,7 @@ class AudioPipelineViewModel @Inject constructor(
     private val spectrumTap: SpectrumAnalyzerTap,
     private val outputProbe: OutputDeviceProbe,
     private val atmosProcessor: AtmosAudioProcessor,
+    private val atmosFrames: tf.monochrome.android.audio.atmos.AtmosFrameBuffer,
     usbExclusive: UsbExclusiveController,
     dspEngine: DspEngineManager,
     preferences: PreferencesManager,
@@ -238,6 +239,7 @@ class AudioPipelineViewModel @Inject constructor(
             atmosObjects = live.atmosMix?.count ?: 0,
             atmosMoving = live.atmosMix?.moving ?: 0,
             atmosLfe = live.atmosMix?.lfe ?: false,
+            atmosStreamObjects = atmosFrames.streamObjects.value,
             outputChannels = poll.outputChannels,
         )
     }

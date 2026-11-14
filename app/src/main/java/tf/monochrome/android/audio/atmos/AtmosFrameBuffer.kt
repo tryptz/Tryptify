@@ -21,11 +21,35 @@ class AtmosFrameBuffer @Inject constructor() {
     /** A raw E-AC-3 access unit and the presentation time it was tapped at. */
     class TappedFrame(@JvmField val timeUs: Long, @JvmField val bytes: ByteArray)
 
+    /**
+     * How many Atmos objects the stream being read carries (its OAMD count,
+     * the LFE included), or 0 for none or not known. Read off the frames
+     * themselves, so it is known whether or not anything renders them: with
+     * the binaural render off the pipeline sheet said "6 (5.1)" and nothing
+     * showed the stream was an Atmos one.
+     */
+    private val _streamObjects = kotlinx.coroutines.flow.MutableStateFlow(0)
+    val streamObjects: kotlinx.coroutines.flow.StateFlow<Int> = _streamObjects
+    private var sinceProbe = 0
+
     private val lock = Any()
     private val frames = ArrayDeque<TappedFrame>()
 
     /** Records a raw E-AC-3 access unit at its presentation time. */
     fun put(timeUs: Long, bytes: ByteArray) {
+        // Every frame of an Atmos stream carries the count; one in 32 (a
+        // second) is plenty, and a stream's first frame is always looked at.
+        val last = synchronized(lock) { frames.lastOrNull() }
+        val jumped = last == null || timeUs < last.timeUs || timeUs - last.timeUs > CONTINUOUS_US
+        if (jumped || ++sinceProbe >= PROBE_EVERY) {
+            sinceProbe = 0
+            val objects = if (AtmosNative.isAvailable) {
+                runCatching { AtmosNative.nativeParseAtmos(bytes) }.getOrDefault(-1)
+            } else {
+                -1
+            }
+            _streamObjects.value = if (objects > 0) objects else 0
+        }
         synchronized(lock) {
             // A frame that does not follow the last one (a seek, another
             // song) starts afresh: what is buffered belongs to somewhere else.
@@ -75,6 +99,7 @@ class AtmosFrameBuffer @Inject constructor() {
         // ~128 frames * 1536 samples / 48 kHz ≈ 4 s of lookahead; far more than
         // the decoder's latency, and each frame is a few hundred bytes.
         const val MAX_FRAMES = 128
+        const val PROBE_EVERY = 32
         // Frames are 32 ms apart; past a quarter of a second it is a jump.
         const val CONTINUOUS_US = 250_000L
     }

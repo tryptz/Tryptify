@@ -209,6 +209,8 @@ data class AudioPipelineInputs(
     /** Of [atmosObjects], how many have moved; the rest (but the LFE) are the mix's bed. */
     val atmosMoving: Int = 0,
     val atmosLfe: Boolean = false,
+    /** Objects the stream carries, whether or not they are rendered; 0 for none. */
+    val atmosStreamObjects: Int = 0,
     /** Channels leaving the chain for the platform; null before a stream. */
     val outputChannels: Int? = null,
     /** The EBU R128 meter at the end of the chain; null before it has measured anything. */
@@ -368,6 +370,11 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
                         atmosChannels(
                             count, input.chain?.layoutName, input.atmosObjects, input.atmosMoving, input.atmosLfe,
                         )
+                    } else if (input.atmosStreamObjects > 0 && (count ?: 0) > 2) {
+                        // An Atmos stream with nothing rendering its objects:
+                        // still an Atmos stream, and said to be.
+                        channels(count, input.chain?.layoutName?.takeIf { it.isNotBlank() }?.let { "$it core" })
+                            ?.let { "$it + ${input.atmosStreamObjects} Atmos objects, not rendered" }
                     } else {
                         channels(count, input.chain?.layoutName)
                     }
@@ -472,7 +479,8 @@ fun buildAudioPipelineSnapshot(input: AudioPipelineInputs): AudioPipelineSnapsho
             PipelineField("EQ Preset", input.eqPresetName?.takeIf { it.isNotBlank() }),
             // Only for a multichannel source; a stereo track has no Atmos
             // stage, and a dash there would read as something missing.
-            input.atmos?.let { PipelineField("Atmos", it.label) },
+            (input.atmos?.label ?: "Objects not rendered: Binaural render is off, the core is folded to stereo"
+                .takeIf { input.atmosStreamObjects > 0 })?.let { PipelineField("Atmos", it) },
             PipelineField(
                 "Stereo Expand",
                 input.stereoWidthDb?.let {
