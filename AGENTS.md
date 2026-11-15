@@ -324,66 +324,24 @@ stream to that server's origin only: the API client's network interceptor
 (`NetworkModule`, per redirect hop) and the players' data sources
 (`PlaybackService`, `SongPreview`). `ApiServerTest` holds the origin match.
 
-## The listener's Claude API key is a device secret
+## There is no assistant in the app
 
-The assistant calls the Claude API with the listener's own key
-(`data/assistant/`), typed once into the Ask Claude sheet. It is kept in the
-DataStore key `claude_api_key`, deliberately not in `SETTINGS_SYNC_KEYS`, is
-never in the APK, and `LogRedactor` takes any `sk-ant-…` out of every log
-line (`ClaudeEqTest`). Nothing reads it back to the page: the sheet knows
-only whether one is saved. Never add a build-time key, a key in a test, or a
-call that sends the key anywhere but Anthropic's API through the official
-SDK (`com.anthropic:anthropic-java`; its jar carries its own R8 rules).
+An in-app assistant and an "ask for an EQ" sheet on the AutoEQ screen, both
+calling a model's API with a key the listener typed in, were built on
+2026-11-14 and taken out the next day (the owner's decision). Do not put them
+back, or any other call to a model from the app, without being asked. What is
+left of them is on purpose:
 
-**Ask Claude on the AutoEQ screen** (`ui/eq/AskClaudeEqSheet.kt`,
-`ClaudeEq`, `ClaudeEqClient`): the listener gives a picture of a frequency
-response graph, a wish in words, or both, optionally with the filters in
-use, and Claude answers with filters in a fixed JSON shape (structured
-output; the model is `claude-opus-5-5`). The answer is a proposal: nothing
-changes until Apply, which takes the road an imported profile takes
-(`EqViewModel.importApoProfile`: saved as a preset, preamp held to the
-headroom). Whatever comes back is held to `ClaudeEq`'s limits before it is
-shown (10 filters, ±12 dB, Q 0.2 to 10, 20 Hz to 20 kHz, a preamp that is
-never a boost): the prompt states the same limits, and a test holds the two
-together. A refusal or a cut-off answer is said as such, never parsed. The
-SDK at 3.3.0 has no builder for server-side refusal fallbacks, so none is
-sent. The assistant asks before every change; an "auto" mode, when there is
-one, must go back to asking when the app closes (the owner's rule).
+- `PreferencesManager.forgetAssistantKey`, run at every start: it takes the
+  key and the model choice an earlier build stored off the phone. Nothing
+  could show or delete them otherwise.
+- `LogRedactor` still hides an `sk-ant-…` key in a log line
+  (`LogRedactorTest`): a line from one of those builds may carry one.
+- `docs/manual.md`, the manual that was written for the assistant. It is a
+  document now and is not in the APK.
 
-**The assistant** (Settings › System › Assistant; `data/assistant/Assistant.kt`,
-`AssistantTools`, `AssistantSettings`, `ui/assistant/`) is a conversation
-with the same key and model, in which Claude can act in the app through five
-tools: `get_settings`, `set_setting`, `open_screen`, `playback`,
-`now_playing`. What it knows of the app is the manual, which ships in the
-APK for it (`app/src/main/assets/assistant/manual.md`; `docs/manual.md`
-points there): keep the manual true to the app, since the assistant is told
-to say nothing the manual does not support.
-
-- **The model is the listener's choice** (`ClaudeModel`: Opus, Sonnet or
-  Haiku 5.5; the DataStore key `claude_model`, device-local with the key),
-  one choice for the assistant and Ask Claude, picked by chips on both.
-  Opus until they choose: what they ask is billed to their key.
-- **It asks before every change.** `set_setting`, `open_screen` and
-  `playback` each wait for the listener's Allow. Auto lets them through; it
-  is a field of the `Assistant` singleton, in memory only, so it is off
-  again whenever the app has closed. Never store it.
-- **What it may touch is a generated table**, `AssistantSettingKeys.kt`,
-  written by `tools/assistant_settings/generate.py` from
-  `SETTINGS_SYNC_KEYS`: the listener's own choices, never a sign-in. Whole
-  documents (`*_JSON`), addresses, user names and developer mode are left
-  out. Run the script after adding, removing or retyping a synced setting;
-  `AssistantTest` reads `PreferencesManager.kt` and fails when the table is
-  stale. The type matters: a value stored under the wrong type crashes the
-  app where the setting is next read, so `AssistantSettings.typed` refuses
-  what is not the key's own type.
-- **Switches and numbers can be changed; text settings are read only.**
-  Which texts a setting accepts is not known to the table. For anything it
-  cannot set, the assistant opens the screen and says what to tap.
-- A setting it changes is written to the DataStore directly, not through
-  its screen's view model: a screen that is open and holds its own copy
-  shows the change when it is next opened.
-- A turn that fails is taken back out of the conversation, so the next
-  request is one the API accepts; what was already done stays done.
+The live log (below, under its own heading) was built in the same days and
+stays.
 
 ## Tryptify Cloud
 

@@ -228,11 +228,11 @@ class PreferencesManager @Inject constructor(
         private val API_SERVERS = stringPreferencesKey("api_servers")
         // Device-local, like the Subsonic sign-in: never in SETTINGS_SYNC_KEYS.
         private val API_SERVER_PASSWORDS = stringPreferencesKey("api_server_passwords")
-        // The listener's own Claude API key, for the assistant. Device-local
-        // like every sign-in: never in SETTINGS_SYNC_KEYS.
-        private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
-        // Which model that key is spent on. With the key, on this device only.
-        private val CLAUDE_MODEL = stringPreferencesKey("claude_model")
+        // What the in-app assistant kept (the listener's own API key and
+        // their choice of model), from the builds that had one. Nothing reads
+        // them now: [forgetAssistantKey] takes them off the phone.
+        private val RETIRED_ASSISTANT_KEY = stringPreferencesKey("claude_api_key")
+        private val RETIRED_ASSISTANT_MODEL = stringPreferencesKey("claude_model")
 
         // Lyrics 3D appearance (legacy per-field keys, read for migration only)
         private val LYRICS_3D_ROTATION = floatPreferencesKey("lyrics_3d_rotation")
@@ -1169,46 +1169,16 @@ class PreferencesManager @Inject constructor(
         }
     }
 
-    /** The listener's own Claude API key, empty when none is saved. A device secret: see AGENTS.md. */
-    val claudeApiKey: Flow<String> = dataStore.data.map { prefs -> prefs[CLAUDE_API_KEY].orEmpty() }
-
-    /** The model the assistant uses (`ClaudeModel.stored`); empty until one is chosen. */
-    val claudeModel: Flow<String> = dataStore.data.map { prefs -> prefs[CLAUDE_MODEL].orEmpty() }
-
-    suspend fun setClaudeModel(stored: String) {
-        dataStore.edit { it[CLAUDE_MODEL] = stored }
-    }
-
-    /** Saves the Claude API key, or forgets it when blank. */
-    suspend fun setClaudeApiKey(key: String) {
-        dataStore.edit { prefs ->
-            if (key.isBlank()) prefs.remove(CLAUDE_API_KEY) else prefs[CLAUDE_API_KEY] = key.trim()
-        }
-    }
-
     /**
-     * The stored values of [names], for the assistant (`AssistantSettings`,
-     * which decides what may be asked for). A setting never changed from its
-     * default has no stored value and is left out.
+     * Takes the retired assistant's API key and model choice out of the
+     * store. The assistant was removed on 2026-11-15 (the owner's decision);
+     * a key typed into an earlier build would otherwise stay on the phone
+     * for good, with nothing left that could show or delete it.
      */
-    suspend fun storedValues(names: Collection<String>): Map<String, Any> {
-        val wanted = names.toSet()
-        return dataStore.data.first().asMap().entries
-            .filter { it.key.name in wanted }
-            .associate { it.key.name to it.value }
-    }
-
-    /** Stores [value] under the key [name], as the type of [value]: the caller has made it the key's own type. */
-    suspend fun storeValue(name: String, value: Any) {
+    suspend fun forgetAssistantKey() {
         dataStore.edit { prefs ->
-            when (value) {
-                is Boolean -> prefs[booleanPreferencesKey(name)] = value
-                is Int -> prefs[intPreferencesKey(name)] = value
-                is Long -> prefs[longPreferencesKey(name)] = value
-                is Float -> prefs[floatPreferencesKey(name)] = value
-                is Double -> prefs[doublePreferencesKey(name)] = value
-                else -> error("no setting is stored as ${value::class.simpleName}")
-            }
+            prefs.remove(RETIRED_ASSISTANT_KEY)
+            prefs.remove(RETIRED_ASSISTANT_MODEL)
         }
     }
 

@@ -13,6 +13,14 @@ class LogRedactorTest {
     private fun redact(s: String) = LogRedactor.redact(s, emptyMap())
 
     @Test
+    fun anAssistantApiKeyNeverStaysInALogLine() {
+        // An earlier build had the listener type one in; a line from then may still carry it.
+        val line = redact("request failed for key sk-ant-api03-AbCdEf123456_-xyz and more")
+        org.junit.Assert.assertFalse("AbCdEf123456" in line)
+        org.junit.Assert.assertTrue("and more" in line)
+    }
+
+    @Test
     fun aMusicServersSignInIsHidden() {
         val out = redact("GET http://nas.local/rest/stream?id=7&u=me&t=0123abcd&s=salt99&v=1.16.1")
         assertEquals("GET http://nas.local/rest/stream?id=7&u=<redacted>&t=<redacted>&s=<redacted>&v=1.16.1", out)

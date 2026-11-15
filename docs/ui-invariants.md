@@ -3485,19 +3485,6 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   reading of the meter. Measured with Skia's CPU renderer on the check
   frame, a frame took 38% less than before these; nobody has measured it
   on a phone.
-- **The assistant's page says what is about to happen and what happened.**
-  A change waits in a card that names it ("Set gapless_playback to false",
-  "Open the Mixer") with Allow and No; afterwards a line says Done or Not
-  done. Auto is a switch at the top with its meaning under it, and it is
-  off whenever the app starts: never remember it. The key is typed into a
-  password field and never shown again.
-- **Ask Claude proposes, the listener applies.** The Ask Claude sheet on
-  the AutoEQ screen never changes the equaliser by itself: it shows Claude's
-  summary and every filter, and Apply is the only thing that acts (the
-  owner's rule for the assistant: ask before every change). The key field
-  is a password field and the saved key is never shown again, only Forget
-  key. Do not add an auto-apply here without the owner's "auto" switch,
-  which resets when the app closes.
 - **Show sound in the room** (`RendererProfile.roomSound`, the switch under
   the room) turns the drawing of the sound off: no grain, no rays, no
   turning spots, and the clock that redraws the room between the meter's
