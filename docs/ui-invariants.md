@@ -482,6 +482,16 @@ opened (seen on device, a `StackOverflowError` in `getDensity`). Work out
 every length before recording either way. `record { drawContent() }` is safe:
 `drawContent()` draws the children in their own scopes.
 
+**The shafts are drawn at half size and scaled up** (`SHAFTS_SCALE`, in
+`LyricBackdropFx`). They are soft by their making, an average along each
+pixel's way to the light, and at full size over the whole screen they were
+what took the lyric view from 119 frames a second to 62 to 72 on a 165 Hz
+phone. Every px length in the shader is scaled with the layer
+(`setGodRayUniforms`'s `px`): a uniform added in px takes it too. **The shadow
+has a layer of its own, at full size**, drawn first: it is the letters' own
+shape a few px away, and in the shafts' layer it held them to full size. The
+light on the letters (`ON_LETTERS`) is never drawn small: that is their edge.
+
 **"On top" is the backdrop's shafts plus the letters' own light, added to
 their own pixels.** A layer under the letters cannot add light over them, so
 `lyricRaysOnLetters` does that part alone (`uOnLetters`): a render effect on

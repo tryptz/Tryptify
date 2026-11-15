@@ -299,6 +299,17 @@ effects rebuilt in every frame, because each glass block read the music
 links' values, new every frame while anything is linked
 (`rememberLinkedGlass` in `docs/ui-invariants.md`).
 
+That was a real waste and not the stutter. The next day's log, with that fix
+in, still had 27 to 37 slabs built in every frame on every screen, the home
+screen included, at 138 frames a second and 5 ms of GPU: the player's glass
+has surface motion on by default, so each pane is a new frame of an
+animation, and it is cheap. What the slow seconds had in common was the god
+rays: the lyric view drew 119 frames a second with them off and 62 to 72 with
+them on, the GPU at 19 to 28 ms. Sort the log's seconds by what was at work
+(the query is in the session of 2026-11-15) before reading any one of them:
+a count that is high everywhere, fast screens too, is not the cause. The
+shafts are drawn at half size since (`SHAFTS_SCALE`).
+
 ## A listener's Subsonic server is a device secret
 
 Settings › Connections › Music server stores one Subsonic server

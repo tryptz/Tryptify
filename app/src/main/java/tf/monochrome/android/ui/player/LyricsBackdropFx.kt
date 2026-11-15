@@ -1,6 +1,5 @@
 package tf.monochrome.android.ui.player
 
-import android.graphics.BlendMode
 import android.graphics.RenderEffect
 import android.os.Build
 import androidx.compose.foundation.layout.Box
@@ -24,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.CompositingStrategy as LayerCompositingStrategy
 import androidx.compose.ui.graphics.layer.GraphicsLayer
@@ -193,6 +193,7 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
     RaysProbe.backdropState = "composed"
     val origin = remember { mutableStateOf<Offset?>(null) }
     val fxLayer = rememberGraphicsLayer()
+    val shadeLayer = rememberGraphicsLayer()
 
     Box(
         modifier
@@ -209,29 +210,22 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                 }
                 val f = light?.frameFor(at)
                 if (raysLight != null && f == null) RaysProbe.hit(RaysProbe.Backdrop.NO_LIGHT_FRAME)
+                // The shafts are drawn small and scaled up ([SHAFTS_SCALE]).
+                val down = SHAFTS_SCALE
                 val rays = if (raysLight != null && f != null && shader != null &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 ) {
-                    setGodRayUniforms(shader, raysLight, f, RayOutput.SHAFTS, emission = LYRIC_COPY_EMISSION)
+                    setGodRayUniforms(shader, raysLight, f, RayOutput.SHAFTS, emission = LYRIC_COPY_EMISSION, px = down)
                     RenderEffect.createRuntimeShaderEffect(shader, "content")
                 } else {
                     null
                 }
                 val shade = if (shadow) lyricShadowEffect(live.lyrics(fx), f) else null
-                // The effect and the copy it reads are set in the one place,
-                // so the copy itself can never be drawn bare.
-                val effect = when {
-                    rays != null && shade != null -> RenderEffect.createBlendModeEffect(shade, rays, BlendMode.SRC_OVER)
-                    rays != null -> rays
-                    else -> shade
-                } ?: run {
+                if (rays == null && shade == null) {
                     RaysProbe.hit(RaysProbe.Backdrop.NO_EFFECT)
                     return@drawBehind
                 }
                 RaysProbe.hit(if (rays != null) RaysProbe.Backdrop.RAYS else RaysProbe.Backdrop.SHADOW_ONLY)
-                // Its own buffer, so the copy's edge fade (DstIn) cuts the copy alone.
-                fxLayer.compositingStrategy = LayerCompositingStrategy.Offscreen
-                fxLayer.renderEffect = effect.asComposeRenderEffect()
                 // Every length in px before recording, and recorded with a
                 // plain Density rather than through the node's own record { }:
                 // inside that block the node's draw scope reads its density
@@ -239,14 +233,35 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                 // stack overflowed, the moment the lyrics opened (seen on
                 // device). Here the block draws in the layer's own scope.
                 val feather = 14.dp.toPx()
-                fxLayer.record(
-                    Density(density, fontScale),
-                    layoutDirection,
-                    IntSize(ceil(size.width).toInt(), ceil(size.height).toInt()),
-                ) {
-                    drawLetterCopy(capture, letters, capture.originInRoot - at, feather)
+                val plain = Density(density, fontScale)
+                val copyAt = capture.originInRoot - at
+                // The shadow first, under the shafts, at full size: it is the
+                // letters' own shape a few px from them. It had the shafts in
+                // its layer, one effect over the other, which held the shafts
+                // to full size too. Each layer's effect and the copy it reads
+                // are set in the one place, so the copy is never drawn bare,
+                // and each has its own buffer, so the copy's edge fade (DstIn)
+                // cuts the copy alone.
+                if (shade != null) {
+                    shadeLayer.compositingStrategy = LayerCompositingStrategy.Offscreen
+                    shadeLayer.renderEffect = shade.asComposeRenderEffect()
+                    shadeLayer.record(plain, layoutDirection, IntSize(ceil(size.width).toInt(), ceil(size.height).toInt())) {
+                        drawLetterCopy(capture, letters, copyAt, feather)
+                    }
+                    drawLayer(shadeLayer)
                 }
-                drawLayer(fxLayer)
+                if (rays != null) {
+                    fxLayer.compositingStrategy = LayerCompositingStrategy.Offscreen
+                    fxLayer.renderEffect = rays.asComposeRenderEffect()
+                    fxLayer.record(
+                        plain,
+                        layoutDirection,
+                        IntSize(ceil(size.width * down).toInt(), ceil(size.height * down).toInt()),
+                    ) {
+                        scale(down, down, pivot = Offset.Zero) { drawLetterCopy(capture, letters, copyAt, feather) }
+                    }
+                    scale(1f / down, 1f / down, pivot = Offset.Zero) { drawLayer(fxLayer) }
+                }
             },
     )
 }

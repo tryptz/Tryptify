@@ -367,6 +367,21 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
     }
 }
 
+/**
+ * The size the backdrop's shafts are drawn at, against the screen: half each
+ * way, a quarter of the pixels, scaled back up as they are laid down.
+ *
+ * Shafts are soft by their making: each pixel is an average of the light
+ * along its way to the source, so there is nothing in them a half-size
+ * drawing loses. What it saves is most of the rays' cost. The shafts layer is
+ * the whole screen and every pixel in reach of the sung line marches 16 to 50
+ * samples; on a phone with the rays on, the lyric view drew 62 to 72 frames a
+ * second with the GPU 19 to 28 ms in each, against 119 with them off (the
+ * live log, 2026-11-14, a 165 Hz screen). The light on the letters themselves
+ * ([RayOutput.ON_LETTERS]) stays at full size: that is the letters' own edge.
+ */
+internal const val SHAFTS_SCALE = 0.5f
+
 /** What a rays layer hands back: [GOD_RAYS_SRC]'s `uRaysOnly` and `uOnLetters`. */
 internal enum class RayOutput {
     /**
@@ -393,7 +408,9 @@ internal enum class RayOutput {
  * of the layer [f] was moved into. [output] says what the layer hands back.
  * [emission] scales how much light the letters give: the backdrop's copy is
  * taken before the glass, at full strength, where the shafts were tuned on the
- * glass's see-through letters.
+ * glass's see-through letters. [px] is the layer's size against the one [f]
+ * is in: under 1 for a layer drawn small and scaled back up
+ * ([SHAFTS_SCALE]), and then every length here is that much shorter.
  *
  * The shader is shared ([godRaysShader]), so this runs right before every
  * effect made from it, and sets every uniform on every path: one it left out
@@ -407,18 +424,19 @@ internal fun Density.setGodRayUniforms(
     f: RayFrame,
     output: RayOutput,
     emission: Float = 1f,
+    px: Float = 1f,
 ) {
     val fx = light.fx
     val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
     val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
 
-    shader.setFloatUniform("uLight", f.light.x, f.light.y)
+    shader.setFloatUniform("uLight", f.light.x * px, f.light.y * px)
     shader.setFloatUniform("uSource", fx.godRaySource.toFloat())
     shader.setFloatUniform("uOnTop", if (fx.godRaysOnTop) 1f else 0f)
     shader.setFloatUniform("uRaysOnly", if (output == RayOutput.SHAFTS) 1f else 0f)
     shader.setFloatUniform("uOnLetters", if (output == RayOutput.ON_LETTERS) 1f else 0f)
     shader.setFloatUniform("uDensity", f.density)
-    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.scale)
+    shader.setFloatUniform("uReachCap", GodRayGeometry.REACH_CAP_SHARE * f.scale * px)
     shader.setFloatUniform("uSamples", samples.toFloat())
     shader.setFloatUniform("uDecay", decay)
     shader.setFloatUniform(
@@ -428,19 +446,19 @@ internal fun Density.setGodRayUniforms(
     shader.setFloatUniform("uCenterTap", GodRayGeometry.CENTER_TAP)
     shader.setFloatUniform("uBacklightGain", GodRayGeometry.BACKLIGHT_GAIN * f.exposure)
     shader.setFloatUniform("uDecayRef", fx.godRayDecay)
-    shader.setFloatUniform("uFalloffLen", f.density * f.scale)
+    shader.setFloatUniform("uFalloffLen", f.density * f.scale * px)
     // Inflated a little: the pump and the per-letter wave carry glyphs a
     // few dp past the item's own box.
     val pad = 2.dp.toPx()
     val line = f.line
     if (line != null) {
-        shader.setFloatUniform("uBand", line.left - pad, line.top - pad, line.right + pad, line.bottom + pad)
+        shader.setFloatUniform("uBand", (line.left - pad) * px, (line.top - pad) * px, (line.right + pad) * px, (line.bottom + pad) * px)
     } else {
         shader.setFloatUniform("uBand", 0f, 1f, 0f, 0f)
     }
-    shader.setFloatUniform("uFeather", 5.dp.toPx(), 3.dp.toPx())
+    shader.setFloatUniform("uFeather", 5.dp.toPx() * px, 3.dp.toPx() * px)
     shader.setFloatUniform("uGuard", GodRayGeometry.LEGIBILITY_GUARD)
-    shader.setFloatUniform("uSunR", fx.godRaySunSize * f.scale)
+    shader.setFloatUniform("uSunR", fx.godRaySunSize * f.scale * px)
     shader.setFloatUniform("uSunColor", light.color.red, light.color.green, light.color.blue)
     shader.setFloatUniform("uShimmer", fx.godRayShimmer)
     shader.setFloatUniform(
