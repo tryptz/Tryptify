@@ -217,13 +217,15 @@ private fun khz(hz: Float): String = String.format(Locale.getDefault(), "%.1f kH
 
 /** Where the graph asks for the response: 1 to 20 kHz, evenly by pitch. */
 private val EAR_GRAPH_HZ = FloatArray(96) { 1000f * 20f.pow(it / 95f) }
-private const val GRAPH_DB = 42f       // top to bottom
-private const val GRAPH_ZERO = 0.36f   // where the head's own level sits, from the top
+private const val GRAPH_SPAN_DB = 36f  // the least the graph shows, top to bottom
+private const val GRAPH_FLOOR_DB = -30f // a notch deeper than this is drawn at this
+private const val GRAPH_MARGIN_DB = 3f
 
 /**
  * [curves] is the head's response and then the tuned one, in dB at each of
  * [EAR_GRAPH_HZ]; null until the renderer has answered. Both are drawn
- * against the head's own level under 2.5 kHz, where no ear does anything.
+ * against the head's own level under 2.5 kHz, where no ear does anything,
+ * on a scale that holds them both ([earGraphRange]).
  */
 @Composable
 private fun EarGraph(tune: EarTune, curves: FloatArray?) {
@@ -239,16 +241,21 @@ private fun EarGraph(tune: EarTune, curves: FloatArray?) {
         val n = EAR_GRAPH_HZ.size
         val top = 20.dp.toPx()
         val bottom = size.height - 16.dp.toPx()
-        val zero = top + (bottom - top) * GRAPH_ZERO
-        val perDb = (bottom - top) / GRAPH_DB
         fun x(hz: Float) = size.width * ln(hz / 1000f) / ln(20f)
-        drawLine(line, Offset(0f, zero), Offset(size.width, zero), strokeWidth = 1.dp.toPx())
 
         if (curves != null && curves.size == 2 * n) {
             var level = 0f
             var counted = 0
             for (i in 0 until n) if (EAR_GRAPH_HZ[i] < 2500f) { level += curves[i]; counted++ }
             level /= counted.coerceAtLeast(1)
+            // The scale is the curves' own: what is drawn is never cut off at
+            // the top. With a fixed scale a head that is already 10 dB up at
+            // the band had no room left, and a boost of 12 was drawn as none
+            // ("the ear tuner doesn't boost", the owner, 2026-11-14).
+            val range = earGraphRange(curves, level)
+            val perDb = (bottom - top) / (range.endInclusive - range.start)
+            val zero = top + range.endInclusive * perDb
+            drawLine(line, Offset(0f, zero), Offset(size.width, zero), strokeWidth = 1.dp.toPx())
             fun y(db: Float) = (zero - (db - level) * perDb).coerceIn(top, bottom)
             fun path(from: Int) = Path().apply {
                 for (i in 0 until n) {
@@ -287,6 +294,28 @@ private fun EarGraph(tune: EarTune, curves: FloatArray?) {
             drawText(t, topLeft = Offset(px, size.height - t.size.height))
         }
     }
+}
+
+/**
+ * What the graph shows of [curves] (the head's and the tuned response), in dB
+ * against [level]: from under the lowest of them to over the highest, with a
+ * margin, at least [GRAPH_SPAN_DB] wide, and never below [GRAPH_FLOOR_DB],
+ * where a notch's bottom is of no interest.
+ */
+internal fun earGraphRange(curves: FloatArray, level: Float): ClosedFloatingPointRange<Float> {
+    var high = 0f
+    var low = 0f
+    for (v in curves) {
+        val db = v - level
+        if (db > high) high = db
+        if (db < low) low = db
+    }
+    high += GRAPH_MARGIN_DB
+    low = (low - GRAPH_MARGIN_DB).coerceAtLeast(GRAPH_FLOOR_DB)
+    val short = GRAPH_SPAN_DB - (high - low)
+    if (short > 0f) low = (low - short).coerceAtLeast(GRAPH_FLOOR_DB)
+    if (high - low < GRAPH_SPAN_DB) high = low + GRAPH_SPAN_DB
+    return low..high
 }
 
 private val GRAPH_TICKS = listOf(1000f to "1k", 2000f to "2k", 5000f to "5k", 10000f to "10k", 20000f to "20k")

@@ -3543,7 +3543,11 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
     dashed and quiet, the tuned one solid in the primary colour with a fade
     under it, both against the head's level under 2.5 kHz. A pill with the
     band's pitch marks where the height band is. `ear_tune_test` holds the
-    curve to what is heard.
+    curve to what is heard. **The graph's scale is the curves' own**
+    (`earGraphRange`): on a fixed scale a head already 10 dB up at the band
+    left no room, a boost of 12 was drawn as nothing while a cut showed, and
+    the owner read it as "the ear tuner doesn't boost". Never clamp a curve
+    at the top of the graph.
   - **The pad is a square** (`EarPadMap`, held by `EarTunerTest`): the dot is
     ear size across (the head's own in the middle, smaller ears to the
     left) and the height band's level up and down (more height up); the ring

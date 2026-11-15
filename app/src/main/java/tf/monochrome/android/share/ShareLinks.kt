@@ -57,16 +57,26 @@ class ShareLinks @Inject constructor(
      */
     suspend fun shareTrack(track: Track, unified: UnifiedTrack?, previewStartSec: Int? = null) {
         val source = unified?.source
+        // The song as a catalogue has it, looked for: by its ISRC, else its name and length.
+        suspend fun found(why: String): SharedLink? = withContext(Dispatchers.IO) {
+            localLink(
+                track, unified?.isrc,
+                byIsrc = { runCatching { apiClient.findQobuzTrackByIsrc(it) }.getOrNull() },
+                byName = { runCatching { apiClient.searchTracks(it, limit = 20) }.getOrDefault(emptyList()) },
+            )
+        }.also {
+            Log.i(TAG, "share link: $why, ${if (it == null) "found in no catalogue" else "found as ${it.source.slug} ${it.track}"} (isrc ${SharedLink.isrcOf(unified?.isrc) ?: "none"}, ${track.duration} s)")
+        }
         val link = when (source) {
             is PlaybackSource.Scxyt -> signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it, previewStartSec) }
             // A file of the listener's own: the song it is in a catalogue, if it is in one.
-            is PlaybackSource.LocalFile -> withContext(Dispatchers.IO) {
-                localLink(
-                    track, unified?.isrc,
-                    byIsrc = { runCatching { apiClient.findQobuzTrackByIsrc(it) }.getOrNull() },
-                    byName = { runCatching { apiClient.searchTracks(it, limit = 20) }.getOrDefault(emptyList()) },
-                )
-            }.also { Log.i(TAG, "share link: a local file ${if (it == null) "found in no catalogue" else "is ${it.source.slug} ${it.track}"} (isrc ${SharedLink.isrcOf(unified?.isrc) ?: "none"})") }
+            is PlaybackSource.LocalFile -> found("a local file")
+            // A catalogue's song whose album is not known here (one from a
+            // playlist or an import, played from its copy on the phone) has
+            // no link of its own making: it is looked for like a file.
+            is PlaybackSource.QobuzCached, is PlaybackSource.AppleCached,
+            is PlaybackSource.DeezerPreview, is PlaybackSource.HiFiApi, null ->
+                linkFor(track, source, unified?.pageUrl) ?: found("a ${source?.let { it::class.simpleName } ?: "catalogue"} song with no album")
             else -> linkFor(track, source, unified?.pageUrl)
         }
         if (link == null) {

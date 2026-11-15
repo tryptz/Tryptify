@@ -516,7 +516,10 @@ recording by that code; without a code, or where Qobuz has none for it, the
 catalogue is searched for the artist and title and the song within two
 seconds of the file's length is taken (`sameSong`: a live take or a remaster
 is another length). The code goes in the link either way. A recording found
-in neither has no link, as before. `LocalShareLinkTest` holds it.
+in neither has no link, as before. A catalogue's own song whose album is not
+known on the phone (one from a playlist or an import, shown as "Qobuz via
+Local") cannot make its link either, and is looked for the same way.
+`LocalShareLinkTest` holds it.
 
 **The preview starts where the song is playing**, when the song shared is
 the one playing or paused (`PlayerViewModel.previewStartFor`,

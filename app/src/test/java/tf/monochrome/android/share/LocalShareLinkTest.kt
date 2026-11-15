@@ -93,6 +93,20 @@ class LocalShareLinkTest {
     }
 
     @Test
+    fun `a long version is found by its own length, not the single's`() = runBlocking {
+        // An eight-minute mix on the phone: the catalogue's four-minute single is not it.
+        val mix = track(-5, "Turn the Tide", "Sylver", 480)
+        val catalogue = listOf(
+            track(21, "Turn the Tide", "Sylver", 244, album = 3),
+            track(22, "Turn the Tide (Extended Mix)", "Sylver", 481, album = 4),
+        )
+        val link = ShareLinks.localLink(mix, null, byIsrc = { null }, byName = { catalogue })!!
+        assertEquals(22L, link.track)
+        assertEquals(480, link.durationSec)
+        assertNull(ShareLinks.localLink(mix, null, byIsrc = { null }, byName = { catalogue.take(1) }))
+    }
+
+    @Test
     fun `a recording of one's own has no link`() = runBlocking {
         assertNull(ShareLinks.localLink(file, null, byIsrc = { null }, byName = { emptyList() }))
         assertNull(ShareLinks.localLink(file.copy(title = ""), "nonsense", byIsrc = { error("not a code") }, byName = never))

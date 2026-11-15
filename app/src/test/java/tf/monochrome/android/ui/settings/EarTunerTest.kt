@@ -84,6 +84,25 @@ class EarTunerTest {
     }
 
     @Test
+    fun `the graph's scale holds a boost on a head that is already loud there`() {
+        // A head 10 dB up at the band, and a tuning that adds 12: the top of the tuned curve is 22.
+        val head = floatArrayOf(0f, 2f, 10f, -8f)
+        val tuned = floatArrayOf(0f, 2f, 22f, -8f)
+        val range = earGraphRange(head + tuned, level = 0f)
+        assertTrue("the boost's top is inside the graph", range.endInclusive > 22f)
+        assertTrue(range.start < -8f)
+        // A flat pair still gets a graph of a sensible height, and a deep notch does not stretch it.
+        val flat = earGraphRange(floatArrayOf(0f, 1f, 0f, 1f), level = 0f)
+        assertTrue(flat.endInclusive - flat.start >= 36f)
+        val notch = earGraphRange(floatArrayOf(0f, -80f, 5f, 0f), level = 0f)
+        assertEquals(-30f, notch.start, 0f)
+        assertTrue(notch.endInclusive > 5f)
+        // Against the head's own level, wherever its numbers sit.
+        val moved = earGraphRange(floatArrayOf(-40f, -38f, -18f, -48f), level = -40f)
+        assertTrue(moved.endInclusive > 22f)
+    }
+
+    @Test
     fun `out of range is brought in and what is not a number is the default`() {
         val wild = EarTune(size = 9f, freqHz = 50f, gainDb = -80f, q = Float.NaN).clamped()
         assertEquals(EarTune.MAX_SIZE, wild.size, 0f)
