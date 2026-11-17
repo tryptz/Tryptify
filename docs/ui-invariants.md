@@ -407,6 +407,26 @@ by the screen call, the hero slot, `PlayerGlassColors` and the system bars
 own scope; the god rays' light reads its accent in the draw phase. Read in the
 route, every frame of the fade (up to 8 s) recomposed the whole player.
 
+### Lyrics: where lines start, and soft focus
+
+Two choices of the listener's own, in the Studio's Typography section, both
+off as shipped and both carried over a theme (`withPersonalFrom`), like the
+font:
+
+- **Line start** (`LyricsFxSettings.lineAlign`): Middle, or From the left.
+  From the left, every row of every line starts at the edge
+  (`lyricLineAlignment`), and a line grows about that edge as it is sung
+  (`lyricLineOrigin`): about its middle it stepped sideways each time. The
+  right edge in a right-to-left language. The Studio's sample follows it.
+- **Soft focus** (`softFocus`, 0 to 1): the lines away from the sung one go
+  out of focus and dim, a step more for each line of distance to four
+  (`LyricSoftFocus`, held by `LyricSoftFocusTest`), on the same clock as the
+  line's own grow, so a line sharpens as its turn comes. The blur is set in
+  the line's layer block, never in composition (a line is not recomposed for
+  it), and the layer is not clipped, so it spreads past the line's box. Off,
+  no line has a blur or an animation for it at all. It is seen in the player,
+  not in the Studio's sample, which is one line. Android 12 and later.
+
 ### Lyrics: letter glass and god rays
 
 **Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a

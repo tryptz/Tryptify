@@ -1194,6 +1194,11 @@
     <string name="fx_letter_spacing">字间距</string>
     <string name="fx_edge_margin">边距</string>
     <string name="fx_lines_per_block">每段行数</string>
+    <string name="fx_line_align">行起始位置</string>
+    <string name="fx_line_align_center">居中</string>
+    <string name="fx_line_align_start">靠左</string>
+    <string name="fx_soft_focus">柔焦</string>
+    <string name="fx_soft_focus_summary">离正在演唱的那一行越远的歌词越模糊、越暗淡。在播放器中可见；需要 Android 12 及以上。</string>
     <string name="fx_font">字体</string>
     <string name="fx_playback_sync">播放同步</string>
     <string name="fx_bluetooth_sync_delay">蓝牙同步延迟</string>

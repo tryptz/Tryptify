@@ -1194,6 +1194,11 @@
     <string name="fx_letter_spacing">文字間隔</string>
     <string name="fx_edge_margin">端の余白</string>
     <string name="fx_lines_per_block">ブロックあたりの行数</string>
+    <string name="fx_line_align">行の開始位置</string>
+    <string name="fx_line_align_center">中央</string>
+    <string name="fx_line_align_start">左から</string>
+    <string name="fx_soft_focus">ソフトフォーカス</string>
+    <string name="fx_soft_focus_summary">歌われている行から離れた行ほど、ぼやけて暗くなります。プレーヤーで確認できます。Android 12 以降。</string>
     <string name="fx_font">フォント</string>
     <string name="fx_playback_sync">再生の同期</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth 同期の遅延</string>

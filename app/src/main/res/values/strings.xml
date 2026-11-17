@@ -1237,6 +1237,11 @@
     <string name="fx_letter_spacing">Letter spacing</string>
     <string name="fx_edge_margin">Edge margin</string>
     <string name="fx_lines_per_block">Lines per block</string>
+    <string name="fx_line_align">Line start</string>
+    <string name="fx_line_align_center">Middle</string>
+    <string name="fx_line_align_start">From the left</string>
+    <string name="fx_soft_focus">Soft focus</string>
+    <string name="fx_soft_focus_summary">The lines away from the one being sung go out of focus and dim, more the further they are. Seen in the player; Android 12 and later.</string>
     <string name="fx_font">Font</string>
     <string name="fx_playback_sync">Playback Sync</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth sync delay</string>

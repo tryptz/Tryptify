@@ -1278,6 +1278,11 @@
     <string name="fx_letter_spacing">Espaciado entre letras</string>
     <string name="fx_edge_margin">Margen lateral</string>
     <string name="fx_lines_per_block">Líneas por bloque</string>
+    <string name="fx_line_align">Inicio de las líneas</string>
+    <string name="fx_line_align_center">En el centro</string>
+    <string name="fx_line_align_start">Desde la izquierda</string>
+    <string name="fx_soft_focus">Enfoque suave</string>
+    <string name="fx_soft_focus_summary">Las líneas alejadas de la que se canta se desenfocan y se atenúan, más cuanto más lejos están. Se ve en el reproductor; Android 12 y posteriores.</string>
     <string name="fx_font">Fuente</string>
     <string name="fx_playback_sync">Sincronización de la reproducción</string>
     <string name="fx_bluetooth_sync_delay">Retardo de sincronización Bluetooth</string>

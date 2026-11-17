@@ -1236,6 +1236,11 @@
     <string name="fx_letter_spacing">Zeichenabstand</string>
     <string name="fx_edge_margin">Randabstand</string>
     <string name="fx_lines_per_block">Zeilen pro Block</string>
+    <string name="fx_line_align">Zeilenbeginn</string>
+    <string name="fx_line_align_center">Mittig</string>
+    <string name="fx_line_align_start">Von links</string>
+    <string name="fx_soft_focus">Weichzeichner</string>
+    <string name="fx_soft_focus_summary">Die Zeilen abseits der gesungenen werden unscharf und blasser, je weiter weg, desto mehr. Im Player zu sehen; ab Android 12.</string>
     <string name="fx_font">Schrift</string>
     <string name="fx_playback_sync">Wiedergabe-Synchronisierung</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth-Synchronverzögerung</string>

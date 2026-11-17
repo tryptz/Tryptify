@@ -1201,6 +1201,11 @@ fx_font_size	Font size	字号	フォントサイズ	Taille de police	Tamaño de 
 fx_letter_spacing	Letter spacing	字间距	文字間隔	Espacement des lettres	Espaciado entre letras	Harf aralığı	Zeichenabstand	Spaziatura lettere
 fx_edge_margin	Edge margin	边距	端の余白	Marge latérale	Margen lateral	Kenar boşluğu	Randabstand	Margine dal bordo
 fx_lines_per_block	Lines per block	每段行数	ブロックあたりの行数	Lignes par bloc	Líneas por bloque	Blok başına satır	Zeilen pro Block	Righe per blocco
+fx_line_align	Line start	行起始位置	行の開始位置	Début des lignes	Inicio de las líneas	Satır başlangıcı	Zeilenbeginn	Inizio delle righe
+fx_line_align_center	Middle	居中	中央	Au milieu	En el centro	Ortada	Mittig	Al centro
+fx_line_align_start	From the left	靠左	左から	À gauche	Desde la izquierda	Soldan	Von links	Da sinistra
+fx_soft_focus	Soft focus	柔焦	ソフトフォーカス	Flou doux	Enfoque suave	Yumuşak odak	Weichzeichner	Sfocatura morbida
+fx_soft_focus_summary	The lines away from the one being sung go out of focus and dim, more the further they are. Seen in the player; Android 12 and later.	离正在演唱的那一行越远的歌词越模糊、越暗淡。在播放器中可见；需要 Android 12 及以上。	歌われている行から離れた行ほど、ぼやけて暗くなります。プレーヤーで確認できます。Android 12 以降。	Les lignes éloignées de celle qui est chantée deviennent floues et s’estompent, d’autant plus qu’elles sont loin. Visible dans le lecteur ; Android 12 et versions ultérieures.	Las líneas alejadas de la que se canta se desenfocan y se atenúan, más cuanto más lejos están. Se ve en el reproductor; Android 12 y posteriores.	Söylenen satırdan uzaktaki satırlar bulanıklaşır ve soluklaşır; uzaklaştıkça daha çok. Oynatıcıda görülür; Android 12 ve sonrası.	Die Zeilen abseits der gesungenen werden unscharf und blasser, je weiter weg, desto mehr. Im Player zu sehen; ab Android 12.	Le righe lontane da quella cantata si sfocano e si attenuano, tanto più quanto sono distanti. Si vede nel lettore; Android 12 e versioni successive.
 fx_font	Font	字体	フォント	Police	Fuente	Yazı tipi	Schrift	Font
 fx_playback_sync	Playback Sync	播放同步	再生の同期	Synchronisation de la lecture	Sincronización de la reproducción	Çalma senkronizasyonu	Wiedergabe-Synchronisierung	Sincronizzazione riproduzione
 fx_bluetooth_sync_delay	Bluetooth sync delay	蓝牙同步延迟	Bluetooth 同期の遅延	Retard de synchro Bluetooth	Retardo de sincronización Bluetooth	Bluetooth senkronizasyon gecikmesi	Bluetooth-Synchronverzögerung	Ritardo sincronizzazione Bluetooth

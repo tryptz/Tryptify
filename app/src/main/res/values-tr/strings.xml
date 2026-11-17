@@ -1236,6 +1236,11 @@
     <string name="fx_letter_spacing">Harf aralığı</string>
     <string name="fx_edge_margin">Kenar boşluğu</string>
     <string name="fx_lines_per_block">Blok başına satır</string>
+    <string name="fx_line_align">Satır başlangıcı</string>
+    <string name="fx_line_align_center">Ortada</string>
+    <string name="fx_line_align_start">Soldan</string>
+    <string name="fx_soft_focus">Yumuşak odak</string>
+    <string name="fx_soft_focus_summary">Söylenen satırdan uzaktaki satırlar bulanıklaşır ve soluklaşır; uzaklaştıkça daha çok. Oynatıcıda görülür; Android 12 ve sonrası.</string>
     <string name="fx_font">Yazı tipi</string>
     <string name="fx_playback_sync">Çalma senkronizasyonu</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth senkronizasyon gecikmesi</string>

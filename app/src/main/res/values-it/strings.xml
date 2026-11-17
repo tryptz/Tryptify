@@ -1278,6 +1278,11 @@
     <string name="fx_letter_spacing">Spaziatura lettere</string>
     <string name="fx_edge_margin">Margine dal bordo</string>
     <string name="fx_lines_per_block">Righe per blocco</string>
+    <string name="fx_line_align">Inizio delle righe</string>
+    <string name="fx_line_align_center">Al centro</string>
+    <string name="fx_line_align_start">Da sinistra</string>
+    <string name="fx_soft_focus">Sfocatura morbida</string>
+    <string name="fx_soft_focus_summary">Le righe lontane da quella cantata si sfocano e si attenuano, tanto più quanto sono distanti. Si vede nel lettore; Android 12 e versioni successive.</string>
     <string name="fx_font">Font</string>
     <string name="fx_playback_sync">Sincronizzazione riproduzione</string>
     <string name="fx_bluetooth_sync_delay">Ritardo sincronizzazione Bluetooth</string>

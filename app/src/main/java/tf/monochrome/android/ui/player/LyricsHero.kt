@@ -643,6 +643,33 @@ internal fun SyncedLyricsView(
                 animationSpec = tween(durationMillis = LINE_SWITCH_FADE_MS, easing = FastOutSlowInEasing),
                 label = "lineEmphasis",
             )
+            // Soft focus: the lines away from the sung one go out of focus and
+            // dim, a step more for each line of distance, and come back as
+            // their turn nears, on the emphasis's own clock. Nothing is made
+            // for it while it is off.
+            val softSteps = LyricSoftFocus.steps(index, currentLineIndex)
+            val soft = fx.softFocus >= LyricSoftFocus.OFF
+            val softBlurDp = if (soft) {
+                animateFloatAsState(
+                    targetValue = LyricSoftFocus.blurDp(fx.softFocus, softSteps),
+                    animationSpec = tween(durationMillis = LINE_SWITCH_FADE_MS, easing = FastOutSlowInEasing),
+                    label = "softFocusBlur",
+                )
+            } else {
+                null
+            }
+            val softAlpha = if (soft) {
+                animateFloatAsState(
+                    targetValue = LyricSoftFocus.alpha(fx.softFocus, softSteps),
+                    animationSpec = tween(durationMillis = LINE_SWITCH_FADE_MS, easing = FastOutSlowInEasing),
+                    label = "softFocusAlpha",
+                )
+            } else {
+                null
+            }
+            // A line that starts at the edge grows from that edge, or it would
+            // step sideways as it is sung.
+            val growFrom = lyricLineOrigin(fx)
             val beatModifier = (if (isActive && beatIntensity > 0.01f) {
                 Modifier.bassBeat(bassPulse, fx, lineAnchors, LocalVisualLinks.current)
             } else {
@@ -650,6 +677,18 @@ internal fun SyncedLyricsView(
             }).graphicsLayer {
                 scaleX = emphasis
                 scaleY = emphasis
+                transformOrigin = growFrom
+                if (softAlpha != null) alpha = softAlpha.value
+                // Read here, in the layer's own block: the blur follows its
+                // animation frame by frame and the line is never recomposed.
+                val sigma = (softBlurDp?.value ?: 0f).dp.toPx()
+                renderEffect = if (sigma > 0.25f) {
+                    // The line's own layer is not clipped, so the blur spreads
+                    // past its box instead of being cut off at it.
+                    androidx.compose.ui.graphics.BlurEffect(sigma, sigma, androidx.compose.ui.graphics.TileMode.Decal)
+                } else {
+                    null
+                }
             }
             val lyricFont = rememberLyricFontFamily(fx)
             val weight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium
@@ -735,7 +774,7 @@ internal fun SyncedLyricsView(
                 val time = if (perLetter) rememberLetterWaveSeconds { live.lyrics(fx).waveSpeed } else null
                 Column(
                     modifier = lineModifier,
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = lyricLineAlignment(fx),
                 ) {
                     var phaseBase = 0
                     layout.rowIndices.forEach { row ->
@@ -815,7 +854,7 @@ internal fun KaraokeLyricLine(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = lyricLineAlignment(fx),
     ) {
         var letterBase = 0
         layout.rowIndices.forEach { rowWords ->
@@ -952,6 +991,26 @@ private const val ACTIVE_LINE_ANCHOR = 0.38f
  * fade so the list is still settling as the new line finishes lighting up —
  * ending everything on the same frame read as an abrupt full stop.
  */
+/** Where a lyric line's rows sit across the view: centred, or all from the start edge ([LyricsFxSettings.lineAlign]). */
+internal fun lyricLineAlignment(fx: LyricsFxSettings): Alignment.Horizontal =
+    if (fx.lineAlign == LyricsFxSettings.ALIGN_START) Alignment.Start else Alignment.CenterHorizontally
+
+/**
+ * The point a line grows and shrinks about as it is sung: its middle, or for
+ * lines that start at the edge, that edge (the right one in a right-to-left
+ * language), so its first letter stays where it is.
+ */
+@Composable
+internal fun lyricLineOrigin(fx: LyricsFxSettings): androidx.compose.ui.graphics.TransformOrigin {
+    val rtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+    val x = when {
+        fx.lineAlign != LyricsFxSettings.ALIGN_START -> 0.5f
+        rtl -> 1f
+        else -> 0f
+    }
+    return androidx.compose.ui.graphics.TransformOrigin(x, 0.5f)
+}
+
 private const val LINE_SWITCH_SCROLL_MS = 600
 private const val LINE_SWITCH_FADE_MS = 450
 

@@ -241,6 +241,22 @@ data class LyricsFxSettings(
      * [godRayQuality] — preserved when a theme preset is applied.
      */
     val motionBlurQuality: Int = 0,
+
+    // ── Layout ─────────────────────────────────────────────────────────
+    /**
+     * Where each line starts: [ALIGN_CENTER] (the shipped look) or
+     * [ALIGN_START], every line from the left edge (the right in a
+     * right-to-left language). The listener's own way of reading, like the
+     * font: a theme carries it over.
+     */
+    val lineAlign: Int = ALIGN_CENTER,
+    /**
+     * Soft focus, 0 (off, the shipped look) to 1: the lines away from the
+     * sung one go out of focus and dim, more with each line of distance, so
+     * the eye rests on the one being sung. Android 12 and later (a layer's
+     * blur). Carried over a theme with [lineAlign].
+     */
+    val softFocus: Float = 0f,
 ) {
     /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float
@@ -319,6 +335,8 @@ data class LyricsFxSettings(
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
             godRayQuality = godRayQuality.coerceIn(1, 4),
             motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
+            lineAlign = if (lineAlign == ALIGN_START) ALIGN_START else ALIGN_CENTER,
+            softFocus = softFocus.c(0f, 1f, d.softFocus),
         )
     }
 
@@ -371,6 +389,8 @@ data class LyricsFxSettings(
         artGlowBrightness = other.artGlowBrightness,
         godRayQuality = other.godRayQuality,
         motionBlurQuality = other.motionBlurQuality,
+        lineAlign = other.lineAlign,
+        softFocus = other.softFocus,
     )
 
     /**
@@ -381,6 +401,11 @@ data class LyricsFxSettings(
     fun matchesPreset(preset: LyricsFxSettings): Boolean = this == preset.withPersonalFrom(this)
 
     companion object {
+        /** [lineAlign]: every line centred. */
+        const val ALIGN_CENTER = 0
+        /** [lineAlign]: every line from the start edge. */
+        const val ALIGN_START = 1
+
         /** [curvatureTarget]: every lyric, as one tube. */
         const val CURVE_ALL = 0
         /** [curvatureTarget]: the sung line alone. */

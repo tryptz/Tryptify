@@ -107,6 +107,7 @@ the room stays at the top; tap it to go back.
 | The glow behind the cover | `Settings › Appearance › Glow behind album art`, `Glow radius`, `Glow brightness` |
 | Fonts and text sizes | `Settings › Fonts › Typography`, `Font size`, `Letter width`, `Custom font`, `Use system font size` |
 | The player's glass and the lyrics' effects | Player Visuals Studio (search Settings for it) |
+| Lyrics starting from the left, or softer lyrics | Player Visuals Studio › Lyrics FX › Typography: Line start (Middle or From the left) and Soft focus |
 | An old-TV look | `Settings › Appearance › CRT effect` |
 | A whole look made by someone else | Theme Store |
 | A plainer, lighter app | `Settings › Appearance › Legacy player`, `Remove liquid glass`, `Disable animations` |

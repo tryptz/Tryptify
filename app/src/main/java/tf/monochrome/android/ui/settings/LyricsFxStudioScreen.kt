@@ -1066,6 +1066,34 @@ fun LyricsFxStudioScreen(
                     description = stringResource(R.string.fx_how_many_rows_a_long_line_may_wrap_to_before_it),
                     defaultValue = LyricsFxSettings.DEFAULT.maxWrapLines.toFloat(),
                 ) { viewModel.update { s -> s.copy(maxWrapLines = it.toInt()) } }
+                // Where every line starts: the middle, or the edge.
+                Text(
+                    stringResource(R.string.fx_line_align),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        LyricsFxSettings.ALIGN_CENTER to R.string.fx_line_align_center,
+                        LyricsFxSettings.ALIGN_START to R.string.fx_line_align_start,
+                    ).forEach { (align, label) ->
+                        tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                            label = stringResource(label),
+                            selected = fx.lineAlign == align,
+                            accent = MaterialTheme.colorScheme.primary,
+                            onClick = { viewModel.update { s -> s.copy(lineAlign = align) } },
+                        )
+                    }
+                }
+                FxSlider(
+                    stringResource(R.string.fx_soft_focus), "${(fx.softFocus * 100).toInt()}%" + if (fx.softFocus < 0.01f) " (off)" else "",
+                    fx.softFocus, 0f..1f,
+                    description = stringResource(R.string.fx_soft_focus_summary),
+                    defaultValue = LyricsFxSettings.DEFAULT.softFocus,
+                ) { viewModel.update { s -> s.copy(softFocus = it) } }
             }
 
             item {
@@ -2424,10 +2452,10 @@ internal fun StudioPreview(
                 }
                 Box(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                    contentAlignment = if (fx.lineAlign == LyricsFxSettings.ALIGN_START) Alignment.CenterStart else Alignment.Center,
                 ) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        horizontalAlignment = tf.monochrome.android.ui.player.lyricLineAlignment(fx),
                         modifier = Modifier
                             .onGloballyPositioned { blockBand = it.boundsInRoot() }
                             .lyricRaysOnLetters(backdrop)
