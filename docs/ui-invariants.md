@@ -3500,16 +3500,27 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   so a silent room's floor shows nothing. It costs about a seventh more a
   frame than without, measured as above. The cells follow the room's size (`RoomGrain.ACROSS` of
   them over its longest way; 52, down from 64, which cost a fifth more to walk), so a booth and a hall get the same picture.
-  Nothing moves them but the levels: the clock only redraws the room
-  between the meter's readings, and with reduced motion it stands still and
-  the room is drawn as each reading comes.
+  Nothing moves them but the levels, and the room is drawn as each reading
+  of the meter comes, thirty times a second, with reduced motion or
+  without. **Do not give the room a clock of its own.** It had one, thirty
+  times a second, from when the meter read ten times a second; once the
+  meter read thirty, the two fell between each other and the whole shader
+  ran up to sixty times a second with the sound shown, thirty without (the
+  owner: the frame rate "divided in half" with Show sound in the room on).
 - **The room's shader is kept cheap, and these are what keep it so.** A
   pixel whose ray misses the room's box returns at once. In a room no wall
   of which bends outwards (`uConvex`, wall curve 1 or more) the walls are
   found by narrowing in on the ray's nearest approach, with no march; the
   36 steps are only for a wall that bends out. A speaker or object far
   from the ray is passed over before any `exp`. The grain's cells are
-  walked only when there is sound to show (`RoomScene.sounds`). Straight
+  walked only when there is sound to show (`RoomScene.sounds`). Before the
+  walk a ray asks once for the most sound any speck on it could have
+  (`most`: each source of `sound` at the ray's nearest approach); a speck
+  whose rank is over that is passed over before it is placed, and a ray
+  through a quiet part of the room walks nothing. It draws the same picture
+  to the pixel (compared on the check frame), with a third to a half of the
+  specks placed and of the sound worked out. `most` and `sound` share their
+  measures (`speakerReach` and the rest): change them there. Straight
   walls take no `pow`. The page keeps where the speakers stand and where
   their sound turns for as long as the room is the same one (`RoomPlaces`),
   and makes the room's `RoomShape` when the room changes, not at each
@@ -3518,8 +3529,7 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   on a phone.
 - **Show sound in the room** (`RendererProfile.roomSound`, the switch under
   the room) turns the drawing of the sound off: no grain, no rays, no
-  turning spots, and the clock that redraws the room between the meter's
-  readings stops. The speakers still light as they play and the objects
+  turning spots. The speakers still light as they play and the objects
   stay where the mix puts them: the room is still the channel map. It is
   the page's alone and changes nothing that is heard.
 - **Scrolled past, the room stays as a small picture in the page's top
@@ -3529,8 +3539,7 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   0.82 of the page's width and centred, at the owner's asking, and then the
   owner asked for it small and in the corner again, and lighter). **The
   sound is not drawn in it**, whatever "Show sound in the room" says: no
-  grain, no rays, and no clock, so it is drawn when the meter has something
-  new and not thirty times a second, and no pixel walks the room for grain.
+  grain and no rays, so no pixel walks the room for grain.
   Its speakers still light and its objects still move. It comes when none of the room
   is on screen and goes when any of it is, and a tap scrolls back up to
   the room. Only one of the two is ever drawn: the room's place in the

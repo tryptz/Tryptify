@@ -121,6 +121,21 @@ float room(float3 p) {
     return max(plan(p), max(-p.z, p.z - uRoom.z));
 }
 
+// How far a speaker's sound reaches at a level, and how much of it there is at the speaker.
+float speakerReach(float level) {
+    return uGrain.y * (uCloud.x + level);
+}
+float speakerSound(float level) {
+    return level * sqrt(level);
+}
+// An object's reach, and a spot's where sound turns on a surface.
+float objectReach(float level) {
+    return uGrain.y * uCloud.y * (0.5 + level);
+}
+float turnReach() {
+    return uGrain.y * uCloud.y;
+}
+
 // The sound at p: whose colour it has, and how much of it there is (0..1).
 // A speaker's falls away round it, further the harder it is driven; what the
 // room holds is the same everywhere.
@@ -131,9 +146,9 @@ float4 sound(float3 p) {
         if (float(i) >= uSpkCount) break;
         float level = uSpkAir[i];
         if (level <= 0.0) continue;
-        float reach = uGrain.y * (uCloud.x + level);
+        float reach = speakerReach(level);
         float3 to = p - uSpk[i].xyz;
-        float w = level * sqrt(level) * fade(dot(to, to) / (reach * reach));
+        float w = speakerSound(level) * fade(dot(to, to) / (reach * reach));
         sum += w;
         tint += (uSpkKind[i] == 1.0 ? uTertiary : uPrimary) * w;
     }
@@ -141,7 +156,7 @@ float4 sound(float3 p) {
     for (int i = 0; i < 32; i++) {
         if (float(i) >= uObjCount) break;
         float level = abs(uObj[i].w);
-        float reach = uGrain.y * uCloud.y * (0.5 + level);
+        float reach = objectReach(level);
         float3 to = p - uObj[i].xyz;
         float w = uObjGrain * level * fade(dot(to, to) / (reach * reach));
         sum += w;
@@ -149,13 +164,49 @@ float4 sound(float3 p) {
     }
     for (int i = 0; i < 12; i++) {
         if (float(i) >= uSrcCount) break;
-        float reach = uGrain.y * uCloud.y;
+        float reach = turnReach();
         float3 to = p - uSrc[i].xyz;
         float w = uSrc[i].w * fade(dot(to, to) / (reach * reach));
         sum += w;
         tint += uPrimary * w;
     }
     return float4(tint / max(sum, 1e-4), min(sum, 1.0));
+}
+
+// The square of how near the ray comes to p before `stop`, less `slack`.
+float nearest(float3 ro, float3 rd, float3 p, float stop, float slack) {
+    float3 to = p - ro;
+    float3 gap = to - rd * clamp(dot(to, rd), 0.0, stop);
+    float d = max(length(gap) - slack, 0.0);
+    return d * d;
+}
+
+// The most sound there can be at a speck the ray meets before `stop`: each
+// source of `sound` again, at the nearest the ray comes to it. A speck is
+// within `slack` of the ray, so none of them has more. It is what lets the
+// ray pass over a speck by its rank alone, and over a quiet part of the room
+// without walking it. Keep it saying what `sound` says.
+float most(float3 ro, float3 rd, float stop, float slack) {
+    float sum = uGlow * uCloud.z;
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uSpkCount) break;
+        float level = uSpkAir[i];
+        if (level <= 0.0) continue;
+        float reach = speakerReach(level);
+        sum += speakerSound(level) * fade(nearest(ro, rd, uSpk[i].xyz, stop, slack) / (reach * reach));
+    }
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= uObjCount) break;
+        float level = abs(uObj[i].w);
+        float reach = objectReach(level);
+        sum += uObjGrain * level * fade(nearest(ro, rd, uObj[i].xyz, stop, slack) / (reach * reach));
+    }
+    for (int i = 0; i < 12; i++) {
+        if (float(i) >= uSrcCount) break;
+        float reach = turnReach();
+        sum += uSrc[i].w * fade(nearest(ro, rd, uSrc[i].xyz, stop, slack) / (reach * reach));
+    }
+    return sum;
 }
 
 // A point of light seen along the ray: the square of how far the ray passes from it.
@@ -338,26 +389,34 @@ half4 main(float2 fragCoord) {
         // keeps clear of its cell's sides by more than its own size, so the
         // ray that meets it is in its cell.
         float side = uGrain.x;
+        // No speck on this ray has more sound than this (a speck is 0.15 of a
+        // cell at its biggest). One whose rank is over it cannot show, and is
+        // passed over before it is placed or the sound at it worked out; with
+        // next to none, as in a quiet part of the room, there is no walk.
+        float top = most(ro, rd, stop, 0.15 * side) + 0.001;
         float3 stepTo = step(0.0, rd) * 2.0 - 1.0;
         float3 cell = floor((ro + rd * (tNear + 1e-3)) / side);
         float3 tNext = ((cell + max(stepTo, 0.0)) * side - ro) * inv;
         float3 tCell = abs(side * inv);
         for (int i = 0; i < CELLS; i++) {
+            if (top < 0.005) break;
             float3 own = hash3(cell);
-            float3 at = (cell + 0.16 + 0.68 * own) * side;
-            float3 to = at - ro;
-            float along = dot(to, rd);
-            // Fine, but never so fine that it is one pixel on and the next off:
-            // it is a soft dot a pixel or two across, however far off it is.
-            float size = clamp(1.5 * pixel * along, 0.06 * side, 0.15 * side);
-            float d2 = dot(to, to) - along * along;
-            if (along > 0.0 && along < stop && d2 < size * size && room(at) < 0.0) {
-                float4 here = sound(at);
-                // Its rank; it comes and goes over a tenth of the way, not at once.
-                float rank = fract(own.x + own.y * 7.0 + own.z * 13.0);
-                float shown = smoothstep(0.0, 0.1, here.a - 0.9 * rank);
-                float disc = fade(3.5 * d2 / (size * size));
-                acc = under(acc, here.rgb, shown * disc * uGrain.z);
+            // Its rank; it comes and goes over a tenth of the way, not at once.
+            float rank = fract(own.x + own.y * 7.0 + own.z * 13.0);
+            if (0.9 * rank < top) {
+                float3 at = (cell + 0.16 + 0.68 * own) * side;
+                float3 to = at - ro;
+                float along = dot(to, rd);
+                // Fine, but never so fine that it is one pixel on and the next off:
+                // it is a soft dot a pixel or two across, however far off it is.
+                float size = clamp(1.5 * pixel * along, 0.06 * side, 0.15 * side);
+                float d2 = dot(to, to) - along * along;
+                if (along > 0.0 && along < stop && d2 < size * size && room(at) < 0.0) {
+                    float4 here = sound(at);
+                    float shown = smoothstep(0.0, 0.1, here.a - 0.9 * rank);
+                    float disc = fade(3.5 * d2 / (size * size));
+                    acc = under(acc, here.rgb, shown * disc * uGrain.z);
+                }
             }
             float tOut = min(tNext.x, min(tNext.y, tNext.z));
             if (tOut >= tFar || acc.a > 0.97) break;

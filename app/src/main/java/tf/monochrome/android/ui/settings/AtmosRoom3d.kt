@@ -149,14 +149,18 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * [AtmosNative.nativeRoomLayout]'s, [speakers] the processor's levels in the
  * same order (null: nothing plays through the room).
  *
- * With [sound] off the sound is not drawn: no grain and no rays, and nothing
- * moves between the meter's readings; the speakers still light as they play
+ * The room is drawn when the meter has a new reading, thirty times a second,
+ * and at no other time: a clock of its own used to draw it again between
+ * the readings, from when there were ten of them a second, and with thirty
+ * that was the whole shader twice as often for nothing new.
+ *
+ * With [sound] off the sound is not drawn: no grain and no rays; the
+ * speakers still light as they play
  * and the objects are where the mix puts them. [compact] is the room as a
  * small picture: no numbers, no measurements, it is not turned by a drag,
  * and the sound is not drawn in it either. At that size the grain is a few
  * pixels of haze, and it is what costs: every pixel walks the room's cells
- * for it, thirty times a second. Without it the picture is drawn only when
- * the meter has something new, and each pixel stops at the walls. [yaw] is how far it is turned, the page's to keep when the room is
+ * for it, thirty times a second. Without it each pixel stops at the walls. [yaw] is how far it is turned, the page's to keep when the room is
  * drawn in two places.
  */
 @Composable
@@ -228,28 +232,6 @@ private fun rememberRoomLabels(shape: RoomShape, ink: Color): RoomLabels {
 }
 
 /**
- * The grain's clock: the time since it started, in nanoseconds, thirty times
- * a second while [running], and held still otherwise. Nothing is drawn from
- * the time itself: reading it where the room is drawn is what draws the room
- * again between the meter's ten readings a second, so the averaged levels
- * ([SlowLevels]) move smoothly; nothing else is redrawn by it.
- */
-@Composable
-private fun rememberGrainClock(running: Boolean): androidx.compose.runtime.LongState {
-    val clock = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
-    if (running) {
-        androidx.compose.runtime.LaunchedEffect(Unit) {
-            val start = System.nanoTime() - clock.longValue
-            while (true) {
-                clock.longValue = System.nanoTime() - start
-                kotlinx.coroutines.delay(33)
-            }
-        }
-    }
-    return clock
-}
-
-/**
  * The room drawn by the GPU. Each frame the page says what is in the room
  * ([RoomScene]) and where the camera is ([RoomCamera]); the shader draws it,
  * and the labels go over it by the same camera.
@@ -285,7 +267,6 @@ private fun AtmosRoomGpu(
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
     val places = remember { RoomPlaces() }
-    val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
@@ -300,7 +281,6 @@ private fun AtmosRoomGpu(
                     val sound = liveOptions.sound
                     places.of(room, layout, count)
                     val camera = RoomCamera(yaw.floatValue, room, size.width, size.height)
-                    clock.longValue  // read: see rememberGrainClock
 
                     scene.clear()
                     scene.objectGrain = sound
@@ -450,7 +430,6 @@ private fun AtmosRoomCanvas(
     val air = remember { SlowLevels() }
     val places = remember { RoomPlaces() }
     val grain = remember { CanvasGrain() }
-    val clock = rememberGrainClock(options.sound && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
 
     Box(modifier = modifier) {
         Spacer(
@@ -464,7 +443,6 @@ private fun AtmosRoomCanvas(
                     val compact = liveOptions.compact
                     places.of(room, layout, count)
                     val view = AtmosRoomView(yaw.floatValue, room)
-                    clock.longValue  // read: see rememberGrainClock
                     // The whole room at any turn: its near corners come out
                     // 0.7 of a room to the side and 0.57 below the middle.
                     val unit = min(size.width * 0.54f, size.height * 0.84f)
