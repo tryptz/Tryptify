@@ -289,6 +289,8 @@ data class RendererProfile(
     val roomFile: String? = null,
     /** The room the listener describes ([RoomKind.CUSTOM]). */
     val customRoom: CustomRoom = CustomRoom(),
+    /** Rooms the listener saved under a name, to fill [customRoom] from again. */
+    val savedRooms: List<SavedRoom> = emptyList(),
     /** The space objects may use: off (the mix's own box), or narrowing with height. */
     val panEnvelope: PanEnvelope = PanEnvelope(),
     /** The listener's own ears on top of the HRTF: the ear tuner. */
@@ -320,6 +322,7 @@ data class RendererProfile(
             binauralStrength = binauralStrength.c(0f, 1f, 1f),
             roomAmount = roomAmount.c(0f, 1f, DEFAULT_ROOM_AMOUNT),
             customRoom = customRoom.clamped(),
+            savedRooms = SavedRooms.clamped(savedRooms),
             panEnvelope = panEnvelope.clamped(),
             earTune = earTune.clamped(),
             crossoverHz = crossoverHz.coerceIn(40, 200),

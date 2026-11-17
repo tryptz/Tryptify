@@ -227,12 +227,14 @@ class AtmosRendererViewModel @Inject constructor(
     /**
      * This page's settings back to their defaults. The fold's preamp and LFE
      * low-pass are in the same profile but are set on Settings › Audio now:
-     * a reset here leaves them as they are.
+     * a reset here leaves them as they are. The rooms the listener saved
+     * are theirs to delete, one by one: a reset keeps them too.
      */
     fun reset() = update(
         RendererProfile.DEFAULT.copy(
             downmixPreampDb = _profile.value.downmixPreampDb,
             lfeLowpass = _profile.value.lfeLowpass,
+            savedRooms = _profile.value.savedRooms,
         ),
     )
 

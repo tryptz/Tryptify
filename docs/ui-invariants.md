@@ -3410,6 +3410,18 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   (`MultichannelDownmixToggle`). The speaker render's code stays, with no
   switch: `PreferencesManager.rendererProfile` reads `speakerRender` as off
   whatever was saved, so no phone is left on a render nothing can turn off.
+- **My room's own presets** (`SavedRoomPresets`, `SavedRooms`,
+  `RendererProfile.savedRooms`; the owner asked for a preset saver with
+  import and export). Under the built-in Presets row: Saved rooms, a row of
+  chips as that one is (plain `FilterChip`s, each with a cross that deletes
+  it, never a glass pane), shown only when there is one, and under it Save
+  preset, Import and Export. A chip only fills the values, as a built-in
+  preset does. Saving under a name that is there replaces it. Export writes
+  the room as it is now set, one room to a file (`.room.json`, marked
+  `tryptifyRoom`); Import takes any file type, since file managers disagree
+  on what a `.json` is, refuses what is not a room file with a toast, and
+  saves and chooses what is. Reset to defaults keeps the saved rooms. Its
+  strings are the lyric and CRT presets' own, so the three say the same.
 - **Ceiling width and Ceiling depth are Trapezoid panning's alone.** My
   room had a pair of its own with the same names (its walls' lean), a few
   rows above the trapezoid's on the same page, and a leaning room of the

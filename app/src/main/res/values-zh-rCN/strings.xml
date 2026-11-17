@@ -3440,6 +3440,8 @@
     <string name="atmos_ear_pad_help">调校面板。拖动圆点：左右为耳朵大小，上下为音量。沿对角线拖动白色手柄可调整 Q。</string>
     <string name="atmos_ear_not_heard">当前听不到效果：没有声音经过虚拟房间。调校仅对耳机上的 Atmos 和环绕声歌曲有效，立体声歌曲不经过房间。</string>
     <string name="atmos_room_presets">预设</string>
+    <string name="atmos_room_saved">已保存的房间</string>
+    <string name="atmos_room_not_a_preset">此文件不是房间预设</string>
     <string name="atmos_room_preset_booth">人声录音间</string>
     <string name="atmos_room_preset_home">家庭录音室</string>
     <string name="atmos_room_preset_control">控制室</string>

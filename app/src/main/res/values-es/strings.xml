@@ -3596,6 +3596,8 @@
     <string name="atmos_ear_pad_help">Panel de ajuste. Arrastra el punto: de lado es el tamaño de la oreja, arriba y abajo es el volumen. Arrastra el tirador blanco por su diagonal para Q.</string>
     <string name="atmos_ear_not_heard">Ahora no se oye: nada suena a través de la sala virtual. El ajuste actúa en canciones Atmos y envolventes con auriculares. Una canción estéreo no pasa por la sala.</string>
     <string name="atmos_room_presets">Preajustes</string>
+    <string name="atmos_room_saved">Salas guardadas</string>
+    <string name="atmos_room_not_a_preset">este archivo no es un preset de sala</string>
     <string name="atmos_room_preset_booth">Cabina de voz</string>
     <string name="atmos_room_preset_home">Estudio casero</string>
     <string name="atmos_room_preset_control">Sala de control</string>

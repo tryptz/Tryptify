@@ -3518,6 +3518,8 @@
     <string name="atmos_ear_pad_help">Ayar yüzeyi. Noktayı sürükle: yana kulak boyutu, yukarı aşağı ses düzeyi. Q için beyaz tutamacı çaprazı boyunca sürükle.</string>
     <string name="atmos_ear_not_heard">Şu an duyulmuyor: sanal odadan geçen bir ses yok. Ayar, kulaklıkta Atmos ve surround şarkılarda çalışır. Stereo bir şarkı odadan geçmez.</string>
     <string name="atmos_room_presets">Ön ayarlar</string>
+    <string name="atmos_room_saved">Kayıtlı odalar</string>
+    <string name="atmos_room_not_a_preset">bu dosya bir oda ön ayarı değil</string>
     <string name="atmos_room_preset_booth">Vokal kabini</string>
     <string name="atmos_room_preset_home">Ev stüdyosu</string>
     <string name="atmos_room_preset_control">Kontrol odası</string>

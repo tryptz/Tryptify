@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -8,26 +10,33 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +48,12 @@ import tf.monochrome.android.domain.model.AtmosRoom
 import tf.monochrome.android.domain.model.CustomRoom
 import tf.monochrome.android.domain.model.RendererProfile
 import tf.monochrome.android.domain.model.RoomKind
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tf.monochrome.android.domain.model.RoomPreset
+import tf.monochrome.android.domain.model.SavedRoom
+import tf.monochrome.android.domain.model.SavedRooms
 import java.io.File
 import java.util.Locale
 
@@ -156,6 +170,7 @@ internal fun AtmosRoomSection(
                     )
                 }
             }
+            SavedRoomPresets(profile = profile, custom = custom, onProfile = onProfile)
             LabeledSlider(
                 title = stringResource(R.string.atmos_room_width),
                 valueText = metres(custom.width),
@@ -256,6 +271,132 @@ private fun RoomNote(text: String) {
 
 @Composable
 private fun metres(value: Float) = stringResource(R.string.atmos_room_metres, number(value))
+
+/**
+ * The listener's own presets for My room: the rooms saved under a name, each
+ * a chip that fills the values (its cross deletes it), and under them Save
+ * preset, Import and Export. A room is exported and imported as a small JSON
+ * file ([SavedRooms]); an imported one is saved and chosen at once.
+ */
+@Composable
+private fun SavedRoomPresets(profile: RendererProfile, custom: CustomRoom, onProfile: (RendererProfile) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val live by rememberUpdatedState(profile)
+    val saved = profile.savedRooms
+    // The saved room the values are now, if any: its name is the file's and the dialog's.
+    val current = saved.firstOrNull { it.room == custom }
+    val defaultName = current?.name ?: stringResource(R.string.atmos_room_custom)
+    var naming by rememberSaveable { mutableStateOf(false) }
+    fun toast(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_SHORT).show()
+
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val room = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        // One byte over the most a room file is: a bigger file is not one, and is not read through.
+                        val bytes = ByteArray(SavedRooms.MAX_FILE_BYTES + 1)
+                        var read = 0
+                        while (read < bytes.size) {
+                            val n = input.read(bytes, read, bytes.size - read)
+                            if (n < 0) break
+                            read += n
+                        }
+                        if (read > SavedRooms.MAX_FILE_BYTES) null else SavedRooms.decode(String(bytes, 0, read, Charsets.UTF_8))
+                    }
+                }.getOrNull()
+            }
+            if (room == null) {
+                toast(context.getString(R.string.crt_preset_import_failed, context.getString(R.string.atmos_room_not_a_preset)))
+            } else {
+                onProfile(live.copy(customRoom = room.room, savedRooms = SavedRooms.add(live.savedRooms, room.name, room.room)))
+                toast(context.getString(R.string.fx_saved_named, room.name))
+            }
+        }
+    }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val room = SavedRoom(defaultName, live.customRoom)
+        scope.launch {
+            val written = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(SavedRooms.encode(room).toByteArray(Charsets.UTF_8)) } != null
+                }.getOrDefault(false)
+            }
+            toast(
+                if (written) context.getString(R.string.crt_preset_exported, room.name)
+                else context.getString(R.string.crt_preset_export_failed),
+            )
+        }
+    }
+
+    if (saved.isNotEmpty()) {
+        Text(
+            stringResource(R.string.atmos_room_saved),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            saved.forEach { room ->
+                FilterChip(
+                    selected = room.room == custom,
+                    onClick = { onProfile(profile.copy(customRoom = room.room)) },
+                    label = { Text(room.name) },
+                    trailingIcon = {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.crt_preset_delete, room.name),
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable(role = Role.Button) {
+                                    onProfile(profile.copy(savedRooms = SavedRooms.remove(profile.savedRooms, room.name)))
+                                },
+                        )
+                    },
+                )
+            }
+        }
+    }
+    Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        TextButton(onClick = { naming = true }) { Text(stringResource(R.string.fx_save_preset)) }
+        // Any type: a file manager may call a .json text, octet-stream or nothing at all.
+        TextButton(onClick = { importer.launch(arrayOf("*/*")) }) { Text(stringResource(R.string.crt_preset_import)) }
+        TextButton(onClick = { exporter.launch(SavedRooms.fileName(defaultName)) }) { Text(stringResource(R.string.crt_preset_export)) }
+    }
+
+    if (naming) {
+        var name by rememberSaveable { mutableStateOf(defaultName) }
+        AlertDialog(
+            onDismissRequest = { naming = false },
+            title = { Text(stringResource(R.string.fx_save_preset)) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(SavedRooms.MAX_NAME) },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.fx_preset_name)) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = SavedRooms.name(name).isNotEmpty(),
+                    onClick = {
+                        val kept = SavedRooms.name(name)
+                        onProfile(profile.copy(savedRooms = SavedRooms.add(profile.savedRooms, kept, custom)))
+                        toast(context.getString(R.string.fx_saved_named, kept))
+                        naming = false
+                    },
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = { TextButton(onClick = { naming = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+}
 
 private fun presetName(preset: RoomPreset): Int = when (preset) {
     RoomPreset.BOOTH -> R.string.atmos_room_preset_booth

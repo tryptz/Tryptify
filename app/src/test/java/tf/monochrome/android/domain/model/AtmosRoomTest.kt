@@ -239,6 +239,50 @@ class AtmosRoomTest {
     }
 
     @Test
+    fun `a saved room comes back from its file as it was saved`() {
+        val room = CustomRoom(width = 10.1f, depth = 9.7f, height = 5.5f, damping = 0.13f, roundness = 0.4f)
+        val back = SavedRooms.decode(SavedRooms.encode(SavedRoom("  Late   night  ", room)))!!
+        assertEquals("Late night", back.name)
+        assertEquals(room, back.room)
+        // Some other JSON, no JSON at all, and a room with no name are not room files.
+        assertEquals(null, SavedRooms.decode("""{"name":"x","width":4}"""))
+        assertEquals(null, SavedRooms.decode("""{"tryptifyRoom":1,"name":"  ","width":4}"""))
+        assertEquals(null, SavedRooms.decode("not json"))
+        assertEquals(null, SavedRooms.decode("""{"tryptifyRoom":1,"name":"x","width":NaN}"""))
+        // A file from elsewhere is brought into range, keeps what it does not say at the defaults,
+        // and may hold fields this build does not know.
+        val wild = SavedRooms.decode("""{"tryptifyRoom":1,"name":"Barn","width":9000,"height":-3,"lean":0.2}""")!!
+        assertEquals(CustomRoom.MAX_SIDE, wild.room.width, 0f)
+        assertEquals(CustomRoom.MIN_HEIGHT, wild.room.height, 0f)
+        assertEquals(CustomRoom().depth, wild.room.depth, 0f)
+        assertEquals(wild.room, wild.room.clamped())
+        assertEquals("Late night.room.json", SavedRooms.fileName(" Late/night: "))
+        assertEquals("room.room.json", SavedRooms.fileName("///"))
+    }
+
+    @Test
+    fun `saving a room of a name there already replaces it, and the oldest goes when there are too many`() {
+        val a = CustomRoom(width = 4f)
+        val b = CustomRoom(width = 7f)
+        var saved = SavedRooms.add(emptyList(), "Den", a)
+        saved = SavedRooms.add(saved, "Loft", b)
+        saved = SavedRooms.add(saved, "den", b)
+        assertEquals(listOf("Loft", "den"), saved.map { it.name })
+        assertEquals(b, saved.last().room)
+        assertEquals(saved, SavedRooms.add(saved, "   ", a))                 // no name, nothing saved
+        assertEquals(listOf("den"), SavedRooms.remove(saved, "Loft").map { it.name })
+        repeat(SavedRooms.MAX + 5) { saved = SavedRooms.add(saved, "Room $it", a) }
+        assertEquals(SavedRooms.MAX, saved.size)
+        assertEquals("Room ${SavedRooms.MAX + 4}", saved.last().name)
+        assertFalse(saved.any { it.name == "Loft" })
+        // They are part of the profile, are kept tidy with it, and an older profile has none.
+        val profile = RendererProfile(savedRooms = listOf(SavedRoom(" A ", a), SavedRoom("a", b), SavedRoom("", a))).clamped()
+        assertEquals(listOf(SavedRoom("a", b.clamped())), profile.savedRooms)
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        assertTrue(json.decodeFromString<RendererProfile>("""{"hrtfEnabled":true}""").savedRooms.isEmpty())
+    }
+
+    @Test
     fun `every preset is a room that can be made, and no two are the same`() {
         val rooms = RoomPreset.entries.map { it.room }
         assertEquals(rooms.size, rooms.toSet().size)

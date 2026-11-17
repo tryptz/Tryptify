@@ -132,6 +132,80 @@ enum class RoomPreset(val room: CustomRoom) {
     STEREO(CustomRoom(width = 17.5f, depth = 18f, height = 5.5f, damping = 0.35f)),
 }
 
+/** A room the listener set and gave a name, to come back to: My room's own presets. */
+@Serializable
+data class SavedRoom(val name: String, val room: CustomRoom)
+
+/**
+ * The listener's saved rooms, and the file one of them is shared as: a small
+ * JSON text with the room's size, damping and roundness under a marker, so a
+ * file that is some other JSON is told apart and refused.
+ */
+object SavedRooms {
+    /** How many are kept; saving one more drops the oldest. */
+    const val MAX = 40
+    const val MAX_NAME = 40
+
+    /** No room file is anywhere near this; a bigger one is not read. */
+    const val MAX_FILE_BYTES = 64 * 1024
+    const val FILE_EXTENSION = ".room.json"
+
+    /** A name as it is kept: trimmed, its runs of space made one, and not over [MAX_NAME]. */
+    fun name(raw: String): String = raw.trim().replace(Regex("\\s+"), " ").take(MAX_NAME).trim()
+
+    /**
+     * [saved] with [room] added as [name], last. A room of that name already
+     * there (in any letter case) is replaced; a blank name adds nothing.
+     */
+    fun add(saved: List<SavedRoom>, name: String, room: CustomRoom): List<SavedRoom> {
+        val kept = name(name)
+        if (kept.isEmpty()) return saved
+        return (saved.filterNot { it.name.equals(kept, ignoreCase = true) } + SavedRoom(kept, room.clamped())).takeLast(MAX)
+    }
+
+    fun remove(saved: List<SavedRoom>, name: String): List<SavedRoom> = saved.filterNot { it.name == name }
+
+    /** As they are kept: names tidied, rooms in range, nameless and repeated ones dropped. */
+    fun clamped(saved: List<SavedRoom>): List<SavedRoom> =
+        saved.fold(emptyList()) { kept, it -> add(kept, it.name, it.room) }
+
+    /** The text of a room's file. */
+    fun encode(saved: SavedRoom): String {
+        val r = saved.room.clamped()
+        return json.encodeToString(RoomFile.serializer(), RoomFile(FORMAT, name(saved.name), r.width, r.depth, r.height, r.damping, r.roundness))
+    }
+
+    /** The room in a file's [text], or null when it is not a room file. Its values are brought into range. */
+    fun decode(text: String): SavedRoom? {
+        val file = runCatching { json.decodeFromString(RoomFile.serializer(), text) }.getOrNull() ?: return null
+        if (file.tryptifyRoom < 1) return null
+        val named = name(file.name)
+        if (named.isEmpty()) return null
+        val room = CustomRoom(file.width, file.depth, file.height, file.damping, file.roundness).clamped()
+        return SavedRoom(named, room)
+    }
+
+    /** The file a room of [name] is saved as: its name, with a space for what a file name cannot hold. */
+    fun fileName(name: String): String {
+        val safe = name(name.replace(Regex("[^\\p{L}\\p{N} _-]"), " ")).ifEmpty { "room" }
+        return safe + FILE_EXTENSION
+    }
+
+    private const val FORMAT = 1
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
+
+    @Serializable
+    private class RoomFile(
+        val tryptifyRoom: Int = 0,
+        val name: String = "",
+        val width: Float = 5f,
+        val depth: Float = 6f,
+        val height: Float = 2.7f,
+        val damping: Float = 0.25f,
+        val roundness: Float = 0f,
+    )
+}
+
 /**
  * The listener's own ears on top of the HRTF in use (`EarTune` in
  * `render/virtual_room.h`, which says why). [size] is the ear's size against

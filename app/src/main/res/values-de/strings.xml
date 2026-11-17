@@ -3518,6 +3518,8 @@
     <string name="atmos_ear_pad_help">Abstimmfläche. Ziehe den Punkt: seitwärts ist die Ohrgröße, auf und ab die Lautstärke. Ziehe den weißen Griff entlang seiner Diagonale für Q.</string>
     <string name="atmos_ear_not_heard">Gerade nicht zu hören: Nichts spielt durch den virtuellen Raum. Die Abstimmung wirkt bei Atmos- und Surround-Titeln über Kopfhörer. Ein Stereo-Titel geht nicht durch den Raum.</string>
     <string name="atmos_room_presets">Voreinstellungen</string>
+    <string name="atmos_room_saved">Gespeicherte Räume</string>
+    <string name="atmos_room_not_a_preset">diese Datei ist kein Raum-Preset</string>
     <string name="atmos_room_preset_booth">Gesangskabine</string>
     <string name="atmos_room_preset_home">Heimstudio</string>
     <string name="atmos_room_preset_control">Regieraum</string>
