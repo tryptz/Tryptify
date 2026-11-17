@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -246,6 +248,18 @@ private fun rememberRoomLabels(shape: RoomShape, ink: Color): RoomLabels {
 }
 
 /**
+ * The size the room is drawn at while its sound is shown, of its size on the
+ * page; it is scaled up from there. Every pixel of the room walks the grain's
+ * cells, and at full size a frame of it took the GPU long enough to hold up
+ * every frame of the app with it (the owner: the sound in the room made the
+ * whole app sluggish). A quarter of the pixels is a quarter of that. The
+ * specks and the room's lines are a little softer for it; the numbers and
+ * measurements are drawn over the picture at full size. With the sound not
+ * shown, and in the small picture, the room is drawn at its full size.
+ */
+internal const val ROOM_SOUND_SCALE = 0.5f
+
+/**
  * The grain's clock: the time since it started, in nanoseconds, thirty times
  * a second while [running], and held still otherwise. Nothing is drawn from
  * the time itself: reading it where the room is drawn is what draws the room
@@ -305,6 +319,7 @@ private fun AtmosRoomGpu(
     val air = remember { SlowLevels() }
     val clock = rememberGrainClock(options.sound && options.slowLevels && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
     val places = remember { RoomPlaces() }
+    val picture = androidx.compose.ui.graphics.rememberGraphicsLayer()
 
     Box(modifier = modifier) {
         Spacer(
@@ -372,12 +387,31 @@ private fun AtmosRoomGpu(
                     for (src in room.sources) scene.addMark(src[0], src[1], src[2])
 
                     val held = afterglow.follow(peak, liveDecay)
-                    shader.draw(
-                        drawContext.canvas.nativeCanvas, size.width, size.height, camera, room, scene,
-                        glow = if (sound) amount * held else 0f,
-                        envelope = liveOptions.envelope(),
-                        primary = accent, tertiary = heightTint, ink = onSurface,
-                    )
+                    // Into a picture of its own, which the page then lays down:
+                    // the shader runs when the room has something new, and
+                    // any other frame of the app only puts the picture back.
+                    // With the sound shown that picture is small and scaled
+                    // up ([ROOM_SOUND_SCALE]): the grain is what costs.
+                    val down = if (sound) ROOM_SOUND_SCALE else 1f
+                    val wide = kotlin.math.ceil(size.width * down).toInt().coerceAtLeast(1)
+                    val high = kotlin.math.ceil(size.height * down).toInt().coerceAtLeast(1)
+                    val glow = if (sound) amount * held else 0f
+                    val lit = liveOptions.envelope()
+                    picture.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                    // A plain Density, not the node's own: see LyricsBackdropFx, where reading it inside record recursed.
+                    picture.record(
+                        androidx.compose.ui.unit.Density(density, fontScale),
+                        layoutDirection,
+                        androidx.compose.ui.unit.IntSize(wide, high),
+                    ) {
+                        shader.draw(
+                            drawContext.canvas.nativeCanvas, wide.toFloat(), high.toFloat(), camera, room, scene,
+                            glow = glow,
+                            envelope = lit,
+                            primary = accent, tertiary = heightTint, ink = onSurface,
+                        )
+                    }
+                    scale(size.width / wide, size.height / high, pivot = Offset.Zero) { drawLayer(picture) }
 
                     // Over it: each object's number beside it, and the room's measurements.
                     if (liveOptions.compact) return@drawBehind

@@ -3553,6 +3553,19 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   reading of the meter. Measured with Skia's CPU renderer on the check
   frame, a frame took 38% less than before these; nobody has measured it
   on a phone.
+- **The room is a picture of its own, and a small one while the sound is
+  shown** (`picture` in `AtmosRoomGpu`, `ROOM_SOUND_SCALE` 0.5). The shader
+  draws into an offscreen layer that the page lays down, so it runs when the
+  room has something new and any other frame of the app only puts the
+  picture back. With the sound shown the layer is half the room's size each
+  way and scaled up: a quarter of the pixels walking the grain. At full
+  size a frame of it held up every frame of the app (the owner: the sound
+  in the room "shouldn't make the entire app sluggish"; 52 frames a second
+  on a 165 Hz screen). The specks and lines are a little softer; the
+  numbers and measurements are drawn over it at full size. Do not draw the
+  shader straight onto the page again, and do not raise the scale without
+  a phone's frame times to show it is free. Nobody has measured this on a
+  phone yet either.
 - **Show sound in the room** (`RendererProfile.roomSound`, the switch under
   the room) turns the drawing of the sound off: no grain, no rays, no
   turning spots, and the clock that draws the room between the channel
