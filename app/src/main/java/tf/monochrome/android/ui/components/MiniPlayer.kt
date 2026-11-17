@@ -289,9 +289,17 @@ fun MiniPlayer(
     // swell centred on the icon; a press anywhere else on the bar raises a
     // broader one under the finger. Whichever is live wins — they cannot both
     // be, since the controls sit above the bar's own tap target.
-    val bulgeCenter = if (anyPressed) controlCenter else barPress.center
-    val bulge = if (anyPressed) bulgeAmt else barPress.amount
-    val bulgeSpread = if (anyPressed) 0f else GlassPressDefaults.BULGE
+    //
+    // A control's dome is live for as long as it is still there, not only
+    // while the finger is down: its release is the spring carrying bulgeAmt
+    // back to rest. This used to ask anyPressed alone, so the instant the
+    // finger lifted the slab was handed the bar's own amount, which was 0,
+    // and the dome was gone in one frame with no release at all (the owner's
+    // recording, beside the Studio's preview dock, which eased out).
+    val controlLive = anyPressed || bulgeAmt > barPress.amount
+    val bulgeCenter = if (controlLive) controlCenter else barPress.center
+    val bulge = if (controlLive) bulgeAmt else barPress.amount
+    val bulgeSpread = if (controlLive) 0f else GlassPressDefaults.BULGE
 
     // Whether the bar draws an opaque backdrop pane — the live lens or the
     // haze blur — decided out here because the shadow needs it too: it only

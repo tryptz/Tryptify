@@ -1045,6 +1045,16 @@ in a `SideEffect`. The copy only runs on recomposition, and an animation read
 only inside the `SideEffect` never causes one. The swell then freezes wherever
 it was when the finger lifted, and every pill stays half pressed.
 
+**A dome is released by its own spring, wherever two presses share a slab.**
+The mini player's slab has one dome for three presses: the two controls
+(`bulgeAmt`) and the bar (`barPress`). Which of them the slab shows is asked
+of the amounts, not of the finger (`controlLive`): a control's dome stays the
+slab's until its spring has brought it back to rest. Asked of `anyPressed`
+alone, the slab switched to the bar's amount, 0, the moment the finger
+lifted, and the dome vanished in one frame while the Studio's preview dock
+eased out beside it (the owner's recording, 2026-11-17). Never pick a
+press's value by whether it is held.
+
 **Every glass button and pill is the panel recipe, never a faint slab.**
 `PressableGlass`, `GlassPill` and `GlassChoiceChip` draw through
 `GlassMaterial`, the same layers `GlassPanel` uses: the live lens or the
