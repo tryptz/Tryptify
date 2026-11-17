@@ -409,9 +409,10 @@ route, every frame of the fade (up to 8 s) recomposed the whole player.
 
 ### Lyrics: where lines start, and soft focus
 
-Two choices of the listener's own, in the Studio's Typography section, both
-off as shipped and both carried over a theme (`withPersonalFrom`), like the
-font:
+Two choices in the Studio's Typography section, both off as shipped. They are
+part of the look, so a theme sets them (the "Apple Music" preset is made of
+them: plain bold type from the left, the rest out of focus) and another theme
+takes them back:
 
 - **Line start** (`LyricsFxSettings.lineAlign`): Middle, or From the left.
   From the left, every row of every line starts at the edge

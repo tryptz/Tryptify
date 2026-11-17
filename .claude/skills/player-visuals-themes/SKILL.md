@@ -144,7 +144,7 @@ test enforces `tintColor == 0 && previewBg == 0` for every preset, and
 ## Where to add a preset
 
 - Lyrics FX: append at the end of `PRESETS = listOf(…)` in
-  `LyricsFxSettings.kt`, after `"Sea Glass"` (26 presets today; `"Static"`
+  `LyricsFxSettings.kt`, after `"Sea Glass"` (27 presets today; `"Static"`
   closes the first 17, and nothing goes between it and `"Sunburst"`).
 - Player Glass: append after `"Holo"` inside `PRESETS = listOf(…)` in
   `PlayerGlassSettings.kt` (19 today: Float, Opal, Ripple, Glint, Blurred,

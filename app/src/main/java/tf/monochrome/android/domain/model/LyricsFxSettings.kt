@@ -246,15 +246,14 @@ data class LyricsFxSettings(
     /**
      * Where each line starts: [ALIGN_CENTER] (the shipped look) or
      * [ALIGN_START], every line from the left edge (the right in a
-     * right-to-left language). The listener's own way of reading, like the
-     * font: a theme carries it over.
+     * right-to-left language). Part of the look: a theme sets it.
      */
     val lineAlign: Int = ALIGN_CENTER,
     /**
      * Soft focus, 0 (off, the shipped look) to 1: the lines away from the
      * sung one go out of focus and dim, more with each line of distance, so
      * the eye rests on the one being sung. Android 12 and later (a layer's
-     * blur). Carried over a theme with [lineAlign].
+     * blur). Part of the look, like [lineAlign]: a theme sets it.
      */
     val softFocus: Float = 0f,
 ) {
@@ -389,8 +388,6 @@ data class LyricsFxSettings(
         artGlowBrightness = other.artGlowBrightness,
         godRayQuality = other.godRayQuality,
         motionBlurQuality = other.motionBlurQuality,
-        lineAlign = other.lineAlign,
-        softFocus = other.softFocus,
     )
 
     /**
@@ -715,6 +712,18 @@ data class LyricsFxSettings(
                 rotationDegrees = 4f, waveSpeed = 0.5f, wavePhaseStep = 0.12f, waveTravelDp = 2f, shadowDepth = 0.4f,
                 bassReact = 0.35f, pumpAmount = 0.04f, attackMs = 24f, releaseMs = 300f, bounce = 0.35f,
                 glowRadiusDp = 60f, glowBrightness = 0.12f,
+            ),
+            // Apple Music — the lyric page of that app, as the owner asked for
+            // it by name: plain bold letters from the left, the sung line
+            // sharp and the others out of focus and dim. No glass, no wave,
+            // no pump, no glow, no shadow: nothing but the type and the focus.
+            "Apple Music" to LyricsFxSettings(
+                fontSizeSp = 28f, letterSpacingSp = -0.4f, edgeMarginDp = 12f, maxWrapLines = 3,
+                liquidGlass = false,
+                rotationDegrees = 0f, waveTravelDp = 0f, shadowDepth = 0f,
+                bassReact = 0f, pumpAmount = 0f,
+                glowRadiusDp = 0f, glowBrightness = 0f,
+                lineAlign = ALIGN_START, softFocus = 0.75f,
             ),
         )
     }

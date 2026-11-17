@@ -52,17 +52,29 @@ class LyricSoftFocusTest {
     }
 
     @Test
-    fun `the two are clamped, saved, and carried over a theme`() {
+    fun `the two are clamped, and a theme sets them`() {
         assertEquals(1f, LyricsFxSettings(softFocus = 9f).clamped().softFocus, 0f)
         assertEquals(0f, LyricsFxSettings(softFocus = Float.NaN).clamped().softFocus, 0f)
         assertEquals(LyricsFxSettings.ALIGN_CENTER, LyricsFxSettings(lineAlign = 7).clamped().lineAlign)
         assertEquals(LyricsFxSettings.ALIGN_START, LyricsFxSettings(lineAlign = LyricsFxSettings.ALIGN_START).clamped().lineAlign)
+        // They are the look, not a personal setting: another theme takes them back to its own.
         val mine = LyricsFxSettings(lineAlign = LyricsFxSettings.ALIGN_START, softFocus = 0.6f)
         val applied = LyricsFxSettings.DEFAULT.withPersonalFrom(mine)
-        assertEquals(LyricsFxSettings.ALIGN_START, applied.lineAlign)
-        assertEquals(0.6f, applied.softFocus, 0f)
-        // So a theme's chip still lights with them set.
-        assertTrue(applied.matchesPreset(LyricsFxSettings.DEFAULT))
+        assertEquals(LyricsFxSettings.ALIGN_CENTER, applied.lineAlign)
+        assertEquals(0f, applied.softFocus, 0f)
+        assertTrue(!mine.matchesPreset(LyricsFxSettings.DEFAULT))
+        // The preset made of them: plain type from the left, the rest out of focus.
+        val preset = LyricsFxSettings.PRESETS.first { it.first == "Apple Music" }.second
+        assertEquals(LyricsFxSettings.ALIGN_START, preset.lineAlign)
+        assertTrue(preset.softFocus > 0.5f)
+        assertTrue(!preset.liquidGlass && !preset.godRays && preset.rotationDegrees == 0f && preset.bassReact == 0f)
+        assertEquals(preset, preset.clamped())
+        // Applied over a listener's settings it keeps their font and brings its own layout.
+        val font = LyricsFxSettings(customFont = true, customFontPath = "/x.otf")
+        val worn = preset.withPersonalFrom(font)
+        assertEquals("/x.otf", worn.customFontPath)
+        assertEquals(LyricsFxSettings.ALIGN_START, worn.lineAlign)
+        assertTrue(worn.matchesPreset(preset))
         assertEquals(lyricLineAlignment(mine), androidx.compose.ui.Alignment.Start)
         assertEquals(lyricLineAlignment(LyricsFxSettings.DEFAULT), androidx.compose.ui.Alignment.CenterHorizontally)
     }

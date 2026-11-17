@@ -13,7 +13,8 @@
 
 #### Lyrics
 - **Lines can start from the left.** Player Visuals Studio › Lyrics FX › Typography › Line start: Middle, as before, or From the left, where every line starts at the edge and grows from it as it is sung.
-- **Soft focus.** In the same place, a slider that takes the lines away from the sung one out of focus and dims them, more with each line of distance, so the eye stays on the line being sung; a line comes into focus as its turn nears. Off as shipped. Both choices stay when a theme is applied. Android 12 and later.
+- **Soft focus.** In the same place, a slider that takes the lines away from the sung one out of focus and dims them, more with each line of distance, so the eye stays on the line being sung; a line comes into focus as its turn nears. Off as shipped. Android 12 and later.
+- **An "Apple Music" lyric theme.** Among the Lyrics FX presets: plain bold lyrics from the left with the sung line sharp and the others soft and dim, and no glass, wave, pump, glow or shadow. It is the two settings above, made into a look.
 
 #### Sharing
 - **A shared song's preview starts where the song is playing.** Share link on the song that is playing (or paused) sends its position with the share, and the 30-second preview Discord plays starts there; shared in the last seconds, the clip is the song's last thirty. A song that is not the one playing starts a third of the way in, as before. Needs the servers' side (TrypT-hifi and trypt-hifi-scxyt, which take `t=` and sign it with the link); an older server ignores it.
