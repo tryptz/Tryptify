@@ -3399,6 +3399,20 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   itself, so it needs no reduce-motion case.
 - The LFE has no place in a mix: its speaker is drawn on the floor under the
   screen, and an LFE object gets no dot.
+- **The Atmos page is five headed sections, in this order** (the owner
+  asked for it "more organized"; offered folding sections too, and chose
+  headings with everything in view, as the rest of Settings is): Channel
+  Map (the room, Show sound in the room), Spatial Render (the one switch),
+  Room (Room amount, Rooms, Size and shape with its presets, the room
+  database), Panning (Trapezoid panning and its three sliders), HRTF (the
+  set in use, SOFA presets, the HRTF database, Load .sofa file, the ear
+  tuner), Test Track, then Reset to defaults. Room and HRTF show only while
+  the binaural render is on; Panning always, since the envelope is for any
+  output. Everything from Room amount to the envelope used to sit under
+  "Spatial Render" with no heading between, a room's size next to an HRTF
+  file's name. A new setting goes under the heading it belongs to, not at
+  the end. The slider is "Room amount" (it was "Room", which is now the
+  heading over it).
 - **The Atmos page holds only what is the renderer's own.** The owner took
   three sections off it: Downmix (its switch was a second copy of the one on
   Settings › Audio, a page back), Sources (TIDAL Dolby Atmos, also on

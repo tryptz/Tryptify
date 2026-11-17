@@ -582,26 +582,11 @@ fun AtmosRendererScreen(
                 }
                 Spacer(Modifier.height(20.dp))
 
-                // ── Built-in test track ────────────────────────────────────────
-                SectionHeader(stringResource(R.string.atmos_test_track))
-                val testStatus by viewModel.testTrackStatus.collectAsStateWithLifecycle()
-                Text(
-                    stringResource(R.string.atmos_a_bundled_e_ac_3_joc_channel_check_a_voice),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = { viewModel.installTestTrack() }) {
-                    Text(stringResource(R.string.atmos_add_atmos_test_track_to_library))
-                }
-                testStatus?.let {
-                    Text(
-                        it.resolve(androidx.compose.ui.platform.LocalContext.current),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.height(20.dp))
-
+                // The page in the order a listener meets it: the map, the one
+                // switch, then what that switch brings, each under its own
+                // heading (Room, Panning, HRTF), and the test track last. They
+                // were all under "Spatial Render", the room's settings, the
+                // HRTF's files, the ear tuner and the envelope run together.
                 // ── Spatial render — the ONE option beyond the fold ───────────
                 // Off (default): every Atmos track goes through the coefficient
                 // downmix renderer above. On: objects are binauralized via the
@@ -627,7 +612,11 @@ fun AtmosRendererScreen(
                     checked = spatial,
                     onCheckedChange = { viewModel.setSpatial(it) },
                 )
+                Spacer(Modifier.height(20.dp))
+
+                // ── Room: how much of it, which one, and its size ─────────────
                 if (spatial) {
+                    SectionHeader(stringResource(R.string.atmos_section_room))
                     // The headphone render is the 15.1.12 virtual room; Room at 0
                     // is the room's speakers with no reflections or tail.
                     LabeledSlider(
@@ -645,6 +634,61 @@ fun AtmosRendererScreen(
                         onDelete = viewModel::deleteRoom,
                         onBrowse = { navController.navigateTool(Screen.RoomDatabase) },
                     )
+                    Spacer(Modifier.height(20.dp))
+                }
+
+                // ── Panning: the envelope, drawn by the room above ───────────
+                SectionHeader(stringResource(R.string.atmos_section_panning))
+                // The space objects may use, for headphones and loudspeakers
+                // alike; the room above takes its shape.
+                val envelope = profile.panEnvelope.clamped()
+                SettingSwitchItem(
+                    title = stringResource(R.string.atmos_envelope),
+                    subtitle = stringResource(R.string.atmos_envelope_summary),
+                    checked = envelope.enabled,
+                    onCheckedChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(enabled = it)))
+                    },
+                )
+                if (envelope.enabled) {
+                    val min = tf.monochrome.android.domain.model.PanEnvelope.MIN_CEILING
+                    LabeledSlider(
+                        title = stringResource(R.string.atmos_envelope_width),
+                        valueText = "${(envelope.ceilingWidth * 100).toInt()}%",
+                        value = envelope.ceilingWidth,
+                        range = min..1f,
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingWidth = it)))
+                    },
+                    )
+                    LabeledSlider(
+                        title = stringResource(R.string.atmos_envelope_depth),
+                        valueText = "${(envelope.ceilingDepth * 100).toInt()}%",
+                        value = envelope.ceilingDepth,
+                        range = min..1f,
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingDepth = it)))
+                    },
+                    )
+                    LabeledSlider(
+                        title = stringResource(R.string.atmos_envelope_curve),
+                        valueText = String.format(java.util.Locale.getDefault(), "%.2f", envelope.curve),
+                        value = envelope.curve,
+                        range = tf.monochrome.android.domain.model.PanEnvelope.MIN_CURVE..tf.monochrome.android.domain.model.PanEnvelope.MAX_CURVE,
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(curve = it)))
+                    },
+                    )
+                }
+                Spacer(Modifier.height(20.dp))
+
+                // ── HRTF: the head that is heard through, and its tuning ─────
+                if (spatial) {
+                    SectionHeader(stringResource(R.string.atmos_section_hrtf))
                     if (profile.hrtfProfileId == null) Text(
                         stringResource(R.string.atmos_using_the_built_in_mit_kemar_set_pick_a_sofa),
                         style = MaterialTheme.typography.bodySmall,
@@ -719,59 +763,34 @@ fun AtmosRendererScreen(
                             Text(stringResource(R.string.atmos_load_sofa_file))
                         }
                     }
+                    EarTunerSection(
+                        tune = profile.earTune,
+                        // A new head has its own curve: the graph is asked for again.
+                        head = profile.hrtfProfileId,
+                        // The room's meter answers only while a song plays through the room.
+                        heard = roomSpeakers != null,
+                        onTune = viewModel::tuneEar,
+                        curve = viewModel::earCurve,
+                    )
+                    Spacer(Modifier.height(20.dp))
                 }
-                if (profile.hrtfEnabled || profile.hrtfAuto) EarTunerSection(
-                    tune = profile.earTune,
-                    // A new head has its own curve: the graph is asked for again.
-                    head = profile.hrtfProfileId,
-                    // The room's meter answers only while a song plays through the room.
-                    heard = roomSpeakers != null,
-                    onTune = viewModel::tuneEar,
-                    curve = viewModel::earCurve,
+
+                // ── Built-in test track ────────────────────────────────────────
+                SectionHeader(stringResource(R.string.atmos_test_track))
+                val testStatus by viewModel.testTrackStatus.collectAsStateWithLifecycle()
+                Text(
+                    stringResource(R.string.atmos_a_bundled_e_ac_3_joc_channel_check_a_voice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                // The space objects may use, for headphones and loudspeakers
-                // alike; the room above takes its shape.
-                val envelope = profile.panEnvelope.clamped()
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_envelope),
-                    subtitle = stringResource(R.string.atmos_envelope_summary),
-                    checked = envelope.enabled,
-                    onCheckedChange = {
-                        envelopeMoved++
-                        viewModel.update(profile.copy(panEnvelope = envelope.copy(enabled = it)))
-                    },
-                )
-                if (envelope.enabled) {
-                    val min = tf.monochrome.android.domain.model.PanEnvelope.MIN_CEILING
-                    LabeledSlider(
-                        title = stringResource(R.string.atmos_envelope_width),
-                        valueText = "${(envelope.ceilingWidth * 100).toInt()}%",
-                        value = envelope.ceilingWidth,
-                        range = min..1f,
-                        onValueChange = {
-                        envelopeMoved++
-                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingWidth = it)))
-                    },
-                    )
-                    LabeledSlider(
-                        title = stringResource(R.string.atmos_envelope_depth),
-                        valueText = "${(envelope.ceilingDepth * 100).toInt()}%",
-                        value = envelope.ceilingDepth,
-                        range = min..1f,
-                        onValueChange = {
-                        envelopeMoved++
-                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingDepth = it)))
-                    },
-                    )
-                    LabeledSlider(
-                        title = stringResource(R.string.atmos_envelope_curve),
-                        valueText = String.format(java.util.Locale.getDefault(), "%.2f", envelope.curve),
-                        value = envelope.curve,
-                        range = tf.monochrome.android.domain.model.PanEnvelope.MIN_CURVE..tf.monochrome.android.domain.model.PanEnvelope.MAX_CURVE,
-                        onValueChange = {
-                        envelopeMoved++
-                        viewModel.update(profile.copy(panEnvelope = envelope.copy(curve = it)))
-                    },
+                TextButton(onClick = { viewModel.installTestTrack() }) {
+                    Text(stringResource(R.string.atmos_add_atmos_test_track_to_library))
+                }
+                testStatus?.let {
+                    Text(
+                        it.resolve(androidx.compose.ui.platform.LocalContext.current),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                 }
                 Spacer(Modifier.height(16.dp))

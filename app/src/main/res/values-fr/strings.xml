@@ -1438,7 +1438,10 @@
     <string name="atmos_binaural_on">Les objets et les lits Atmos sont joués par une salle virtuelle 15.1.12 d\'enceintes autour de votre tête, via la HRTF ci-dessous.</string>
     <string name="atmos_binaural_off">Désactivé. Les titres Atmos utilisent le downmix par coefficients.</string>
     <string name="atmos_binaural_auto">Automatique : activé au casque, sous la forme d\'une salle virtuelle 15.1.12 d\'enceintes autour de vous. Sur le haut-parleur du téléphone, Atmos est réduit en stéréo.</string>
-    <string name="atmos_room_amount">Salle</string>
+    <string name="atmos_room_amount">Niveau de salle</string>
+    <string name="atmos_section_room">Salle</string>
+    <string name="atmos_section_panning">Panoramique</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">En direct : Dolby Atmos · %1$d objets sur un cœur %2$s · %3$s. Chaque point est un objet, là où le mixage le place.</string>
     <string name="atmos_live_watched">En direct : Dolby Atmos · %1$d objets sur un cœur %2$s · %3$s. Chaque point est l\'endroit où le mixage place un objet ; ils ne sont pas rendus (rendu binaural désactivé), vous entendez donc le cœur réduit en stéréo.</string>
     <string name="atmos_live_not_rendering">En direct : cœur %1$s · %2$s. Les objets Atmos ne sont pas rendus : le rendu binaural (ci-dessous) est désactivé pour cette sortie, seul le cœur est joué, réduit en stéréo.</string>

@@ -1354,7 +1354,10 @@
     <string name="atmos_binaural_on">Atmos のオブジェクトとベッドは、下の HRTF を通して、頭のまわりの 15.1.12 バーチャルスピーカールームから再生されます。</string>
     <string name="atmos_binaural_off">オフ。Atmos の曲は係数ダウンミックスのレンダラーを使います。</string>
     <string name="atmos_binaural_auto">自動：ヘッドホンではオンになり、あなたを囲む 15.1.12 のバーチャルスピーカールームとして再生します。本体スピーカーでは Atmos をステレオにダウンミックスします。</string>
-    <string name="atmos_room_amount">部屋の響き</string>
+    <string name="atmos_room_amount">部屋の響きの量</string>
+    <string name="atmos_section_room">部屋</string>
+    <string name="atmos_section_panning">パンニング</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">ライブ：Dolby Atmos · %2$s コア上の %1$d オブジェクト · %3$s。各ドットはオブジェクトで、ミックスが置いた位置にあります。</string>
     <string name="atmos_live_watched">ライブ：Dolby Atmos · %2$s コア上の %1$d オブジェクト · %3$s。各ドットはミックスがオブジェクトを置いた位置です。レンダリングはされておらず（バイノーラルレンダリングがオフ）、ステレオにダウンミックスされたコアが聞こえています。</string>
     <string name="atmos_live_not_rendering">ライブ：%1$s コア · %2$s。Atmos オブジェクトはレンダリングされていません：この出力ではバイノーラルレンダリング（下）がオフのため、コアだけがステレオにダウンミックスされて再生されています。</string>

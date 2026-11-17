@@ -1354,7 +1354,10 @@
     <string name="atmos_binaural_on">Atmos 对象和声床通过下方的 HRTF，从环绕你头部的 15.1.12 虚拟扬声器房间播放。</string>
     <string name="atmos_binaural_off">关闭。Atmos 歌曲使用系数缩混渲染器。</string>
     <string name="atmos_binaural_auto">自动：使用耳机时开启，呈现为环绕你的 15.1.12 虚拟扬声器房间。使用手机扬声器时，Atmos 会缩混为立体声。</string>
-    <string name="atmos_room_amount">房间感</string>
+    <string name="atmos_room_amount">房间感强度</string>
+    <string name="atmos_section_room">房间</string>
+    <string name="atmos_section_panning">声像</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是一个对象，位于混音放置它的位置。</string>
     <string name="atmos_live_watched">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是混音放置对象的位置；它们未被渲染（双耳渲染已关闭），你听到的是缩混为立体声的核心。</string>
     <string name="atmos_live_not_rendering">实时：%1$s 核心 · %2$s。Atmos 对象未被渲染：此输出的双耳渲染（见下方）已关闭，因此只播放缩混为立体声的核心。</string>

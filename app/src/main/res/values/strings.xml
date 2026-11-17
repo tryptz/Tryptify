@@ -1397,7 +1397,10 @@
     <string name="atmos_binaural_on">Atmos objects and beds play from a 15.1.12 virtual room of speakers around your head, through the HRTF below.</string>
     <string name="atmos_binaural_off">Off. Atmos tracks use the coefficient downmix renderer.</string>
     <string name="atmos_binaural_auto">Automatic: on with headphones, as a 15.1.12 virtual room of speakers around you. On the phone\'s speaker Atmos is folded to stereo.</string>
-    <string name="atmos_room_amount">Room</string>
+    <string name="atmos_room_amount">Room amount</string>
+    <string name="atmos_section_room">Room</string>
+    <string name="atmos_section_panning">Panning</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d objects on a %2$s core · %3$s. Each dot is an object, where the mix puts it.</string>
     <string name="atmos_live_watched">Live: Dolby Atmos · %1$d objects on a %2$s core · %3$s. Each dot is where the mix puts an object; they are not being rendered (Binaural render is off), so you hear the core folded to stereo.</string>
     <string name="atmos_live_not_rendering">Live: %1$s core · %2$s. Atmos objects are not being rendered: Binaural render (below) is off for this output, so only the core is playing, folded to stereo.</string>

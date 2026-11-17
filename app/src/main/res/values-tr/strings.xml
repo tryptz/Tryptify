@@ -1396,7 +1396,10 @@
     <string name="atmos_binaural_on">Atmos nesneleri ve yatakları, aşağıdaki HRTF aracılığıyla başınızın çevresindeki 15.1.12 sanal hoparlör odasından çalınır.</string>
     <string name="atmos_binaural_off">Kapalı. Atmos parçaları katsayılı downmix oluşturucusunu kullanır.</string>
     <string name="atmos_binaural_auto">Otomatik: kulaklıkla açık, çevrenizde 15.1.12 sanal hoparlör odası olarak. Telefonun hoparlöründe Atmos stereoya indirgenir.</string>
-    <string name="atmos_room_amount">Oda</string>
+    <string name="atmos_room_amount">Oda miktarı</string>
+    <string name="atmos_section_room">Oda</string>
+    <string name="atmos_section_panning">Panlama</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta bir nesnedir, miksin koyduğu yerde.</string>
     <string name="atmos_live_watched">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta, miksin bir nesneyi koyduğu yerdir; işlenmiyorlar (binaural işleme kapalı), bu yüzden stereoya indirgenmiş çekirdeği duyuyorsunuz.</string>
     <string name="atmos_live_not_rendering">Canlı: %1$s çekirdek · %2$s. Atmos nesneleri işlenmiyor: bu çıkış için binaural işleme (aşağıda) kapalı, bu yüzden yalnızca stereoya indirgenmiş çekirdek çalıyor.</string>

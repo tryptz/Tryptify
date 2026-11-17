@@ -1438,7 +1438,10 @@
     <string name="atmos_binaural_on">Oggetti e letti Atmos suonano da una stanza virtuale 15.1.12 di altoparlanti intorno alla tua testa, tramite l\'HRTF sottostante.</string>
     <string name="atmos_binaural_off">Disattivato. I brani Atmos utilizzano il renderer di downmix a coefficienti.</string>
     <string name="atmos_binaural_auto">Automatico: attivo con le cuffie, come una stanza virtuale 15.1.12 di altoparlanti intorno a te. Sull\'altoparlante del telefono Atmos viene ridotto a stereo.</string>
-    <string name="atmos_room_amount">Stanza</string>
+    <string name="atmos_room_amount">Livello di stanza</string>
+    <string name="atmos_section_room">Stanza</string>
+    <string name="atmos_section_panning">Panning</string>
+    <string name="atmos_section_hrtf">HRTF</string>
     <string name="atmos_live_objects">Live: Dolby Atmos · %1$d oggetti su un core %2$s · %3$s. Ogni punto è un oggetto, dove lo colloca il mix.</string>
     <string name="atmos_live_watched">Live: Dolby Atmos · %1$d oggetti su un core %2$s · %3$s. Ogni punto è dove il mix colloca un oggetto; non vengono renderizzati (il rendering binaurale è disattivato), quindi senti il core ridotto a stereo.</string>
     <string name="atmos_live_not_rendering">Live: core %1$s · %2$s. Gli oggetti Atmos non vengono renderizzati: il rendering binaurale (sotto) è disattivato per questa uscita, quindi suona solo il core, ridotto a stereo.</string>
