@@ -3399,8 +3399,16 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   itself, so it needs no reduce-motion case.
 - The LFE has no place in a mix: its speaker is drawn on the floor under the
   screen, and an LFE object gets no dot.
-- With real speakers chosen (`speakerRender`) the flat map of that layout
-  stays: those are the speakers that play.
+- **The Atmos page holds only what is the renderer's own.** The owner took
+  three sections off it: Downmix (its switch was a second copy of the one on
+  Settings › Audio, a page back), Sources (TIDAL Dolby Atmos, also on
+  Settings › Audio) and Speakers ("Render Atmos to speakers", which the
+  owner cannot test and so does not want offered). Do not put a setting
+  there that another page already has. Downmix preamp and LFE low-pass,
+  which were only there, sit under the downmix switch on Settings › Audio
+  (`MultichannelDownmixToggle`). The speaker render's code stays, with no
+  switch: `PreferencesManager.rendererProfile` reads `speakerRender` as off
+  whatever was saved, so no phone is left on a render nothing can turn off.
 - **The room drawn is the room heard** (`RoomShape`, `domain/model/AtmosRoom.kt`).
   The built-in room is a trapezoid: its walls stand upright to ear height
   and lean in from there to the layout's top ring of speakers, a quarter in

@@ -1370,17 +1370,11 @@
     <string name="atmos_lfe_low_pass_125_hz">Paso bajo LFE (125 Hz)</string>
     <string name="atmos_butterworth_4th_order_on_the_lfe_feed_the_dry">Butterworth de 4.º orden en la señal LFE; la ruta seca se retrasa en consonancia (~3,3 ms) antes de sumar. Desactivado = LFE directo sin filtrar.</string>
     <string name="atmos_tidal_dolby_atmos">TIDAL Dolby Atmos</string>
-    <string name="atmos_render_atmos_to_speakers">Renderizar Atmos a altavoces</string>
-    <string name="atmos_detect_layout_from_the_output">Detectar la disposición desde la salida</string>
-    <string name="atmos_uses_the_channel_count_the_hdmi_usb_device">Usa el número de canales que indica el dispositivo HDMI/USB. 8 y 10 canales son ambiguos (7.1 / 5.1.2, 5.1.4 / 7.1.2): desactívalo para elegir el tuyo.</string>
     <string name="atmos_binaural_render_sofa_hrtf">Renderizado binaural (SOFA HRTF)</string>
     <string name="atmos_channel_map">Mapa de canales</string>
     <string name="atmos_test_track">Pista de prueba</string>
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">Una prueba de canales E-AC-3 JOC incluida: una voz que recorre las posiciones Atmos. Añádela a tu biblioteca para oír el renderizador en acción.</string>
     <string name="atmos_add_atmos_test_track_to_library">Añadir la pista de prueba Atmos a la biblioteca</string>
-    <string name="atmos_downmix">Downmix</string>
-    <string name="atmos_sources">Fuentes</string>
-    <string name="atmos_speakers">Altavoces</string>
     <string name="atmos_spatial_render">Renderizado espacial</string>
     <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">Usando el conjunto MIT KEMAR integrado. Elige abajo un preset SOFA (o carga uno) para tus propios oídos.</string>
     <string name="atmos_sofa_presets">Presets SOFA</string>
@@ -1441,9 +1435,6 @@
     <string name="atmos_speakers_idle">Los altavoces que usa la mezcla actual, iluminados en su posición en la sala. Reproduce una canción para ver los niveles de canal en directo.</string>
     <string name="atmos_tidal_on">Las canciones de TIDAL con mezcla Atmos la reproducen (E-AC-3 JOC completo, a través de tu instancia TrypT HiFi) en lugar del estéreo.</string>
     <string name="atmos_tidal_off">Desactivado. Las canciones de TIDAL reproducen su flujo estéreo.</string>
-    <string name="atmos_speakers_on">Los objetos se colocan en tu disposición de altavoces (hasta 9.1.6) por HDMI o una interfaz USB multicanal. Se omiten DSP/EQ.</string>
-    <string name="atmos_speakers_off">Desactivado. Atmos se reproduce en binaural o reducido a estéreo (abajo).</string>
-    <string name="atmos_layout_option">%1$s  ·  %2$d canales</string>
     <string name="atmos_binaural_on">Los objetos y las camas Atmos suenan desde una sala virtual 15.1.12 de altavoces alrededor de tu cabeza, mediante la HRTF de abajo.</string>
     <string name="atmos_binaural_off">Desactivado. Las canciones Atmos usan el renderizador de downmix por coeficientes.</string>
     <string name="atmos_binaural_auto">Automático: activado con auriculares, como una sala virtual 15.1.12 de altavoces a tu alrededor. En el altavoz del teléfono, Atmos se reduce a estéreo.</string>

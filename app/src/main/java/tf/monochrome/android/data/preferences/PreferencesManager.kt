@@ -2756,11 +2756,27 @@ class PreferencesManager @Inject constructor(
             raw
                 ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(s) }.getOrNull() }
                 ?.clamped()
+                // "Render Atmos to speakers" has no switch any more (it could not
+                // be tested, so the owner took it out): a profile saved with it on
+                // must not leave a phone on a render nothing can turn off.
+                ?.copy(speakerRender = false)
                 ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
         }
 
     suspend fun setRendererProfile(profile: tf.monochrome.android.domain.model.RendererProfile) {
         dataStore.edit { it[RENDERER_PROFILE_JSON] = json.encodeToString(profile.clamped()) }
+    }
+
+    /** Changes the saved profile in one step, so two pages changing it cannot undo each other. */
+    suspend fun updateRendererProfile(
+        change: (tf.monochrome.android.domain.model.RendererProfile) -> tf.monochrome.android.domain.model.RendererProfile,
+    ) {
+        dataStore.edit { prefs ->
+            val saved = prefs[RENDERER_PROFILE_JSON]
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.RendererProfile>(s) }.getOrNull() }
+                ?: tf.monochrome.android.domain.model.RendererProfile.DEFAULT
+            prefs[RENDERER_PROFILE_JSON] = json.encodeToString(change(saved).clamped())
+        }
     }
 
     /** The mixer's spatial map (off, at standard positions, until set). */

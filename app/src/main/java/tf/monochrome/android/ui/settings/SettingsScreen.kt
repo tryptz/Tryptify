@@ -2007,6 +2007,10 @@ private fun formatBlockSize(size: Int): String = when {
  * Multichannel (5.1/7.1) handling: fold down to stereo through the DSP/EQ
  * chain (default), or pass multichannel PCM through to the device with
  * DSP/EQ bypassed for those tracks. Applies from the next track / seek.
+ *
+ * Under it, the fold's own two settings, which were on the Atmos renderer's
+ * page beside a second copy of this switch: the master trim (the fold runs
+ * hot) and the LFE's low-pass.
  */
 @Composable
 private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
@@ -2020,6 +2024,29 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
         },
         checked = enabled,
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
+    )
+    val saved by viewModel.downmixPreampDb.collectAsStateWithLifecycle()
+    // The slider follows the finger; the saved value comes back a moment later.
+    var dragged by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(saved) { if (dragged == saved) dragged = null }
+    val preamp = dragged ?: saved
+    LabeledSlider(
+        title = stringResource(R.string.atmos_downmix_preamp),
+        valueText = "%+.1f dB".format(preamp),
+        value = preamp,
+        range = -24f..6f,
+        enabled = enabled,
+        onValueChange = {
+            dragged = it
+            viewModel.setDownmixPreampDb(it)
+        },
+    )
+    val lfeLowpass by viewModel.downmixLfeLowpass.collectAsStateWithLifecycle()
+    SettingSwitchItem(
+        title = stringResource(R.string.atmos_lfe_low_pass_125_hz),
+        subtitle = stringResource(R.string.atmos_butterworth_4th_order_on_the_lfe_feed_the_dry),
+        checked = lfeLowpass,
+        onCheckedChange = { viewModel.setDownmixLfeLowpass(it) },
     )
 }
 

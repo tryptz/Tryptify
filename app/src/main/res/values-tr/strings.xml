@@ -1328,17 +1328,11 @@
     <string name="atmos_lfe_low_pass_125_hz">LFE alçak geçiren (125 Hz)</string>
     <string name="atmos_butterworth_4th_order_on_the_lfe_feed_the_dry">LFE beslemesinde 4. dereceden Butterworth; işlenmemiş yol toplamadan önce gecikmeyle eşleştirilir (~3,3 ms). Kapalı = işlenmemiş doğrudan LFE.</string>
     <string name="atmos_tidal_dolby_atmos">TIDAL Dolby Atmos</string>
-    <string name="atmos_render_atmos_to_speakers">Atmos’u hoparlörlere oluştur</string>
-    <string name="atmos_detect_layout_from_the_output">Düzeni çıkıştan algıla</string>
-    <string name="atmos_uses_the_channel_count_the_hdmi_usb_device">HDMI/USB cihazının bildirdiği kanal sayısını kullanır. 8 ve 10 kanal belirsizdir (7.1 / 5.1.2, 5.1.4 / 7.1.2): kendinizinkini seçmek için kapatın.</string>
     <string name="atmos_binaural_render_sofa_hrtf">Binaural oluşturma (SOFA HRTF)</string>
     <string name="atmos_channel_map">Kanal eşlemesi</string>
     <string name="atmos_test_track">Test parçası</string>
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">Dahili bir E-AC-3 JOC kanal testi: Atmos konumları arasında dolaşan bir ses. Oluşturucunun çalışmasını duymak için kitaplığınıza ekleyin.</string>
     <string name="atmos_add_atmos_test_track_to_library">Atmos test parçasını kitaplığa ekle</string>
-    <string name="atmos_downmix">Downmix</string>
-    <string name="atmos_sources">Kaynaklar</string>
-    <string name="atmos_speakers">Hoparlörler</string>
     <string name="atmos_spatial_render">Uzamsal oluşturma</string>
     <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">Dahili MIT KEMAR seti kullanılıyor. Kendi kulaklarınız için aşağıdan bir SOFA ön ayarı seçin (veya yükleyin).</string>
     <string name="atmos_sofa_presets">SOFA ön ayarları</string>
@@ -1399,9 +1393,6 @@
     <string name="atmos_speakers_idle">Mevcut miksin kullandığı hoparlörler, odadaki konumlarında yanar. Canlı kanal seviyelerini görmek için bir parça çalın.</string>
     <string name="atmos_tidal_on">Atmos miksi olan TIDAL parçaları stereo yerine onu çalar (TrypT HiFi örneğiniz üzerinden tam E-AC-3 JOC).</string>
     <string name="atmos_tidal_off">Kapalı. TIDAL parçaları stereo akışlarını çalar.</string>
-    <string name="atmos_speakers_on">Nesneler HDMI veya çok kanallı bir USB arabirimi üzerinden hoparlör düzeninize (9.1.6’ya kadar) yerleştirilir. DSP/EQ atlanır.</string>
-    <string name="atmos_speakers_off">Kapalı. Atmos binaural olarak veya stereoya indirilerek çalınır (aşağıda).</string>
-    <string name="atmos_layout_option">%1$s  ·  %2$d kanal</string>
     <string name="atmos_binaural_on">Atmos nesneleri ve yatakları, aşağıdaki HRTF aracılığıyla başınızın çevresindeki 15.1.12 sanal hoparlör odasından çalınır.</string>
     <string name="atmos_binaural_off">Kapalı. Atmos parçaları katsayılı downmix oluşturucusunu kullanır.</string>
     <string name="atmos_binaural_auto">Otomatik: kulaklıkla açık, çevrenizde 15.1.12 sanal hoparlör odası olarak. Telefonun hoparlöründe Atmos stereoya indirgenir.</string>

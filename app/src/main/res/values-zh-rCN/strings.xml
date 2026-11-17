@@ -1286,17 +1286,11 @@
     <string name="atmos_lfe_low_pass_125_hz">LFE 低通（125 Hz）</string>
     <string name="atmos_butterworth_4th_order_on_the_lfe_feed_the_dry">在 LFE 信号上使用 4 阶巴特沃斯滤波；干声路径在求和前进行延迟匹配（约 3.3 ms）。关闭 = 直接使用未处理的 LFE。</string>
     <string name="atmos_tidal_dolby_atmos">TIDAL Dolby Atmos</string>
-    <string name="atmos_render_atmos_to_speakers">将 Atmos 渲染到扬声器</string>
-    <string name="atmos_detect_layout_from_the_output">从输出设备检测布局</string>
-    <string name="atmos_uses_the_channel_count_the_hdmi_usb_device">使用 HDMI/USB 设备报告的声道数。8 声道和 10 声道存在歧义（7.1 / 5.1.2、5.1.4 / 7.1.2）：关闭此项可自行选择。</string>
     <string name="atmos_binaural_render_sofa_hrtf">双耳渲染（SOFA HRTF）</string>
     <string name="atmos_channel_map">声道映射</string>
     <string name="atmos_test_track">测试音轨</string>
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">内置的 E-AC-3 JOC 声道测试：一段在各个 Atmos 位置间移动的人声。将其添加到音乐库即可听到渲染器的效果。</string>
     <string name="atmos_add_atmos_test_track_to_library">将 Atmos 测试音轨添加到音乐库</string>
-    <string name="atmos_downmix">缩混</string>
-    <string name="atmos_sources">音源</string>
-    <string name="atmos_speakers">扬声器</string>
     <string name="atmos_spatial_render">空间渲染</string>
     <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">正在使用内置的 MIT KEMAR 数据集。可在下方选择（或加载）适合你耳朵的 SOFA 预设。</string>
     <string name="atmos_sofa_presets">SOFA 预设</string>
@@ -1357,9 +1351,6 @@
     <string name="atmos_speakers_idle">当前混音所驱动的扬声器，按其在房间中的位置点亮。播放一首歌即可看到实时声道电平。</string>
     <string name="atmos_tidal_on">带有 Atmos 混音的 TIDAL 歌曲会播放 Atmos 版本（完整 E-AC-3 JOC，经由你的 TrypT HiFi 实例），而不是立体声。</string>
     <string name="atmos_tidal_off">关闭。TIDAL 歌曲播放立体声流。</string>
-    <string name="atmos_speakers_on">通过 HDMI 或多声道 USB 接口，将声音对象放置到你的扬声器布局上（最高 9.1.6）。将绕过 DSP/EQ。</string>
-    <string name="atmos_speakers_off">关闭。Atmos 以双耳方式播放，或缩混为立体声（见下方）。</string>
-    <string name="atmos_layout_option">%1$s  ·  %2$d 声道</string>
     <string name="atmos_binaural_on">Atmos 对象和声床通过下方的 HRTF，从环绕你头部的 15.1.12 虚拟扬声器房间播放。</string>
     <string name="atmos_binaural_off">关闭。Atmos 歌曲使用系数缩混渲染器。</string>
     <string name="atmos_binaural_auto">自动：使用耳机时开启，呈现为环绕你的 15.1.12 虚拟扬声器房间。使用手机扬声器时，Atmos 会缩混为立体声。</string>

@@ -1329,17 +1329,11 @@
     <string name="atmos_lfe_low_pass_125_hz">LFE low-pass (125 Hz)</string>
     <string name="atmos_butterworth_4th_order_on_the_lfe_feed_the_dry">Butterworth 4th-order on the LFE feed; the dry path is delay-matched (~3.3 ms) before summing. Off = dry direct LFE.</string>
     <string name="atmos_tidal_dolby_atmos">TIDAL Dolby Atmos</string>
-    <string name="atmos_render_atmos_to_speakers">Render Atmos to speakers</string>
-    <string name="atmos_detect_layout_from_the_output">Detect layout from the output</string>
-    <string name="atmos_uses_the_channel_count_the_hdmi_usb_device">Uses the channel count the HDMI/USB device reports. 8 and 10 channels are ambiguous (7.1 / 5.1.2, 5.1.4 / 7.1.2): turn this off to pick yours.</string>
     <string name="atmos_binaural_render_sofa_hrtf">Binaural render (SOFA HRTF)</string>
     <string name="atmos_channel_map">Channel Map</string>
     <string name="atmos_test_track">Test Track</string>
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">A bundled E-AC-3 JOC channel check: a voice moving through the Atmos positions. Add it to your library to hear the renderer work.</string>
     <string name="atmos_add_atmos_test_track_to_library">Add Atmos test track to library</string>
-    <string name="atmos_downmix">Downmix</string>
-    <string name="atmos_sources">Sources</string>
-    <string name="atmos_speakers">Speakers</string>
     <string name="atmos_spatial_render">Spatial Render</string>
     <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">Using the built-in MIT KEMAR set. Pick a SOFA preset below (or load one) for your own ears.</string>
     <string name="atmos_sofa_presets">SOFA presets</string>
@@ -1400,9 +1394,6 @@
     <string name="atmos_speakers_idle">Speakers the current mix drives, lit on their room positions. Play a track to see live channel levels.</string>
     <string name="atmos_tidal_on">TIDAL tracks with an Atmos mix play it (full E-AC-3 JOC, via your TrypT HiFi instance) instead of stereo.</string>
     <string name="atmos_tidal_off">Off. TIDAL tracks play their stereo stream.</string>
-    <string name="atmos_speakers_on">Objects are placed on your speaker layout (up to 9.1.6) over HDMI or a multichannel USB interface. DSP/EQ are bypassed.</string>
-    <string name="atmos_speakers_off">Off. Atmos plays binaural or folded to stereo (below).</string>
-    <string name="atmos_layout_option">%1$s  ·  %2$d ch</string>
     <string name="atmos_binaural_on">Atmos objects and beds play from a 15.1.12 virtual room of speakers around your head, through the HRTF below.</string>
     <string name="atmos_binaural_off">Off. Atmos tracks use the coefficient downmix renderer.</string>
     <string name="atmos_binaural_auto">Automatic: on with headphones, as a 15.1.12 virtual room of speakers around you. On the phone\'s speaker Atmos is folded to stereo.</string>

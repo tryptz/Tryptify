@@ -175,25 +175,6 @@ class AtmosRendererViewModel @Inject constructor(
     val outcome: StateFlow<tf.monochrome.android.audio.atmos.AtmosAudioProcessor.Outcome?> =
         atmosProcessor.outcome
 
-    /** Multichannel → stereo fold toggle (same preference as Settings). */
-    val multichannelDownmixEnabled: StateFlow<Boolean> =
-        preferences.multichannelDownmixEnabled.stateIn(
-            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), true,
-        )
-
-    fun setMultichannelDownmix(enabled: Boolean) {
-        viewModelScope.launch { preferences.setMultichannelDownmixEnabled(enabled) }
-    }
-
-    val tidalAtmosPreferred: StateFlow<Boolean> =
-        preferences.tidalAtmosPreferred.stateIn(
-            viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), false,
-        )
-
-    fun setTidalAtmosPreferred(enabled: Boolean) {
-        viewModelScope.launch { preferences.setTidalAtmosPreferred(enabled) }
-    }
-
     // In-memory working copy so slider drags update the UI instantly; the
     // DataStore write is debounced to the drag's tail (same approach the Player
     // Visuals Studio uses for its glass sliders).
@@ -578,104 +559,6 @@ fun AtmosRendererScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                }
-                Spacer(Modifier.height(20.dp))
-
-                // ── Multichannel downmix ───────────────────────────────────────
-                // Replaces the old read-only "Output Layout" (binaural pipeline)
-                // blurb: the setting that actually governs multichannel output —
-                // the fixed-matrix fold to stereo — lives here now. Same
-                // preference as the toggle in Settings › Audio › Output, which now
-                // sits directly under the row that opens this screen.
-                SectionHeader(stringResource(R.string.atmos_downmix))
-                val downmixEnabled by viewModel.multichannelDownmixEnabled.collectAsStateWithLifecycle()
-                SettingSwitchItem(
-                    title = stringResource(R.string.settings_downmix_multichannel_to_stereo),
-                    subtitle = if (downmixEnabled) {
-                        stringResource(R.string.settings_downmix_on)
-                    } else {
-                        stringResource(R.string.settings_downmix_off)
-                    },
-                    checked = downmixEnabled,
-                    onCheckedChange = { viewModel.setMultichannelDownmix(it) },
-                )
-                // Master trim inside the fold (the peqdb Downmix Renderer's
-                // --master-gain-db): the verbatim matrix runs hot, this pulls it
-                // below clipping. Applies to both matrices and the Atmos fallback.
-                LabeledSlider(
-                    title = stringResource(R.string.atmos_downmix_preamp),
-                    valueText = "%+.1f dB".format(profile.downmixPreampDb),
-                    value = profile.downmixPreampDb,
-                    range = -24f..6f,
-                    enabled = downmixEnabled,
-                    onValueChange = { viewModel.update(profile.copy(downmixPreampDb = it)) },
-                )
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_lfe_low_pass_125_hz),
-                    subtitle = stringResource(R.string.atmos_butterworth_4th_order_on_the_lfe_feed_the_dry),
-                    checked = profile.lfeLowpass,
-                    onCheckedChange = { viewModel.update(profile.copy(lfeLowpass = it)) },
-                )
-                Spacer(Modifier.height(20.dp))
-
-                // ── Sources ────────────────────────────────────────────────────
-                SectionHeader(stringResource(R.string.atmos_sources))
-                val tidalAtmos by viewModel.tidalAtmosPreferred.collectAsStateWithLifecycle()
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_tidal_dolby_atmos),
-                    subtitle = if (tidalAtmos) {
-                        stringResource(R.string.atmos_tidal_on)
-                    } else {
-                        stringResource(R.string.atmos_tidal_off)
-                    },
-                    checked = tidalAtmos,
-                    onCheckedChange = { viewModel.setTidalAtmosPreferred(it) },
-                )
-                Spacer(Modifier.height(20.dp))
-
-                // ── Speakers — render objects to a physical layout ───────────
-                // Off (default) leaves every stereo path above and below exactly as
-                // it was. On: Atmos objects render to the layout (auto-detected
-                // from the connected HDMI/USB output, or picked here), the fold is
-                // bypassed, and the track carries the layout's real channel mask.
-                SectionHeader(stringResource(R.string.atmos_speakers))
-                SettingSwitchItem(
-                    title = stringResource(R.string.atmos_render_atmos_to_speakers),
-                    subtitle = if (profile.speakerRender) {
-                        stringResource(R.string.atmos_speakers_on)
-                    } else {
-                        stringResource(R.string.atmos_speakers_off)
-                    },
-                    checked = profile.speakerRender,
-                    onCheckedChange = { viewModel.update(profile.copy(speakerRender = it)) },
-                )
-                if (profile.speakerRender) {
-                    SettingSwitchItem(
-                        title = stringResource(R.string.atmos_detect_layout_from_the_output),
-                        subtitle = stringResource(R.string.atmos_uses_the_channel_count_the_hdmi_usb_device),
-                        checked = profile.autoDetectLayout,
-                        onCheckedChange = { viewModel.update(profile.copy(autoDetectLayout = it)) },
-                    )
-                    if (!profile.autoDetectLayout) {
-                        ChannelLayout.entries.filter { it.isMultichannel }.forEach { layout ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { viewModel.update(profile.copy(layout = layout)) },
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                RadioButton(
-                                    selected = profile.layout == layout,
-                                    onClick = { viewModel.update(profile.copy(layout = layout)) },
-                                )
-                                Text(
-                                    stringResource(R.string.atmos_layout_option, layout.label, layout.channelCount),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
                 }
                 Spacer(Modifier.height(20.dp))
 

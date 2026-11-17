@@ -1286,17 +1286,11 @@
     <string name="atmos_lfe_low_pass_125_hz">LFE ローパス（125 Hz）</string>
     <string name="atmos_butterworth_4th_order_on_the_lfe_feed_the_dry">LFE 信号に 4 次バターワースを適用します。ドライ信号は加算前に遅延を合わせます（約 3.3 ms）。オフ = 未処理の LFE をそのまま使います。</string>
     <string name="atmos_tidal_dolby_atmos">TIDAL Dolby Atmos</string>
-    <string name="atmos_render_atmos_to_speakers">Atmos をスピーカーにレンダリング</string>
-    <string name="atmos_detect_layout_from_the_output">出力からレイアウトを検出</string>
-    <string name="atmos_uses_the_channel_count_the_hdmi_usb_device">HDMI/USB 機器が報告するチャンネル数を使います。8 チャンネルと 10 チャンネルはあいまいです（7.1 / 5.1.2、5.1.4 / 7.1.2）。オフにすると自分で選べます。</string>
     <string name="atmos_binaural_render_sofa_hrtf">バイノーラルレンダリング（SOFA HRTF）</string>
     <string name="atmos_channel_map">チャンネルマップ</string>
     <string name="atmos_test_track">テストトラック</string>
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">内蔵の E-AC-3 JOC チャンネルチェック。Atmos の各位置を声が移動します。ライブラリに追加すると、レンダラーの動作を聴けます。</string>
     <string name="atmos_add_atmos_test_track_to_library">Atmos テストトラックをライブラリに追加</string>
-    <string name="atmos_downmix">ダウンミックス</string>
-    <string name="atmos_sources">ソース</string>
-    <string name="atmos_speakers">スピーカー</string>
     <string name="atmos_spatial_render">空間レンダリング</string>
     <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">内蔵の MIT KEMAR セットを使用中です。自分の耳に合う SOFA プリセットを下から選ぶか、読み込んでください。</string>
     <string name="atmos_sofa_presets">SOFA プリセット</string>
@@ -1357,9 +1351,6 @@
     <string name="atmos_speakers_idle">現在のミックスが鳴らすスピーカーを、部屋の位置に表示します。曲を再生するとリアルタイムのチャンネルレベルが見られます。</string>
     <string name="atmos_tidal_on">Atmos ミックスのある TIDAL の曲は、ステレオではなく Atmos で再生されます（完全な E-AC-3 JOC、TrypT HiFi インスタンス経由）。</string>
     <string name="atmos_tidal_off">オフ。TIDAL の曲はステレオで再生されます。</string>
-    <string name="atmos_speakers_on">HDMI またはマルチチャンネル USB インターフェース経由で、オブジェクトをスピーカー配置（最大 9.1.6）に配置します。DSP/EQ は通りません。</string>
-    <string name="atmos_speakers_off">オフ。Atmos はバイノーラル、またはステレオに畳み込んで再生されます（下記）。</string>
-    <string name="atmos_layout_option">%1$s  ·  %2$d ch</string>
     <string name="atmos_binaural_on">Atmos のオブジェクトとベッドは、下の HRTF を通して、頭のまわりの 15.1.12 バーチャルスピーカールームから再生されます。</string>
     <string name="atmos_binaural_off">オフ。Atmos の曲は係数ダウンミックスのレンダラーを使います。</string>
     <string name="atmos_binaural_auto">自動：ヘッドホンではオンになり、あなたを囲む 15.1.12 のバーチャルスピーカールームとして再生します。本体スピーカーでは Atmos をステレオにダウンミックスします。</string>

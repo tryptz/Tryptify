@@ -575,6 +575,27 @@ class SettingsViewModel @Inject constructor(
     fun setTidalAtmosPreferred(enabled: Boolean) {
         viewModelScope.launch { preferences.setTidalAtmosPreferred(enabled) }
     }
+
+    /**
+     * The fold's master trim (dB) and its LFE low-pass: part of the Atmos
+     * renderer's profile, set under the downmix switch. The trim is written
+     * at the end of a drag, not at each step of it.
+     */
+    val downmixPreampDb: StateFlow<Float> = preferences.rendererProfile.map { it.downmixPreampDb }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+    val downmixLfeLowpass: StateFlow<Boolean> = preferences.rendererProfile.map { it.lfeLowpass }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    private var downmixPreampJob: kotlinx.coroutines.Job? = null
+    fun setDownmixPreampDb(db: Float) {
+        downmixPreampJob?.cancel()
+        downmixPreampJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(120)
+            preferences.updateRendererProfile { it.copy(downmixPreampDb = db) }
+        }
+    }
+    fun setDownmixLfeLowpass(enabled: Boolean) {
+        viewModelScope.launch { preferences.updateRendererProfile { it.copy(lfeLowpass = enabled) } }
+    }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
