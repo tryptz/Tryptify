@@ -149,10 +149,13 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * [AtmosNative.nativeRoomLayout]'s, [speakers] the processor's levels in the
  * same order (null: nothing plays through the room).
  *
- * The room is drawn when the meter has a new reading, thirty times a second,
- * and at no other time: a clock of its own used to draw it again between
- * the readings, from when there were ten of them a second, and with thirty
- * that was the whole shader twice as often for nothing new.
+ * The room is drawn when its levels have a new reading. The object meter
+ * reads thirty times a second, and then nothing else draws the room: a
+ * clock of its own used to draw it again between those readings as well,
+ * which was the whole shader up to twice as often for nothing new. With
+ * [slowLevels] the levels are the channel detector's, ten times a second
+ * (a stream with no objects), and the clock ([rememberGrainClock]) draws the
+ * room between them so the grain's averaged levels move smoothly.
  *
  * With [sound] off the sound is not drawn: no grain and no rays; the
  * speakers still light as they play
@@ -161,7 +164,10 @@ internal fun roomLevelsFromChannels(layout: FloatArray, names: List<String>, pea
  * and the sound is not drawn in it either. At that size the grain is a few
  * pixels of haze, and it is what costs: every pixel walks the room's cells
  * for it, thirty times a second. Without it each pixel stops at the walls. [yaw] is how far it is turned, the page's to keep when the room is
- * drawn in two places.
+ * drawn in two places. [envelope] is how brightly the panning envelope is lit,
+ * 0..1: the page raises it while Trapezoid panning's settings are moved, so
+ * the walls that lean and the ceiling's edge show in the accent what the
+ * setting changed. It is read where the room is drawn.
  */
 @Composable
 internal fun AtmosRoom3d(
@@ -175,9 +181,11 @@ internal fun AtmosRoom3d(
     sound: Boolean = true,
     compact: Boolean = false,
     yaw: MutableFloatState = remember { mutableFloatStateOf(RoomCamera.START_YAW) },
+    envelope: () -> Float = { 0f },
+    slowLevels: Boolean = false,
 ) {
     val shader = rememberRoomShader()
-    val options = RoomViewOptions(sound && !compact, compact, yaw)
+    val options = RoomViewOptions(sound && !compact, compact, yaw, envelope, slowLevels)
     if (shader != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         AtmosRoomGpu(shader, layout, speakers, objects, shape, roomAmount, decaySeconds, options, modifier)
     } else {
@@ -186,7 +194,13 @@ internal fun AtmosRoom3d(
 }
 
 /** How the room is shown, whichever way it is drawn: see [AtmosRoom3d]. */
-private class RoomViewOptions(val sound: Boolean, val compact: Boolean, val yaw: MutableFloatState)
+private class RoomViewOptions(
+    val sound: Boolean,
+    val compact: Boolean,
+    val yaw: MutableFloatState,
+    val envelope: () -> Float,
+    val slowLevels: Boolean,
+)
 
 /** Turns the room with a sideways drag (up and down still scrolls the page); a [compact] room is not turned. */
 private fun Modifier.turnsRoom(view: RoomViewOptions): Modifier =
@@ -232,6 +246,29 @@ private fun rememberRoomLabels(shape: RoomShape, ink: Color): RoomLabels {
 }
 
 /**
+ * The grain's clock: the time since it started, in nanoseconds, thirty times
+ * a second while [running], and held still otherwise. Nothing is drawn from
+ * the time itself: reading it where the room is drawn is what draws the room
+ * again between readings of levels that come only ten times a second, so
+ * the averaged levels ([SlowLevels]) move smoothly. It must not run beside
+ * the object meter, which reads thirty times a second itself.
+ */
+@Composable
+private fun rememberGrainClock(running: Boolean): androidx.compose.runtime.LongState {
+    val clock = remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    if (running) {
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            val start = System.nanoTime() - clock.longValue
+            while (true) {
+                clock.longValue = System.nanoTime() - start
+                kotlinx.coroutines.delay(33)
+            }
+        }
+    }
+    return clock
+}
+
+/**
  * The room drawn by the GPU. Each frame the page says what is in the room
  * ([RoomScene]) and where the camera is ([RoomCamera]); the shader draws it,
  * and the labels go over it by the same camera.
@@ -266,6 +303,7 @@ private fun AtmosRoomGpu(
     val afterglow = remember { Afterglow() }
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
+    val clock = rememberGrainClock(options.sound && options.slowLevels && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
     val places = remember { RoomPlaces() }
 
     Box(modifier = modifier) {
@@ -281,6 +319,8 @@ private fun AtmosRoomGpu(
                     val sound = liveOptions.sound
                     places.of(room, layout, count)
                     val camera = RoomCamera(yaw.floatValue, room, size.width, size.height)
+
+                    clock.longValue  // read: see rememberGrainClock
 
                     scene.clear()
                     scene.objectGrain = sound
@@ -335,6 +375,7 @@ private fun AtmosRoomGpu(
                     shader.draw(
                         drawContext.canvas.nativeCanvas, size.width, size.height, camera, room, scene,
                         glow = if (sound) amount * held else 0f,
+                        envelope = liveOptions.envelope(),
                         primary = accent, tertiary = heightTint, ink = onSurface,
                     )
 
@@ -428,6 +469,7 @@ private fun AtmosRoomCanvas(
     val afterglow = remember { Afterglow() }
     val glows = remember { FloatArray(AtmosNative.ROOM_MAX_SPEAKERS) }
     val air = remember { SlowLevels() }
+    val clock = rememberGrainClock(options.sound && options.slowLevels && speakers != null && !tf.monochrome.android.ui.theme.reduceMotion())
     val places = remember { RoomPlaces() }
     val grain = remember { CanvasGrain() }
 
@@ -441,6 +483,7 @@ private fun AtmosRoomCanvas(
                     val amount = liveAmount.coerceIn(0f, 1f)
                     val sound = liveOptions.sound
                     val compact = liveOptions.compact
+                    clock.longValue  // read: see rememberGrainClock
                     places.of(room, layout, count)
                     val view = AtmosRoomView(yaw.floatValue, room)
                     // The whole room at any turn: its near corners come out
@@ -529,6 +572,36 @@ private fun AtmosRoomCanvas(
                                 at(earLine[j][0], earLine[j][1], heights[1]),
                                 strokeWidth = 1f,
                             )
+                        }
+                    }
+                    // The panning envelope, lit while its settings are moved:
+                    // the ceiling's edge, the line the walls lean from and the
+                    // corners above it, as the shader lights them.
+                    val lit = liveOptions.envelope().coerceIn(0f, 1f)
+                    if (lit > 0f && !room.upright) {
+                        val shown = accent.copy(alpha = 0.85f * lit)
+                        val earLine = rings[1]
+                        for (i in earLine.indices) {
+                            val j = (i + 1) % earLine.size
+                            drawLine(shown, at(earLine[i][0], earLine[i][1], heights[1]), at(earLine[j][0], earLine[j][1], heights[1]), strokeWidth = 2f)
+                            drawLine(
+                                shown,
+                                at(ceilingLine[i][0], ceilingLine[i][1], room.height),
+                                at(ceilingLine[j][0], ceilingLine[j][1], room.height),
+                                strokeWidth = 2.5f,
+                            )
+                        }
+                        if (floorLine.size == 4) {
+                            for (k in 1 until rings.size - 1) {
+                                for (i in floorLine.indices) {
+                                    drawLine(
+                                        shown,
+                                        at(rings[k][i][0], rings[k][i][1], heights[k]),
+                                        at(rings[k + 1][i][0], rings[k + 1][i][1], heights[k + 1]),
+                                        strokeWidth = 2f,
+                                    )
+                                }
+                            }
                         }
                     }
                     // The screen, on the wall ahead, leaning as the wall does.

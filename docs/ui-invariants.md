@@ -3403,7 +3403,8 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   three sections off it: Downmix (its switch was a second copy of the one on
   Settings › Audio, a page back), Sources (TIDAL Dolby Atmos, also on
   Settings › Audio) and Speakers ("Render Atmos to speakers", which the
-  owner cannot test and so does not want offered). Do not put a setting
+  owner cannot test and so does not want offered). Reset to defaults there
+  leaves the two that moved as they are (`reset`). Do not put a setting
   there that another page already has. Downmix preamp and LFE low-pass,
   which were only there, sit under the downmix switch on Settings › Audio
   (`MultichannelDownmixToggle`). The speaker render's code stays, with no
@@ -3428,6 +3429,19 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   with are small diamonds, and the layout's 28 speakers stand on its walls
   (`RoomShape.place`: a point beyond a leaning wall or a rounded corner is
   brought in to it).
+- **The panning envelope lights up while its settings move** (`uEnvelope`
+  in the shader, `AtmosRoom3d`'s `envelope`, raised by the page's
+  `envelopeMoved`). Trapezoid panning's switch and its three sliders are a
+  long way down the page, where the room is the small picture in the
+  corner, and a wall leaning a little more was not seen to answer them (the
+  owner asked for feedback in the room). While one moves, the walls from
+  where they lean, the line they lean from and the ceiling's edge are lit in
+  the primary; 0.7 s after the last move it fades over 0.6 s (at once with
+  reduced motion). It is lit only by the hand on those settings, never by
+  the music or at opening the page, and never in a room that is a
+  trapezoid itself, whose walls the envelope does not move. While it
+  fades the room is drawn at the display's rate, for that 0.6 s only. The canvas drawing
+  lights the same lines. `ROOM_ENVELOPE=1` shows it in the shader check.
 - **Reflections are geometry, not decoration.** From the three loudest
   speakers a ray runs to the listener, and each first reflection is drawn by
   way of the spot where the mirror image says it turns
@@ -3509,12 +3523,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   frame than without, measured as above. The cells follow the room's size (`RoomGrain.ACROSS` of
   them over its longest way; 52, down from 64, which cost a fifth more to walk), so a booth and a hall get the same picture.
   Nothing moves them but the levels, and the room is drawn as each reading
-  of the meter comes, thirty times a second, with reduced motion or
-  without. **Do not give the room a clock of its own.** It had one, thirty
-  times a second, from when the meter read ten times a second; once the
-  meter read thirty, the two fell between each other and the whole shader
-  ran up to sixty times a second with the sound shown, thirty without (the
-  owner: the frame rate "divided in half" with Show sound in the room on).
+  of the levels comes. **The room's own clock never runs beside the object
+  meter.** The clock (`rememberGrainClock`, thirty times a second) is for
+  levels that come ten times a second, the channel detector's, for a stream
+  with no objects (`slowLevels`); the object meter reads thirty times a
+  second itself. The clock used to run beside it too: the two fell between
+  each other and the whole shader ran up to sixty times a second with the
+  sound shown, thirty without (the owner: the frame rate "divided in half"
+  with Show sound in the room on). With reduced motion the clock is off.
 - **The room's shader is kept cheap, and these are what keep it so.** A
   pixel whose ray misses the room's box returns at once. In a room no wall
   of which bends outwards (`uConvex`, wall curve 1 or more) the walls are
@@ -3525,9 +3541,11 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   walk a ray asks once for the most sound any speck on it could have
   (`most`: each source of `sound` at the ray's nearest approach); a speck
   whose rank is over that is passed over before it is placed, and a ray
-  through a quiet part of the room walks nothing. It draws the same picture
-  to the pixel (compared on the check frame), with a third to a half of the
-  specks placed and of the sound worked out. `most` and `sound` share their
+  through a quiet part of the room walks nothing. The rank test draws the
+  same picture to the pixel (compared over three rooms and many scenes);
+  passing over a quiet ray loses only the last trace of what the room
+  holds, a 255th in a few pixels. A third to a half of the specks are
+  placed and of the sound worked out. `most` and `sound` share their
   measures (`speakerReach` and the rest): change them there. Straight
   walls take no `pow`. The page keeps where the speakers stand and where
   their sound turns for as long as the room is the same one (`RoomPlaces`),
@@ -3537,7 +3555,8 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   on a phone.
 - **Show sound in the room** (`RendererProfile.roomSound`, the switch under
   the room) turns the drawing of the sound off: no grain, no rays, no
-  turning spots. The speakers still light as they play and the objects
+  turning spots, and the clock that draws the room between the channel
+  detector's readings stops. The speakers still light as they play and the objects
   stay where the mix puts them: the room is still the channel map. It is
   the page's alone and changes nothing that is heard.
 - **Scrolled past, the room stays as a small picture in the page's top

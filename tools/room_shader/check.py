@@ -13,7 +13,9 @@ nothing to say why. Run it after changing ROOM_SRC or RoomCamera:
 In the picture the loud speaker must be at the far wall on the left in a
 dense cloud of specks, the quieter one on the right wall in a smaller one,
 thin grain through the rest of the room, and the object near the camera on
-the right. The room's size can be given (the built-in room's otherwise):
+the right. ROOM_ENVELOPE=1 in the environment lights the panning envelope
+(the leaning walls, the line they lean from and the ceiling's edge, in the
+accent), as it is while Trapezoid panning's settings are moved. The room's size can be given (the built-in room's otherwise):
 
     python3 tools/room_shader/check.py -0.5 hall.png 23 23 6.7
 """
@@ -59,7 +61,7 @@ src4=np.zeros((12,4),'f4'); src4[0]=((spk[fl][0]+RW*0.44)/2,(spk[fl][1]+RD*0.6)/
 obj=np.zeros((32,4),'f4'); obj[0]=(RW*0.9,RD*0.9,ear,0.9)
 for n,v in dict(uRes=(W,H),uEye=eye,uRight=right,uUp=up,uFwd=fwd,uFocal=[FOCAL],uRoom=(RW,RD,RH),uLean=[ear],uCeil=ceil,uCorner=[0.0],uListener=(RW*0.5,RD*0.5,ear),
                 uSpk=spk,uSpkKind=kind,uSpkAir=spk[:,3],uSpkCount=[28.0],uObj=obj,uObjCount=[1.0],uObjGrain=[G['OBJECT']],uMirror=[G['MIRROR']],uSrc=src4,uSrcCount=[1.0],uRay=ray,uMark=np.zeros(32),uMarkCount=[0.0],
-                uGrain=(cell,G['REACH']*min(RW,RD),G['COVER']),uCloud=(G['NEAR'],G['TURNED'],G['HELD']),uGlow=[0.3],uConvex=[1.0],uUnit=[unit],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0]).items(): put(n,v)
+                uGrain=(cell,G['REACH']*min(RW,RD),G['COVER']),uCloud=(G['NEAR'],G['TURNED'],G['HELD']),uGlow=[0.3],uConvex=[1.0],uUnit=[unit],uPrimary=(0.925,0.675,0.157),uTertiary=(0.47,0.78,0.90),uInk=(0.92,0.94,0.94),uGrid=[1.0],uEnvelope=[float(os.environ.get('ROOM_ENVELOPE','0'))]).items(): put(n,v)
 shader=eff.makeShader(skia.Data.MakeWithCopy(bytes(buf)))
 surf=skia.Surface(W,H); c=surf.getCanvas(); c.clear(skia.Color(8,40,50)); p=skia.Paint(); p.setShader(shader); c.drawRect(skia.Rect.MakeWH(W,H),p)
 out=sys.argv[2] if len(sys.argv)>2 else 'room.png'

@@ -78,6 +78,7 @@ uniform float3 uPrimary;   // the theme: speakers and waves,
 uniform float3 uTertiary;  // heights,
 uniform float3 uInk;       // the room's lines and the listener,
 uniform float uGrid;       // and whether the floor has a metre grid
+uniform float uEnvelope;   // 0..1: the panning envelope lit, while its settings are being moved
 
 const int STEPS = 36;    // along a ray, looking for the walls
 const int CELLS = 138;   // the most grain cells a ray goes through
@@ -526,6 +527,17 @@ half4 main(float2 fragCoord) {
         // The listener's shadow on the floor.
         float2 fromSeat = seat / uUnit;
         float shadow = onFloor * fade(dot(fromSeat, fromSeat) / 0.05);
+        // The panning envelope, lit while its settings are moved: the walls
+        // from where they begin to lean, a line there, and the ceiling's edge.
+        // It is laid before the room's own lines, so it is over them.
+        if (uEnvelope > 0.0 && (uCeil.x < 1.0 || uCeil.y < 1.0)) {
+            float leaning = onWall * smoothstep(uLean - 0.02, uLean + 0.02, p.z);
+            float start = onWall * (1.0 - smoothstep(0.0, line * 1.6, abs(p.z - uLean)));
+            float top = max(onCeiling * (1.0 - smoothstep(0.0, line * 2.0, toWall)),
+                            onWall * (1.0 - smoothstep(0.0, line * 2.0, uRoom.z - p.z)));
+            float lit = max(max(start, top) * 0.9, leaning * (0.14 + 0.5 * corner));
+            acc = under(acc, uPrimary, lit * uEnvelope * (pass == 0 ? 1.0 : 0.7) * cover);
+        }
         acc = under(acc, uInk, (edge * 0.55 + grid * 0.22) * weight);
         // The floor is glossy: what plays above it shows in it.
         if (pass == 0 && onFloor > 0.5) {
@@ -706,6 +718,7 @@ internal class RoomShader {
         shape: RoomShape,
         scene: RoomScene,
         glow: Float,
+        envelope: Float,
         primary: Color,
         tertiary: Color,
         ink: Color,
@@ -743,6 +756,7 @@ internal class RoomShader {
         shader.setFloatUniform("uTertiary", tertiary.red, tertiary.green, tertiary.blue)
         shader.setFloatUniform("uInk", ink.red, ink.green, ink.blue)
         shader.setFloatUniform("uGrid", 1f)
+        shader.setFloatUniform("uEnvelope", envelope.coerceIn(0f, 1f))
         canvas.drawRect(0f, 0f, width, height, paint)
     }
 }

@@ -2026,9 +2026,16 @@ private fun MultichannelDownmixToggle(viewModel: SettingsViewModel) {
         onCheckedChange = { viewModel.setMultichannelDownmixEnabled(it) },
     )
     val saved by viewModel.downmixPreampDb.collectAsStateWithLifecycle()
-    // The slider follows the finger; the saved value comes back a moment later.
+    // The slider follows the finger, since the saved value comes back only
+    // after the drag's last step is written; once the finger has been still
+    // a while, it shows what is saved again.
     var dragged by remember { mutableStateOf<Float?>(null) }
-    LaunchedEffect(saved) { if (dragged == saved) dragged = null }
+    LaunchedEffect(dragged) {
+        if (dragged != null) {
+            kotlinx.coroutines.delay(600)
+            dragged = null
+        }
+    }
     val preamp = dragged ?: saved
     LabeledSlider(
         title = stringResource(R.string.atmos_downmix_preamp),

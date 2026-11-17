@@ -215,11 +215,26 @@ class AtmosRendererViewModel @Inject constructor(
         persistJob?.cancel()
         persistJob = viewModelScope.launch {
             delay(120)
-            preferences.setRendererProfile(clamped)
+            // The fold's preamp and LFE low-pass are set on Settings › Audio:
+            // this page's copy of them may be older than what is saved there,
+            // so what is saved is kept.
+            preferences.updateRendererProfile { saved ->
+                clamped.copy(downmixPreampDb = saved.downmixPreampDb, lfeLowpass = saved.lfeLowpass)
+            }
         }
     }
 
-    fun reset() = update(RendererProfile.DEFAULT)
+    /**
+     * This page's settings back to their defaults. The fold's preamp and LFE
+     * low-pass are in the same profile but are set on Settings › Audio now:
+     * a reset here leaves them as they are.
+     */
+    fun reset() = update(
+        RendererProfile.DEFAULT.copy(
+            downmixPreampDb = _profile.value.downmixPreampDb,
+            lfeLowpass = _profile.value.lfeLowpass,
+        ),
+    )
 
     /**
      * The ear tuner as it is dragged: heard at once, ahead of [update]'s
@@ -432,6 +447,21 @@ fun AtmosRendererScreen(
         val showsRoom = !profile.speakerRender && roomLayout.isNotEmpty()
         val roomYaw = remember { mutableFloatStateOf(RoomCamera.START_YAW) }
         var roomInView by remember { mutableStateOf(true) }
+        // Trapezoid panning's settings are a long way down the page from the
+        // room, which is then a small picture in the corner: a wall leaning a
+        // little more was not seen to answer the slider (the owner asked for
+        // feedback there). While one of them moves, the envelope is lit in
+        // the room, and fades when the hand is off.
+        val envelopeGlow = remember { androidx.compose.animation.core.Animatable(0f) }
+        var envelopeMoved by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val stillRoom = tf.monochrome.android.ui.theme.reduceMotion()
+        LaunchedEffect(envelopeMoved) {
+            if (envelopeMoved == 0) return@LaunchedEffect
+            envelopeGlow.snapTo(1f)
+            kotlinx.coroutines.delay(ENVELOPE_GLOW_HOLD_MS)
+            if (stillRoom) envelopeGlow.snapTo(0f)
+            else envelopeGlow.animateTo(0f, androidx.compose.animation.core.tween(ENVELOPE_GLOW_FADE_MS))
+        }
         val roomView: @Composable (Modifier, Boolean) -> Unit = { modifier, compact ->
             val d = detected
             // With no object through or towards it, the stream's own channels
@@ -444,16 +474,19 @@ fun AtmosRendererScreen(
             // Made when the room changes, not at every reading of the meter:
             // the drawing keeps what it works out for a room while it is the same one.
             val envelope = profile.panEnvelope.clamped()
-            val shape = remember(profile.roomKind, profile.customRoom, room, envelope) {
-                val own = when (profile.roomKind) {
+            val own = remember(profile.roomKind, profile.customRoom, room) {
+                when (profile.roomKind) {
                     RoomKind.CUSTOM -> RoomShape.of(profile.customRoom)
                     RoomKind.MEASURED -> room?.let { RoomShape.of(it) }
                     else -> null
                 } ?: RoomShape.BUILT_IN
-                // Its walls lean as the panning envelope does, when that is on:
-                // the view shows the space objects may use.
-                own.within(envelope)
             }
+            // Its walls lean as the panning envelope does, when that is on:
+            // the view shows the space objects may use.
+            val shape = remember(own, envelope) { own.within(envelope) }
+            // A room that is a trapezoid itself keeps its own walls: there the
+            // envelope's settings change nothing drawn, so nothing is lit.
+            val envelopeDrawn = shape !== own
             AtmosRoom3d(
                 layout = roomLayout,
                 speakers = roomSpeakers ?: fromChannels,
@@ -465,6 +498,11 @@ fun AtmosRendererScreen(
                 sound = profile.roomSound,
                 compact = compact,
                 yaw = roomYaw,
+                envelope = { if (envelopeDrawn) envelopeGlow.value else 0f },
+                // Nothing from the object meter (thirty readings a second):
+                // the levels are the channel detector's, ten a second, and the
+                // grain needs drawing between them.
+                slowLevels = roomSpeakers == null && objects == null,
             )
         }
         val scroll = rememberScrollState()
@@ -696,7 +734,10 @@ fun AtmosRendererScreen(
                     title = stringResource(R.string.atmos_envelope),
                     subtitle = stringResource(R.string.atmos_envelope_summary),
                     checked = envelope.enabled,
-                    onCheckedChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(enabled = it))) },
+                    onCheckedChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(enabled = it)))
+                    },
                 )
                 if (envelope.enabled) {
                     val min = tf.monochrome.android.domain.model.PanEnvelope.MIN_CEILING
@@ -705,21 +746,30 @@ fun AtmosRendererScreen(
                         valueText = "${(envelope.ceilingWidth * 100).toInt()}%",
                         value = envelope.ceilingWidth,
                         range = min..1f,
-                        onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingWidth = it))) },
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingWidth = it)))
+                    },
                     )
                     LabeledSlider(
                         title = stringResource(R.string.atmos_envelope_depth),
                         valueText = "${(envelope.ceilingDepth * 100).toInt()}%",
                         value = envelope.ceilingDepth,
                         range = min..1f,
-                        onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingDepth = it))) },
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(ceilingDepth = it)))
+                    },
                     )
                     LabeledSlider(
                         title = stringResource(R.string.atmos_envelope_curve),
                         valueText = String.format(java.util.Locale.getDefault(), "%.2f", envelope.curve),
                         value = envelope.curve,
                         range = tf.monochrome.android.domain.model.PanEnvelope.MIN_CURVE..tf.monochrome.android.domain.model.PanEnvelope.MAX_CURVE,
-                        onValueChange = { viewModel.update(profile.copy(panEnvelope = envelope.copy(curve = it))) },
+                        onValueChange = {
+                        envelopeMoved++
+                        viewModel.update(profile.copy(panEnvelope = envelope.copy(curve = it)))
+                    },
                     )
                 }
                 Spacer(Modifier.height(16.dp))
@@ -777,6 +827,10 @@ private fun RoomThumbnail(
 
 /** The built-in room's tail, in seconds (VirtualRoom::kTailSeconds). */
 private const val BUILT_IN_ROOM_DECAY = 0.32f
+
+/** How long the panning envelope stays lit in the room after its settings last moved, and how long it takes to fade. */
+private const val ENVELOPE_GLOW_HOLD_MS = 700L
+private const val ENVELOPE_GLOW_FADE_MS = 600
 
 /**
  * The picture of the room in the top right corner: the size of a video
