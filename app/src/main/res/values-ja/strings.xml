@@ -3394,6 +3394,10 @@
     <string name="whats_new_1952_atmos_decode_body">これまでストリームのオブジェクト更新の 4 分の 3 が見落とされ、オブジェクトの動きが遅れ、互いににじんでいました。すべての更新を読み取るようになり、サラウンドチャンネルの位相を戻し、スピーカーレンダリングが 3 dB 小さくなることもなくなりました。</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos は「6 ch」ではなくオブジェクトを表示</string>
     <string name="whats_new_1952_atmos_objects_body">Atmos ストリームは、オブジェクトを内包した 5.1 コアです。オーディオパイプラインのシートとAtmos レンダラーの設定のページがオブジェクトを数え、再生されているかどうかを示すようになり、ルームマップには各オブジェクトがミックスの置いた位置に表示されます。</string>
+    <string name="whats_new_1952_atmos_rooms_title">部屋を保存、読み込み、書き出し</string>
+    <string name="whats_new_1952_atmos_rooms_body">「自分の部屋 › サイズと形」：「プリセットを保存」で設定した部屋に名前を付けて残せます。タップで呼び戻せ、「書き出し」と「読み込み」で小さなファイルとして受け渡せます。</string>
+    <string name="whats_new_1952_atmos_page_title">すっきりした Atmos ページ</string>
+    <string name="whats_new_1952_atmos_page_body">設定は「部屋」「パンニング」「HRTF」に分かれました。ダウンミックスと TIDAL のスイッチは「設定 › オーディオ」だけにあり、ダウンミックスのプリアンプと LFE ローパスもそこに移りました。「Atmos をスピーカーにレンダリング」はなくなりました。部屋に音を表示してもアプリが重くなりません。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

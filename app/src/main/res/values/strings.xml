@@ -3475,6 +3475,10 @@
     <string name="whats_new_1952_atmos_decode_body">Three in four of a stream\'s object updates were being missed, so objects moved late and bled into each other. Every update is read now, the surround channels are turned back into phase, and the speaker render is no longer 3 dB quiet.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos shows its objects, not “6 ch”</string>
     <string name="whats_new_1952_atmos_objects_body">An Atmos stream is a 5.1 core with the objects inside it. The Audio pipeline sheet and the Atmos Renderer Configuration page now count the objects and say whether they are playing, and the room map shows each one where the mix puts it.</string>
+    <string name="whats_new_1952_atmos_rooms_title">Save, import and export your rooms</string>
+    <string name="whats_new_1952_atmos_rooms_body">My room › Size and shape: Save preset keeps the room you set under a name, a tap brings it back, and Export and Import pass one on as a small file.</string>
+    <string name="whats_new_1952_atmos_page_title">A tidier Atmos page</string>
+    <string name="whats_new_1952_atmos_page_body">Its settings sit under Room, Panning and HRTF. The downmix and TIDAL switches are on Settings › Audio alone, with Downmix preamp and LFE low-pass, and Render Atmos to speakers is gone. Showing the sound in the room no longer slows the app.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

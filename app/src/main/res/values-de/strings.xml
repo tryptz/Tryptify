@@ -3472,6 +3472,10 @@
     <string name="whats_new_1952_atmos_decode_body">Drei von vier Objekt-Updates eines Streams wurden übersehen, sodass Objekte sich verspätet bewegten und ineinander übersprachen. Jetzt wird jedes Update gelesen, die Surround-Kanäle werden in Phase zurückgedreht, und das Lautsprecher-Rendering ist nicht mehr 3 dB zu leise.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos zeigt seine Objekte, nicht „6 ch“</string>
     <string name="whats_new_1952_atmos_objects_body">Ein Atmos-Stream ist ein 5.1-Kern mit den Objekten darin. Das Audio-Pipeline-Blatt und die Seite Atmos-Renderer-Konfiguration zählen jetzt die Objekte und sagen, ob sie spielen, und die Raumkarte zeigt jedes dort, wo der Mix es platziert.</string>
+    <string name="whats_new_1952_atmos_rooms_title">Räume speichern, importieren und exportieren</string>
+    <string name="whats_new_1952_atmos_rooms_body">Mein Raum › Größe und Form: „Preset speichern“ behält den eingestellten Raum unter einem Namen, ein Tippen holt ihn zurück, und Exportieren und Importieren geben ihn als kleine Datei weiter.</string>
+    <string name="whats_new_1952_atmos_page_title">Eine aufgeräumtere Atmos-Seite</string>
+    <string name="whats_new_1952_atmos_page_body">Ihre Einstellungen stehen unter Raum, Panning und HRTF. Die Schalter für Downmix und TIDAL gibt es nur noch unter Einstellungen › Audio, mit Downmix-Vorverstärker und LFE-Tiefpass, und „Atmos auf Lautsprecher rendern“ ist entfallen. Den Klang im Raum anzuzeigen bremst die App nicht mehr.</string>
     <string name="atmos_room_builtin">Eingebauter Raum</string>
     <string name="atmos_room_custom">Mein Raum</string>
     <string name="atmos_rooms">Räume</string>

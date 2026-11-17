@@ -3550,6 +3550,10 @@
     <string name="whats_new_1952_atmos_decode_body">Trois mises à jour d\'objets sur quatre étaient manquées, si bien que les objets bougeaient en retard et bavaient les uns sur les autres. Chaque mise à jour est désormais lue, les canaux surround sont remis en phase et le rendu sur enceintes n\'est plus trop faible de 3 dB.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos montre ses objets, pas « 6 ch »</string>
     <string name="whats_new_1952_atmos_objects_body">Un flux Atmos est un cœur 5.1 qui contient les objets. Le panneau Chaîne audio et la page Configuration du moteur de rendu Atmos comptent désormais les objets et indiquent s\'ils sont joués, et le plan de la salle montre chacun là où le mixage le place.</string>
+    <string name="whats_new_1952_atmos_rooms_title">Enregistrez, importez et exportez vos salles</string>
+    <string name="whats_new_1952_atmos_rooms_body">Ma salle › Taille et forme : Enregistrer le préréglage garde sous un nom la salle que vous avez réglée, un appui la rappelle, et Exporter et Importer la transmettent dans un petit fichier.</string>
+    <string name="whats_new_1952_atmos_page_title">Une page Atmos mieux rangée</string>
+    <string name="whats_new_1952_atmos_page_body">Ses réglages sont rangés sous Salle, Panoramique et HRTF. Les commutateurs de downmix et de TIDAL ne sont plus que dans Réglages › Audio, avec le préampli de downmix et le passe-bas LFE, et le rendu Atmos sur enceintes a disparu. Afficher le son dans la salle ne ralentit plus l’app.</string>
     <string name="atmos_room_builtin">Salle intégrée</string>
     <string name="atmos_room_custom">Ma salle</string>
     <string name="atmos_rooms">Salles</string>

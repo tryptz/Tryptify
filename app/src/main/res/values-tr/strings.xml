@@ -3472,6 +3472,10 @@
     <string name="whats_new_1952_atmos_decode_body">Bir akıştaki nesne güncellemelerinin dörtte üçü kaçırılıyordu; bu yüzden nesneler geç hareket ediyor ve birbirine karışıyordu. Artık her güncelleme okunuyor, surround kanalları yeniden faza getiriliyor ve hoparlör işlemesi 3 dB kısık değil.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos “6 ch” değil, nesnelerini gösteriyor</string>
     <string name="whats_new_1952_atmos_objects_body">Bir Atmos akışı, nesneleri içinde taşıyan bir 5.1 çekirdektir. Ses işlem hattı sayfası ve Atmos oluşturucu yapılandırması sayfası artık nesneleri sayıyor ve çalınıp çalınmadıklarını söylüyor; oda haritası her birini miksin koyduğu yerde gösteriyor.</string>
+    <string name="whats_new_1952_atmos_rooms_title">Odalarını kaydet, içe ve dışa aktar</string>
+    <string name="whats_new_1952_atmos_rooms_body">Odam › Boyut ve şekil: Ön ayarı kaydet, ayarladığın odayı bir adla saklar, bir dokunuş geri getirir; Dışa aktar ve İçe aktar onu küçük bir dosya olarak paylaşır.</string>
+    <string name="whats_new_1952_atmos_page_title">Daha düzenli bir Atmos sayfası</string>
+    <string name="whats_new_1952_atmos_page_body">Ayarları Oda, Panlama ve HRTF başlıkları altında. Downmix ve TIDAL anahtarları yalnızca Ayarlar › Ses’te; downmix ön yükselteci ve LFE alçak geçireni de orada. Atmos’u hoparlörlere oluşturma kaldırıldı. Odada sesi göstermek artık uygulamayı yavaşlatmıyor.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

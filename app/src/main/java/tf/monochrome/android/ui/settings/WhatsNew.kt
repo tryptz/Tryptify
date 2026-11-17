@@ -272,6 +272,22 @@ object WhatsNew {
                     titleRes = R.string.whats_new_1952_atmos_objects_title,
                     bodyRes = R.string.whats_new_1952_atmos_objects_body,
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Save, import and export your rooms",
+                    body = "My room › Size and shape: Save preset keeps the room you set under a name, a tap brings it back, and Export and Import pass one on as a small file.",
+                    titleRes = R.string.whats_new_1952_atmos_rooms_title,
+                    bodyRes = R.string.whats_new_1952_atmos_rooms_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "A tidier Atmos page",
+                    body = "Its settings sit under Room, Panning and HRTF. The downmix and TIDAL switches are on Settings › Audio alone, with Downmix preamp and LFE low-pass, and Render Atmos to speakers is gone. Showing the sound in the room no longer slows the app.",
+                    titleRes = R.string.whats_new_1952_atmos_page_title,
+                    bodyRes = R.string.whats_new_1952_atmos_page_body,
+                ),
             ),
         ),
         WhatsNewRelease(
