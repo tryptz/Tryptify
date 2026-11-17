@@ -211,31 +211,29 @@ class AtmosRoomTest {
         assertTrue(box.isBox)
         assertEquals(144f, box.volume(), 0.01f)
         assertEquals(box, box.equivalentBox())
-        // Walls leaning to a ceiling half the size each way: 7/12 of the box
-        // (a frustum), and its box keeps the height and the proportions.
+        // The listener's room has upright walls: leaning walls are Trapezoid
+        // panning's alone, and a room saved when it had a lean of its own is
+        // read as the box it stands on.
         val leaning = box.copy(ceilingWidth = 0.5f, ceilingDepth = 0.5f)
-        assertFalse(leaning.isBox)
-        assertEquals(144f * 7f / 12f, leaning.volume(), 0.3f)
-        val same = leaning.equivalentBox()
-        assertTrue(same.isBox)
-        assertEquals(3f, same.height, 0f)
-        assertEquals(leaning.volume(), same.width * same.depth * same.height, 0.01f)
-        assertEquals(6f / 8f, same.width / same.depth, 1e-4f)
-        assertEquals(leaning.damping, same.damping, 0f)
-        // A fully round room on a square plan is a cylinder: pi r squared h.
+        assertEquals(box, leaning.clamped())
+        assertEquals(144f, leaning.volume(), 0.01f)
+        assertEquals(box, leaning.equivalentBox())
+        // A fully round room on a square plan is a cylinder: pi r squared h,
+        // and its box keeps the height, the damping and the proportions.
         val round = CustomRoom(width = 8f, depth = 8f, height = 4f, roundness = 1f)
+        assertFalse(round.isBox)
         assertEquals((Math.PI * 16.0 * 4.0).toFloat(), round.volume(), 0.05f)
-        assertTrue(round.equivalentBox().width < 8f)
-        // It is drawn as it is, leaning from its floor, whatever it sounds as.
-        val shape = RoomShape.of(leaning)
-        assertEquals(0f, shape.leanStart, 0f)
-        assertEquals(0.5f, shape.ceilingWidth, 0f)
-        assertEquals(0.125f, shape.leanX(1.5f), 1e-6f)              // half way up, half way in
-        assertEquals(listOf(0f, 3f), shape.wallHeights().toList())
+        val same = round.equivalentBox()
+        assertTrue(same.isBox)
+        assertTrue(same.width < 8f)
+        assertEquals(4f, same.height, 0f)
+        assertEquals(round.volume(), same.width * same.depth * same.height, 0.05f)
+        assertEquals(1f, same.width / same.depth, 1e-4f)
+        assertEquals(round.damping, same.damping, 0f)
         assertEquals(1f, RoomShape.of(round).roundness, 0f)
-        // Its own lean is its walls: the panning envelope does not redraw them.
+        // So the panning envelope always draws its walls, the once-leaning room's too.
         val envelope = PanEnvelope(enabled = true, ceilingWidth = 0.9f)
-        assertEquals(0.5f, shape.within(envelope).ceilingWidth, 0f)
+        assertEquals(0.9f, RoomShape.of(leaning).within(envelope).ceilingWidth, 0f)
         assertEquals(0.9f, RoomShape.of(box).within(envelope).ceilingWidth, 0f)
         assertEquals(RoomShape.EAR_HEIGHT, RoomShape.of(box).within(envelope).leanStart, 0f)
     }

@@ -3410,6 +3410,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   (`MultichannelDownmixToggle`). The speaker render's code stays, with no
   switch: `PreferencesManager.rendererProfile` reads `speakerRender` as off
   whatever was saved, so no phone is left on a render nothing can turn off.
+- **Ceiling width and Ceiling depth are Trapezoid panning's alone.** My
+  room had a pair of its own with the same names (its walls' lean), a few
+  rows above the trapezoid's on the same page, and a leaning room of the
+  listener's kept its own walls in the drawing whatever the trapezoid said
+  (the owner: they "should only be on trapezoid"). My room's walls stand
+  upright now (`CustomRoom.clamped`); one saved with a lean is read upright,
+  and the Hall and Chapel presets are boxes. Do not give My room a lean
+  again.
 - **The room drawn is the room heard** (`RoomShape`, `domain/model/AtmosRoom.kt`).
   The built-in room is a trapezoid: its walls stand upright to ear height
   and lean in from there to the layout's top ring of speakers, a quarter in

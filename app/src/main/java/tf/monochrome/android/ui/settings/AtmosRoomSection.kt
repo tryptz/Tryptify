@@ -184,27 +184,13 @@ internal fun AtmosRoomSection(
                 range = CustomRoom.MIN_DAMPING..CustomRoom.MAX_DAMPING,
                 onValueChange = { set(custom.copy(damping = it)) },
             )
-            // Its shape: rounded corners, and walls that lean in to a smaller ceiling.
+            // Its shape: rounded corners. Leaning walls are Trapezoid panning's, further down the page.
             LabeledSlider(
                 title = stringResource(R.string.atmos_room_roundness),
                 valueText = "${(custom.roundness * 100).toInt()}%",
                 value = custom.roundness,
                 range = 0f..1f,
                 onValueChange = { set(custom.copy(roundness = it)) },
-            )
-            LabeledSlider(
-                title = stringResource(R.string.atmos_envelope_width),
-                valueText = "${(custom.ceilingWidth * 100).toInt()}%",
-                value = custom.ceilingWidth,
-                range = CustomRoom.MIN_CEILING..1f,
-                onValueChange = { set(custom.copy(ceilingWidth = it)) },
-            )
-            LabeledSlider(
-                title = stringResource(R.string.atmos_envelope_depth),
-                valueText = "${(custom.ceilingDepth * 100).toInt()}%",
-                value = custom.ceilingDepth,
-                range = CustomRoom.MIN_CEILING..1f,
-                onValueChange = { set(custom.copy(ceilingDepth = it)) },
             )
             val modes = custom.modesHz()
             RoomNote(stringResource(R.string.atmos_room_modes, hz(modes[0]), hz(modes[1]), hz(modes[2])))

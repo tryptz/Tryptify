@@ -41,8 +41,12 @@ data class CustomRoom(
             height = height.c(MIN_HEIGHT, MAX_HEIGHT, 2.7f),
             damping = damping.c(MIN_DAMPING, MAX_DAMPING, 0.25f),
             roundness = roundness.c(0f, 1f, 0f),
-            ceilingWidth = ceilingWidth.c(MIN_CEILING, 1f, 1f),
-            ceilingDepth = ceilingDepth.c(MIN_CEILING, 1f, 1f),
+            // My room's walls stand upright. It had Ceiling width and Ceiling
+            // depth of its own, with the same names as Trapezoid panning's two
+            // and beside them on the page; the owner asked for those to be the
+            // trapezoid's alone. A room saved with leaning walls is read upright.
+            ceilingWidth = 1f,
+            ceilingDepth = 1f,
         )
     }
 
@@ -122,8 +126,8 @@ enum class RoomPreset(val room: CustomRoom) {
     LIVE(CustomRoom(width = 9f, depth = 12f, height = 5.5f, damping = 0.25f)),
     SMALL_CLUB(CustomRoom(width = 10f, depth = 16f, height = 4f, damping = 0.30f)),
     LARGE_CLUB(CustomRoom(width = 20f, depth = 30f, height = 9f, damping = 0.25f)),
-    HALL(CustomRoom(width = 22f, depth = 30f, height = 12f, damping = 0.18f, ceilingWidth = 0.8f)),
-    CHAPEL(CustomRoom(width = 8f, depth = 22f, height = 11f, damping = 0.06f, roundness = 0.2f, ceilingWidth = 0.6f)),
+    HALL(CustomRoom(width = 22f, depth = 30f, height = 12f, damping = 0.18f)),
+    CHAPEL(CustomRoom(width = 8f, depth = 22f, height = 11f, damping = 0.06f, roundness = 0.2f)),
     ROUND(CustomRoom(width = 9f, depth = 9f, height = 4.5f, damping = 0.20f, roundness = 1f)),
     STEREO(CustomRoom(width = 17.5f, depth = 18f, height = 5.5f, damping = 0.35f)),
 }
