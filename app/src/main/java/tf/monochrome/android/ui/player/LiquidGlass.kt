@@ -738,6 +738,16 @@ internal const val FROST_MIN_SCALE = 0.25f
  * shader bevels the (solid) glyph shape. No-op when disabled, below API 33, or
  * on shader-compile failure.
  */
+/**
+ * True inside a frosted pane (a menu, a dialog, a sheet): every glass button,
+ * pill and row in it holds still too, as the pane itself does
+ * (`playerGlass(moves = false)`). A menu's rows are glass of their own, a
+ * dozen panes rebuilt on every frame at the surface motion: with the menu
+ * open the app ran at 118 to 143 fps instead of 165, with the backdrop blur
+ * at zero and the pane's own glass already still (the owner, 2026-11-18).
+ */
+val LocalGlassHoldsStill = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 internal fun Modifier.playerGlass(
     tint: Color,
@@ -814,7 +824,7 @@ private fun playerGlassModifier(
     // scaled by uLiquid, so at zero it renders identically frame to frame and
     // has no reason to drive a clock. This is the mini player, mounted app-wide
     // by the nav host, so the gate reaches every screen.
-    val timeSec = rememberFrameSeconds(animated = moves && base.surfaceMotion > 0f)
+    val timeSec = rememberFrameSeconds(animated = moves && !LocalGlassHoldsStill.current && base.surfaceMotion > 0f)
     // The same argument for the sensor. Every uTilt term in the shader is
     // multiplied by uTiltAmount, and tilt reactivity defaults to zero, so at
     // the default this surface's pixels do not depend on the phone's attitude

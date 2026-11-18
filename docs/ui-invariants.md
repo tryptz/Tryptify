@@ -163,6 +163,13 @@ on a 165 Hz phone with the visualizer off (the owner, 2026-11-18, after the
 blur below was already cut). The rim and the press dome still answer. Do not
 give a frosted pane its motion back.
 
+The pane alone was not enough: with it still and the backdrop blur at zero,
+the menu still held the app at 118 to 143 fps. A menu's rows and a sheet's
+tiles are glass of their own, a dozen more panes rebuilt on every frame. So
+everything inside a frosted pane holds still with it (`LocalGlassHoldsStill`,
+provided by `GlassPanel(frosted = true)` and by the audio tools sheet's
+content).
+
 **A frosted pane blurs its backdrop small** (`frostInputScale`, Haze's
 `inputScale`, set in `glassFrost`). Haze blurs what is behind a pane again
 whenever that moves, and behind the player's sheets it always moves. At full

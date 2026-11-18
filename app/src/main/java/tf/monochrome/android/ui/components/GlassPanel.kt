@@ -179,7 +179,13 @@ fun GlassPanel(
             frosted = frosted,
             punchThrough = punchThrough,
         )
-        GlassInkScope(glass) { content() }
+        // Inside a frosted pane, the glass of its rows and buttons holds still with it.
+        androidx.compose.runtime.CompositionLocalProvider(
+            tf.monochrome.android.ui.player.LocalGlassHoldsStill provides
+                (frosted || tf.monochrome.android.ui.player.LocalGlassHoldsStill.current),
+        ) {
+            GlassInkScope(glass) { content() }
+        }
     }
 }
 
