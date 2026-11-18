@@ -140,11 +140,13 @@ void test_ear_size() {
   std::printf("   a 1.25 ear's curve sits at x%.3f of the pitch, a 0.8 ear's at x%.3f\n", down, up);
   CHECK_NEAR(down, 1.0 / 1.25, 0.03);
   CHECK_NEAR(up, 1.0 / 0.8, 0.04);
-  // Down low, where the ear does nothing, the level is the set's.
+  // Down low, where the ear does nothing, the level is the set's. To within
+  // the slope the head itself has there: a larger ear reads the set's 375 Hz
+  // at 300, and up at 60 degrees the baked head is a decibel apart at those.
   float low_hz[1] = {300.0f}, a[1], b[1];
   VirtualRoom::baked_ear_curve(EarTune{}, -45.0f, 60.0f, 0, low_hz, 1, a);
   VirtualRoom::baked_ear_curve(tune(1.25f, 8000.0f, 0.0f, 2.0f), -45.0f, 60.0f, 0, low_hz, 1, b);
-  CHECK_NEAR(b[0] - a[0], 0.0, 0.5);
+  CHECK_NEAR(b[0] - a[0], 0.0, 1.5);
 }
 
 void test_graph_is_what_plays() {

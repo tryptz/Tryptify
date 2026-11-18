@@ -1376,7 +1376,7 @@
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">Un controllo canali E-AC-3 JOC integrato: una voce che si sposta attraverso le posizioni Atmos. Aggiungilo alla tua libreria per ascoltare il renderer in azione.</string>
     <string name="atmos_add_atmos_test_track_to_library">Aggiungi traccia di prova Atmos alla libreria</string>
     <string name="atmos_spatial_render">Rendering spaziale</string>
-    <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">Uso del set MIT KEMAR integrato. Scegli un preset SOFA in basso (o caricane uno) adatto alle tue orecchie.</string>
+    <string name="atmos_using_the_built_in_set_pick_a_sofa">Uso del set Neumann KU100 integrato. Scegli un preset SOFA in basso (o caricane uno) adatto alle tue orecchie.</string>
     <string name="atmos_sofa_presets">Preset SOFA</string>
     <string name="atmos_browse_hrtf_database">Sfoglia database HRTF</string>
     <string name="atmos_load_sofa_file">Carica file .sofa</string>
@@ -1446,7 +1446,7 @@
     <string name="atmos_live_watched">Live: Dolby Atmos · %1$d oggetti su un core %2$s · %3$s. Ogni punto è dove il mix colloca un oggetto; non vengono renderizzati (il rendering binaurale è disattivato), quindi senti il core ridotto a stereo.</string>
     <string name="atmos_live_not_rendering">Live: core %1$s · %2$s. Gli oggetti Atmos non vengono renderizzati: il rendering binaurale (sotto) è disattivato per questa uscita, quindi suona solo il core, ridotto a stereo.</string>
     <string name="atmos_live_no_objects">Live: %1$s · %2$s. Questo stream non contiene oggetti Atmos in questo momento, quindi i suoi canali suonano così come sono.</string>
-    <string name="atmos_sofa_rejected">⚠ %1$s è stato RIFIUTATO dal caricatore SOFA. Il rendering utilizzerà l\'HRTF KEMAR integrato. Il file potrebbe essere corrotto, non supportato o non essere un SOFA.</string>
+    <string name="atmos_sofa_rejected">⚠ %1$s è stato RIFIUTATO dal caricatore SOFA. Il rendering utilizzerà l\'HRTF KU100 integrato. Il file potrebbe essere corrotto, non supportato o non essere un SOFA.</string>
     <string name="atmos_sofa_loaded">Caricato: %1$s</string>
     <string name="atmos_sofa_selected">Selezionato: %1$s. Viene applicato all\'avvio/riavvio della riproduzione.</string>
     <string name="api_remove_detail">%1$s\n\nI suoi cataloghi verranno rimossi da Cerca a meno che non siano forniti da un\'altra API.</string>
@@ -3554,6 +3554,8 @@
     <string name="whats_new_1952_atmos_rooms_body">La mia stanza › Dimensioni e forma: Salva preset conserva con un nome la stanza che hai impostato, un tocco la richiama, ed Esporta e Importa la passano come piccolo file.</string>
     <string name="whats_new_1952_atmos_page_title">Una pagina Atmos più ordinata</string>
     <string name="whats_new_1952_atmos_page_body">Le sue impostazioni sono sotto Stanza, Panning e HRTF. Gli interruttori di downmix e TIDAL sono solo in Impostazioni › Audio, con il preamplificatore del downmix e il passa-basso LFE, e il rendering Atmos sugli altoparlanti non c’è più. Mostrare il suono nella stanza non rallenta più l’app.</string>
+    <string name="whats_new_1952_atmos_head_title">Atmos in cuffia: una testa di riferimento da studio</string>
+    <string name="whats_new_1952_atmos_head_body">L’HRTF integrato è ora il Neumann KU100, misurato all’Università di York: più morbido, con bassi veri e alti completi, direzioni più fini e suono da sopra la testa. I tuoi set SOFA funzionano come prima e vengono riletti una volta.</string>
     <string name="atmos_room_builtin">Stanza integrata</string>
     <string name="atmos_room_custom">La mia stanza</string>
     <string name="atmos_rooms">Stanze</string>

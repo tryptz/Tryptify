@@ -3,7 +3,7 @@
 //   c++ -std=c++17 -I.. hrtf_render_test.cpp -o hrtf && ./hrtf
 //
 // Feeds an impulse as a single object and checks the interaural cues the baked
-// MIT KEMAR table must reproduce: the near ear leads (earlier main arrival) and
+// table must reproduce: the near ear leads (earlier main arrival) and
 // is louder for a lateral source, a center source is L/R symmetric, strength=0
 // collapses to a dry mono image, and off-grid directions interpolate to finite
 // output. This exercises the table + interpolation + convolution end to end.
@@ -80,6 +80,8 @@ void test_center_symmetric() {
   std::vector<float> l, r;
   render_impulse(0.0f, 0.0f, l, r);                      // az = 0 (front)
   CHECK(onset(l) == onset(r));
+  // The baked head is made the same on both sides (tools/bake_hrir.py): the
+  // measurement it comes from is 1.1 dB louder in the right ear dead ahead.
   CHECK(std::fabs(energy(l) - energy(r)) < 1e-4f);
 }
 

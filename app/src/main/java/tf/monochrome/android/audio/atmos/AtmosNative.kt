@@ -50,7 +50,7 @@ object AtmosNative {
 
     /**
      * Installs a runtime HRTF from raw .sofa file bytes, replacing the baked
-     * MIT KEMAR default. Parses + onset-aligns off the audio thread and swaps it
+     * KU100 default. Parses + onset-aligns off the audio thread and swaps it
      * in double-buffered, so it is safe to call while playing. Returns 1 on
      * success, 0 if the buffer is not a decodable SOFA (the baked HRTF stays).
      */

@@ -10,7 +10,8 @@
 //    behind, beside, above. The LFE is non-directional bass and goes to both
 //    ears equally, as the Atmos path does.
 //
-//    Then diffuse-field equalized (hrir_dfe.h). The raw KEMAR responses carry
+//    Then diffuse-field equalized (hrir_dfe.h). A raw set's responses (the MIT
+//    KEMAR's, which this was written for) carry
 //    what every direction shares — the measuring speaker's bass roll-off and
 //    the dummy ear canal's resonance, -15 dB at 100 Hz against +10 dB at
 //    2.5 kHz — and heard raw that is thin and honky ("tinny"). The equalizer

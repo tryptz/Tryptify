@@ -1,7 +1,7 @@
 // Runtime SOFA HRTF loader. Parses a listener's .sofa (from memory, or where
-// it is on disk) with libmysofa and reproduces tools/bake_hrir.c's onset-aligned decomposition,
+// it is on disk) with libmysofa and makes the onset-aligned decomposition the table is,
 // so a loaded set has the grid, tap count and delay convention of the baked
-// MIT KEMAR table. Allocates and calls libmysofa: loader thread.
+// table (hrir_table.h). Allocates and calls libmysofa: loader thread.
 #include "sofa_loader.h"
 
 #include <cmath>

@@ -267,7 +267,7 @@ data class RendererProfile(
     /**
      * The ONE spatial option: off (default) = every Atmos track goes through
      * the coefficient downmix renderer (fixed matrix + preamp + LFE filter);
-     * on = objects are binauralized through the HRTF (built-in KEMAR or a
+     * on = objects are binauralized through the HRTF (built-in KU100 or a
      * SOFA). The UI keeps [mode] in lockstep: PASSTHROUGH when off,
      * OBJECT_RENDER when on.
      */

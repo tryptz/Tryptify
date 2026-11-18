@@ -1292,7 +1292,7 @@
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">内置的 E-AC-3 JOC 声道测试：一段在各个 Atmos 位置间移动的人声。将其添加到音乐库即可听到渲染器的效果。</string>
     <string name="atmos_add_atmos_test_track_to_library">将 Atmos 测试音轨添加到音乐库</string>
     <string name="atmos_spatial_render">空间渲染</string>
-    <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">正在使用内置的 MIT KEMAR 数据集。可在下方选择（或加载）适合你耳朵的 SOFA 预设。</string>
+    <string name="atmos_using_the_built_in_set_pick_a_sofa">正在使用内置的 Neumann KU100 数据集。可在下方选择（或加载）适合你耳朵的 SOFA 预设。</string>
     <string name="atmos_sofa_presets">SOFA 预设</string>
     <string name="atmos_browse_hrtf_database">浏览 HRTF 数据库</string>
     <string name="atmos_load_sofa_file">加载 .sofa 文件</string>
@@ -1362,7 +1362,7 @@
     <string name="atmos_live_watched">实时：Dolby Atmos · %2$s 核心上的 %1$d 个对象 · %3$s。每个点是混音放置对象的位置；它们未被渲染（双耳渲染已关闭），你听到的是缩混为立体声的核心。</string>
     <string name="atmos_live_not_rendering">实时：%1$s 核心 · %2$s。Atmos 对象未被渲染：此输出的双耳渲染（见下方）已关闭，因此只播放缩混为立体声的核心。</string>
     <string name="atmos_live_no_objects">实时：%1$s · %2$s。此流目前不含 Atmos 对象，因此其声道按原样播放。</string>
-    <string name="atmos_sofa_rejected">⚠ %1$s 被 SOFA 加载器拒绝。渲染改用内置的 KEMAR HRTF。该文件可能不完整、不受支持，或不是 SOFA 文件。</string>
+    <string name="atmos_sofa_rejected">⚠ %1$s 被 SOFA 加载器拒绝。渲染改用内置的 KU100 HRTF。该文件可能不完整、不受支持，或不是 SOFA 文件。</string>
     <string name="atmos_sofa_loaded">已加载：%1$s</string>
     <string name="atmos_sofa_selected">已选择：%1$s。将在播放（重新）开始时生效。</string>
     <string name="api_remove_detail">%1$s\n\n除非有其他 API 提供，它的曲库将从搜索中移除。</string>
@@ -3398,6 +3398,8 @@
     <string name="whats_new_1952_atmos_rooms_body">“我的房间 › 尺寸和形状”：“保存预设”会以一个名称保存你设置的房间，轻点即可恢复；“导出”和“导入”可将它作为小文件传给别人。</string>
     <string name="whats_new_1952_atmos_page_title">更整洁的 Atmos 页面</string>
     <string name="whats_new_1952_atmos_page_body">它的设置分为“房间”“声像”和“HRTF”。下混和 TIDAL 开关只保留在“设置 › 音频”中，下混前级增益和 LFE 低通也在那里；“将 Atmos 渲染到扬声器”已移除。在房间中显示声音不再拖慢应用。</string>
+    <string name="whats_new_1952_atmos_head_title">耳机上的 Atmos：录音室参考人头</string>
+    <string name="whats_new_1952_atmos_head_body">内置 HRTF 现在是约克大学测量的 Neumann KU100：更平滑，低频扎实、高频完整，方向更细，并能呈现正上方的声音。你自己的 SOFA 数据集照常可用，只会重新读取一次。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

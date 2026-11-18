@@ -1334,7 +1334,7 @@
     <string name="atmos_a_bundled_e_ac_3_joc_channel_check_a_voice">Dahili bir E-AC-3 JOC kanal testi: Atmos konumları arasında dolaşan bir ses. Oluşturucunun çalışmasını duymak için kitaplığınıza ekleyin.</string>
     <string name="atmos_add_atmos_test_track_to_library">Atmos test parçasını kitaplığa ekle</string>
     <string name="atmos_spatial_render">Uzamsal oluşturma</string>
-    <string name="atmos_using_the_built_in_mit_kemar_set_pick_a_sofa">Dahili MIT KEMAR seti kullanılıyor. Kendi kulaklarınız için aşağıdan bir SOFA ön ayarı seçin (veya yükleyin).</string>
+    <string name="atmos_using_the_built_in_set_pick_a_sofa">Dahili Neumann KU100 seti kullanılıyor. Kendi kulaklarınız için aşağıdan bir SOFA ön ayarı seçin (veya yükleyin).</string>
     <string name="atmos_sofa_presets">SOFA ön ayarları</string>
     <string name="atmos_browse_hrtf_database">HRTF veritabanına göz at</string>
     <string name="atmos_load_sofa_file">.sofa dosyası yükle</string>
@@ -1404,7 +1404,7 @@
     <string name="atmos_live_watched">Canlı: Dolby Atmos · %2$s çekirdek üzerinde %1$d nesne · %3$s. Her nokta, miksin bir nesneyi koyduğu yerdir; işlenmiyorlar (binaural işleme kapalı), bu yüzden stereoya indirgenmiş çekirdeği duyuyorsunuz.</string>
     <string name="atmos_live_not_rendering">Canlı: %1$s çekirdek · %2$s. Atmos nesneleri işlenmiyor: bu çıkış için binaural işleme (aşağıda) kapalı, bu yüzden yalnızca stereoya indirgenmiş çekirdek çalıyor.</string>
     <string name="atmos_live_no_objects">Canlı: %1$s · %2$s. Bu akış şu anda Atmos nesnesi taşımıyor, bu yüzden kanalları olduğu gibi çalıyor.</string>
-    <string name="atmos_sofa_rejected">⚠ %1$s, SOFA yükleyicisi tarafından REDDEDİLDİ. Oluşturma bunun yerine dahili KEMAR HRTF’yi kullanıyor. Dosya eksik, desteklenmeyen veya SOFA olmayan bir dosya olabilir.</string>
+    <string name="atmos_sofa_rejected">⚠ %1$s, SOFA yükleyicisi tarafından REDDEDİLDİ. Oluşturma bunun yerine dahili KU100 HRTF’yi kullanıyor. Dosya eksik, desteklenmeyen veya SOFA olmayan bir dosya olabilir.</string>
     <string name="atmos_sofa_loaded">Yüklendi: %1$s</string>
     <string name="atmos_sofa_selected">Seçildi: %1$s. Çalma (yeniden) başladığında uygulanır.</string>
     <string name="api_remove_detail">%1$s\n\nBaşka bir API sunmadıkça katalogları Arama’dan çıkar.</string>
@@ -3476,6 +3476,8 @@
     <string name="whats_new_1952_atmos_rooms_body">Odam › Boyut ve şekil: Ön ayarı kaydet, ayarladığın odayı bir adla saklar, bir dokunuş geri getirir; Dışa aktar ve İçe aktar onu küçük bir dosya olarak paylaşır.</string>
     <string name="whats_new_1952_atmos_page_title">Daha düzenli bir Atmos sayfası</string>
     <string name="whats_new_1952_atmos_page_body">Ayarları Oda, Panlama ve HRTF başlıkları altında. Downmix ve TIDAL anahtarları yalnızca Ayarlar › Ses’te; downmix ön yükselteci ve LFE alçak geçireni de orada. Atmos’u hoparlörlere oluşturma kaldırıldı. Odada sesi göstermek artık uygulamayı yavaşlatmıyor.</string>
+    <string name="whats_new_1952_atmos_head_title">Kulaklıkta Atmos: stüdyo referans kafası</string>
+    <string name="whats_new_1952_atmos_head_body">Dahili HRTF artık York Üniversitesi’nde ölçülen Neumann KU100: daha pürüzsüz, gerçek baslı ve tam tizli, yönleri daha ince ve tam tepeden gelen sesi de veriyor. Kendi SOFA setleriniz eskisi gibi çalışır ve bir kez yeniden okunur.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

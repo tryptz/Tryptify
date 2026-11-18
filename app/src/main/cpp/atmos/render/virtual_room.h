@@ -484,8 +484,8 @@ class VirtualRoom {
   }
 
   // The low end a measured set lacks, as a low shelf {b0, b1, b2, a1, a2}:
-  // the loudspeaker it was measured with had little (the baked KEMAR set is
-  // 5 dB down at 60 Hz, 3 at 120), a head does nothing to sound that long,
+  // the loudspeaker it was measured with had little (the MIT KEMAR set was
+  // 5 dB down at 60 Hz, 3 at 120; the baked KU100 set has its low end), a head does nothing to sound that long,
   // and the equalizer is too short to put it all back. As much as the set,
   // through its equalizer, is quieter at 40-70 Hz than at 300-630 Hz.
   // Nothing for a set whose low end is level, never over kMaxShelfDb, never
@@ -835,8 +835,8 @@ class VirtualRoom {
     }
   }
 
-  // The top octave a measured set lacks, added to `gain_db`. The baked KEMAR
-  // set (a small loudspeaker, 44.1 kHz) is, over every direction and through
+  // The top octave a measured set lacks, added to `gain_db`. The baked KU100
+  // set lacks none. The MIT KEMAR set (a small loudspeaker, 44.1 kHz) is, over every direction and through
   // its equalizer, 5 dB down at 15 kHz, 9 at 16 and 14 at 18, and the
   // equalizer stops correcting there, so nothing above 15 kHz came through.
   // As much as the set is under its own 8-13 kHz at each kHz from 14

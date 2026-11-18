@@ -254,7 +254,7 @@ void test_sides() {
   const double left_l = l, left_r = r;
   ears(90.0f, 0.0f, l, r);
   CHECK(db(r / l) > 6.0);
-  // The baked KEMAR set is one ear measured twice: a mirror image, near enough.
+  // The baked set is made the same on both sides (tools/bake_hrir.py).
   CHECK_NEAR(db(r / left_l), 0.0, 1.5);
   CHECK_NEAR(db(l / left_r), 0.0, 1.5);
   ears(0.0f, 0.0f, l, r);
@@ -469,21 +469,23 @@ double tone_level_db(VirtualRoom& room, int count, int speaker, double hz) {
 }
 
 void test_low_end() {
-  std::printf("-- the low end the measured set lacks is put back\n");
+  std::printf("-- the low end a measured set lacks is put back\n");
   const std::vector<RoomSpeaker> v = room_layout();
   const int count = static_cast<int>(v.size());
   VirtualRoom room;
   room.configure(48000, v);
   room.set_params(1.0f, 0.0f);
   room.set_bass_management(false, 80);
-  // The baked set is 5 dB short at 60 Hz: the shelf is there, and bounded.
+  // The baked set (the KU100 of SADIE II) has its low end, so it gets no
+  // shelf to speak of; the MIT KEMAR set it replaced was 5 dB short at 60 Hz
+  // and got one. Whatever the set, the shelf is bounded.
   float shelf[5];
   room.bass_shelf(shelf);
   const double dc = 20.0 * std::log10((shelf[0] + shelf[1] + shelf[2]) / (1.0 + shelf[3] + shelf[4]));
   std::printf("   shelf %.2f dB\n", dc);
-  CHECK(dc > 4.0 && dc < 7.0);
+  CHECK(dc > -0.1 && dc < 7.0);
   // A speaker's bass comes out as loud as its low mids, with no help from
-  // the crossover: before the shelf 60 Hz was 5 dB under 400 Hz.
+  // the crossover.
   // The speakers ahead: a head already makes a side speaker's near ear
   // louder at 400 Hz than in the bass.
   const int used[] = {speaker_at(v, 0.0f, 0.0f), speaker_at(v, -30.0f, 0.0f), speaker_at(v, 30.0f, 0.0f)};
@@ -531,11 +533,12 @@ void test_tone_correction() {
               fir_db(tone, taps, 1500.0), fir_db(tone, taps, 7000.0), fir_db(tone, taps, 16000.0),
               fir_db(tone, taps, 18000.0));
   CHECK(fir_db(tone, taps, 1500.0) > 1.0);
-  CHECK(fir_db(tone, taps, 7000.0) > 2.0);
-  // Above it, the top octave the baked set lacks (9 dB at 16 kHz, 14 at
-  // 18), never over its limit, and nothing where the set has nothing.
-  CHECK(fir_db(tone, taps, 16000.0) > 6.0);
-  CHECK(fir_db(tone, taps, 18000.0) > 9.0);
+  CHECK(fir_db(tone, taps, 7000.0) > 1.0);
+  // Above it, the top octave a set lacks is put back (the MIT KEMAR set was
+  // 9 dB short at 16 kHz and 14 at 18). The baked KU100 reaches the top, so
+  // it gets nothing there: never a cut, never over the limit.
+  CHECK(fir_db(tone, taps, 16000.0) > -0.5);
+  CHECK(fir_db(tone, taps, 18000.0) > -0.5);
   for (double hz = 12000.0; hz < 24000.0; hz += 250.0) CHECK(fir_db(tone, taps, hz) < VirtualRoom::kTopBoostDb + 0.7);
   CHECK(std::fabs(fir_db(tone, taps, 23000.0)) < 1.0);
   // The render uses it: the equalizer in use is the baked one through it.

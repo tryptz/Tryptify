@@ -2,8 +2,8 @@
 //
 // Replaces the procedural spherical-head model (structural_hrtf.h, deleted) with
 // convolution against MEASURED head-related impulse responses. The HRIRs are the
-// MIT KEMAR set, baked to a compact 48 kHz az/el grid by libmysofa in
-// hrir_table.h (see scratchpad/dump.c). Measured HRIRs carry the pinna spectral
+// Neumann KU100 of SADIE II, baked to a 48 kHz az/el grid in hrir_table.h
+// (tools/bake_hrir.py; NOTICE.md). Measured HRIRs carry the pinna spectral
 // cues — the notches and peaks that give real front/back and elevation
 // disambiguation — that a delay + one-pole shadow cannot reproduce, which is the
 // fidelity the procedural model lacked.

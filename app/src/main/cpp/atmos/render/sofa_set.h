@@ -1,12 +1,11 @@
 // A loaded HRTF set, as it is handed about: one array of floats.
 //
-// The renderer's own table is coarse: an HRIR every 10 degrees round and
-// every 20 up (hrir_table.h), which is what the baked MIT KEMAR set was
-// measured on. A speaker between its points gets a blend of its neighbours,
-// and two impulse responses blended are not the response in between: their
-// outer-ear notches sit at different pitches, and the sum has both, shallow.
-// The room's twelve height speakers are at 30 and 60 degrees up, never on a
-// row of the table.
+// The renderer's own table is a grid: an HRIR every 5 degrees round and
+// every 10 up, from 40 below to overhead (hrir_table.h; it was every 10 by
+// every 20 and stopped at 60 up). A direction between its points gets a
+// blend of its neighbours, and two impulse responses blended are not the
+// response in between: their outer-ear notches sit at different pitches,
+// and the sum has both, shallow.
 //
 // A set measured finer than that (the Aachen KEMAR has a direction every
 // degree, 64,800 of them) does not have to be blended: the room has 27
@@ -40,7 +39,7 @@ namespace render {
 
 struct SofaSet {
   static constexpr float kMagic = 50724.0f;
-  static constexpr float kVersion = 1.0f;
+  static constexpr float kVersion = 2.0f;   // 2: the 5 by 10 degree table, up to overhead
   static constexpr int kHeader = 6;
   static constexpr int kMaxSpeakers = 64;
   static constexpr size_t kPoints = static_cast<size_t>(kHrirElCount) * kHrirAzCount * 2;

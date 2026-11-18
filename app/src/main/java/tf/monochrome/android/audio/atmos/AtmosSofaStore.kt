@@ -71,9 +71,12 @@ class AtmosSofaStore @Inject constructor(@ApplicationContext context: Context) {
         /**
          * A kept set's name: the file it was read from, as it was then. A file
          * that is replaced has another length or time, and is read again. The
-         * [FORMAT] goes up when what the reading makes changes.
+         * [FORMAT] goes up when what the reading makes changes: 2 is the
+         * table every 5 degrees round and 10 up to overhead (it was 10 by 20
+         * to +60). A set kept in the older layout is not one the render
+         * takes, so it must not be found under the new name.
          */
-        const val FORMAT = 1
+        const val FORMAT = 2
         fun keptName(path: String, length: Long, modified: Long): String =
             "${Integer.toHexString(path.hashCode())}-$length-$modified-v$FORMAT.set"
     }

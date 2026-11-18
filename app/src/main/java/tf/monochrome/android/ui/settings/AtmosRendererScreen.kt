@@ -135,7 +135,7 @@ class AtmosRendererViewModel @Inject constructor(
 
     /**
      * Live SOFA apply outcome from the render pipeline (path → accepted).
-     * Lets the screen say "this .sofa was REJECTED — running built-in KEMAR"
+     * Lets the screen say "this .sofa was REJECTED — running the built-in set"
      * instead of silently claiming the custom HRTF is active.
      */
     val sofaStatus: StateFlow<Pair<String, Boolean>?> = atmosProcessor.sofaStatus
@@ -590,7 +590,7 @@ fun AtmosRendererScreen(
                 // ── Spatial render — the ONE option beyond the fold ───────────
                 // Off (default): every Atmos track goes through the coefficient
                 // downmix renderer above. On: objects are binauralized via the
-                // built-in KEMAR or a SOFA HRTF. Renderer mode follows the switch
+                // built-in KU100 or a SOFA HRTF. Renderer mode follows the switch
                 // (PASSTHROUGH ↔ OBJECT_RENDER) — no separate mode setting.
                 SectionHeader(stringResource(R.string.atmos_spatial_render))
                 val sofaPicker = rememberLauncherForActivityResult(
@@ -690,7 +690,7 @@ fun AtmosRendererScreen(
                 if (spatial) {
                     SectionHeader(stringResource(R.string.atmos_section_hrtf))
                     if (profile.hrtfProfileId == null) Text(
-                        stringResource(R.string.atmos_using_the_built_in_mit_kemar_set_pick_a_sofa),
+                        stringResource(R.string.atmos_using_the_built_in_set_pick_a_sofa),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     ) else {

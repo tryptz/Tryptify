@@ -288,6 +288,14 @@ object WhatsNew {
                     titleRes = R.string.whats_new_1952_atmos_page_title,
                     bodyRes = R.string.whats_new_1952_atmos_page_body,
                 ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "Atmos on headphones: a studio reference head",
+                    body = "The built-in HRTF is now the Neumann KU100, measured at the University of York: smoother, with real bass and a full top end, finer directions and sound from straight overhead. Your own SOFA sets work as before and are read again once.",
+                    titleRes = R.string.whats_new_1952_atmos_head_title,
+                    bodyRes = R.string.whats_new_1952_atmos_head_body,
+                ),
             ),
         ),
         WhatsNewRelease(

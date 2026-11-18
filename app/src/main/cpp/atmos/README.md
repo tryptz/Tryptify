@@ -233,6 +233,10 @@ stays for the mixer's spatial map (`render/channel_placer.h`).
 
 ## The virtual room's low end (fixed 1.9.52)
 
+(The built-in set is the KU100 of SADIE II since 2026-11-18, which has its
+low end and gets no shelf; this is the MIT KEMAR set it replaced, and any
+loaded set that is short of bass.)
+
 The baked KEMAR set was measured with a small loudspeaker and rolls off
 below 300 Hz: through its equalizer, every direction was 3 dB down at 120 Hz
 and 5 dB at 60 Hz, more than the 512-tap equalizer can put back. With bass
@@ -316,6 +320,8 @@ side or behind gets the same lift and is that much brighter there. Not
 checked by ear here.
 
 ## Nothing above 15 kHz (fixed 1.9.52)
+
+(Likewise: the KU100 set reaches the top and gets nothing here.)
 
 The baked KEMAR set (a small loudspeaker, measured at 44.1 kHz) falls away
 at the top: over every direction and through its equalizer it is 5 dB down

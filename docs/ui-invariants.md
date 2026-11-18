@@ -3409,6 +3409,19 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   itself, so it needs no reduce-motion case.
 - The LFE has no place in a mix: its speaker is drawn on the floor under the
   screen, and an LFE object gets no dot.
+- **The built-in HRTF is the Neumann KU100 of SADIE II** (the owner asked
+  for "the best of the best default", 2026-11-18, and chose it over the TH
+  Köln KU100 and a newer KEMAR; `render/hrir_table.h`,
+  `render/tools/bake_hrir.py`, `render/NOTICE.md`). Never bake a set with a
+  threshold on its onset again: this one's filters ring before their peak,
+  and that put the two ears 14 samples apart for a sound dead ahead. The
+  bake keeps each magnitude as a minimum-phase filter, the time between the
+  ears from their correlation, and makes the head the same on both sides
+  (as measured it is 1.1 dB to the right dead ahead, and a leaning centre is
+  what a listener hears first). When the table's grid changes,
+  `AtmosSofaStore.FORMAT` and `SofaSet::kVersion` go up with it, or every
+  set a listener has loaded is refused from the cache. The page says which
+  set is built in (`atmos_using_the_built_in_set_pick_a_sofa`).
 - **The Atmos render has no limiter** (the owner's decision, 2026-11-18;
   `render/virtual_room.h`). The headphone room's output is the mix 3 dB
   down (`kTrim`) and nothing holds its peaks: a mix too hot for that goes
