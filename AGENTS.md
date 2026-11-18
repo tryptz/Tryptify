@@ -387,6 +387,19 @@ is a `subsonic-cover://` reference resolved only by the app's own Coil
 (`SubsonicCoverMapper`). `SubsonicTest` checks that nothing mapped from a server
 contains the token or the password.
 
+The media session is the other place that reference is resolved, and it gets
+the picture, never an address: its bitmap loader is
+`SubsonicCoverBitmapLoader` (set in `PlaybackService`, in front of Media3's
+own), which answers a reference with the bytes from
+`SubsonicRepository.coverArtBytes`. Without it Media3 took the reference for a
+web address and the notification, the lock screen and Bluetooth had no cover
+("unknown protocol: subsonic-cover", 15 times in one of the owner's logs of
+2026-11-18): for every song played from its copy on the phone
+(`resolveLocalFile` carries the song's reference and no bytes), and any whose
+picture missed the 2.5 s `resolveSubsonic` waits. Never fix that by putting
+the real getCoverArt address on a `MediaItem`. `SubsonicCoverBitmapLoaderTest`
+holds the routing.
+
 ## A server's password is a device secret
 
 A TrypT HiFi with `ACCESS_PASSWORD` set (trypt-hifi's `middleware.ts`) answers

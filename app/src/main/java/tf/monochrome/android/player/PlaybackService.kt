@@ -564,6 +564,18 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setSessionActivity(createSessionActivity())
             .setCallback(PlaybackResumptionCallback())
+            // Media3's own loader (the same two it uses when none is given),
+            // with one in between that answers a subsonic-cover:// reference
+            // with the picture: the notification, the lock screen and
+            // Bluetooth otherwise got "unknown protocol" and no cover.
+            .setBitmapLoader(
+                androidx.media3.session.CacheBitmapLoader(
+                    SubsonicCoverBitmapLoader(
+                        others = androidx.media3.datasource.DataSourceBitmapLoader(this),
+                        scope = CoroutineScope(serviceScope.coroutineContext + Dispatchers.IO),
+                    ) { ref -> subsonicRepository.coverArtBytes(ref) },
+                ),
+            )
             .build()
         // The session hears when the DAC is claimed or let go, a stream
         // goes to Android's output despite it, or Trypt Mania plays its own
