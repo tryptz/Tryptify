@@ -12,9 +12,13 @@ import java.lang.ref.WeakReference
 
 /**
  * Says in the log when the app drew slowly, on which screen, and where the
- * time went. It runs only while the live log does ([LiveLog]), so that a
- * stutter someone reports can be read from where the log is read, with its
- * length, its place and its cause's side, instead of guessed at.
+ * time went. It runs while the live log does ([LiveLog]) and while the FPS
+ * counter is on screen (Settings › System › Performance), so that a stutter
+ * someone reports can be read from where the log is read, with its length,
+ * its place and its cause's side, instead of guessed at. The counter was
+ * added to that on 2026-11-18: the owner measures with it on and exports the
+ * debug log, and three such logs in a row had no line of this in them,
+ * because the live log (which needs a sign-in) was off.
  *
  * Two things are watched, because a stutter has two places to come from:
  * - the gap between two frames on the main thread ([Choreographer]): a gap of
@@ -107,7 +111,12 @@ object FrameStallLog : Choreographer.FrameCallback {
         }
     }
 
+    /** One for each of [start]'s callers that has not called [stop]: main thread only. */
+    private var holders = 0
+
+    /** Pair each call with one [stop]; it runs while anyone holds it. */
     fun start() = main.post {
+        holders++
         if (running) return@post
         running = true
         lastNanos = 0L
@@ -121,6 +130,8 @@ object FrameStallLog : Choreographer.FrameCallback {
     }
 
     fun stop() = main.post {
+        holders = (holders - 1).coerceAtLeast(0)
+        if (holders > 0) return@post
         running = false
         runCatching { listening?.removeOnFrameMetricsAvailableListener(metrics) }
         listening = null

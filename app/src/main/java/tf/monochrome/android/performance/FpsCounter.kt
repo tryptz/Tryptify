@@ -51,6 +51,12 @@ fun FpsCounter(
     limit: Int,
     modifier: Modifier = Modifier,
 ) {
+    // While the counter is on screen the log says where slow frames' time went
+    // (FrameStallLog): whoever turned the counter on is measuring.
+    DisposableEffect(Unit) {
+        tf.monochrome.android.debug.FrameStallLog.start()
+        onDispose { tf.monochrome.android.debug.FrameStallLog.stop() }
+    }
     val view = LocalView.current
     val frames = remember { AtomicInteger() }
     var fps by remember { mutableIntStateOf(0) }

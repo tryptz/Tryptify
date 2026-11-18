@@ -278,6 +278,11 @@ and each insert drops that account's lines older than a day. `LiveLogTest`
 holds the numbering, what is left out and that a sign-in never reaches a row.
 Never make it start by itself or stay on across launches.
 
+`FrameStallLog` also runs while the FPS counter is on screen (Settings ›
+System › Performance), with no live log and no sign-in: its lines are then in
+the debug log the owner exports. Ask for the counter on before asking for a
+log about a stutter; three exported logs in a row had none of these lines.
+
 While it is on, `FrameStallLog` (tag `FrameStall`) says when the app drew
 slowly, on which screen, and where the time went: "no frame for 840 ms on
 equalizer" for a gap on the main thread, and for a second with slow frames

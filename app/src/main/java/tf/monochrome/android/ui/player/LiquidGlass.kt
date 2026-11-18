@@ -696,8 +696,31 @@ fun Modifier.glassFrost(
         val g = linked.value
         blurRadius = g.hazeBlurDp.dp
         tints = listOf(dev.chrisbanes.haze.HazeTint(playerFrostTint(g, isDark)))
+        inputScale = dev.chrisbanes.haze.HazeInputScale.Fixed(frostInputScale(g.hazeBlurDp))
     }
 }
+
+/**
+ * The size a frosted pane's backdrop is blurred at, of its size on the page.
+ *
+ * Haze blurs what is behind a pane again whenever that moves, and behind the
+ * player's sheets it always moves (the glass's surface, the progress, a
+ * visualizer). At full size that was the whole pane through a 40 dp blur on
+ * every frame: the audio tools sheet and the song menu each halved the frame
+ * rate on a 165 Hz phone (the owner's report, 2026-11-18). A wide blur cannot
+ * show the detail it is given, so the backdrop is made small first and blurred
+ * there, with the radius made small with it: the same soft colour, from a
+ * sixteenth of the pixels at the default blur.
+ *
+ * The scale keeps the blur at [FROST_SMALL_BLUR_DP] or more at the small
+ * size, so a narrow blur, which does show detail, is left at full size, and
+ * no pane goes under a quarter.
+ */
+internal fun frostInputScale(blurDp: Float): Float =
+    if (blurDp <= FROST_SMALL_BLUR_DP) 1f else (FROST_SMALL_BLUR_DP / blurDp).coerceIn(FROST_MIN_SCALE, 1f)
+
+internal const val FROST_SMALL_BLUR_DP = 10f
+internal const val FROST_MIN_SCALE = 0.25f
 
 /**
  * The SAME refractive lyric glass ([LIQUID_GLASS_SRC]) applied to a player

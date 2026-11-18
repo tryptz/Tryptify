@@ -153,6 +153,18 @@ no album art behind it and takes none, so it is the page blurred to soft
 colour under the theme's tint, not the player's colours. `FrostedPaneTest`
 reads each call.
 
+**A frosted pane blurs its backdrop small** (`frostInputScale`, Haze's
+`inputScale`, set in `glassFrost`). Haze blurs what is behind a pane again
+whenever that moves, and behind the player's sheets it always moves. At full
+size the audio tools sheet and the song menu each halved the frame rate on a
+165 Hz phone (the owner, 2026-11-18): the whole pane through a 40 dp blur on
+every frame. The backdrop is made small first and blurred there, a quarter
+each way at the default blur; a blur of 10 dp or less, which does show
+detail, stays at full size. Do not set the scale back to none, and do not
+give a frosted pane a blur of its own outside `glassFrost`.
+`FrostInputScaleTest` holds the rule. Nobody has measured the gain on a
+phone yet.
+
 **The mini player and the tab bar cast their shadow from outside their clip.**
 Both clip to their rounded shape, so a shadow drawn inside is cut away. Each
 wraps its clipped bar in an unclipped box that draws `GlassBarShadow` first,
