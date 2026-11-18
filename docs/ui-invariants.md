@@ -3444,6 +3444,15 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   file's name. A new setting goes under the heading it belongs to, not at
   the end. The slider is "Room amount" (it was "Room", which is now the
   heading over it).
+- **The Atmos page has a "?"** in its top bar (`AtmosHelpSheet`; the owner
+  asked for one "just like the Inflator", easy to read and learn from). It
+  is the same bottom sheet of short headed sections as the Inflator's and
+  AutoEQ's, ten of them in the page's own order, ending with what to do
+  about loudness and a five-step way to start. A section names each
+  control exactly as the page labels it in that language: change a label
+  and its section together. A new part of the page gets a section. Keep
+  them short and in plain words; this is for someone learning, not a
+  reference.
 - **The Atmos page holds only what is the renderer's own.** The owner took
   three sections off it: Downmix (its switch was a second copy of the one on
   Settings › Audio, a page back), Sources (TIDAL Dolby Atmos, also on

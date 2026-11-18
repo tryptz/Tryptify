@@ -39,6 +39,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -431,6 +432,7 @@ fun AtmosRendererScreen(
         onStopOrDispose { viewModel.releaseDetector() }
     }
 
+    var showHelp by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.settings_atmos_renderer_configuration)) },
@@ -439,8 +441,18 @@ fun AtmosRendererScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                 }
             },
+            actions = {
+                // What the page's parts do and how to use them, as the Inflator and AutoEQ have it.
+                IconButton(onClick = { showHelp = true }) {
+                    Icon(
+                        Icons.AutoMirrored.Outlined.HelpOutline,
+                        contentDescription = stringResource(R.string.eq_help),
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         )
+        if (showHelp) AtmosHelpSheet(onDismiss = { showHelp = false })
 
         // The 3D room, for the page and for the small picture of it that
         // stays in the corner once the page has scrolled past it. One of the

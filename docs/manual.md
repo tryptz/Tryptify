@@ -93,6 +93,7 @@ Configuration page).
 | Fold surround to stereo | Downmix multichannel to stereo (`Settings › Audio`), with Downmix preamp and LFE low-pass under it |
 | Atmos mixes from TIDAL | TIDAL Dolby Atmos (`Settings › Audio › TIDAL Dolby Atmos`) |
 | Test it | Add Atmos test track to library |
+| Learn what the page does | The ? in the top bar: each part of the page in a few plain lines, and a way to start |
 
 The 3D room at the top of that page shows the speakers lighting as they play,
 the mix's objects, and the sound as grain in the air. Drag sideways to turn
