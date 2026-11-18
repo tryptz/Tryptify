@@ -421,16 +421,16 @@ Java_tf_monochrome_android_audio_atmos_AtmosNative_nativeRoomMeter(
 // slow (it parses the whole file) and allocates.
 JNIEXPORT jfloatArray JNICALL
 Java_tf_monochrome_android_audio_atmos_AtmosNative_nativePrepareRoomSofa(
-    JNIEnv* env, jclass /*clazz*/, jbyteArray sofa) {
-  const jsize len = env->GetArrayLength(sofa);
-  if (len <= 0) return nullptr;
-  std::vector<char> file(static_cast<size_t>(len));
-  env->GetByteArrayRegion(sofa, 0, len, reinterpret_cast<jbyte*>(file.data()));
+    JNIEnv* env, jclass /*clazz*/, jstring path) {
+  if (path == nullptr) return nullptr;
+  const char* chars = env->GetStringUTFChars(path, nullptr);
+  if (chars == nullptr) return nullptr;
+  const std::string file(chars);
+  env->ReleaseStringUTFChars(path, chars);
   std::vector<float> left, right;
   double rate = 0.0;
   tf::atmos::render::RoomGeometry geometry;
-  if (!tf::atmos::read_room_sofa(file.data(), len, left, right, rate, geometry)) return nullptr;
-  file = std::vector<char>();  // the file is the larger part of the memory; done with it
+  if (!tf::atmos::read_room_sofa_file(file.c_str(), left, right, rate, geometry)) return nullptr;
   tf::atmos::render::RoomResponse room;
   if (!tf::atmos::render::prepare_room_response(left.data(), right.data(), static_cast<int>(left.size()),
                                                 rate, room)) {

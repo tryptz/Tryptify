@@ -137,11 +137,11 @@ void read_geometry(const MYSOFA_HRTF* h, RoomGeometry& g) {
 
 }  // namespace
 
-bool read_room_sofa(const char* data, long size, std::vector<float>& left,
-                    std::vector<float>& right, double& rate, RoomGeometry& geometry) {
-  if (data == nullptr || size <= 0) return false;
-  int err = 0;
-  MYSOFA_HRTF* h = mysofa_load_data(data, static_cast<size_t>(size), &err);
+namespace {
+
+// What read_room_sofa says of a file libmysofa has opened; frees it.
+bool read_room(MYSOFA_HRTF* h, std::vector<float>& left, std::vector<float>& right, double& rate,
+               RoomGeometry& geometry) {
   if (h == nullptr) return false;
   bool ok = false;
   const unsigned emitters = h->E > 0 ? h->E : 1;
@@ -175,6 +175,22 @@ bool read_room_sofa(const char* data, long size, std::vector<float>& left,
   }
   mysofa_free(h);
   return ok;
+}
+
+}  // namespace
+
+bool read_room_sofa(const char* data, long size, std::vector<float>& left,
+                    std::vector<float>& right, double& rate, RoomGeometry& geometry) {
+  if (data == nullptr || size <= 0) return false;
+  int err = 0;
+  return read_room(mysofa_load_data(data, static_cast<size_t>(size), &err), left, right, rate, geometry);
+}
+
+bool read_room_sofa_file(const char* path, std::vector<float>& left, std::vector<float>& right,
+                         double& rate, RoomGeometry& geometry) {
+  if (path == nullptr || path[0] == '\0') return false;
+  int err = 0;
+  return read_room(mysofa_load(path, &err), left, right, rate, geometry);
 }
 
 }  // namespace atmos

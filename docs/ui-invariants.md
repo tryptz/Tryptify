@@ -3664,6 +3664,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
   see-through thing over it. It covers a corner of the rows under it;
   scrolling moves them out from under it.
+- **A room downloads to a file too** (`RoomDatabaseViewModel.take`,
+  `read_room_sofa_file`). It came through memory, under a 48 MB limit that
+  was the HRTF sets' before they went to files, and the room database
+  refused a 139 MB room with "pick a smaller HRTF set" (the owner's
+  screenshot, 2026-11-18). The SOFA goes to the cache with the same
+  progress line, is read where it is on disk, and is deleted: only the
+  room made of it is kept. Nothing downloads a .sofa through memory any
+  more; do not bring that back.
 - **An HRTF set downloads to a file and says how far it is** (the HRTF
   database, `HrtfDatabaseViewModel.take`, `SofaHrtfApi.downloadTo`): the
   status line counts megabytes while a large one comes in, and the set is in

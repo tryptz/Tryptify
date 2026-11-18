@@ -134,11 +134,21 @@ abstract class SofaBrowseViewModel(
         }
     }
 
-    /** Fetches the file at [path] and puts it to use; what to tell the listener. Through memory, unless overridden. */
-    protected open suspend fun take(path: String, file: HrtfNode): UiText {
-        val result = api.download(path)
-        val bytes = result.getOrNull()
-        return if (bytes == null || bytes.isEmpty()) failed(result.exceptionOrNull()) else use(file, bytes)
+    /**
+     * Fetches the file at [path] and puts it to use; what to tell the listener.
+     * Always to a file ([SofaHrtfApi.downloadTo]), never through memory: the
+     * rooms and the finest HRTF sets are over a hundred megabytes. Through
+     * memory there was a 48 MB limit, and the room database refused a 139 MB
+     * room with "pick a smaller HRTF set".
+     */
+    protected abstract suspend fun take(path: String, file: HrtfNode): UiText
+
+    /** Downloads [path] into [dest], saying how far it is in the status line. The bytes written, or the failure's text. */
+    protected suspend fun fetch(path: String, file: HrtfNode, dest: File): Result<Long> {
+        val mb = 1024L * 1024L
+        return api.downloadTo(path, dest) { done, total ->
+            if (total > 0) progress(UiText.Res(R.string.hrtf_downloading, listOf(file.display, (done / mb).toInt(), (total / mb).toInt())))
+        }
     }
 
     protected fun failed(cause: Throwable?): UiText =
@@ -149,8 +159,6 @@ abstract class SofaBrowseViewModel(
         _state.value = _state.value.copy(status = text)
     }
 
-    /** Takes the downloaded [bytes] of [file] into use; what to tell the listener. */
-    protected abstract suspend fun use(file: HrtfNode, bytes: ByteArray): UiText
 }
 
 @HiltViewModel
@@ -171,10 +179,7 @@ class HrtfDatabaseViewModel @Inject constructor(
      */
     override suspend fun take(path: String, file: HrtfNode): UiText {
         val dest = destination(file)
-        val mb = 1024L * 1024L
-        val result = api.downloadTo(path, dest) { done, total ->
-            if (total > 0) progress(UiText.Res(R.string.hrtf_downloading, listOf(file.display, (done / mb).toInt(), (total / mb).toInt())))
-        }
+        val result = fetch(path, file, dest)
         val size = result.getOrNull() ?: return failed(result.exceptionOrNull())
         return withContext(Dispatchers.IO) {
             runCatching {
@@ -183,23 +188,6 @@ class HrtfDatabaseViewModel @Inject constructor(
                 UiText.Res(R.string.hrtf_applied, listOf(file.display, (size / 1024).toInt()))
             }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
         }
-    }
-
-    /** Stores the .sofa in app storage and selects it as the HRTF. */
-    override suspend fun use(file: HrtfNode, bytes: ByteArray): UiText = withContext(Dispatchers.IO) {
-        runCatching {
-            val dest = destination(file)
-            dest.writeBytes(bytes)
-            // Keep previous downloads: every stored .sofa remains a
-            // selectable preset on the renderer page.
-            val profile = preferences.rendererProfile.first()
-            // Applying a downloaded HRTF is an explicit request to use
-            // one, so the binauralizer goes on as well if it was off.
-            preferences.setRendererProfile(
-                profile.copy(hrtfProfileId = dest.absolutePath, hrtfEnabled = true)
-            )
-            UiText.Res(R.string.hrtf_applied, listOf(file.display, bytes.size / 1024))
-        }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
     }
 }
 
@@ -211,12 +199,29 @@ class HrtfDatabaseViewModel @Inject constructor(
  */
 @HiltViewModel
 class RoomDatabaseViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val preferences: PreferencesManager,
     private val rooms: tf.monochrome.android.audio.atmos.AtmosRoomStore,
 ) : SofaBrowseViewModel(rootFolders = SofaHrtfApi.ROOM_FOLDERS, unreachable = R.string.room_unreachable) {
 
-    override suspend fun use(file: HrtfNode, bytes: ByteArray): UiText {
-        val room = rooms.addMeasured(file.display, bytes) ?: return UiText.Res(R.string.room_unusable)
+    /**
+     * The SOFA goes to a file in the cache, is read into a room, and is
+     * deleted: only the room made of it is kept.
+     */
+    override suspend fun take(path: String, file: HrtfNode): UiText {
+        val sofa = File(File(context.cacheDir, "room-downloads").apply { mkdirs() }, "room.sofa")
+        try {
+            val result = fetch(path, file, sofa)
+            result.getOrNull() ?: return failed(result.exceptionOrNull())
+            progress(UiText.Res(R.string.room_reading, listOf(file.display)))
+            return use(file, sofa)
+        } finally {
+            sofa.delete()
+        }
+    }
+
+    private suspend fun use(file: HrtfNode, sofa: File): UiText {
+        val room = rooms.addMeasured(file.display, sofa) ?: return UiText.Res(R.string.room_unusable)
         val profile = preferences.rendererProfile.first()
         preferences.setRendererProfile(
             profile.copy(

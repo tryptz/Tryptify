@@ -15,6 +15,11 @@ namespace atmos {
 bool read_room_sofa(const char* data, long size, std::vector<float>& left,
                     std::vector<float>& right, double& rate, render::RoomGeometry& geometry);
 
+// The same of the file at `path`, read where it is on disk: a room's file is
+// tens to hundreds of megabytes, and need not be held in memory twice.
+bool read_room_sofa_file(const char* path, std::vector<float>& left, std::vector<float>& right,
+                         double& rate, render::RoomGeometry& geometry);
+
 }  // namespace atmos
 }  // namespace tf
 

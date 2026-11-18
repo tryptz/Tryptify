@@ -45,13 +45,13 @@ class AtmosRoomStore @Inject constructor(@ApplicationContext context: Context) {
         dir.listFiles { f -> f.isFile && f.name.endsWith(EXTENSION) }?.sortedBy { it.name.lowercase() } ?: emptyList()
 
     /**
-     * Reads a room out of a SOFA file's [sofa] bytes and keeps it as [name].
+     * Reads a room out of the SOFA file at [sofa] and keeps it as [name].
      * Null when the file holds no room the render can use (an HRTF set, an
      * anechoic measurement, a file the reader cannot open).
      */
-    suspend fun addMeasured(name: String, sofa: ByteArray): File? = withContext(Dispatchers.Default) {
+    suspend fun addMeasured(name: String, sofa: File): File? = withContext(Dispatchers.Default) {
         if (!AtmosNative.isAvailable) return@withContext null
-        val packed = runCatching { AtmosNative.nativePrepareRoomSofa(sofa) }.getOrNull()
+        val packed = runCatching { AtmosNative.nativePrepareRoomSofa(sofa.absolutePath) }.getOrNull()
         if (AtmosRoom.of(packed) == null) return@withContext null
         val file = File(dir, fileName(name))
         runCatching {

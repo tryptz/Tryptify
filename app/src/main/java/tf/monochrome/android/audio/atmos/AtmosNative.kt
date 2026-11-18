@@ -187,10 +187,11 @@ object AtmosNative {
     /**
      * A measured room out of a SOFA file of room impulse responses (BRIRs,
      * SRIRs, DRIRs), as a packed room ([tf.monochrome.android.domain.model.AtmosRoom]
-     * reads one). Null when the file cannot be read or holds no room. Slow:
-     * it parses the whole file. Never on the playback thread.
+     * reads one), read from the file at [path] where it is on disk. Null when
+     * the file cannot be read or holds no room. Slow: it parses the whole
+     * file. Never on the playback thread.
      */
-    external fun nativePrepareRoomSofa(sofa: ByteArray): FloatArray?
+    external fun nativePrepareRoomSofa(path: String): FloatArray?
 
     /**
      * A room worked out from its size in metres and the share of sound its

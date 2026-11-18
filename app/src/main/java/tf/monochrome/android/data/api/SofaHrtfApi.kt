@@ -50,10 +50,6 @@ class SofaHrtfApi {
             "6dof dataset", "bbc maida vale", "dechorate", "kaist-iem", "oldenburg", "pan-ar",
             "room transition dataset", "sbsbrir", "thk", "tu-ilmenau (robot)", "tu-ilmenau (rooms)", "tuburo",
         )
-        // Useful HRTF sets for this renderer are a few MB; anything past this is a
-        // dense-grid / BRIR set that would OOM the heap and downsample away anyway.
-        private const val MAX_SOFA_BYTES = 48L * 1024 * 1024
-
         /** The most a .sofa saved to a file may be: the finest sets in the collection are under 200 MB. */
         private const val MAX_SOFA_FILE_BYTES = 512L * 1024 * 1024
 
@@ -178,58 +174,6 @@ class SofaHrtfApi {
             Result.failure(e)
         } finally {
             if (part.exists()) part.delete()
-        }
-    }
-
-    /**
-     * Downloads a .sofa file's bytes. [path] is [BASE]-relative (encoded).
-     *
-     * Hard-capped at [MAX_SOFA_BYTES]: some databases hold hundreds-of-MB files
-     * (dense grids, BRIR sets) that OOM the heap and are useless here anyway —
-     * the loader resamples every HRTF to a fixed 36x6 grid. The cap is checked
-     * from Content-Length up front and enforced during the read (the header can
-     * be absent or wrong).
-     */
-    suspend fun download(path: String): Result<ByteArray> = withContext(Dispatchers.IO) {
-        // (An HRTF set goes to a file instead: see [downloadTo].)
-        try {
-            val conn = (URL(BASE + path).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000
-                readTimeout = 60000
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "Tryptify")
-            }
-            if (conn.responseCode != 200) {
-                return@withContext Result.failure(Exception("Server returned ${conn.responseCode}"))
-            }
-            val declared = conn.contentLengthLong
-            if (declared > MAX_SOFA_BYTES) {
-                return@withContext Result.failure(
-                    Exception("File is ${declared / (1024 * 1024)} MB — too large (max ${MAX_SOFA_BYTES / (1024 * 1024)} MB). Pick a smaller HRTF set.")
-                )
-            }
-            val out = java.io.ByteArrayOutputStream(
-                if (declared in 1..MAX_SOFA_BYTES) declared.toInt() else 1 shl 20
-            )
-            conn.inputStream.use { input ->
-                val buf = ByteArray(1 shl 16)
-                var total = 0L
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    total += n
-                    if (total > MAX_SOFA_BYTES) {
-                        return@withContext Result.failure(
-                            Exception("File exceeds ${MAX_SOFA_BYTES / (1024 * 1024)} MB — too large. Pick a smaller HRTF set.")
-                        )
-                    }
-                    out.write(buf, 0, n)
-                }
-            }
-            Result.success(out.toByteArray())
-        } catch (e: Exception) {
-            Log.e(TAG, "download('$path') failed", e)
-            Result.failure(e)
         }
     }
 
