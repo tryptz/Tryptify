@@ -102,6 +102,27 @@ class LogReportTest {
     }
 
     @Test
+    fun `every tag the app logs with is one the table's analysis knows as the app's`() {
+        // The analysis calls a tag's errors a fault only when the tag is in its list of the app's own
+        // (a sent log is full of Android's and the phone maker's). A tag missing there is never a headline.
+        val sql = File("../docs/supabase/log_reports.sql").readText()
+        val listed = Regex("'([^']+)'").findAll(sql.substringAfter("-- app-tags:begin").substringBefore("-- app-tags:end"))
+            .map { it.groupValues[1] }.toSet()
+        assertTrue("the list is empty", listed.size > 50)
+        val literal = Regex("""\bLog\.(?:v|d|i|w|e|wtf)\(\s*"([^"$\\]+)"""")
+        val constant = Regex("""\b(?:(?:\w+_)?TAG(?:_\w+)?)\s*(?::\s*String\s*)?=\s*"([A-Za-z][A-Za-z0-9_.\-]{1,39})"""")
+        val used = File("src/main/java").walkTopDown().filter { it.extension == "kt" || it.extension == "java" }
+            .flatMap { file -> file.readText().let { text -> (literal.findAll(text) + constant.findAll(text)).map { it.groupValues[1] } } }
+            .filter { Regex("[A-Za-z][A-Za-z0-9_.\\-]{1,39}").matches(it) }
+            .toSet()
+        assertTrue("found too few tags to trust the search: ${used.size}", used.size > 50)
+        assertEquals(
+            "tags the analysis does not know; run python3 tools/log_reports/app_tags.py and have the SQL run again",
+            emptySet<String>(), used - listed,
+        )
+    }
+
+    @Test
     fun `the last crash is read back as it was kept`() {
         val stack = "java.lang.IllegalStateException: boom\n\tat tf.monochrome.android.Foo.bar(Foo.kt:12)\n"
         val kept = parseLastCrash(formatLastCrash(1_763_460_000_000, "main", stack))!!

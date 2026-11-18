@@ -342,9 +342,21 @@ columns, the limit, the redaction and the exit names.
 ok), `headline` (the fault in a sentence), `signature` (the same for the same
 fault on another phone: group by it) and `analysis` (every finding, the
 exceptions, the tags that logged errors, `FrameStallLog`'s seconds by screen).
+A sent log is the whole process's logcat, so most of its errors are Android's,
+the phone maker's or a library's: the first report from a phone (2026-11-18)
+had OnePlus's `VibratorInfo` as its headline. So a tag's errors are a fault
+only when the tag is one the app's own code logs with, the list between the
+`app-tags` marks of that file, which `tools/log_reports/app_tags.py` writes
+from the source (`LogReportTest` fails when a tag is missing from it). An
+exception under anyone else's tag is kept as a note (`info`), after the
+app's own: it may still be the app's doing, as "unknown protocol:
+subsonic-cover" under Media3's tag was.
 The rules are in the database and not the app so they improve without a
-release: change the function, apply it as a migration, keep the file here the
-same, then run them over what is already there with
+release: change the function in the file and have the whole file run on the
+project again. The owner pastes it into the SQL editor: on 2026-11-18 the
+connector's approval question for a write never reached their screen, four
+times, so do not wait on one. The file ends by reading the newest 50 reports
+again with the new rules; for all of them,
 `update public.log_reports set analyzed_at = null;`. Prove a change first on a
 scratch database of any local Postgres, never on the project:
 `docs/supabase/log_reports_test.sql` stubs what Supabase gives, applies the

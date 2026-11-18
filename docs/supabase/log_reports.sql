@@ -64,16 +64,32 @@ stable
 set search_path = ''
 as $fn$
 declare
-    -- Tags of Android's own that warn and err on every phone, whatever the app does.
-    noise constant text[] := array[
-        'HWUI', 'BufferQueueConsumer', 'BufferQueueProducer', 'AudioSystem-JNI', 'VideoCapabilities',
-        'AudioCapabilities', 'libc', 'CCodec', 'CCodecConfig', 'CCodecBufferChannel', 'Codec2Client',
-        'LoudnessCodecController', 'InteractionJankMonitor', 'ImeBackCallbackProxy',
-        'RemoteInputConnectionImpl', 'DynamicsProcessing', 'AudioTrack', 'MediaCodec', 'OpenGLRenderer',
-        'SurfaceComposerClient', 'ViewRootImpl', 'InputMethodManager', 'InsetsController', 'WindowOnBackDispatcher',
-        'Choreographer', 'System', 'System.err', 'chromium', 'cr_WebView', 'ProfileInstaller', 'Parcel',
-        'FrameStall', 'LiveLog'
+    -- The tags the app's own code logs with. A sent log is the whole
+    -- process's logcat, and Android, the phone's maker and the libraries warn
+    -- and err in it on every phone: only these tags' errors are a fault.
+    -- app-tags:begin (written by tools/log_reports/app_tags.py, never by hand)
+    own constant text[] := array[
+        'AlbumArtFinder', 'AmbientComposite', 'AmbientVisualizer', 'ArtworkStoreMigration', 'AtmosPipeline',
+        'AtmosProcessor', 'AtmosRoom', 'AtmosSofaStore', 'AtmosTap', 'AtmosTrackProvider',
+        'AudioProcessorChain', 'ChartQueue', 'CrashLogger', 'CrtPresetStore', 'DebugScreenRecorder',
+        'DebugScreenRecordSvc', 'DeviceRegistry', 'DiscordPresence', 'DownloadManager', 'DownloadQueueWorker',
+        'DspEngineManager', 'DynamicRange', 'EqProcessor', 'EqRepository', 'FloatPcmGuard', 'FolderIndexer',
+        'FrameStall', 'GalaxyFx', 'GlyphAssets', 'GlyphAttempts', 'GlyphSongs', 'GlyphStyleLibrary',
+        'GlyphTvShader', 'GlyphViewModel', 'HeadphoneAutoEqApi', 'HiFiApiClient', 'ImportSync',
+        'IndexedFragMp4', 'LastFmAuth', 'LibraryRestore', 'LibraryWatcher', 'LibusbAudioSink',
+        'LibusbUacDriver', 'ListTrackLoader', 'LiveGlassLens', 'LiveLog', 'LogReport', 'LyricsCurvature',
+        'LyricsFx', 'LyricsResolver', 'MediaScanner', 'MonochromeDSP', 'MonochromeDSP_JNI', 'MonoPerf',
+        'MusicDatabase', 'MusicLinkPresetStore', 'OfflineMeasurements', 'OpenedAudio', 'PartyClient',
+        'PartyController', 'PartyService', 'PlaybackService', 'PlaybackState', 'PlayerViewModel', 'PlaySession',
+        'PoTokenProvider', 'PoTokenWebView', 'PresetCrashGuard', 'ProjectMAssetInstaller', 'ProjectMBridge',
+        'ProjectMEngineRepository', 'ProjectMNativeBridge', 'ProjectMOverlay', 'QueueForwardingPlayer',
+        'RadioQueueManager', 'RarNative', 'RoomClient', 'SafeClipboard', 'ScanCoordinator', 'Scrobbling',
+        'SearchViewModel', 'SettingsSync', 'ShareLinks', 'ShareShrinker', 'SofaHrtfApi', 'SongPreview',
+        'SourceDepthCodec', 'SquiglinkApi', 'StepManiaConversion', 'StreamResolver', 'SupabaseAuth',
+        'SupabaseSync', 'SystemAudioEq', 'TimedLyrics', 'TrackDownloader', 'TrackShareHelper',
+        'TryptifyConnect', 'TryptifyGlyph', 'TryptifyMotion', 'UsbExclusiveCtl', 'UsbJni', 'YoutubeOnDevice'
     ];
+    -- app-tags:end
     agg       jsonb;
     findings  jsonb := '[]'::jsonb;
     x         jsonb;
@@ -97,23 +113,22 @@ begin
             r.line, '^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})\s+(\d+)\s+\d+\s+([VDIWEFS])\s+([^:]+):\s?(.*)$') as m
         where m is not null
     ), tagged as (
-        select l.*,
-               (l.tag = any (noise) or l.tag like 'VRI[%' or l.tag like 'DynamicFramerate%'
-                   or l.tag like '%.android' or l.tag like 'Codec2%' or l.tag like 'C2%') as noisy
+        select l.*, not (l.tag = any (own)) as noisy
         from l
     ), exc as (
-        select t.n, t.tag, e[1] as cls, left(coalesce(e[2], ''), 200) as detail
+        select t.n, t.tag, t.noisy, e[1] as cls, left(coalesce(e[2], ''), 200) as detail
         from tagged t
         cross join lateral regexp_match(
             t.msg, '((?:[a-z_][a-z0-9_]*\.)+[A-Z][A-Za-z0-9_$]*(?:Exception|Error))(?::\s*(.*))?') as e
         where t.lvl in ('W', 'E', 'F') and e is not null and t.msg !~ '^\s*at\s'
     ), exc_g as (
-        select cls, count(*) as c, min(n) as first_n,
-               (array_agg(tag order by n))[1] as tag,
-               (array_agg(detail order by n))[1] as detail
-        from exc group by cls order by count(*) desc, min(n) limit 8
+        -- The app's own first: someone else's flood must not push them out of the eight.
+        select cls, count(*) as c, min(n) as first_n, bool_or(not noisy) as ours,
+               (array_agg(tag order by noisy, n))[1] as tag,
+               (array_agg(detail order by noisy, n))[1] as detail
+        from exc group by cls order by bool_or(not noisy) desc, count(*) desc, min(n) limit 8
     ), exc_w as (
-        select g.cls, g.c, g.tag, g.detail,
+        select g.cls, g.c, g.tag, g.detail, g.ours,
                (select substring(f.msg from '^\s*at\s+([^(]+\([^)]*\))')
                 from l f
                 where f.n > g.first_n and f.n <= g.first_n + 60 and f.msg ~ '^\s*at\s+tf\.monochrome\.'
@@ -150,7 +165,8 @@ begin
         'fatal_lines', (select count(*) from l where lvl = 'F'),
         'fatal_sample', (select left(msg, 200) from l where lvl = 'F' order by n limit 1),
         'exceptions', coalesce((select jsonb_agg(jsonb_build_object(
-            'class', cls, 'count', c, 'tag', tag, 'detail', detail, 'frame', frame) order by c desc) from exc_w), '[]'::jsonb),
+            'class', cls, 'count', c, 'tag', tag, 'detail', detail, 'frame', frame,
+            'ours', ours or frame is not null) order by (ours or frame is not null) desc, c desc) from exc_w), '[]'::jsonb),
         'error_tags', coalesce((select jsonb_agg(jsonb_build_object(
             'tag', tag, 'errors', e, 'warnings', w, 'sample', sample, 'noisy', noisy) order by e desc, w desc)
             from (select * from errs order by e desc, w desc limit 12) z), '[]'::jsonb),
@@ -222,11 +238,14 @@ begin
             'text', 'A fatal line in the log: ' || coalesce(agg ->> 'fatal_sample', ''));
     end if;
 
-    -- 2. Exceptions the log names, most frequent first.
+    -- 2. Exceptions the log names: the app's own (its tag, or its code in the
+    --    trace) first and as errors, most frequent first. One from anyone
+    --    else's tag is a note: it may be the app's doing (a bad address handed
+    --    to a library) or the phone's own business.
     for x in select e from jsonb_array_elements(agg -> 'exceptions') as e limit 5 loop
         top := regexp_replace(x ->> 'class', '^.*\.', '');
         findings := findings || jsonb_build_object(
-            'kind', 'error',
+            'kind', case when (x ->> 'ours')::boolean then 'error' else 'info' end,
             'key', 'exc:' || (x ->> 'class') || '@' || coalesce(split_part(x ->> 'frame', '(', 1), x ->> 'tag'),
             'count', (x ->> 'count')::integer,
             'text', top || ' x' || (x ->> 'count') || ' in ' || (x ->> 'tag')
@@ -261,7 +280,7 @@ begin
                 else '' end);
     end if;
 
-    -- 4. The app's own tags that logged errors, where no exception above already names the tag.
+    -- 4. The app's own tags that logged errors (never anyone else's), where no exception above already names the tag.
     for x in
         select e from jsonb_array_elements(agg -> 'error_tags') as e
         where not (e ->> 'noisy')::boolean and (e ->> 'errors')::integer > 0
@@ -332,3 +351,9 @@ drop trigger if exists log_reports_analyze on public.log_reports;
 create trigger log_reports_analyze
     before insert or update on public.log_reports
     for each row execute function public.log_reports_analyze();
+
+-- Running this file again is how the rules above reach the project, so it
+-- ends by reading the newest reports again with them (each update runs the
+-- analysis). Fifty, not all: a full log takes half a second.
+update public.log_reports set analyzed_at = null
+where id in (select id from public.log_reports order by id desc limit 50);

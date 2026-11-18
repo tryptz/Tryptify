@@ -26,7 +26,8 @@ insert into auth.users values ('00000000-0000-0000-0000-000000000001'), ('000000
 
 \i docs/supabase/log_reports.sql
 
--- An account writes its own report: an exception with its frames, slow seconds, a freeze, and Android's noise.
+-- An account writes its own report: an exception with its frames, slow seconds, a freeze, and what Android,
+-- the phone's maker and a library say in every log.
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 insert into public.log_reports (user_id, manufacturer, model, device, android_release, android_sdk, app_version,
@@ -41,7 +42,10 @@ $log$(12 earlier lines left out: the log was too long to send whole)
 11-18 10:00:00.012  1234  1300 E SupabaseSync: 	at io.ktor.client.Foo.bar(Foo.kt:3)
 11-18 10:00:00.013  1234  1300 E SupabaseSync: 	at tf.monochrome.android.data.sync.SupabaseSync.pushSettings(SupabaseSync.kt:212)
 11-18 10:00:01.011  1234  1300 E SupabaseSync: java.lang.IllegalStateException: no session
-11-18 10:00:02.000  1234  1234 E Downloads: could not write the file
+11-18 10:00:02.000  1234  1234 E DownloadManager: could not write the file
+11-18 10:00:02.100  1234  1234 E VibratorInfo: Invalid frequency profile received from HAL. resonantFrequencyHz=NaN, frequenciesHz=null
+11-18 10:00:02.200  1234  1234 E OplusPredictiveBackController:  NoSuchMethodException
+11-18 10:00:02.300  1234  1234 W NotificationProvider: Failed to load bitmap: androidx.media3.datasource.HttpDataSource$HttpDataSourceException: java.net.MalformedURLException: unknown protocol
 11-18 10:00:03.000  1234  1234 I FrameStall: slow second on lyrics: 64 frames, 30 over 16 ms, worst 88 ms; slow frames average app 6 sync 2 issue 31 swap 4 gpu 22 ms; drew lens 0 (0.0 Mpx) frost 2 (1.1 Mpx) slab 30 (9.0 Mpx) rays 64 curve 3
 11-18 10:00:04.000  1234  1234 I FrameStall: slow second on lyrics: 70 frames, 20 over 16 ms, worst 40 ms; slow frames average app 5 sync 2 issue 20 swap 4 gpu 19 ms; drew lens 0 (0.0 Mpx) frost 2 (1.1 Mpx) slab 30 (9.0 Mpx) rays 70 curve 3
 11-18 10:00:05.000  1234  1234 I FrameStall: slow second on home: 100 frames, 12 over 16 ms, worst 30 ms; slow frames average app 20 sync 2 issue 3 swap 4 gpu 5 ms; drew lens 0 (0.0 Mpx) frost 0 (0.0 Mpx) slab 3 (1.0 Mpx) rays 0 curve 0
@@ -79,18 +83,25 @@ do $$
 declare r public.log_reports;
 begin
     select * into strict r from public.log_reports where note = 'it stutters';
-    assert r.line_count = 13, 'lines: ' || r.line_count;
+    assert r.line_count = 16, 'lines: ' || r.line_count;
     assert r.severity = 'error', 'severity: ' || r.severity;
     assert r.signature = 'exc:java.lang.IllegalStateException@tf.monochrome.android.data.sync.SupabaseSync.pushSettings', r.signature;
     assert r.headline = 'IllegalStateException x2 in SupabaseSync at tf.monochrome.android.data.sync.SupabaseSync.pushSettings(SupabaseSync.kt:212): no session', r.headline;
     -- Slow drawing: the screen with most slow seconds, where the time went, the god rays, the freeze.
     assert r.analysis -> 'findings' @> '[{"kind": "stutter", "key": "stall:lyrics:gpu", "text": "3 slow seconds, most on lyrics (worst frame 88 ms; app 6 ms, gpu 21 ms: the drawing itself, god rays on); 1 freeze, longest 840 ms on equalizer"}]',
         (r.analysis -> 'findings')::text;
-    -- A tag of the app's own that logged an error and threw nothing is named; Android's noise and a tag an exception already names are not.
-    assert r.analysis -> 'findings' @> '[{"key": "err:Downloads"}]', 'the app''s own error tag is missing';
-    assert not r.analysis -> 'findings' @> '[{"key": "err:HWUI"}]', 'Android''s noise was reported';
-    assert not r.analysis -> 'findings' @> '[{"key": "err:SupabaseSync"}]', 'a tag was reported twice';
-    assert r.analysis -> 'levels' = '{"D": 1, "E": 7, "I": 4, "W": 1}', (r.analysis -> 'levels')::text;
+    -- A tag of the app's own that logged an error and threw nothing is named. A tag that is not the app's
+    -- never is, whatever it says (the first report from a phone had the maker's VibratorInfo as its headline),
+    -- nor one an exception already names.
+    assert r.analysis -> 'findings' @> '[{"key": "err:DownloadManager", "kind": "error"}]', 'the app''s own error tag is missing';
+    assert not exists (select from jsonb_array_elements(r.analysis -> 'findings') f
+                       where f ->> 'key' in ('err:HWUI', 'err:VibratorInfo', 'err:OplusPredictiveBackController', 'err:SupabaseSync')),
+        (r.analysis -> 'findings')::text;
+    -- An exception under someone else's tag is kept, as a note after the app's own: it may still be the app's doing.
+    assert r.analysis -> 'findings' -> 1 @> '{"kind": "info", "key": "exc:androidx.media3.datasource.HttpDataSource$HttpDataSourceException@NotificationProvider"}',
+        (r.analysis -> 'findings' -> 1)::text;
+    assert r.analysis -> 'levels' = '{"D": 1, "E": 9, "I": 4, "W": 2}', (r.analysis -> 'levels')::text;
+    assert (r.analysis ->> 'app_errors')::integer = 6, r.analysis ->> 'app_errors';
     -- A phone cannot write its own analysis: the row holds what the table worked out.
     assert r.analyzed_at is not null and r.created_at > now() - interval '1 minute';
 end $$;
@@ -122,6 +133,16 @@ begin
         'at_ms', (extract(epoch from now()) * 1000)::bigint, 'reason', 'LOW_MEMORY')), '{}', now());
     assert a ->> 'severity' = 'info', a ->> 'severity';
 
+    -- Only what is not the app's: nothing stands out, and no "NaN" from the phone's maker in the headline.
+    a := public.analyze_log_report(
+        '11-18 10:00:02.100  1234  1234 E VibratorInfo: Invalid frequency profile received from HAL. resonantFrequencyHz=NaN',
+        '[]', '{}', now());
+    assert a ->> 'severity' = 'ok' and a ->> 'headline' = 'Nothing stands out in this log', a ->> 'headline';
+    a := public.analyze_log_report(
+        '11-18 10:00:02.300  1234  1234 W NotificationProvider: Failed to load bitmap: java.net.MalformedURLException: unknown protocol: subsonic-cover',
+        '[]', '{}', now());
+    assert a ->> 'severity' = 'info' and a ->> 'headline' = 'MalformedURLException x1 in NotificationProvider: unknown protocol: subsonic-cover', a::text;
+
     -- Nothing in it, and shapes a phone should never send: still an answer, never an error.
     a := public.analyze_log_report('not a logcat line', '{"not": "an array"}', '{"last_crash": "text"}', now());
     assert a ->> 'severity' = 'ok' and a ->> 'signature' = 'none' and (a ->> 'lines')::integer = 0, a::text;
@@ -152,7 +173,7 @@ set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 insert into public.log_reports (user_id, manufacturer, model, android_release, android_sdk, app_version, app_version_code, log)
 values ('00000000-0000-0000-0000-000000000001', 'M', 'P', '16', 36, '1', 1,
-        '11-18 10:00:00.011  1234  1300 E Sync: java.net.SocketTimeoutException: timeout');
+        '11-18 10:00:00.011  1234  1300 E SupabaseSync: java.net.SocketTimeoutException: timeout');
 reset role;
 do $$
 declare r public.log_reports;
@@ -160,7 +181,7 @@ begin
     assert not exists (select from public.log_reports where note = 'it stutters'), 'a report older than 90 days was kept';
     update public.log_reports set headline = 'stale', analyzed_at = null where user_id = '00000000-0000-0000-0000-000000000001';
     select * into strict r from public.log_reports where user_id = '00000000-0000-0000-0000-000000000001';
-    assert r.headline = 'SocketTimeoutException x1 in Sync: timeout' and r.analyzed_at is not null, r.headline;
+    assert r.headline = 'SocketTimeoutException x1 in SupabaseSync: timeout' and r.severity = 'error' and r.analyzed_at is not null, r.headline;
 end $$;
 
 \echo log_reports: all held
