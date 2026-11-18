@@ -3389,7 +3389,7 @@
     <string name="whats_new_1952_player_menu_title">プレーヤーのメニューが曲のメニューに</string>
     <string name="whats_new_1952_player_menu_body">プレーヤーの ⋮ で、どのリストの曲にもあるのと同じメニューが開くようになりました。お気に入り、曲情報、Trypt Mania、キューもここから使えます。プレーヤー独自の操作（シャッフル、リピート、歌詞、ビジュアル、設定）は末尾にあります。</string>
     <string name="whats_new_1952_atmos_room_title">ヘッドホンでの Atmos：15.1.12 バーチャルルーム</string>
-    <string name="whats_new_1952_atmos_room_body">ヘッドホンでは、Atmos のオブジェクトとベッドが、あなたを囲む 27 個のバーチャルスピーカーと LFE から部屋の響きとともに再生され、固定の音量カットの代わりにリミッターが働きます。スイッチと部屋の響きの量は「設定 › オーディオ › Atmos レンダラーの設定」にあります。</string>
+    <string name="whats_new_1952_atmos_room_body">ヘッドホンでは、Atmos のオブジェクトとベッドが、あなたを囲む 27 個のバーチャルスピーカーと LFE から部屋の響きとともに再生されます。スイッチと部屋の響きの量は「設定 › オーディオ › Atmos レンダラーの設定」にあります。</string>
     <string name="whats_new_1952_atmos_decode_title">Atmos ミックスをミックスされた通りにデコード</string>
     <string name="whats_new_1952_atmos_decode_body">これまでストリームのオブジェクト更新の 4 分の 3 が見落とされ、オブジェクトの動きが遅れ、互いににじんでいました。すべての更新を読み取るようになり、サラウンドチャンネルの位相を戻し、スピーカーレンダリングが 3 dB 小さくなることもなくなりました。</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos は「6 ch」ではなくオブジェクトを表示</string>

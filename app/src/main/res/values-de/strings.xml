@@ -3467,7 +3467,7 @@
     <string name="whats_new_1952_player_menu_title">Das Player-Menü ist das Titelmenü</string>
     <string name="whats_new_1952_player_menu_body">Das ⋮ im Player öffnet jetzt dasselbe Menü, das ein Titel in jeder Liste hat: Favoriten, Titelinfo, Trypt Mania und die Warteschlange sind auch dabei. Die eigenen Aktionen des Players (Zufall, Wiederholen, Songtext, Visuals, Einstellungen) stehen am Ende.</string>
     <string name="whats_new_1952_atmos_room_title">Atmos über Kopfhörer: ein virtueller 15.1.12-Raum</string>
-    <string name="whats_new_1952_atmos_room_body">Über Kopfhörer spielen Atmos-Objekte und -Betten jetzt aus 27 virtuellen Lautsprechern und einem LFE um dich herum, in einem Raum, mit einem Limiter statt einer festen Pegelabsenkung. Den Schalter und den Raumanteil findest du unter Einstellungen › Audio › Atmos-Renderer-Konfiguration.</string>
+    <string name="whats_new_1952_atmos_room_body">Über Kopfhörer spielen Atmos-Objekte und -Betten jetzt aus 27 virtuellen Lautsprechern und einem LFE um dich herum, in einem Raum. Den Schalter und den Raumanteil findest du unter Einstellungen › Audio › Atmos-Renderer-Konfiguration.</string>
     <string name="whats_new_1952_atmos_decode_title">Atmos-Mixe werden so dekodiert, wie sie gemischt wurden</string>
     <string name="whats_new_1952_atmos_decode_body">Drei von vier Objekt-Updates eines Streams wurden übersehen, sodass Objekte sich verspätet bewegten und ineinander übersprachen. Jetzt wird jedes Update gelesen, die Surround-Kanäle werden in Phase zurückgedreht, und das Lautsprecher-Rendering ist nicht mehr 3 dB zu leise.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos zeigt seine Objekte, nicht „6 ch“</string>

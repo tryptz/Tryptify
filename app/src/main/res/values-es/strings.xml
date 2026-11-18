@@ -3545,7 +3545,7 @@
     <string name="whats_new_1952_player_menu_title">El menú del reproductor es el de las canciones</string>
     <string name="whats_new_1952_player_menu_body">El ⋮ del reproductor abre ahora el mismo menú que tiene una canción en cualquier lista, así que también están los favoritos, la información de la canción, Trypt Mania y la cola. Las acciones propias del reproductor (aleatorio, repetición, letras, visuales, ajustes) van al final.</string>
     <string name="whats_new_1952_atmos_room_title">Atmos con auriculares: una sala virtual 15.1.12</string>
-    <string name="whats_new_1952_atmos_room_body">Con auriculares, los objetos y las camas Atmos suenan ahora desde 27 altavoces virtuales y un LFE a tu alrededor, en una sala, con un limitador en lugar de un recorte fijo de nivel. El interruptor y la cantidad de sala están en Ajustes › Audio › Configuración del renderizador Atmos.</string>
+    <string name="whats_new_1952_atmos_room_body">Con auriculares, los objetos y las camas Atmos suenan ahora desde 27 altavoces virtuales y un LFE a tu alrededor, en una sala. El interruptor y la cantidad de sala están en Ajustes › Audio › Configuración del renderizador Atmos.</string>
     <string name="whats_new_1952_atmos_decode_title">Las mezclas Atmos se decodifican tal como se mezclaron</string>
     <string name="whats_new_1952_atmos_decode_body">Se perdían tres de cada cuatro actualizaciones de objetos de una transmisión, por lo que los objetos se movían tarde y se mezclaban entre sí. Ahora se lee cada actualización, los canales envolventes vuelven a su fase y el renderizado en altavoces ya no suena 3 dB más bajo.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos muestra sus objetos, no «6 ch»</string>

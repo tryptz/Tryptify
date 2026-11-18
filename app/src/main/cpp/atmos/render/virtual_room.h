@@ -10,7 +10,13 @@
 //                   |     -> diffuse-field equalizer
 //                   +-- LFE: 120 Hz low-pass, +10 dB, to both ears
 //                   +-- a shared late tail (feedback delay network)
-//                   -> headroom trim -> look-ahead limiter -> out
+//                   -> headroom trim -> out
+//
+// There is no limiter here (the owner's decision, 2026-11-18): the stage's
+// output is the mix at kTrim, and a mix that is too hot for that goes over
+// full scale as it is. The listener holds it with the tools made for that:
+// ReplayGain, the limiter in the audio tools, or one in the mixer. Do not
+// put one back in the render.
 //
 // The speakers never move, so each one's filter pair is made once, with its
 // interaural delay inside it (a windowed-sinc fractional delay; the moving
@@ -140,20 +146,15 @@ class VirtualRoom {
   static constexpr int kMaxItd = 62;  // samples, as hrir_renderer.h clamps it
   static constexpr int kIrLen = kHrirTaps + kMaxItd + kSincTaps;
   static_assert(kIrLen <= kFft - kBlock + 1, "a speaker's filter must fit the overlap");
-  // The limiter's look-ahead: its gain is the smallest needed over kLook
-  // samples, averaged over kLook more, so it is down before the peak is out.
-  static constexpr int kLook = 33;
-  static constexpr int kLookahead = kLook - 1;
-  static constexpr int kLatency = kSincDelay + kLookahead;
+  static constexpr int kLatency = kSincDelay;
   static constexpr int kMaxSpeakers = 32;
   static constexpr int kTypicalFrame = 1536;
 
   // The LFE channel plays 10 dB above a main channel (its in-band gain).
   static constexpr float kLfeGain = 3.16227766f;
   static constexpr float kLfeCutoffHz = 120.0f;
-  // Fixed headroom ahead of the limiter, and where the limiter holds peaks.
+  // Fixed headroom. Nothing holds peaks after it: see the top of the file.
   static constexpr float kTrim = 0.70794578f;    // -3 dB
-  static constexpr float kCeiling = 0.94406088f; // -0.5 dBFS
 
   // Allocates everything and builds the filters from the baked HRIR set.
   // `speakers` is the room, in the order of the feeds render() is given.
@@ -343,7 +344,7 @@ class VirtualRoom {
     publish(&kHrirData[0][0][0][0], &kHrirDelay[0][0][0], kDfe);
   }
 
-  // Clears every history (convolution, delays, the room, the limiter) without
+  // Clears every history (convolution, delays, the room) without
   // reallocating: a seek or a flush.
   void reset_history() {
     std::fill(hist_.begin(), hist_.end(), 0.0f);
@@ -361,12 +362,6 @@ class VirtualRoom {
     convolver_.reset();
     std::memset(align_, 0, sizeof(align_));
     align_pos_ = 0;
-    std::memset(look_l_, 0, sizeof(look_l_));
-    std::memset(look_r_, 0, sizeof(look_r_));
-    for (float& v : need_) v = 1.0f;
-    for (float& v : held_) v = 1.0f;
-    look_pos_ = 0;
-    release_gain_ = 1.0f;
   }
 
   // `feeds` is `n` frames of speaker_count() interleaved speaker feeds; `out`
@@ -553,7 +548,6 @@ class VirtualRoom {
   static constexpr float kTailDamp = 0.30f;
   static constexpr float kTailGain = 0.30f;     // at room = 1; see virtual_room_test
   static constexpr int kPredelay = 576;         // 12 ms at 48 kHz
-  static constexpr float kLimiterReleaseSeconds = 0.15f;
 
   struct FilterSet {
     std::vector<fft::Complex> spec;  // [speaker][ear][bin], scaled by 1/kFft
@@ -1050,7 +1044,6 @@ class VirtualRoom {
     int pre = static_cast<int>(kPredelay * (sample_rate_ / 48000.0) + 0.5);
     predelay_.assign(pre < 1 ? 1 : pre, 0.0f);
     predelay_pos_ = 0;
-    release_coef_ = 1.0f - std::exp(-1.0f / (kLimiterReleaseSeconds * sample_rate_));
   }
 
   // ── A block ──────────────────────────────────────────────────────────────
@@ -1214,7 +1207,8 @@ class VirtualRoom {
         l += tail_g * tl;
         r += tail_g * tr;
       }
-      limit(l * kTrim, r * kTrim, out[2 * i], out[2 * i + 1]);
+      out[2 * i] = l * kTrim;
+      out[2 * i + 1] = r * kTrim;
     }
   }
 
@@ -1244,35 +1238,6 @@ class VirtualRoom {
     }
     l *= 0.5f;
     r *= 0.5f;
-  }
-
-  // Look-ahead peak limiter, both ears on one gain. The gain a sample needs
-  // is held at its smallest over kLook samples, let back up slowly, and
-  // averaged over kLook, so the output never passes kCeiling and the gain
-  // never steps.
-  void limit(float l, float r, float& out_l, float& out_r) {
-    const float al = l < 0.0f ? -l : l, ar = r < 0.0f ? -r : r;
-    const float peak = al > ar ? al : ar;
-    const int p = look_pos_;
-    need_[p] = peak > kCeiling ? kCeiling / peak : 1.0f;
-    float low = 1.0f;
-    for (int k = 0; k < kLook; ++k) if (need_[k] < low) low = need_[k];
-    release_gain_ += release_coef_ * (1.0f - release_gain_);
-    if (low < release_gain_) release_gain_ = low;
-    held_[p] = release_gain_;
-    // A running sum would drift; the window is short enough to add up.
-    float sum = 0.0f;
-    for (int k = 0; k < kLook; ++k) sum += held_[k];
-    const float mean = sum * (1.0f / kLook);
-    const float gain = mean < 1.0f ? mean : 1.0f;
-    look_l_[p] = l;
-    look_r_[p] = r;
-    // The next slot holds the sample from kLookahead ago: every gain in the
-    // average was held down for it.
-    const int at = p + 1 == kLook ? 0 : p + 1;
-    out_l = look_l_[at] * gain;
-    out_r = look_r_[at] * gain;
-    look_pos_ = at;
   }
 
   int sample_rate_ = 48000;
@@ -1339,13 +1304,6 @@ class VirtualRoom {
   // mono, LFE and the dry pair, kSincDelay samples behind.
   float align_[kSincDelay][4] = {};
   int align_pos_ = 0;
-
-  // The limiter.
-  float look_l_[kLook] = {}, look_r_[kLook] = {};
-  float need_[kLook], held_[kLook];
-  int look_pos_ = 0;
-  float release_gain_ = 1.0f;
-  float release_coef_ = 0.0f;
 };
 
 }  // namespace render

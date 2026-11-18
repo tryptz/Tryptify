@@ -164,7 +164,7 @@ void test_graph_is_what_plays() {
   plain.ear_curve(EarTune{}, -45.0f, 60.0f, 0, hz, 4, base);
   tuned.ear_curve(t, -45.0f, 60.0f, 0, hz, 4, with);
   for (int i = 0; i < 4; ++i) {
-    // The room adds the same equalizer and limiter trim to both: the change is what is compared.
+    // The room adds the same equalizer and trim to both: the change is what is compared.
     const double played = level_db(b, 0, hz[i]) - level_db(a, 0, hz[i]);
     CHECK_NEAR(with[i] - base[i], played, 0.25);
   }

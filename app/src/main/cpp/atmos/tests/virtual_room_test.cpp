@@ -210,7 +210,7 @@ void test_null() {
     std::vector<float> eq(kDfeTaps);
     room.active_equalizer(eq.data());
     double s1 = 0.0, s2 = 0.0;
-    for (int n = 0; n + VirtualRoom::kLookahead < total; ++n) {
+    for (int n = 0; n < total; ++n) {
       double z = 0.0;
       const int jmax = n < kDfeTaps - 1 ? n : kDfeTaps - 1;
       for (int j = 0; j <= jmax; ++j) z += eq[j] * y[n - j];
@@ -220,7 +220,7 @@ void test_null() {
       s1 = shelf[1] * x - shelf[3] * z + s2;
       s2 = shelf[2] * x - shelf[4] * z;
       z *= VirtualRoom::kTrim;
-      const double d = std::fabs(got[2 * (n + VirtualRoom::kLookahead) + ear] - z);
+      const double d = std::fabs(got[2 * n + ear] - z);
       if (d > worst) worst = d;
       if (std::fabs(z) > peak) peak = std::fabs(z);
     }
@@ -229,8 +229,6 @@ void test_null() {
     CHECK(peak > 0.01);
     CHECK(worst < 1e-4 * peak);
   }
-  // Nothing comes out before the stage's delay.
-  for (int i = 0; i < 2 * VirtualRoom::kLookahead; ++i) CHECK(got[i] == 0.0f);
 }
 
 void test_sides() {
@@ -390,8 +388,11 @@ void test_room() {
   CHECK(std::fabs(cross) / std::sqrt(tl * tr) < 0.5);
 }
 
-void test_limiter() {
-  std::printf("-- the limiter\n");
+// The stage has no limiter: what is too loud comes out too loud, the same
+// sound as when it is quiet. Holding it is the listener's, with ReplayGain or
+// a limiter of their choosing.
+void test_no_limiter() {
+  std::printf("-- no limiter\n");
   const std::vector<RoomSpeaker> v = room_layout();
   const int count = static_cast<int>(v.size());
   VirtualRoom room;
@@ -407,13 +408,22 @@ void test_limiter() {
     for (int s = 0; s < count; ++s) feeds[static_cast<size_t>(i) * count + s] = level * noise.next();
   }
   const std::vector<float> out = run(room, feeds, count, {1536, 300, 77});
-  float peak = 0.0f, step = 0.0f;
+  float peak = 0.0f;
   for (int i = 0; i < 2 * total; ++i) peak = std::fmax(peak, std::fabs(out[i]));
-  for (int i = 2; i < 2 * total; ++i) step = std::fmax(step, std::fabs(out[i] - out[i - 2]));
-  std::printf("   peak %.4f (ceiling %.4f)\n", peak, VirtualRoom::kCeiling);
-  CHECK(peak <= VirtualRoom::kCeiling * 1.00001f);
-  CHECK(peak > 0.8f * VirtualRoom::kCeiling);
+  std::printf("   peak %.4f, over full scale and let through\n", peak);
+  CHECK(peak > 1.5f);
   for (int i = 0; i < 2 * total; ++i) CHECK(dspIsFinite(out[i]));
+  // And it is the quiet render made louder, sample for sample: no gain moves.
+  std::vector<float> quiet = feeds;
+  for (float& v : quiet) v *= 0.01f;
+  VirtualRoom again;
+  again.configure(48000, v);
+  again.set_params(1.0f, 1.0f);
+  const std::vector<float> low = run(again, quiet, count, {1536, 300, 77});
+  double worst = 0.0;
+  for (int i = 0; i < 2 * total; ++i) worst = std::fmax(worst, std::fabs(out[i] - 100.0 * low[i]));
+  std::printf("   against the same render 40 dB down: worst difference %.2e\n", worst);
+  CHECK(worst < 1e-3 * peak);
 }
 
 void test_reset_and_silence() {
@@ -634,7 +644,7 @@ int main() {
   test_lfe();
   test_dry_and_bass();
   test_room();
-  test_limiter();
+  test_no_limiter();
   test_reset_and_silence();
   test_low_end();
   test_tone_correction();

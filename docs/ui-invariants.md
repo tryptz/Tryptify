@@ -3409,6 +3409,14 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   itself, so it needs no reduce-motion case.
 - The LFE has no place in a mix: its speaker is drawn on the floor under the
   screen, and an LFE object gets no dot.
+- **The Atmos render has no limiter** (the owner's decision, 2026-11-18;
+  `render/virtual_room.h`). The headphone room's output is the mix 3 dB
+  down (`kTrim`) and nothing holds its peaks: a mix too hot for that goes
+  over full scale. Holding it is the listener's choice of tool, ReplayGain,
+  the limiter in the audio tools or one in the mixer, and a second limiter
+  ahead of those was one they could not switch off. Do not put one back.
+  `virtual_room_test` holds that a loud render is the quiet one made louder,
+  sample for sample. The stage's delay is 7 samples now, not 39.
 - **The Atmos page is five headed sections, in this order** (the owner
   asked for it "more organized"; offered folding sections too, and chose
   headings with everything in view, as the rest of Settings is): Channel

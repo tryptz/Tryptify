@@ -3467,7 +3467,7 @@
     <string name="whats_new_1952_player_menu_title">Oynatıcının menüsü artık parça menüsü</string>
     <string name="whats_new_1952_player_menu_body">Oynatıcının ⋮ düğmesi artık her listedeki bir parçanın menüsünün aynısını açıyor; beğenme, parça bilgisi, Trypt Mania ve sıra da burada. Oynatıcıya özgü işlemler (karıştır, tekrarla, şarkı sözleri, görseller, ayarlar) en sonda.</string>
     <string name="whats_new_1952_atmos_room_title">Kulaklıkta Atmos: 15.1.12 sanal oda</string>
-    <string name="whats_new_1952_atmos_room_body">Kulaklıkta Atmos nesneleri ve yatakları artık çevrenizdeki 27 sanal hoparlörden ve bir LFE\'den, bir oda içinde, sabit bir seviye kesintisi yerine sınırlayıcıyla çalınır. Anahtar ve oda miktarı Ayarlar › Ses › Atmos oluşturucu yapılandırması içindedir.</string>
+    <string name="whats_new_1952_atmos_room_body">Kulaklıkta Atmos nesneleri ve yatakları artık çevrenizdeki 27 sanal hoparlörden ve bir LFE\'den, bir oda içinde çalınır. Anahtar ve oda miktarı Ayarlar › Ses › Atmos oluşturucu yapılandırması içindedir.</string>
     <string name="whats_new_1952_atmos_decode_title">Atmos miksleri mikslendiği gibi çözülüyor</string>
     <string name="whats_new_1952_atmos_decode_body">Bir akıştaki nesne güncellemelerinin dörtte üçü kaçırılıyordu; bu yüzden nesneler geç hareket ediyor ve birbirine karışıyordu. Artık her güncelleme okunuyor, surround kanalları yeniden faza getiriliyor ve hoparlör işlemesi 3 dB kısık değil.</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos “6 ch” değil, nesnelerini gösteriyor</string>

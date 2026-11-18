@@ -3389,7 +3389,7 @@
     <string name="whats_new_1952_player_menu_title">播放器菜单与歌曲菜单一致</string>
     <string name="whats_new_1952_player_menu_body">播放器的 ⋮ 现在打开的菜单与各列表中歌曲的菜单相同，因此也能在这里点赞、查看歌曲信息、进入 Trypt Mania 和加入队列。播放器自己的操作（随机播放、循环、歌词、视觉效果、设置）排在最后。</string>
     <string name="whats_new_1952_atmos_room_title">耳机上的 Atmos：15.1.12 虚拟房间</string>
-    <string name="whats_new_1952_atmos_room_body">使用耳机时，Atmos 对象和声床现在从你周围的 27 个虚拟扬声器和一个 LFE 播放，带有房间感，并用限幅器取代固定的音量削减。开关和房间感的多少在“设置 › 音频 › Atmos 渲染器配置”中。</string>
+    <string name="whats_new_1952_atmos_room_body">使用耳机时，Atmos 对象和声床现在从你周围的 27 个虚拟扬声器和一个 LFE 播放，带有房间感。开关和房间感的多少在“设置 › 音频 › Atmos 渲染器配置”中。</string>
     <string name="whats_new_1952_atmos_decode_title">Atmos 混音按原样解码</string>
     <string name="whats_new_1952_atmos_decode_body">此前流中四分之三的对象更新被漏掉，导致对象移动滞后并相互串音。现在每次更新都会读取，环绕声道的相位被转回，扬声器渲染也不再低 3 dB。</string>
     <string name="whats_new_1952_atmos_objects_title">Atmos 显示它的对象，而不是“6 ch”</string>
