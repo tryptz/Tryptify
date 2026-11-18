@@ -330,8 +330,9 @@ the log itself, the newest 2,000,000 characters of it. A crash is never in the
 log, which starts with the process it is sent from; that is what the exits and
 the last crash are for.
 
-The table and its rules are `docs/supabase/log_reports.sql` (migration
-`log_reports`). An account may insert and nothing else: it cannot read a
+The table and its rules are `docs/supabase/log_reports.sql`, run whole in the
+project's SQL editor on 2026-11-18 (it is not in the migration list, and is
+safe to run again). An account may insert and nothing else: it cannot read a
 report, its own included. Ten an account a day (the eleventh is HTTP 429), and
 a report is kept 90 days. `LogReportTest` holds the row to the table's
 columns, the limit, the redaction and the exit names.
