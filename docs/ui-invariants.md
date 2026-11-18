@@ -153,6 +153,16 @@ no album art behind it and takes none, so it is the page blurred to soft
 colour under the theme's tint, not the player's colours. `FrostedPaneTest`
 reads each call.
 
+**A frosted pane's glass holds still** (`playerGlass(moves = false)`: every
+`GlassPanel(frosted = true)`, so the song menu and every overlay dialog, the
+audio pipeline, speed and devices sheets, and the audio tools sheet). Its
+slab does not follow the surface motion clock, so it is drawn once and kept
+rather than re-run over the whole pane on every frame. With the motion on,
+the three-dot menu and the audio tools sheet held the app at 100 to 120 fps
+on a 165 Hz phone with the visualizer off (the owner, 2026-11-18, after the
+blur below was already cut). The rim and the press dome still answer. Do not
+give a frosted pane its motion back.
+
 **A frosted pane blurs its backdrop small** (`frostInputScale`, Haze's
 `inputScale`, set in `glassFrost`). Haze blurs what is behind a pane again
 whenever that moves, and behind the player's sheets it always moves. At full

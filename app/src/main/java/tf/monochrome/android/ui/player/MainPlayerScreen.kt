@@ -980,7 +980,12 @@ private fun StatusOverlayPanel(
             androidx.compose.foundation.Canvas(
                 modifier = Modifier
                     .matchParentSize()
-                    .playerGlass(tint = glassTint, lensCorner = tf.monochrome.android.ui.theme.MonoDimens.radiusLg)
+                    .playerGlass(
+                        tint = glassTint,
+                        lensCorner = tf.monochrome.android.ui.theme.MonoDimens.radiusLg,
+                        // A sheet of text over the player: its glass holds still (playerGlass's `moves`).
+                        moves = false,
+                    )
                     .graphicsLayer {
                         compositingStrategy =
                             androidx.compose.ui.graphics.CompositingStrategy.Offscreen

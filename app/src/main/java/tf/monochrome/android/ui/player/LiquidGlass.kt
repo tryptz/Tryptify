@@ -776,12 +776,22 @@ internal fun Modifier.playerGlass(
      * the rim light, so the bent backdrop is what shows through.
      */
     liveUnder: Boolean = false,
+    /**
+     * False for a large pane of text over a page: a menu, a dialog, a sheet.
+     * Its surface does not move with the clock, so its glass is drawn once and
+     * kept, instead of re-run over its whole area on every frame. A menu's
+     * glass at the player's surface motion cost the app a quarter to a third
+     * of its frame rate (the owner, 2026-11-18: 165 fps down to 100 to 120
+     * with the three-dot menu or the audio tools sheet open, visualizer off).
+     * The rim and the press dome still answer; only the slow drift is gone.
+     */
+    moves: Boolean = true,
 ): Modifier {
     val g = LocalPlayerGlass.current
     if (LocalLowPerformance.current.disableLiquidGlass) return this
     if (!g.enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     return this.then(
-        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner, liveUnder),
+        playerGlassModifier(tint, g, bulgeCenter, bulgeAmount, bulgeRadiusFraction, artFrame, lensCorner, liveUnder, moves),
     )
 }
 
@@ -796,6 +806,7 @@ private fun playerGlassModifier(
     artFrame: BackdropAnchor?,
     lensCorner: Dp,
     liveUnder: Boolean,
+    moves: Boolean,
 ): Modifier {
     val shader = liquidGlassShader ?: return Modifier
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
@@ -803,7 +814,7 @@ private fun playerGlassModifier(
     // scaled by uLiquid, so at zero it renders identically frame to frame and
     // has no reason to drive a clock. This is the mini player, mounted app-wide
     // by the nav host, so the gate reaches every screen.
-    val timeSec = rememberFrameSeconds(animated = base.surfaceMotion > 0f)
+    val timeSec = rememberFrameSeconds(animated = moves && base.surfaceMotion > 0f)
     // The same argument for the sensor. Every uTilt term in the shader is
     // multiplied by uTiltAmount, and tilt reactivity defaults to zero, so at
     // the default this surface's pixels do not depend on the phone's attitude

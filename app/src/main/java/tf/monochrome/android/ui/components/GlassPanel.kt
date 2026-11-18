@@ -348,9 +348,11 @@ internal fun BoxScope.GlassMaterial(
                             bulgeRadiusFraction = GlassPressDefaults.BULGE,
                             lensCorner = corner,
                             liveUnder = liveLens,
+                            moves = !frosted,
                         )
                     } else {
-                        Modifier.playerGlass(tint = tint, lensCorner = corner, liveUnder = liveLens)
+                        // A frosted pane is a menu, a dialog or a sheet: its glass holds still (playerGlass's `moves`).
+                        Modifier.playerGlass(tint = tint, lensCorner = corner, liveUnder = liveLens, moves = !frosted)
                     },
                 )
                 // One offscreen layer, so a punch clears only the slab and
