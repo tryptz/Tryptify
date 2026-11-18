@@ -28,6 +28,7 @@ import androidx.compose.runtime.withFrameNanos
 import tf.monochrome.android.ui.glyph.LocalAppTvShader
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
@@ -684,7 +685,14 @@ fun Modifier.glassFrost(
     isDark: Boolean = ground.luminance() <= 0.5f,
 ): Modifier {
     val linked = rememberLinkedGlass(glass)
-    return hazeEffect(
+    // Counted for the frame log (FrameStallLog): a frosted pane redraws when
+    // what is behind it moves, and this is drawn each time it does.
+    return drawBehind {
+        tf.monochrome.android.debug.FrameStallLog.drew(
+            tf.monochrome.android.debug.FrameStallLog.Effect.FROST,
+            (size.width * size.height).toLong(),
+        )
+    }.hazeEffect(
         state = state,
         style = dev.chrisbanes.haze.HazeStyle(
             backgroundColor = ground,
@@ -990,7 +998,10 @@ private fun liquidGlassEffect(
     } else {
         setNoRayLight(shader)
     }
-    tf.monochrome.android.debug.FrameStallLog.drew(tf.monochrome.android.debug.FrameStallLog.Effect.SLAB)
+    tf.monochrome.android.debug.FrameStallLog.drew(
+        tf.monochrome.android.debug.FrameStallLog.Effect.SLAB,
+        (size.width * size.height).toLong(),
+    )
     return RenderEffect.createRuntimeShaderEffect(shader, "content").asComposeRenderEffect()
 }
 

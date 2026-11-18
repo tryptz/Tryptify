@@ -290,9 +290,11 @@ in it "slow second on atmos_renderer: 41 frames, 30 over 16 ms, worst 88
 ms; slow frames average app 6 sync 2 issue 31 swap 4 gpu 22 ms". Much time
 in issue, swap or gpu with little in app is the drawing itself (an effect,
 a blur, a shader); much in app is the app's code. The line ends with what
-was at work in that second: how many times the live lens drew a pane and
-how many megapixels it blurred and bent, and how many times the slab's, the
-god rays' and the lyric curve's effects were built again (`FrameStallLog.drew`).
+was at work in that second: how many times the live lens drew a pane, a
+frosted pane (`glassFrost`) drew, and the slab's, the god rays' and the
+lyric curve's effects were built again, with the megapixels the lens, the
+frost and the slab covered (`FrameStallLog.drew`). A full-screen pane is
+about 3.5 Mpx a frame on the owner's phone.
 A count near the frame count means that effect ran every frame. It is how a reported
 stutter is read from a session before anyone names a cause: on 2026-11-14
 "compiling on first run" was named for a stutter at every new glass pane

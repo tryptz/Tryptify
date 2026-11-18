@@ -47,21 +47,22 @@ object FrameStallLog : Choreographer.FrameCallback {
     @Volatile private var running = false
 
     /** The effects that cost the GPU, each counted while the log runs: which were at work in a slow second. */
-    enum class Effect { LENS, SLAB, RAYS, CURVE }
+    enum class Effect { LENS, SLAB, RAYS, CURVE, FROST }
 
     private val drawn = java.util.concurrent.atomic.AtomicIntegerArray(Effect.entries.size)
-    private val lensPixels = java.util.concurrent.atomic.AtomicLong()
+    private val pixels = java.util.concurrent.atomic.AtomicLongArray(Effect.entries.size)
 
     /**
      * An effect was drawn or made anew just now: the live lens once for each
-     * pane it draws (with the [pixels] it blurs and bends), the others once
-     * for each time their effect is built again. Costs one check when the
-     * log is off.
+     * pane it draws, a frosted pane once for each time it draws, the others
+     * once for each time their effect is built again; each with the [area] in
+     * pixels it covers, where it is known, since a shader's cost is its area.
+     * Costs one check when the log is off.
      */
-    fun drew(effect: Effect, pixels: Long = 0L) {
+    fun drew(effect: Effect, area: Long = 0L) {
         if (!running) return
         drawn.incrementAndGet(effect.ordinal)
-        if (pixels > 0L) lensPixels.addAndGet(pixels)
+        if (area > 0L) pixels.addAndGet(effect.ordinal, area)
     }
     private var lastNanos = 0L
     private var thread: HandlerThread? = null
@@ -92,15 +93,18 @@ object FrameStallLog : Choreographer.FrameCallback {
         }
         if (now - secondStart >= 1_000_000_000L) {
             val counts = IntArray(Effect.entries.size) { drawn.getAndSet(it, 0) }
-            val megapixels = lensPixels.getAndSet(0L) / 1_000_000.0
+            val megapixels = DoubleArray(Effect.entries.size) { pixels.getAndSet(it, 0L) / 1_000_000.0 }
+            fun mpx(e: Effect) = "%.1f".format(java.util.Locale.US, megapixels[e.ordinal])
             if (slow >= FEW || worst >= STALL_MS) {
                 fun avg(i: Int) = (parts[i] / slow).toInt()
                 Log.i(
                     TAG,
                     "slow second on $screen: $frames frames, $slow over ${SLOW_MS.toInt()} ms, worst ${worst.toInt()} ms; " +
                         "slow frames average app ${avg(0)} sync ${avg(1)} issue ${avg(2)} swap ${avg(3)} gpu ${avg(4)} ms; " +
-                        "drew lens ${counts[0]} (${"%.1f".format(java.util.Locale.US, megapixels)} Mpx) " +
-                        "slab ${counts[1]} rays ${counts[2]} curve ${counts[3]}",
+                        "drew lens ${counts[Effect.LENS.ordinal]} (${mpx(Effect.LENS)} Mpx) " +
+                        "frost ${counts[Effect.FROST.ordinal]} (${mpx(Effect.FROST)} Mpx) " +
+                        "slab ${counts[Effect.SLAB.ordinal]} (${mpx(Effect.SLAB)} Mpx) " +
+                        "rays ${counts[Effect.RAYS.ordinal]} curve ${counts[Effect.CURVE.ordinal]}",
                 )
             }
             secondStart = now
@@ -141,6 +145,16 @@ object FrameStallLog : Choreographer.FrameCallback {
 
     override fun doFrame(frameTimeNanos: Long) {
         if (!running) return
+        // Not on screen, the phone hands out frames when it likes (one every
+        // 250 ms or so on the owner's): that is not a stall. A live log on
+        // 2026-11-18 had dozens of "no frame for 250 ms on home" from the app
+        // sitting in the background. The gap starts again when it is back.
+        val shown = window?.get()?.decorView?.windowVisibility == android.view.View.VISIBLE
+        if (!shown) {
+            lastNanos = 0L
+            Choreographer.getInstance().postFrameCallback(this)
+            return
+        }
         val gap = if (lastNanos == 0L) 0L else (frameTimeNanos - lastNanos) / 1_000_000
         lastNanos = frameTimeNanos
         if (gap >= STALL_MS) Log.i(TAG, "no frame for $gap ms on $screen")
