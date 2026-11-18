@@ -3393,6 +3393,23 @@ is drawn over the CRT's layer, not in it, and takes no touches. The
 visualizer's surface is not the window's and keeps its own counter (Settings ›
 Visualizer › Show FPS).
 
+### Send logs
+
+**Send logs is the last row of Settings › System, and the row sends nothing.**
+It is the one row on that page that takes anything off the phone, so it sits
+under everything else in Diagnostics (`SendLogsRow`). Tapping it opens an
+opaque `AlertDialog` (a dialog is opaque; see Glass) that says what is sent
+(`settings_send_logs_warning`: the log, the account, the phone, the versions,
+how the app last closed, what is taken out, what may still be in it, how long
+it is kept and who reads it) over an optional note. Only its Send button
+sends. Do not send from the row, do not add a "don't ask again", and do not
+shorten the warning to fit: it scrolls.
+
+Signed out, the row says so in a toast and opens nothing. While a log is being
+sent the row's second line says so and the row takes no tap; each outcome is a
+toast, said once, and the note is kept until a send succeeds, so one that
+failed is not written twice.
+
 ### First-run setup
 
 Setup (`ui/onboarding/OnboardingScreen.kt`) keeps the app's own look, the

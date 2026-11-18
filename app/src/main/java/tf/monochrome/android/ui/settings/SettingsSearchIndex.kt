@@ -289,6 +289,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry("Debug log", R.string.settings_view_debug_log, "System", listOf("logs", "diagnostics", "report", "crash"))
         .at(SettingsDestination.Route("debug_log")),
     entry("Save crash reports", R.string.settings_save_crash_reports, "System", listOf("crash", "anr", "freeze", "diagnostics", "report", "privacy", "downloads", "log")),
+    entry("Send logs", R.string.settings_send_logs, "System", listOf("log", "report", "bug", "problem", "crash", "developer", "diagnostics", "support", "privacy")),
     entry("Backup and restore", R.string.settings_backup_restore, "System", listOf("export", "import", "settings", "transfer")),
     entry("Clear cache", R.string.settings_clear_cache, "System", listOf("storage", "space", "images")),
     entry("Check for updates", R.string.settings_check_for_updates, "System", listOf("update", "version", "github", "release", "newer")),

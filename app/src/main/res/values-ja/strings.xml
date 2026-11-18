@@ -1907,6 +1907,16 @@
     <string name="settings_save_crash_reports">クラッシュレポートを保存</string>
     <string name="settings_save_crash_reports_on">クラッシュやフリーズが起きると「ダウンロード」フォルダに .log ファイルを保存します。不具合の報告に添付できます。</string>
     <string name="settings_save_crash_reports_off">オフ：クラッシュしても「ダウンロード」フォルダにファイルは残りません。</string>
+    <string name="settings_send_logs">ログを送信</string>
+    <string name="settings_send_logs_desc">問題の調査のため、アプリのログを開発者に送信します。送信前に、何が送られるかを表示します。</string>
+    <string name="settings_send_logs_warning">アプリを最後に起動してからのログ（最大 2 MB）を Tryptify の開発者に送信します。あなたのアカウント、端末の機種、Android のバージョン、アプリのバージョン、アプリが前回どのように終了したか（クラッシュの詳細を含む）も一緒に送られます。サインイン情報、トークン、パスワードは事前に取り除かれます。ただし、再生した曲、ファイルやフォルダ、利用しているサーバーの名前はログに含まれることがあります。ログは 90 日間保存され、開発者と、開発者が分析に使うツールだけが読めます。</string>
+    <string name="settings_send_logs_note">何が起きましたか？（任意）</string>
+    <string name="settings_send_logs_send">送信</string>
+    <string name="settings_send_logs_sending">ログを送信中…</string>
+    <string name="settings_send_logs_sent">ログを送信しました。ありがとうございます！</string>
+    <string name="settings_send_logs_signed_out">ログを送信するには、アカウントページでサインインしてください</string>
+    <string name="settings_send_logs_failed">ログを送信できませんでした。接続を確認して、もう一度お試しください。</string>
+    <string name="settings_send_logs_too_many">1 日に送信できるログは 10 件までです。明日もう一度お試しください。</string>
     <string name="sort_file_name">ファイル名</string>
     <string name="sort_year">年</string>
     <string name="sort_date_modified">更新日時</string>

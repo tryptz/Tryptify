@@ -2009,6 +2009,16 @@
     <string name="settings_save_crash_reports">Guardar informes de fallos</string>
     <string name="settings_save_crash_reports_on">Un fallo o bloqueo se guarda en Descargas como archivo .log, para adjuntarlo a un informe de error.</string>
     <string name="settings_save_crash_reports_off">Desactivado: un fallo no deja ningún archivo en Descargas.</string>
+    <string name="settings_send_logs">Enviar registros</string>
+    <string name="settings_send_logs_desc">Envía el registro de la app al desarrollador para investigar un problema. Verás qué se envía antes de que nada salga del teléfono.</string>
+    <string name="settings_send_logs_warning">Esto envía el registro de la app desde su último inicio (hasta 2 MB) al desarrollador de Tryptify, con tu cuenta, el modelo de tu teléfono, su versión de Android, la versión de la app y cómo se cerró la app la última vez, con los detalles de un fallo. Antes se quitan los inicios de sesión, tokens y contraseñas. Aun así, el registro puede nombrar lo que has escuchado, tus archivos y carpetas, y los servidores que usas. Se conserva 90 días, y solo pueden leerlo el desarrollador y las herramientas que usa para analizarlo.</string>
+    <string name="settings_send_logs_note">¿Qué ha fallado? (opcional)</string>
+    <string name="settings_send_logs_send">Enviar</string>
+    <string name="settings_send_logs_sending">Enviando el registro…</string>
+    <string name="settings_send_logs_sent">Registro enviado. ¡Gracias!</string>
+    <string name="settings_send_logs_signed_out">Inicia sesión en la página Cuenta para enviar un registro</string>
+    <string name="settings_send_logs_failed">No se envió el registro. Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="settings_send_logs_too_many">Has enviado 10 registros en un día, que es el límite. Inténtalo de nuevo mañana.</string>
     <string name="sort_file_name">Nombre de archivo</string>
     <string name="sort_year">Año</string>
     <string name="sort_date_modified">Fecha de modificación</string>

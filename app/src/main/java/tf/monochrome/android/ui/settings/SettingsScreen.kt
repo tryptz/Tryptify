@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.settings
 
+import tf.monochrome.android.debug.LogReport
 import tf.monochrome.android.ui.components.UiText
 import tf.monochrome.android.ui.components.materialSurface
 import tf.monochrome.android.ui.navigation.popBackStackSafe
@@ -55,6 +56,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -3236,6 +3238,91 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
         // header. A screen recorder is a diagnostic, not an audio setting.
         Spacer(modifier = Modifier.height(8.dp))
         DebugScreenRecorderRow()
+
+        // Last on the page: the one row here that sends anything off the phone.
+        SendLogsRow(viewModel)
+    }
+}
+
+/**
+ * Sends the app's log to the developer (debug/LogReport.kt). Nothing leaves
+ * the phone from the row itself: it opens a dialog that says what is sent,
+ * and only its Send button sends. The dialog is opaque, like every dialog.
+ */
+@Composable
+private fun SendLogsRow(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val state by viewModel.logReportState.collectAsStateWithLifecycle()
+    var asking by rememberSaveable { mutableStateOf(false) }
+    // Kept while the dialog is closed, so a send that failed need not be written again.
+    var note by rememberSaveable { mutableStateOf("") }
+
+    // Each outcome is said once, when it happens, not again on coming back to the page.
+    var said by remember { mutableStateOf(state) }
+    LaunchedEffect(state) {
+        if (state == said) return@LaunchedEffect
+        said = state
+        val message = when (state) {
+            LogReport.State.SENDING -> R.string.settings_send_logs_sending
+            LogReport.State.SENT -> R.string.settings_send_logs_sent
+            LogReport.State.SIGNED_OUT -> R.string.settings_send_logs_signed_out
+            LogReport.State.TOO_MANY -> R.string.settings_send_logs_too_many
+            LogReport.State.FAILED -> R.string.settings_send_logs_failed
+            LogReport.State.IDLE -> return@LaunchedEffect
+        }
+        if (state == LogReport.State.SENT) note = ""
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    }
+
+    val sending = state == LogReport.State.SENDING
+    SettingItem(
+        title = stringResource(R.string.settings_send_logs),
+        subtitle = stringResource(
+            if (sending) R.string.settings_send_logs_sending else R.string.settings_send_logs_desc,
+        ),
+        onClick = if (sending) null else {
+            {
+                if (viewModel.canSendLogReport()) {
+                    asking = true
+                } else {
+                    Toast.makeText(context, R.string.settings_send_logs_signed_out, Toast.LENGTH_LONG).show()
+                }
+            }
+        },
+    )
+
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            title = { Text(stringResource(R.string.settings_send_logs)) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        stringResource(R.string.settings_send_logs_warning),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = { note = it.take(2_000) },
+                        label = { Text(stringResource(R.string.settings_send_logs_note)) },
+                        minLines = 2,
+                        maxLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    asking = false
+                    viewModel.sendLogReport(note)
+                }) { Text(stringResource(R.string.settings_send_logs_send)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { asking = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 }
 

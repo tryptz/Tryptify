@@ -76,6 +76,25 @@ class CrashLogger @Inject constructor(
     /** What the last process noted ([CrashBreadcrumbs]), read before this one writes over it. */
     @Volatile private var previousCrumbs: Map<String, String> = emptyMap()
 
+    /** Where the app was when the process before this one ended, for a sent log ([LogReport]). */
+    fun previousCrumbs(): Map<String, String> = previousCrumbs
+
+    // In the app's own files and out of backups: it leaves the phone only in
+    // a log the listener chooses to send.
+    private val lastCrashFile get() = File(context.noBackupFilesDir, "last_crash.txt")
+
+    /**
+     * The last uncaught exception, whether or not reports are saved to
+     * Downloads: a log sent afterwards starts with the next process and
+     * would not say why the one before it ended.
+     */
+    fun lastCrash(): LastCrash? = runCatching { parseLastCrash(lastCrashFile.readText()) }.getOrNull()
+
+    private fun rememberCrash(thread: Thread, throwable: Throwable) {
+        val stack = StringWriter().also { sw -> PrintWriter(sw).use { throwable.printStackTrace(it) } }.toString()
+        lastCrashFile.writeText(formatLastCrash(System.currentTimeMillis(), thread.name, LogRedactor.redact(stack)))
+    }
+
     fun install() {
         if (installed) return
         installed = true
@@ -86,6 +105,7 @@ class CrashLogger @Inject constructor(
         }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            runCatching { rememberCrash(thread, throwable) }
             try {
                 if (_saveReports.value) writeCrashDump(thread, throwable)
             } catch (t: Throwable) {
@@ -155,7 +175,7 @@ class CrashLogger @Inject constructor(
     }
 
     /** Runs of printable ASCII at least 4 long: what a tombstone's frames and libraries read as. */
-    private fun readableStrings(bytes: ByteArray): List<String> {
+    internal fun readableStrings(bytes: ByteArray): List<String> {
         val out = ArrayList<String>()
         val run = StringBuilder()
         for (b in bytes) {
@@ -242,6 +262,19 @@ class CrashLogger @Inject constructor(
         private const val KEY_LAST_EXIT = "last_reported_exit"
         private const val KEY_SAVE_REPORTS = "save_reports"
     }
+}
+
+/** An uncaught exception as [CrashLogger] keeps the last one: when, on which thread, and its stack trace. */
+class LastCrash(val atMs: Long, val thread: String, val stack: String)
+
+/** [LastCrash] as its file holds it: the time, the thread, then the stack, cut at what a sent log takes. */
+internal fun formatLastCrash(atMs: Long, thread: String, stack: String): String =
+    "$atMs\n${thread.replace('\n', ' ')}\n${stack.take(LogReport.LAST_CRASH_CHARS)}"
+
+internal fun parseLastCrash(text: String): LastCrash? {
+    val parts = text.split('\n', limit = 3)
+    val at = parts.getOrNull(0)?.toLongOrNull() ?: return null
+    return LastCrash(at, parts.getOrElse(1) { "" }, parts.getOrElse(2) { "" })
 }
 
 /**

@@ -2009,6 +2009,16 @@
     <string name="settings_save_crash_reports">Enregistrer les rapports de plantage</string>
     <string name="settings_save_crash_reports_on">Un plantage ou un blocage est enregistré dans Téléchargements sous forme de fichier .log, à joindre à un rapport de bug.</string>
     <string name="settings_save_crash_reports_off">Désactivé : un plantage ne laisse aucun fichier dans Téléchargements.</string>
+    <string name="settings_send_logs">Envoyer les journaux</string>
+    <string name="settings_send_logs_desc">Envoie le journal de l\'app au développeur pour examiner un problème. Vous voyez ce qui est envoyé avant que quoi que ce soit ne quitte le téléphone.</string>
+    <string name="settings_send_logs_warning">Ceci envoie le journal de l\'app depuis son dernier démarrage (jusqu\'à 2 Mo) au développeur de Tryptify, avec votre compte, le modèle de votre téléphone, sa version d\'Android, la version de l\'app et la façon dont l\'app s\'est fermée la dernière fois, avec les détails d\'un plantage. Les identifiants, jetons et mots de passe sont retirés avant. Le journal peut tout de même nommer ce que vous avez écouté, vos fichiers et dossiers, et les serveurs que vous utilisez. Il est conservé 90 jours, et seuls le développeur et les outils qu\'il utilise pour l\'analyser peuvent le lire.</string>
+    <string name="settings_send_logs_note">Que s\'est-il passé ? (facultatif)</string>
+    <string name="settings_send_logs_send">Envoyer</string>
+    <string name="settings_send_logs_sending">Envoi du journal…</string>
+    <string name="settings_send_logs_sent">Journal envoyé. Merci !</string>
+    <string name="settings_send_logs_signed_out">Connectez-vous sur la page Compte pour envoyer un journal</string>
+    <string name="settings_send_logs_failed">Le journal n\'a pas été envoyé. Vérifiez votre connexion et réessayez.</string>
+    <string name="settings_send_logs_too_many">Vous avez envoyé 10 journaux en un jour, c\'est la limite. Réessayez demain.</string>
     <string name="sort_file_name">Nom du fichier</string>
     <string name="sort_year">Année</string>
     <string name="sort_date_modified">Date de modification</string>

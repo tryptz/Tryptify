@@ -1907,6 +1907,16 @@
     <string name="settings_save_crash_reports">保存崩溃报告</string>
     <string name="settings_save_crash_reports_on">崩溃或无响应时，会在“下载”文件夹中保存一个 .log 文件，可附在错误报告中。</string>
     <string name="settings_save_crash_reports_off">已关闭：崩溃时不会在“下载”文件夹中留下文件。</string>
+    <string name="settings_send_logs">发送日志</string>
+    <string name="settings_send_logs_desc">将应用日志发送给开发者以排查问题。发送前会先告诉你发送的内容。</string>
+    <string name="settings_send_logs_warning">这会把应用自上次启动以来的日志（最多 2 MB）发送给 Tryptify 的开发者，同时附上你的账号、手机型号、Android 版本、应用版本，以及应用上次是如何关闭的（包括崩溃详情）。登录信息、令牌和密码会先被去除。日志中仍可能出现你播放过的内容、你的文件和文件夹，以及你使用的服务器。日志保留 90 天，只有开发者及其用于分析的工具可以读取。</string>
+    <string name="settings_send_logs_note">出了什么问题？（可选）</string>
+    <string name="settings_send_logs_send">发送</string>
+    <string name="settings_send_logs_sending">正在发送日志…</string>
+    <string name="settings_send_logs_sent">日志已发送，谢谢！</string>
+    <string name="settings_send_logs_signed_out">请在账户页面登录后再发送日志</string>
+    <string name="settings_send_logs_failed">日志未能发送。请检查网络连接后重试。</string>
+    <string name="settings_send_logs_too_many">你一天内已发送 10 份日志，已达上限。请明天再试。</string>
     <string name="sort_file_name">文件名</string>
     <string name="sort_year">年份</string>
     <string name="sort_date_modified">修改日期</string>

@@ -1958,6 +1958,16 @@
     <string name="settings_save_crash_reports">Absturzberichte speichern</string>
     <string name="settings_save_crash_reports_on">Ein Absturz oder Hänger wird als .log-Datei unter Downloads gespeichert, zum Anhängen an einen Fehlerbericht.</string>
     <string name="settings_save_crash_reports_off">Aus: Ein Absturz hinterlässt keine Datei unter Downloads.</string>
+    <string name="settings_send_logs">Logs senden</string>
+    <string name="settings_send_logs_desc">Sendet das Log der App an den Entwickler, um ein Problem zu untersuchen. Du siehst, was gesendet wird, bevor etwas das Handy verlässt.</string>
+    <string name="settings_send_logs_warning">Dies sendet das Log der App seit ihrem letzten Start (bis zu 2 MB) an den Entwickler von Tryptify, zusammen mit deinem Konto, dem Modell deines Handys, seiner Android-Version, der Version der App und der Art, wie die App zuletzt beendet wurde, samt den Details eines Absturzes. Anmeldedaten, Tokens und Passwörter werden vorher entfernt. Das Log kann trotzdem nennen, was du gehört hast, deine Dateien und Ordner und die Server, die du nutzt. Es wird 90 Tage aufbewahrt, und nur der Entwickler und die Werkzeuge, mit denen er es auswertet, können es lesen.</string>
+    <string name="settings_send_logs_note">Was ist schiefgelaufen? (optional)</string>
+    <string name="settings_send_logs_send">Senden</string>
+    <string name="settings_send_logs_sending">Log wird gesendet…</string>
+    <string name="settings_send_logs_sent">Log gesendet. Danke!</string>
+    <string name="settings_send_logs_signed_out">Melde dich auf der Kontoseite an, um ein Log zu senden</string>
+    <string name="settings_send_logs_failed">Das Log wurde nicht gesendet. Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="settings_send_logs_too_many">Du hast an einem Tag 10 Logs gesendet, das ist das Limit. Versuche es morgen wieder.</string>
     <string name="sort_file_name">Dateiname</string>
     <string name="sort_year">Jahr</string>
     <string name="sort_date_modified">Änderungsdatum</string>

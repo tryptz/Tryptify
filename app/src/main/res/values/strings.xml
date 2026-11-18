@@ -1959,6 +1959,16 @@
     <string name="settings_save_crash_reports">Save crash reports</string>
     <string name="settings_save_crash_reports_on">A crash or freeze is saved to Downloads as a .log file, to attach to a bug report.</string>
     <string name="settings_save_crash_reports_off">Off: a crash leaves no file in Downloads.</string>
+    <string name="settings_send_logs">Send logs</string>
+    <string name="settings_send_logs_desc">Send the app\'s log to the developer to look into a problem. You see what is sent before anything leaves the phone.</string>
+    <string name="settings_send_logs_warning">This sends the app\'s log since it was last started (up to 2 MB) to Tryptify\'s developer, with your account, your phone\'s model, its Android version, the app\'s version and how the app last closed, with a crash\'s details. Sign-ins, tokens and passwords are taken out first. The log can still name what you played, your files and folders, and the servers you use. It is kept for 90 days, and only the developer and the tools they use to analyse it can read it.</string>
+    <string name="settings_send_logs_note">What went wrong? (optional)</string>
+    <string name="settings_send_logs_send">Send</string>
+    <string name="settings_send_logs_sending">Sending the log…</string>
+    <string name="settings_send_logs_sent">Log sent. Thank you!</string>
+    <string name="settings_send_logs_signed_out">Sign in on the Account page to send a log</string>
+    <string name="settings_send_logs_failed">The log was not sent. Check your connection and try again.</string>
+    <string name="settings_send_logs_too_many">You have sent 10 logs in a day, which is the limit. Try again tomorrow.</string>
     <string name="sort_file_name">File name</string>
     <string name="sort_year">Year</string>
     <string name="sort_date_modified">Date modified</string>

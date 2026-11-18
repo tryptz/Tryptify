@@ -1958,6 +1958,16 @@
     <string name="settings_save_crash_reports">Çökme raporlarını kaydet</string>
     <string name="settings_save_crash_reports_on">Bir çökme veya donma, hata raporuna eklemek için İndirilenler klasörüne .log dosyası olarak kaydedilir.</string>
     <string name="settings_save_crash_reports_off">Kapalı: çökme İndirilenler klasöründe dosya bırakmaz.</string>
+    <string name="settings_send_logs">Günlükleri gönder</string>
+    <string name="settings_send_logs_desc">Bir sorunu incelemesi için uygulamanın günlüğünü geliştiriciye gönderir. Telefondan bir şey çıkmadan önce neyin gönderildiğini görürsün.</string>
+    <string name="settings_send_logs_warning">Bu, uygulamanın son başlatılmasından bu yana tutulan günlüğünü (en fazla 2 MB) Tryptify\'ın geliştiricisine gönderir; hesabın, telefonunun modeli, Android sürümü, uygulamanın sürümü ve uygulamanın en son nasıl kapandığı (bir çökmenin ayrıntılarıyla) da birlikte gider. Oturum bilgileri, belirteçler ve parolalar önce çıkarılır. Günlükte yine de çaldıkların, dosya ve klasörlerin ve kullandığın sunucular geçebilir. 90 gün saklanır; yalnızca geliştirici ve onu incelemek için kullandığı araçlar okuyabilir.</string>
+    <string name="settings_send_logs_note">Ne ters gitti? (isteğe bağlı)</string>
+    <string name="settings_send_logs_send">Gönder</string>
+    <string name="settings_send_logs_sending">Günlük gönderiliyor…</string>
+    <string name="settings_send_logs_sent">Günlük gönderildi. Teşekkürler!</string>
+    <string name="settings_send_logs_signed_out">Günlük göndermek için Hesap sayfasında oturum aç</string>
+    <string name="settings_send_logs_failed">Günlük gönderilemedi. Bağlantını kontrol edip yeniden dene.</string>
+    <string name="settings_send_logs_too_many">Bir günde 10 günlük gönderdin; sınır bu. Yarın yeniden dene.</string>
     <string name="sort_file_name">Dosya adı</string>
     <string name="sort_year">Yıl</string>
     <string name="sort_date_modified">Değiştirilme tarihi</string>

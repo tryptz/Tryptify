@@ -2009,6 +2009,16 @@
     <string name="settings_save_crash_reports">Salva rapporti sui crash</string>
     <string name="settings_save_crash_reports_on">Un arresto anomalo o blocco viene salvato in Download come file .log, da allegare a una segnalazione di bug.</string>
     <string name="settings_save_crash_reports_off">Disattivato: un arresto anomalo non lascia alcun file in Download.</string>
+    <string name="settings_send_logs">Invia i log</string>
+    <string name="settings_send_logs_desc">Invia il log dell\'app allo sviluppatore per esaminare un problema. Vedi cosa viene inviato prima che qualcosa lasci il telefono.</string>
+    <string name="settings_send_logs_warning">Questo invia il log dell\'app dal suo ultimo avvio (fino a 2 MB) allo sviluppatore di Tryptify, con il tuo account, il modello del telefono, la sua versione di Android, la versione dell\'app e il modo in cui l\'app si è chiusa l\'ultima volta, con i dettagli di un crash. Accessi, token e password vengono rimossi prima. Il log può comunque nominare ciò che hai ascoltato, i tuoi file e le tue cartelle e i server che usi. Viene conservato per 90 giorni, e possono leggerlo solo lo sviluppatore e gli strumenti che usa per analizzarlo.</string>
+    <string name="settings_send_logs_note">Cosa è andato storto? (facoltativo)</string>
+    <string name="settings_send_logs_send">Invia</string>
+    <string name="settings_send_logs_sending">Invio del log…</string>
+    <string name="settings_send_logs_sent">Log inviato. Grazie!</string>
+    <string name="settings_send_logs_signed_out">Accedi dalla pagina Account per inviare un log</string>
+    <string name="settings_send_logs_failed">Il log non è stato inviato. Controlla la connessione e riprova.</string>
+    <string name="settings_send_logs_too_many">Hai inviato 10 log in un giorno, che è il limite. Riprova domani.</string>
     <string name="sort_file_name">Nome file</string>
     <string name="sort_year">Anno</string>
     <string name="sort_date_modified">Data di modifica</string>

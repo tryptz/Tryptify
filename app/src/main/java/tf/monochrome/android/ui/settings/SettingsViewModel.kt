@@ -66,6 +66,7 @@ class SettingsViewModel @Inject constructor(
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
     private val crashLogger: tf.monochrome.android.debug.CrashLogger,
+    private val logReport: tf.monochrome.android.debug.LogReport,
     private val glyphPacks: tf.monochrome.android.glyph.pack.GlyphPackLibrary,
     @ApplicationContext private val appContext: Context
 ) : ViewModel(), CrtEffectPrefs {
@@ -76,6 +77,13 @@ class SettingsViewModel @Inject constructor(
     fun setSaveCrashReports(enabled: Boolean) {
         crashLogger.setSaveReports(enabled)
     }
+
+    /** How sending the log to the developer is going; see [tf.monochrome.android.debug.LogReport]. */
+    val logReportState: StateFlow<tf.monochrome.android.debug.LogReport.State> = logReport.state
+
+    fun canSendLogReport(): Boolean = logReport.signedIn()
+
+    fun sendLogReport(note: String) = logReport.send(note)
 
     /** True while any library scan is running — lets Settings disable the
      *  "Rescan Library Now" button and show progress. */
