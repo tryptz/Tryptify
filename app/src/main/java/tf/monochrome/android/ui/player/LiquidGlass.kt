@@ -24,11 +24,14 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import tf.monochrome.android.ui.glyph.LocalAppTvShader
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
@@ -767,6 +770,43 @@ internal fun HoldGlassStillWhileShown() {
     androidx.compose.runtime.DisposableEffect(Unit) {
         frostedPanesOpen.intValue++
         onDispose { frostedPanesOpen.intValue = (frostedPanesOpen.intValue - 1).coerceAtLeast(0) }
+    }
+}
+
+/**
+ * Draws this content as one still picture while a frosted pane is open over
+ * it ([frostedPanesOpen]), and live again once it closes.
+ *
+ * Holding the glass still was not enough: with the menu open the glass was no
+ * longer rebuilt, and the player still fell to 50 to 140 frames a second,
+ * the GPU at 9 to 30 ms a frame. The menu's frost blurs the player under it,
+ * and the player is about 30 glass panes, each a shader, all drawn again
+ * whenever anything under the menu changes. The legacy player, a few panes,
+ * held 165 under the same menu. As a picture, the player under a menu costs
+ * one image, and the frost over it has nothing new to blur.
+ *
+ * The picture is taken a frame after the pane opens, from what was last drawn,
+ * so it is what was on screen. Goes after the content's hazeSource, so the
+ * source records the picture too. A picture that cannot be taken leaves the
+ * content live.
+ */
+@Composable
+internal fun Modifier.stillUnderFrostedPanes(): Modifier {
+    val frozen = frostedPanesOpen.intValue > 0
+    val layer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    var still by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(frozen) {
+        still = null
+        if (frozen) still = runCatching { layer.toImageBitmap() }.getOrNull()
+    }
+    val picture = if (frozen) still else null
+    return drawWithContent {
+        if (picture != null) {
+            drawImage(picture)
+        } else {
+            layer.record { this@drawWithContent.drawContent() }
+            drawLayer(layer)
+        }
     }
 }
 

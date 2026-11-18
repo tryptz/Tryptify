@@ -179,7 +179,13 @@ Glass on glass. Their drift is not seen under a dimmed menu. A frosted pane must
 composition while it is open: the audio tools sheet is always composed, so it
 holds the glass while its scrim shows, not from inside the sheet (that froze
 all glass for good). Trypt Mania's song card is frosted and on screen for the
-whole song select, so the glass there holds still while it is.
+whole song select, so the glass there holds still while it is. Holding still was not enough (the log of
+2026-11-18: rebuilds fell from about 2,500 to 50 a second and the player still
+drew at 50 to 140 frames, the GPU at 9 to 30 ms), so the player's backdrop and
+content are also drawn as one still picture while a frosted pane is open
+(`stillUnderFrostedPanes`, after their `hazeSource`): under the menu, 30 glass
+shaders become one image and the frost has nothing new to blur. Keep the panels
+(the sheet, the overlay slot) outside those two boxes, or they freeze too.
 
 **A frosted pane blurs its backdrop small** (`frostInputScale`, Haze's
 `inputScale`, set in `glassFrost`). Haze blurs what is behind a pane again
