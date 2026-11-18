@@ -3664,6 +3664,17 @@ Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererS
   `GlassPanel`: a frosted pane behind a drawing of a room would be one more
   see-through thing over it. It covers a corner of the rows under it;
   scrolling moves them out from under it.
+- **The room database lists only rooms** (`SofaHrtfApi.ROOM_FOLDERS`,
+  `isRoom`; the owner: "only use room that make sense in the datasets"). A
+  room is a real room heard by a head, a dummy head's or a person's two
+  ears. Every file of the twelve folders once listed was opened and
+  measured on 2026-11-18: 47 of 4,983 are that, the rest microphone arrays
+  or echo-free HRIR sets, and the reader took an array's two outermost
+  microphones for ears. Listed now: oldenburg (the office, not the
+  anechoic set) and thk's `BRIR_` files, 25 rooms. sbsbrir and tuburo hold
+  22 more of 950 MB to 3.1 GB each, left out until the reader can take one
+  measurement of a file without loading all of it. A folder is added by
+  measuring its files, never by its name. `RoomFilesTest` holds the rule.
 - **A room downloads to a file too** (`RoomDatabaseViewModel.take`,
   `read_room_sofa_file`). It came through memory, under a 48 MB limit that
   was the HRTF sets' before they went to files, and the room database

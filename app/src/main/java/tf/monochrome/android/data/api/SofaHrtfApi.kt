@@ -42,16 +42,49 @@ class SofaHrtfApi {
         private val SIZE = Regex("""<td[^>]*>\s*(\d+(?:\.\d+)?[KMG]?)\s*</td>""")
 
         /**
-         * The folders of room impulse responses (BRIRs, SRIRs, DRIRs) in the
-         * collection, as sofaconventions.org lists them; every other folder
-         * holds HRTFs, directivities or headphone responses.
+         * The folders of the collection that hold rooms the headphone render
+         * can play in, and which of their files are those rooms ([isRoom]).
+         *
+         * A room here is a real room heard by a head: a dummy head's or a
+         * person's two ears (a BRIR), with the room's decay in it. Every
+         * .sofa of the twelve folders sofaconventions.org lists as room
+         * impulse responses was opened and measured on 2026-11-18: of 4,983
+         * files, 47 are that. 4,911 are microphone arrays (Eigenmike and
+         * Zylia spheres, ambisonics, linear and seven-microphone arrays),
+         * whose two outermost microphones the reader would have taken for
+         * ears, and 25 are free-field HRIR sets with no room in them. All
+         * twelve used to be listed, file for file, and most taps ended in
+         * "this file holds no room" or in a room that was not one.
+         *
+         * Two more folders hold head rooms and are left out because a phone
+         * cannot take them: sbsbrir (15 files, about 950 MB each) and tuburo
+         * (7 `BRIR_` files of 1.6 to 3.1 GB). The reader loads a whole file
+         * to use its first measurement. They come back when it can read one
+         * measurement of a file.
          */
-        val ROOM_FOLDERS = setOf(
-            "6dof dataset", "bbc maida vale", "dechorate", "kaist-iem", "oldenburg", "pan-ar",
-            "room transition dataset", "sbsbrir", "thk", "tu-ilmenau (robot)", "tu-ilmenau (rooms)", "tuburo",
-        )
+        val ROOM_FOLDERS = setOf("oldenburg", "thk")
+
+        /**
+         * Whether the file [name] (without `.sofa`) of [folder] (lower case)
+         * is a room, by the survey above: in thk the `BRIR_` files (a KU100
+         * in four rooms; its `DRIR_` files are sphere arrays, the rest HRIR
+         * sets), in oldenburg all but the anechoic set.
+         */
+        fun isRoom(folder: String, name: String): Boolean = when (folder) {
+            "thk" -> name.startsWith("BRIR_")
+            "oldenburg" -> !name.contains("anechoic", ignoreCase = true)
+            else -> false
+        }
+
+        /** An index's size text ("9.6M", "861K", "1.2G", "12345") in bytes, or null when it is not one. */
+        fun sizeBytes(text: String?): Long? {
+            val m = Regex("""^(\d+(?:\.\d+)?)([KMG]?)$""").find(text?.trim().orEmpty()) ?: return null
+            val unit = when (m.groupValues[2]) { "K" -> 1024.0; "M" -> 1024.0 * 1024; "G" -> 1024.0 * 1024 * 1024; else -> 1.0 }
+            return (m.groupValues[1].toDouble() * unit).toLong()
+        }
+
         /** The most a .sofa saved to a file may be: the finest sets in the collection are under 200 MB. */
-        private const val MAX_SOFA_FILE_BYTES = 512L * 1024 * 1024
+        const val MAX_SOFA_FILE_BYTES = 512L * 1024 * 1024
 
         /** Storage left free beside a download. */
         private const val SPARE_BYTES = 64L * 1024 * 1024

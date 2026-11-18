@@ -80,6 +80,8 @@ abstract class SofaBrowseViewModel(
     /** The root folders shown (lower case, as displayed); null for all of them. */
     private val rootFolders: Set<String>?,
     private val unreachable: Int,
+    /** Which files of a root folder (lower case, as displayed) are shown; null for all of them. */
+    private val shows: ((folder: String, file: HrtfNode) -> Boolean)? = null,
 ) : ViewModel() {
 
     protected val api = SofaHrtfApi()
@@ -99,6 +101,9 @@ abstract class SofaBrowseViewModel(
             val listing = result.getOrNull()?.let { all ->
                 if (stack.isEmpty() && rootFolders != null) {
                     all.copy(folders = all.folders.filter { it.display.lowercase() in rootFolders }, files = emptyList())
+                } else if (shows != null && stack.isNotEmpty()) {
+                    val folder = stack.first().display.lowercase()
+                    all.copy(files = all.files.filter { shows.invoke(folder, it) })
                 } else {
                     all
                 }
@@ -202,7 +207,15 @@ class RoomDatabaseViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferences: PreferencesManager,
     private val rooms: tf.monochrome.android.audio.atmos.AtmosRoomStore,
-) : SofaBrowseViewModel(rootFolders = SofaHrtfApi.ROOM_FOLDERS, unreachable = R.string.room_unreachable) {
+) : SofaBrowseViewModel(
+    rootFolders = SofaHrtfApi.ROOM_FOLDERS,
+    unreachable = R.string.room_unreachable,
+    // Only what is a room, and can be taken: see SofaHrtfApi.ROOM_FOLDERS.
+    shows = { folder, file ->
+        SofaHrtfApi.isRoom(folder, file.display) &&
+            (SofaHrtfApi.sizeBytes(file.size) ?: 0L) <= SofaHrtfApi.MAX_SOFA_FILE_BYTES
+    },
+) {
 
     /**
      * The SOFA goes to a file in the cache, is read into a room, and is
