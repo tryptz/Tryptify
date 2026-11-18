@@ -335,7 +335,7 @@ fun MainPlayerScreen(
         tf.monochrome.android.ui.player.LocalPlayerHaze provides hazeState,
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(Modifier.matchParentSize().hazeSource(hazeState).hazeSource(panelHaze)) {
+        Box(Modifier.matchParentSize().hazeSource(hazeState).hazeSource(panelHaze).stillUnderFrostedPanes()) {
         // Background on its own node so the dither layer wraps just the
         // gradient, not the whole screen's content.
         Box(
@@ -529,6 +529,8 @@ fun MainPlayerScreen(
                 // source for [hazeState] — the tiles inside this column frost
                 // that one and cannot sample a layer they belong to.
                 .hazeSource(panelHaze, zIndex = 1f)
+                // Under a menu or the audio tools sheet, one still picture.
+                .stillUnderFrostedPanes()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = screenPad),
