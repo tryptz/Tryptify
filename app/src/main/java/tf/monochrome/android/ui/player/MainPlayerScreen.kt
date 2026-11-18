@@ -706,6 +706,10 @@ fun MainPlayerScreen(
             }
         }
 
+        // While the sheet is out, all glass holds still, the player's under it
+        // too (frostedPanesOpen). Not in the sheet itself: it is always
+        // composed, even closed.
+        if (scrimVisible) HoldGlassStillWhileShown()
         // Scrim behind the sheet — opacity tracks the drag (draw-phase read).
         if (scrimVisible) {
             Box(

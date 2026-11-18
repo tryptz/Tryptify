@@ -170,6 +170,17 @@ everything inside a frosted pane holds still with it (`LocalGlassHoldsStill`,
 provided by `GlassPanel(frosted = true)` and by the audio tools sheet's
 content).
 
+That was still not it. **While any frosted pane is open, all glass holds
+still, the player's under it included** (`frostedPanesOpen`,
+`HoldGlassStillWhileShown`). The owner found it: the legacy player, a few
+glass panes, held 165 fps with the menu open, and the player, about 30 glass
+panes each re-run on every frame, fell to 75 to 120 with the menu over it.
+Glass on glass. Their drift is not seen under a dimmed menu. A frosted pane must only be in the
+composition while it is open: the audio tools sheet is always composed, so it
+holds the glass while its scrim shows, not from inside the sheet (that froze
+all glass for good). Trypt Mania's song card is frosted and on screen for the
+whole song select, so the glass there holds still while it is.
+
 **A frosted pane blurs its backdrop small** (`frostInputScale`, Haze's
 `inputScale`, set in `glassFrost`). Haze blurs what is behind a pane again
 whenever that moves, and behind the player's sheets it always moves. At full

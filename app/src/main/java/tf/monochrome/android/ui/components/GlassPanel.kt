@@ -179,6 +179,8 @@ fun GlassPanel(
             frosted = frosted,
             punchThrough = punchThrough,
         )
+        // While a frosted pane is up, all glass holds still, the player's under it too.
+        if (frosted) tf.monochrome.android.ui.player.HoldGlassStillWhileShown()
         // Inside a frosted pane, the glass of its rows and buttons holds still with it.
         androidx.compose.runtime.CompositionLocalProvider(
             tf.monochrome.android.ui.player.LocalGlassHoldsStill provides

@@ -748,6 +748,28 @@ internal const val FROST_MIN_SCALE = 0.25f
  */
 val LocalGlassHoldsStill = androidx.compose.runtime.staticCompositionLocalOf { false }
 
+/**
+ * How many frosted panes (menus, dialogs, sheets) are open. While any is, every
+ * glass surface in the app holds still, the ones under the pane included.
+ *
+ * Glass on glass was the cost, found by the owner on 2026-11-18: the legacy
+ * player, with a few glass panes, held 165 fps with the three-dot menu open;
+ * the player, with about 30 glass panes each re-run on every frame by the
+ * surface motion, fell to 75 to 120 with the menu over it, and to 165 again
+ * once it closed. Stilled, those panes are drawn once and kept while the menu
+ * is up; their drift under a dimmed menu is not seen anyway.
+ */
+internal val frostedPanesOpen = androidx.compose.runtime.mutableIntStateOf(0)
+
+/** Holds every glass surface still while this is in the composition (see [frostedPanesOpen]). */
+@Composable
+internal fun HoldGlassStillWhileShown() {
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        frostedPanesOpen.intValue++
+        onDispose { frostedPanesOpen.intValue = (frostedPanesOpen.intValue - 1).coerceAtLeast(0) }
+    }
+}
+
 @Composable
 internal fun Modifier.playerGlass(
     tint: Color,
@@ -824,7 +846,9 @@ private fun playerGlassModifier(
     // scaled by uLiquid, so at zero it renders identically frame to frame and
     // has no reason to drive a clock. This is the mini player, mounted app-wide
     // by the nav host, so the gate reaches every screen.
-    val timeSec = rememberFrameSeconds(animated = moves && !LocalGlassHoldsStill.current && base.surfaceMotion > 0f)
+    val timeSec = rememberFrameSeconds(
+        animated = moves && !LocalGlassHoldsStill.current && frostedPanesOpen.intValue == 0 && base.surfaceMotion > 0f,
+    )
     // The same argument for the sensor. Every uTilt term in the shader is
     // multiplied by uTiltAmount, and tilt reactivity defaults to zero, so at
     // the default this surface's pixels do not depend on the phone's attitude
