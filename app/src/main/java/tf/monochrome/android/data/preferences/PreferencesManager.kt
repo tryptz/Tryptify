@@ -2078,14 +2078,41 @@ class PreferencesManager @Inject constructor(
      * turns 2-channel mode on; a mono one drives both ears only while 2-channel
      * mode is on and has a right ear to replace. With it off, the stored right
      * ear is a calibration kept for later, not to be overwritten.
+     *
+     * The headphone and its curves too (`PresetHeadphones.restore`), so the EQ
+     * screen opens on the headphone this preset was made for, not the one
+     * picked before the output switched.
      */
     suspend fun applyEqPreset(preset: tf.monochrome.android.domain.model.EqPreset) {
         val bandsSerializer = kotlinx.serialization.builtins.ListSerializer(
             tf.monochrome.android.domain.model.EqBand.serializer(),
         )
+        val curveSerializer = kotlinx.serialization.builtins.ListSerializer(
+            tf.monochrome.android.domain.model.FrequencyPoint.serializer(),
+        )
         val bands = json.encodeToString(bandsSerializer, preset.bands)
         val presetR = preset.bandsR
         dataStore.edit {
+            val shown = tf.monochrome.android.audio.eq.PresetHeadphones.restore(
+                preset,
+                stereoAfterLoad = presetR != null || it[EQ_STEREO_MODE] == true,
+            )
+            val headphone = shown.headphone
+            if (headphone != null) {
+                it[EQ_SELECTED_HEADPHONE_ID] = headphone.id
+                it[EQ_SELECTED_HEADPHONE_NAME] = headphone.name
+            } else {
+                it.remove(EQ_SELECTED_HEADPHONE_ID)
+                it.remove(EQ_SELECTED_HEADPHONE_NAME)
+            }
+            val left = shown.left.curve
+            if (left.isEmpty()) it.remove(EQ_MEASUREMENT_JSON)
+            else it[EQ_MEASUREMENT_JSON] = json.encodeToString(curveSerializer, left)
+            shown.right?.curve?.let { right ->
+                if (right.isEmpty()) it.remove(EQ_MEASUREMENT_R_JSON)
+                else it[EQ_MEASUREMENT_R_JSON] = json.encodeToString(curveSerializer, right)
+            }
+
             if (presetR != null) {
                 it[EQ_BANDS_R_JSON] = json.encodeToString(bandsSerializer, presetR)
                 it[EQ_STEREO_MODE] = true

@@ -222,10 +222,9 @@ class HeadphoneAutoEqApi {
         headphoneName: String,
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val fileNames = listOf("$headphoneName.csv", "raw.csv")
-            for (fileName in fileNames) {
+            for (url in measurementUrls(basePath, headphoneName)) {
                 try {
-                    val csv = fetchUrl("$RAW_BASE/$basePath/$fileName")
+                    val csv = fetchUrl(url)
                     if (csv != null) return@withContext Result.success(csv)
                 } catch (_: Exception) { }
             }
@@ -234,6 +233,13 @@ class HeadphoneAutoEqApi {
             Result.failure(e)
         }
     }
+
+    /**
+     * The files [fetchMeasurementByPath] tries for one measurement, in order;
+     * the offline download asks for the same ones.
+     */
+    fun measurementUrls(basePath: String, headphoneName: String): List<String> =
+        listOf("$headphoneName.csv", "raw.csv").map { "$RAW_BASE/$basePath/$it" }
 
     suspend fun searchHeadphones(query: String): Result<List<Headphone>> {
         val all = fetchHeadphones().getOrNull() ?: return Result.success(emptyList())

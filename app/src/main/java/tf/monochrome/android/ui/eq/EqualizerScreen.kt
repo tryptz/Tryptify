@@ -672,7 +672,11 @@ fun EqualizerScreen(
                         )
                     } else {
                         SelectorRow(
-                            value = selectedHeadphone?.name ?: stringResource(R.string.eq_select_headphone),
+                            // A curve from a file is named as one: the headphone
+                            // picked before it is not what is measured now.
+                            value = measurementLabelText(measurementLabelL?.takeIf { it == IMPORTED_FILE_LABEL })
+                                ?: selectedHeadphone?.name
+                                ?: stringResource(R.string.eq_select_headphone),
                             onClick = {
                                 headphoneSelectForRight = false
                                 showHeadphoneSelect = true

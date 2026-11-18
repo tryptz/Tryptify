@@ -785,7 +785,10 @@ data class EqPreset(
     // Set by EqRepository.toDomain when the stored bandsJson fails to decode.
     // Loading a corrupted preset would silently flatten the EQ; callers should
     // refuse to load it and surface the state instead.
-    val isCorrupted: Boolean = false
+    val isCorrupted: Boolean = false,
+    // The headphone and measured curves the bands were fitted from; null on
+    // presets saved before it was kept, and on Parametric EQ presets.
+    val headphone: PresetHeadphone? = null,
 )
 
 @Serializable

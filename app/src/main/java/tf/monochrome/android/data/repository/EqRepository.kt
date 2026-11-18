@@ -12,6 +12,7 @@ import tf.monochrome.android.data.db.dao.EqPresetDao
 import tf.monochrome.android.data.db.entity.EqPresetEntity
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.EqPreset
+import tf.monochrome.android.domain.model.PresetHeadphone
 import tf.monochrome.android.data.sync.SupabaseSyncRepository
 import tf.monochrome.android.data.sync.SyncKind
 import tf.monochrome.android.data.sync.SyncOp
@@ -186,6 +187,19 @@ class EqRepository @Inject constructor(
                 null
             }
         }
+        // Unlike the bands, a headphone that fails to decode costs nothing
+        // audible: the preset loads as one saved before headphones were kept.
+        val headphone = headphoneJson?.let { hJson ->
+            try {
+                json.decodeFromString<PresetHeadphone>(hJson)
+            } catch (e: Exception) {
+                Log.e(
+                    "EqRepository",
+                    "Failed to decode headphone for preset '$id' (${e.javaClass.simpleName}: ${e.message})"
+                )
+                null
+            }
+        }
         return EqPreset(
             id = id,
             name = name,
@@ -198,7 +212,8 @@ class EqRepository @Inject constructor(
             isCustom = isCustom,
             createdAt = createdAt,
             updatedAt = updatedAt,
-            isCorrupted = corrupted
+            isCorrupted = corrupted,
+            headphone = headphone,
         )
     }
 
@@ -228,7 +243,14 @@ class EqRepository @Inject constructor(
             isCustom = isCustom,
             createdAt = createdAt,
             updatedAt = System.currentTimeMillis(),
-            eqType = 0  // AutoEQ
+            eqType = 0,  // AutoEQ
+            headphoneJson = headphone?.let {
+                try {
+                    json.encodeToString(it)
+                } catch (e: Exception) {
+                    null
+                }
+            },
         )
     }
 }

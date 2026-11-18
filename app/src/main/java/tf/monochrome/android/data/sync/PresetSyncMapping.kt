@@ -76,6 +76,9 @@ internal fun eqPushPayload(preset: EqPresetEntity, userId: String): JsonObject =
     put("eq_type", preset.eqType)
     put("created_at_ms", preset.createdAt)
     put("updated_at_ms", preset.updatedAt)
+    // An explicit null for the same reason as bands_r: a preset re-saved with
+    // no headphone must not keep the old one in the cloud.
+    put("headphone", preset.headphoneJson?.let { JsonPrimitive(it) } ?: JsonNull)
 }
 
 /**
@@ -126,6 +129,7 @@ internal fun SbEqPreset.toEntity(): EqPresetEntity {
         createdAt = created_at_ms.takeIf { it > 0L } ?: now,
         updatedAt = updated_at_ms.takeIf { it > 0L } ?: now,
         eqType = eq_type,
+        headphoneJson = headphone,
     )
 }
 
