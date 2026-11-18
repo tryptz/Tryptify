@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,9 @@ import tf.monochrome.android.domain.model.EqPreset
 import tf.monochrome.android.domain.model.EqTarget
 import tf.monochrome.android.domain.model.FrequencyPoint
 import tf.monochrome.android.domain.model.Headphone
+import tf.monochrome.android.domain.model.PresetEar
+import tf.monochrome.android.domain.model.PresetHeadphone
+import tf.monochrome.android.audio.eq.PresetHeadphones
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
@@ -56,7 +60,9 @@ class EqViewModel @Inject constructor(
     private val preferences: PreferencesManager,
     private val outputEqSwitcher: tf.monochrome.android.audio.eq.OutputEqSwitcher,
     private val achievements: tf.monochrome.android.data.achievements.AchievementStore,
+    private val offlineDownloader: tf.monochrome.android.data.repository.HeadphoneMeasurementDownloader,
 ) : ViewModel() {
+
 
     // ===== Per-device AutoEQ =====
 
@@ -273,6 +279,33 @@ class EqViewModel @Inject constructor(
         _selectedRig.value = rig
     }
 
+    // ===== Measurements saved for offline use =====
+
+    /** The download of every measurement; it runs on when this screen closes. */
+    val offlineState: StateFlow<tf.monochrome.android.data.repository.HeadphoneMeasurementDownloader.State> =
+        offlineDownloader.state
+
+    /** What is saved on the phone now; null until read. */
+    val offlineSummary: StateFlow<tf.monochrome.android.data.repository.HeadphoneOfflineStore.Summary?> =
+        offlineDownloader.summary
+
+    /** What downloading the list now on screen would cost. */
+    val offlineEstimate: StateFlow<tf.monochrome.android.data.repository.HeadphoneMeasurementDownloader.Estimate> =
+        _availableHeadphones
+            .map { tf.monochrome.android.data.repository.HeadphoneMeasurementDownloader.estimate(it) }
+            // Some 12,000 measurements to walk: off the main thread.
+            .flowOn(kotlinx.coroutines.Dispatchers.Default)
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                tf.monochrome.android.data.repository.HeadphoneMeasurementDownloader.Estimate(0, 0L, 0L),
+            )
+
+    fun refreshOfflineSummary() = offlineDownloader.refreshSummary()
+    fun startOfflineDownload() = offlineDownloader.start()
+    fun stopOfflineDownload() = offlineDownloader.stop()
+    fun deleteOfflineMeasurements() = offlineDownloader.delete()
+
     private val _originalMeasurement = MutableStateFlow<List<FrequencyPoint>>(emptyList())
     val originalMeasurement: StateFlow<List<FrequencyPoint>> = _originalMeasurement.asStateFlow()
 
@@ -336,6 +369,7 @@ class EqViewModel @Inject constructor(
         // which made every restore here silently no-op.
         viewModelScope.launch {
             val presetId = preferences.eqActivePresetId.first()
+            var activePreset: EqPreset? = null
 
             if (presetId != null) {
                 // The id and the preset it names arrive by different roads on a
@@ -349,6 +383,7 @@ class EqViewModel @Inject constructor(
                         eqRepository.getPresetByIdFlow(presetId).filterNotNull().first()
                     }
                 _activePreset.value = preset
+                activePreset = preset
                 if (preset != null) {
                     _currentBands.value = preset.bands
                     _currentPreamp.value = preset.preamp
@@ -426,6 +461,27 @@ class EqViewModel @Inject constructor(
                         measurementRJson,
                     )
                 } catch (_: Exception) { }
+            }
+
+            // The pickers' labels are not kept across starts, but the active
+            // preset has them: while its curves are still the ones on screen,
+            // the pickers say what they are, the right one included.
+            activePreset?.headphone?.let { saved ->
+                fun takeLabels(channel: EqChannel, ear: PresetEar, shown: List<FrequencyPoint>) {
+                    if (ear.curve.isEmpty() || ear.curve != shown) return
+                    val steppable = ear.measurement != null && ear.sample != null
+                    if (channel == EqChannel.RIGHT) {
+                        _measurementLabelR.value = ear.label
+                        selectedMeasR = if (steppable) ear.measurement else null
+                        _measurementSampleR.value = if (steppable) ear.sample else null
+                    } else {
+                        _measurementLabelL.value = ear.label
+                        selectedMeasL = if (steppable) ear.measurement else null
+                        _measurementSampleL.value = if (steppable) ear.sample else null
+                    }
+                }
+                takeLabels(EqChannel.LEFT, saved.left, _originalMeasurement.value)
+                takeLabels(EqChannel.RIGHT, saved.right ?: saved.left, _originalMeasurementR.value)
             }
         }
 
@@ -542,14 +598,19 @@ class EqViewModel @Inject constructor(
     }
 
     /**
-     * Load a preset
+     * Load a preset: its bands, and the headphone and measured curves it was
+     * fitted from (see [showPresetHeadphone]).
+     *
+     * Through [launchFit], like every other change to the bands and curves:
+     * a measurement still loading when a preset is picked used to finish
+     * afterwards and write its own fit over the preset.
      */
     fun loadPreset(presetId: String) {
-        viewModelScope.launch {
-            val preset = eqRepository.getPresetById(presetId) ?: return@launch
+        launchFit {
+            val preset = eqRepository.getPresetById(presetId) ?: return@launchFit
             if (preset.isCorrupted) {
                 _error.value = UiText.Res(R.string.eq_err_preset_corrupted, listOf(preset.name))
-                return@launch
+                return@launchFit
             }
             _activePreset.value = preset
             _currentBands.value = preset.bands
@@ -587,8 +648,70 @@ class EqViewModel @Inject constructor(
 
             // Serialize and save bands
             saveBandsToPreferences(preset.bands)
+
+            showPresetHeadphone(PresetHeadphones.restore(preset, _stereoMode.value))
         }
     }
+
+    /**
+     * Put a loaded preset's headphone in the picker and its curves on the
+     * graph, and keep them for the next start. A preset from before
+     * headphones were kept clears the picker: the headphone picked last is
+     * not the one its bands were made for.
+     */
+    private suspend fun showPresetHeadphone(restore: PresetHeadphones.Restore) {
+        val headphone = restore.headphone
+        _selectedHeadphone.value = headphone
+        if (headphone != null) {
+            preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
+        } else {
+            preferences.clearEqSelectedHeadphone()
+        }
+        showEar(EqChannel.LEFT, restore.left)
+        restore.right?.let { showEar(EqChannel.RIGHT, it) }
+    }
+
+    /** One ear's curve, label and sample stepper from [ear]; an empty ear clears them. */
+    private suspend fun showEar(channel: EqChannel, ear: PresetEar) {
+        // The stepper needs both the measurement and the sample it is on.
+        val steppable = ear.measurement != null && ear.sample != null
+        if (channel == EqChannel.RIGHT) {
+            _originalMeasurementR.value = ear.curve
+            if (ear.curve.isEmpty()) preferences.setEqMeasurementRJson(null) else persistMeasurementR(ear.curve)
+            _measurementLabelR.value = ear.label
+            selectedMeasR = if (steppable) ear.measurement else null
+            _measurementSampleR.value = if (steppable) ear.sample else null
+        } else {
+            _originalMeasurement.value = ear.curve
+            if (ear.curve.isEmpty()) preferences.setEqMeasurementJson(null) else persistMeasurement(ear.curve)
+            _measurementLabelL.value = ear.label
+            selectedMeasL = if (steppable) ear.measurement else null
+            _measurementSampleL.value = if (steppable) ear.sample else null
+        }
+    }
+
+    /**
+     * What the picker shows now, to be saved with a preset; [stereo] keeps the
+     * right ear too.
+     */
+    private fun currentPresetHeadphone(stereo: Boolean): PresetHeadphone? =
+        PresetHeadphones.capture(
+            headphone = _selectedHeadphone.value,
+            left = PresetEar(
+                label = _measurementLabelL.value,
+                measurement = selectedMeasL,
+                sample = _measurementSampleL.value,
+                curve = _originalMeasurement.value,
+            ),
+            right = if (stereo) {
+                PresetEar(
+                    label = _measurementLabelR.value,
+                    measurement = selectedMeasR,
+                    sample = _measurementSampleR.value,
+                    curve = _originalMeasurementR.value,
+                )
+            } else null,
+        )
 
     /**
      * Update an individual band
@@ -781,6 +904,8 @@ class EqViewModel @Inject constructor(
                     _currentBands.value = bands
                     saveBandsToPreferences(bands)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _error.value = UiText.Res(R.string.eq_err_switch_sample, listOf(e.message.orEmpty()))
             } finally {
@@ -884,7 +1009,10 @@ class EqViewModel @Inject constructor(
                     targetName = _selectedTarget.value.label,
                     isCustom = true,
                     createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    // The headphone and curves the bands came from, so loading
+                    // the preset shows them again, offline too.
+                    headphone = currentPresetHeadphone(_stereoMode.value),
                 )
                 eqRepository.savePreset(preset)
                 _activePreset.value = preset
@@ -1046,6 +1174,8 @@ class EqViewModel @Inject constructor(
                 saveBandsToPreferences(bands)
                 _error.value = null
 
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _error.value = UiText.Res(R.string.eq_err_autoeq, listOf(e.message.orEmpty()))
             } finally {
@@ -1159,9 +1289,12 @@ class EqViewModel @Inject constructor(
         measurement: tf.monochrome.android.domain.model.AutoEqMeasurement,
         channel: EqChannel = EqChannel.LEFT,
     ) {
-        _selectedHeadphone.value = headphone
+        // The picked headphone is the left (or only) ear's: a right ear picked
+        // from another headphone must not rename the left picker, and is kept
+        // in the preset by its own label.
+        if (channel == EqChannel.LEFT) _selectedHeadphone.value = headphone
         launchFit {
-            preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
+            if (channel == EqChannel.LEFT) preferences.setEqSelectedHeadphone(headphone.id, headphone.name)
             loadHeadphonePresetForMeasurement(measurement, channel)
         }
     }
@@ -1333,6 +1466,10 @@ class EqViewModel @Inject constructor(
             }
             _error.value = null
             _isCalculating.value = false
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Replaced by a newer action (another pick, a preset): not an error.
+            _isCalculating.value = false
+            throw e
         } catch (e: Exception) {
             _error.value = UiText.Res(R.string.eq_err_load_measurement, listOf(e.message.orEmpty()))
             _isCalculating.value = false
@@ -1496,6 +1633,11 @@ class EqViewModel @Inject constructor(
                     _measurementLabelL.value = IMPORTED_FILE_LABEL
                     selectedMeasL = null
                     _measurementSampleL.value = null
+                    // The curve is the file's now, not the picked headphone's:
+                    // left named, the picker and a preset saved next would
+                    // claim the old headphone for it.
+                    _selectedHeadphone.value = null
+                    preferences.clearEqSelectedHeadphone()
                 }
 
                 val target = _selectedTarget.value.data
@@ -1514,6 +1656,8 @@ class EqViewModel @Inject constructor(
                     _currentBands.value = bands
                     saveBandsToPreferences(bands)
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _error.value = UiText.Res(R.string.eq_err_import, listOf(e.message.orEmpty()))
             } finally {

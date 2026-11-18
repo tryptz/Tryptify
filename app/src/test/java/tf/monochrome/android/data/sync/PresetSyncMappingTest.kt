@@ -27,6 +27,7 @@ class PresetSyncMappingTest {
         bandsR: String? = null,
         eqType: Int = 0,
         updatedAt: Long = 2_000L,
+        headphoneJson: String? = null,
     ) = EqPresetEntity(
         id = id,
         name = "Test",
@@ -40,6 +41,7 @@ class PresetSyncMappingTest {
         createdAt = 1_000L,
         updatedAt = updatedAt,
         eqType = eqType,
+        headphoneJson = headphoneJson,
     )
 
     private fun mix(id: Long, createdAt: Long, updatedAt: Long = createdAt) = MixPresetEntity(
@@ -105,6 +107,24 @@ class PresetSyncMappingTest {
         val right = """[{"frequency":100.0,"gain":1.0}]"""
         val payload = eqPushPayload(eq(bandsR = right), "u")
         assertEquals(right, payload["bands_r"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a preset's headphone travels with it`() {
+        val headphone = """{"id":"focal_bathys","name":"Focal Bathys","left":{"curve":"20.0,-7.88"}}"""
+        val payload = eqPushPayload(eq(headphoneJson = headphone), userId = "u")
+        assertEquals(headphone, payload["headphone"]!!.jsonPrimitive.content)
+        val pulled = SbEqPreset(local_id = "x", name = "n", headphone = headphone).toEntity()
+        assertEquals(headphone, pulled.headphoneJson)
+    }
+
+    @Test
+    fun `a preset without a headphone writes an explicit null`() {
+        // Same reason as bands_r: an absent field is left at its old value by
+        // the upsert, so a preset re-saved with no headphone would keep one.
+        val payload = eqPushPayload(eq(headphoneJson = null), userId = "u")
+        assertTrue("headphone must be present in the payload", payload.containsKey("headphone"))
+        assertEquals(JsonNull, payload["headphone"])
     }
 
     @Test

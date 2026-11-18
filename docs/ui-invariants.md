@@ -2181,6 +2181,45 @@ fallback (green boosts, red cuts, grey flat) stays for the screens with no
 chips: Parametric EQ, car mode, the import sheet. Dropping the parameter makes
 the dots disagree with the chips under them.
 
+### AutoEQ presets and the headphone picker
+
+**Loading a preset puts its own headphone in the picker.** A saved AutoEQ
+preset keeps the headphone and the measured curves its bands were fitted from
+(`EqPreset.headphone`, a `PresetHeadphone`), and loading it shows them: the
+picker's name, each ear's label and sample stepper, the curve on the graph.
+Before, a preset brought only its bands and the picker kept the last pick, so
+the Nothing Ear preset showed "Focal Bathys" and the Bathys' curve under its
+bands. `PresetHeadphones.restore` is the rule, for `EqViewModel.loadPreset`
+and for the per-device switch (`PreferencesManager.applyEqPreset`), which runs
+with the screen closed. The right ear follows the bands' rule: a stereo preset
+brings its own, a mono one fills both ears only while 2-channel mode is on.
+
+**A preset saved before headphones were kept clears the picker** and the
+curve rather than leave another headphone's there; saving it again keeps the
+headphone from then on. `PresetHeadphonesTest` holds both.
+
+**A curve from a file is named as one.** Importing a measurement file into
+the left (or only) ear clears the picked headphone, and the mono picker reads
+"Imported file", as the 2-channel pickers already did. Picking a right-ear
+measurement never renames the left picker.
+
+**The headphone list's offline button** (`HeadphoneSelectScreen`, left of
+Refresh) opens an opaque `AlertDialog`: what the download costs before it
+starts (from the list's counts, `HeadphoneMeasurementDownloader.estimate`),
+its progress while it runs (it carries on with the dialog closed, and the
+button turns into a progress ring), and after, what is saved, with Update and
+Delete. The button is a pin once anything is saved.
+
+**The headphone search forgives how a model is typed** (`HeadphoneSearch`,
+`HeadphoneSearchTest`). Spaces and punctuation do not count ("hd600" finds
+"HD 600", "wh1000xm4" finds "WH-1000XM4"); each word is found on its own, in
+any order, in the name or the source ("sennheiser 600", "hd600 oratory").
+Only when nothing matches that way, a word of four letters or more may have a
+slip (one, two from seven letters), against the start of a name's word. Words
+with digits are never guessed: "hd 660" must not bring up the HD 600. A plain
+`name.contains(query)` came back as the "improvement" of none of this, and
+missed every one of those.
+
 ### Stats charts
 
 **Bars are glass, and the glass is flat colour.** `glassBar` in `StatsVisuals.kt`

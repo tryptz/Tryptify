@@ -361,6 +361,30 @@ left of them is on purpose:
 The live log (below, under its own heading) was built in the same days and
 stays.
 
+## AutoEQ: presets keep their headphone, and measurements can be offline
+
+An AutoEQ preset keeps the headphone and the measured curves it was fitted
+from (`PresetHeadphone`, Room `eq_presets.headphoneJson` since v25, Supabase
+`eq_presets.headphone` since the migration `eq_presets_add_headphone`), so
+loading it shows them with no network; see "AutoEQ presets and the headphone
+picker" in `docs/ui-invariants.md`. Curves are stored as `CompactCurve` text
+(`freq,gain;…`, `Float.toString`), which reads back bit for bit, so a fit from
+a stored copy is the fit from the download (`CompactCurveTest`). The push
+writes an explicit null for a preset with no headphone, like `bands_r`.
+
+The headphone list's offline button downloads every measurement, AutoEq's
+results and each squig.link site's left and right ears, about 12,000 of them:
+roughly 450 MB fetched and 75 MB kept (`HeadphoneMeasurementDownloader`,
+measured on a sample on 2026-11-18). They are kept parsed, one gzipped file
+each, under `noBackupFilesDir/headphone_measurements`
+(`HeadphoneOfflineStore`), and `HeadphoneRepository` reads them before the
+network; the list falls back to the saved one, source by source, when a source
+cannot be reached. The download runs in its own scope (not WorkManager), so it
+stops with the app, and a new run skips what is saved. At most 8 requests at
+once, 4 to GitHub and 2 per squig.link site; a 429 (or GitHub's rate-limit
+403) pauses every worker, and a file throttled four times ends the run. Only
+each ear's first sample is kept: the sample stepper still needs the network.
+
 ## Tryptify Cloud
 
 The paid music storage. The server is `cloud/` in tryptz/tryptify-servers (a

@@ -130,10 +130,22 @@ class SquiglinkApi {
         fileName: String,
         channel: String,
     ): Pair<String, String>? {
-        for (suffix in arrayOf(channel, "${channel}1")) {
+        for (suffix in channelSamples(channel)) {
             fetchSampleUrl(host, fileName, suffix)?.let { return it to suffix }
         }
         return null
+    }
+
+    /**
+     * The sample files [fetchMeasurementChannel] tries for [channel], in
+     * order; the offline download asks for the same ones.
+     */
+    fun channelSamples(channel: String): List<String> = listOf(channel, "${channel}1")
+
+    /** Where one sample file of a measurement lives. */
+    fun sampleUrl(host: String, fileName: String, sample: String): String {
+        val name = URLEncoder.encode("$fileName $sample.txt", "UTF-8").replace("+", "%20")
+        return "$host/data/$name"
     }
 
     /** Fetch one exact sample file ("L2", "R3", …); null when not published. */
@@ -152,10 +164,8 @@ class SquiglinkApi {
             candidates.filter { sampleExists(host, fileName, it) }
         }
 
-    private fun fetchSampleUrl(host: String, fileName: String, sample: String): String? {
-        val name = URLEncoder.encode("$fileName $sample.txt", "UTF-8").replace("+", "%20")
-        return fetchUrl("$host/data/$name")
-    }
+    private fun fetchSampleUrl(host: String, fileName: String, sample: String): String? =
+        fetchUrl(sampleUrl(host, fileName, sample))
 
     private fun sampleExists(host: String, fileName: String, sample: String): Boolean = try {
         val name = URLEncoder.encode("$fileName $sample.txt", "UTF-8").replace("+", "%20")

@@ -76,7 +76,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -493,6 +493,17 @@ abstract class MusicDatabase : RoomDatabase() {
                         "`title` TEXT, `artist` TEXT, `albumArtist` TEXT, `album` TEXT, `genre` TEXT, " +
                         "`year` INTEGER, `trackNumber` INTEGER, `discNumber` INTEGER, PRIMARY KEY(`filePath`))",
                 )
+            }
+        }
+
+        /**
+         * An AutoEQ preset keeps the headphone and measured curves it was
+         * fitted from (`PresetHeadphone`), so loading it shows them. Rows from
+         * before have none, and loading one clears the headphone picker.
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `eq_presets` ADD COLUMN `headphoneJson` TEXT")
             }
         }
 

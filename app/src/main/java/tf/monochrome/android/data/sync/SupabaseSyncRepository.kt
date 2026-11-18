@@ -67,7 +67,13 @@ data class SbEqPreset(
     val created_at_ms: Long = 0,
     val updated_at_ms: Long = 0,
     val created_at: String? = null,
-    val updated_at: String? = null
+    val updated_at: String? = null,
+    /**
+     * The serialized `PresetHeadphone`: the headphone and measured curves an
+     * AutoEQ preset was fitted from. Null on rows from before the column and
+     * on Parametric presets.
+     */
+    val headphone: String? = null,
 )
 
 @Serializable

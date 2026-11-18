@@ -201,5 +201,8 @@ data class EqPresetEntity(
     val isCustom: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val eqType: Int = 0  // 0 = AutoEQ, 1 = Parametric
+    val eqType: Int = 0,  // 0 = AutoEQ, 1 = Parametric
+    // Serialized PresetHeadphone: the headphone and measured curves an AutoEQ
+    // preset was fitted from. Null on rows from before v25 and on Parametric.
+    val headphoneJson: String? = null,
 )
