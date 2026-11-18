@@ -995,33 +995,38 @@ private fun StatusOverlayPanel(
                 drawRoundRect(color = glassTint, cornerRadius = CornerRadius(r, r))
             }
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                // The panel itself now insets 12dp, so this sheds 12dp to
-                // leave the content exactly where it was on screen — and
-                // level with the speed panel's, which does the same.
-                .padding(horizontal = PlayerDesignTokens.ScreenPadding - 12.dp)
-                .padding(top = 10.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // The sheet's tiles and pills hold still with it (LocalGlassHoldsStill).
+        androidx.compose.runtime.CompositionLocalProvider(
+            tf.monochrome.android.ui.player.LocalGlassHoldsStill provides true,
         ) {
-            // Tap the handle (or swipe the sheet down / tap the scrim) to close.
-            Box(
+            Column(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .clickable(onClick = onDismiss)
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    // The panel itself now insets 12dp, so this sheds 12dp to
+                    // leave the content exactly where it was on screen — and
+                    // level with the speed panel's, which does the same.
+                    .padding(horizontal = PlayerDesignTokens.ScreenPadding - 12.dp)
+                    .padding(top = 10.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                // Tap the handle (or swipe the sheet down / tap the scrim) to close.
                 Box(
                     modifier = Modifier
-                        .width(40.dp)
-                        .height(4.dp)
-                        .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
-                )
-            }
+                        .clip(RoundedCornerShape(999.dp))
+                        .clickable(onClick = onDismiss)
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(4.dp)
+                            .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
+                    )
+                }
+        }
             // Top of the audio options: the AutoEQ headphone correction. The
             // Wavelet-style system-wide variant is a sub-toggle that only
             // appears while AutoEQ itself is on (and turning AutoEQ off also
