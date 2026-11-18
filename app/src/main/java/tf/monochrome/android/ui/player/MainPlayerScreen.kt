@@ -1026,80 +1026,80 @@ private fun StatusOverlayPanel(
                             .background(Color.White.copy(alpha = 0.35f), RoundedCornerShape(999.dp)),
                     )
                 }
-        }
-            // Top of the audio options: the AutoEQ headphone correction. The
-            // Wavelet-style system-wide variant is a sub-toggle that only
-            // appears while AutoEQ itself is on (and turning AutoEQ off also
-            // clears it, so the global effect never runs hidden).
-            Column(modifier = Modifier.fillMaxWidth()) {
-                ToggleRow(
-                    "AutoEQ",
-                    stringResource(R.string.autoeq_detail),
-                    autoEqEnabled,
-                    accent,
-                    onAutoEqToggle,
-                )
-                AnimatedVisibility(visible = autoEqEnabled) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 12.dp, top = 10.dp),
-                    ) {
-                        // Short form of the Settings caution — the sheet has no
-                        // room for the full reasoning, but this is where the
-                        // toggle is actually reachable mid-listen, so it cannot
-                        // be the one place that stays silent about it.
-                        ToggleRow(
-                            stringResource(R.string.system_wide),
-                            stringResource(R.string.system_wide_detail),
-                            systemWideAutoEqEnabled,
-                            accent,
-                            onSystemWideAutoEqToggle,
-                            badge = stringResource(R.string.badge_beta),
-                            caution = stringResource(R.string.system_wide_caution),
-                        )
+                // Top of the audio options: the AutoEQ headphone correction. The
+                // Wavelet-style system-wide variant is a sub-toggle that only
+                // appears while AutoEQ itself is on (and turning AutoEQ off also
+                // clears it, so the global effect never runs hidden).
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ToggleRow(
+                        "AutoEQ",
+                        stringResource(R.string.autoeq_detail),
+                        autoEqEnabled,
+                        accent,
+                        onAutoEqToggle,
+                    )
+                    AnimatedVisibility(visible = autoEqEnabled) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 12.dp, top = 10.dp),
+                        ) {
+                            // Short form of the Settings caution — the sheet has no
+                            // room for the full reasoning, but this is where the
+                            // toggle is actually reachable mid-listen, so it cannot
+                            // be the one place that stays silent about it.
+                            ToggleRow(
+                                stringResource(R.string.system_wide),
+                                stringResource(R.string.system_wide_detail),
+                                systemWideAutoEqEnabled,
+                                accent,
+                                onSystemWideAutoEqToggle,
+                                badge = stringResource(R.string.badge_beta),
+                                caution = stringResource(R.string.system_wide_caution),
+                            )
+                        }
                     }
                 }
-            }
-            // Bass/treble tone shelves (independent of the system-wide toggle —
-            // applied in-app, or via the global effect when system-wide is on).
-            ToneControlsPanel(
-                tone = toneControls,
-                accent = accent,
-                onChange = onToneControlsChange,
-            )
-            PlayerStatusGrid(
-                accent = accent,
-                timerLabel = timerLabel,
-                soundLabel = soundLabel,
-                speedLabel = speedLabel,
-                mixerLabel = "FX",
-                onTimer = onTimer,
-                onSound = onSound,
-                onSpeed = onSpeed,
-                onMixer = onMixer,
-            )
+                // Bass/treble tone shelves (independent of the system-wide toggle —
+                // applied in-app, or via the global effect when system-wide is on).
+                ToneControlsPanel(
+                    tone = toneControls,
+                    accent = accent,
+                    onChange = onToneControlsChange,
+                )
+                PlayerStatusGrid(
+                    accent = accent,
+                    timerLabel = timerLabel,
+                    soundLabel = soundLabel,
+                    speedLabel = speedLabel,
+                    mixerLabel = "FX",
+                    onTimer = onTimer,
+                    onSound = onSound,
+                    onSpeed = onSpeed,
+                    onMixer = onMixer,
+                )
 
-            // Monitoring row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                OverlayAction(Icons.Default.Animation, stringResource(R.string.visualizer), accent, visualizerActive, onVisualizer)
-                OverlayAction(Icons.Default.GraphicEq, stringResource(R.string.waveform), accent, waveformActive, onWaveform)
-            }
+                // Monitoring row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    OverlayAction(Icons.Default.Animation, stringResource(R.string.visualizer), accent, visualizerActive, onVisualizer)
+                    OverlayAction(Icons.Default.GraphicEq, stringResource(R.string.waveform), accent, waveformActive, onWaveform)
+                }
 
-            // Effects toggles — long-press a row to open that tool's page.
-            ToggleRow(stringResource(R.string.compressor), stringResource(R.string.compressor_detail), compressorEnabled, accent,
-                onCompressorToggle, onLongPress = onCompressorOpen)
-            ToggleRow("Inflator", stringResource(R.string.inflator_detail), inflatorEnabled, accent,
-                onInflatorToggle, onLongPress = onInflatorOpen)
-            ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.crossfeed_detail), crossfeedEnabled, accent,
-                onCrossfeedToggle, onLongPress = onCrossfeedOpen)
-            // Not an effect but a level: every song at one loudness. Long-press
-            // opens Settings › Audio, where its mode and target are.
-            ToggleRow(stringResource(R.string.settings_replaygain), stringResource(R.string.replaygain_detail), replayGainEnabled, accent,
-                onReplayGainToggle, onLongPress = onReplayGainOpen)
+                // Effects toggles — long-press a row to open that tool's page.
+                ToggleRow(stringResource(R.string.compressor), stringResource(R.string.compressor_detail), compressorEnabled, accent,
+                    onCompressorToggle, onLongPress = onCompressorOpen)
+                ToggleRow("Inflator", stringResource(R.string.inflator_detail), inflatorEnabled, accent,
+                    onInflatorToggle, onLongPress = onInflatorOpen)
+                ToggleRow(stringResource(R.string.crossfeed), stringResource(R.string.crossfeed_detail), crossfeedEnabled, accent,
+                    onCrossfeedToggle, onLongPress = onCrossfeedOpen)
+                // Not an effect but a level: every song at one loudness. Long-press
+                // opens Settings › Audio, where its mode and target are.
+                ToggleRow(stringResource(R.string.settings_replaygain), stringResource(R.string.replaygain_detail), replayGainEnabled, accent,
+                    onReplayGainToggle, onLongPress = onReplayGainOpen)
+            }
         }
             }
     }
