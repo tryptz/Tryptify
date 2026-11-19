@@ -24,7 +24,18 @@ enum class BiquadType {
 
 class Biquad {
 public:
-    void reset() { z1_ = z2_ = 0.0f; }
+    /**
+     * The lowest frequency a band is held to, in Hz, at every sample rate.
+     * It was a thousandth of the rate, written like the Nyquist limit beside
+     * it, but nothing about a low frequency depends on the rate: a 31 Hz band
+     * sat at 44 Hz on a 44.1 kHz stream and at 192 Hz at 192 kHz (more under
+     * oversampling, which runs the effect at 2 or 4 times the rate), and a
+     * 20 Hz high-pass at 192 kHz was 35 dB off. All it has to do is keep the
+     * frequency above zero. `biquad_low_freq_test` holds it.
+     */
+    static constexpr double kMinFreqHz = 1.0;
+
+    void reset() { z1_ = z2_ = 0.0; }
 
     void setCoefficients(float b0, float b1, float b2, float a1, float a2) {
         b0_ = b0; b1_ = b1; b2_ = b2; a1_ = a1; a2_ = a2;
@@ -38,7 +49,7 @@ public:
         // second. So the frequency stops just short of Nyquist, Q and gain
         // stay where the maths holds, and a non-finite input changes nothing.
         if (!(sampleRate > 0.0) || !finite(freq) || !finite(q) || !finite(gainDb)) return;
-        freq = std::max(1e-3 * sampleRate, std::min(0.49 * sampleRate, freq));
+        freq = std::max(kMinFreqHz, std::min(0.49 * sampleRate, freq));
         q = std::max(0.025, std::min(200.0, q));
         // A shelf's Q is its slope, and past about 2 the cookbook shelf grows
         // a resonant bump on top of its gain: +24 dB at Q 20 came out 60 dB
@@ -129,19 +140,20 @@ public:
                 break;
         }
 
-        // Normalize
-        b0_ = static_cast<float>(b0 / a0);
-        b1_ = static_cast<float>(b1 / a0);
-        b2_ = static_cast<float>(b2 / a0);
-        a1_ = static_cast<float>(a1 / a0);
-        a2_ = static_cast<float>(a2 / a0);
+        // Normalize, and keep them as doubles (see the members below).
+        b0_ = b0 / a0;
+        b1_ = b1 / a0;
+        b2_ = b2 / a0;
+        a1_ = a1 / a0;
+        a2_ = a2 / a0;
     }
 
     float process(float in) {
-        float out = b0_ * in + z1_;
-        z1_ = b1_ * in - a1_ * out + z2_;
-        z2_ = b2_ * in - a2_ * out;
-        return out;
+        const double x = in;
+        const double out = b0_ * x + z1_;
+        z1_ = b1_ * x - a1_ * out + z2_;
+        z2_ = b2_ * x - a2_ * out;
+        return static_cast<float>(out);
     }
 
     void processBlock(float* data, int numFrames) {
@@ -156,7 +168,12 @@ private:
         return dspIsFinite(x);
     }
 
-    float b0_ = 1.0f, b1_ = 0.0f, b2_ = 0.0f;
-    float a1_ = 0.0f, a2_ = 0.0f;
-    float z1_ = 0.0f, z2_ = 0.0f;
+    // Doubles, though samples go in and out as floats. A low band at a high
+    // rate has its poles a hair inside the unit circle: for 20 Hz at 192 kHz
+    // a1 is about -1.9999996, and a float steps by 0.00000012 there, as much
+    // as what the coefficient has to say. Kept in floats, a 20 Hz high-pass
+    // at 192 kHz was up to 7.6 dB off even with the frequency itself right.
+    double b0_ = 1.0, b1_ = 0.0, b2_ = 0.0;
+    double a1_ = 0.0, a2_ = 0.0;
+    double z1_ = 0.0, z2_ = 0.0;
 };

@@ -30,6 +30,13 @@ echo "== snapin_fixes_test"
 $cxx $flags "$here/snapin_fixes_test.cpp" -o "$out/snapin_fixes_test"
 "$out/snapin_fixes_test"
 
+# A low band lands on the frequency asked for at every rate the engine runs
+# at: biquad.h once held the frequency to a thousandth of the rate and kept
+# its coefficients in floats. With -ffast-math, as the phone builds it.
+echo "== biquad_low_freq_test"
+$cxx $flags -ffast-math "$here/biquad_low_freq_test.cpp" -o "$out/biquad_low_freq_test"
+"$out/biquad_low_freq_test"
+
 # The effects' delay lines and rings: read as they did before their % went,
 # never past their ends at any knob setting (DSP_CHECK_DELAY_RANGE counts
 # that), silent after a rate change; the limiter past its old 2^31-sample

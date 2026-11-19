@@ -69,7 +69,11 @@ device or NDK needed — the multichannel mixer, the Oxford stages at Atmos
 widths, ReplayGain's stage in front of the mixer, the Oxford effects and every
 snapin (`replay_gain_test`), the mixer's exactness (a flat mix and a fader
 moved and back come out bit for bit, `engine_exactness_test`), the effects'
-delay lines and buffers (`snapin_buffers_test`), the finite guards
+delay lines and buffers (`snapin_buffers_test`), a low band's frequency at
+every rate (`biquad_low_freq_test`: `util/biquad.h` holds a frequency to 1 Hz
+and the Nyquist limit and keeps its coefficients and state in doubles; it
+once held it to a thousandth of the rate, which moved every low band up, and
+floats cannot hold a 20 Hz filter's poles at 192 kHz), the finite guards
 (`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music
