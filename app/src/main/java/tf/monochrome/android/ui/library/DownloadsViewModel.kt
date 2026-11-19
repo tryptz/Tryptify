@@ -99,10 +99,10 @@ class DownloadsViewModel @Inject constructor(
 
     val downloadedTracks: StateFlow<List<DownloadedTrackEntity>?> =
         combine(roomTracks, folderTracks) { roomRows, folderRows ->
-            // A file this app downloaded is Room's row, not a second one.
-            val known = roomRows.mapTo(HashSet()) { SafPaths.absolutePath(it.filePath, primaryRoot) ?: it.filePath }
-            // Newest first overall; folder rows bias to file timestamp.
-            (roomRows + folderRows.filter { it.filePath !in known }).sortedByDescending { it.downloadedAt }
+            // A file this app downloaded is Room's row, not a second one, with
+            // a cover the image can open. Newest first overall; folder rows
+            // bias to file timestamp.
+            mergeDownloads(roomRows, folderRows) { SafPaths.absolutePath(it, primaryRoot) ?: it }
         }
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)

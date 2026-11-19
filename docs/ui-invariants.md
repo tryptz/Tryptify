@@ -1405,6 +1405,17 @@ results, a Discover shelf, a genre chart, the local detail pages
 (`UnifiedTrackSelectionBar` uses its `order`). It hides once everything is
 selected, and on a paged list (Local's Songs), which has no "all" on hand.
 
+**A Downloads row's cover is something the image can open** (`downloadCover`,
+`mergeDownloads`). A download's record keeps the cover its catalogue song
+carried, and TIDAL's is a cover id, not an address. `DownloadsScreen` handed
+it to `CoverImage` as it was, so every TIDAL download showed the music note
+(a phone's report of 2026-11-19). The row takes the cover the local library
+read from the same file when there is one (a picture on the phone: it needs
+no network, and downloads are for when there is none), else the record's
+cover made into its address with `buildCoverUrl`. Anything that shows a
+`DownloadedTrackEntity.albumCover` straight from the database asks
+`buildCoverUrl` first. `DownloadsListOrderTest` holds it.
+
 **Every list row is Material 3, in both looks.** Song rows (`TrackItem`, the
 library's `SongRow`, search results), the Library's category tiles, folders,
 album and artist cards stand on `materialSurface`, never glass: a list is the
