@@ -238,7 +238,9 @@ internal fun Modifier.dithered(): Modifier {
     // Dropped in low-performance mode: it's a full-screen offscreen shader pass
     // every frame, which is exactly the cost that mode exists to shed. Gradient
     // banding comes back, and that is the accepted trade.
-    if (LocalLowPerformance.current.disableLiquidGlass) return this
+    val low = LocalLowPerformance.current
+    // And at the Fast rendering quality, for the same reason (RenderQuality).
+    if (low.disableLiquidGlass || !low.renderQuality.dither) return this
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return this
     val shader = ditherShader ?: return this
     return this.graphicsLayer {
@@ -293,6 +295,7 @@ private fun liquidGlassModifier(
 ): Modifier {
     val baseFx = fx
     val shader = liquidGlassShader ?: return Modifier
+    val quality = LocalLowPerformance.current.renderQuality
 
     // The same two gates the player glass has. Every uTime term is scaled by
     // uLiquid and every uTilt term by uTiltAmount, so still letters need no
@@ -341,7 +344,8 @@ private fun liquidGlassModifier(
                 refraction = fx.glassRefraction,
                 rimGain = fx.glassRimBrightness,
                 dispersion = fx.glassDispersion,
-                sampleRings = fx.glassSampleRings.toFloat(),
+                // Held to what the rendering quality runs (RenderQuality).
+                sampleRings = quality.glassRings(fx.glassSampleRings).toFloat(),
                 // The Player Glass optics, mapped exactly as playerGlassModifier
                 // maps them. These were pinned (1, 1, 1, 1, 90, 0.7, 135°, 5, 0)
                 // before the lyrics had knobs for them, and each LyricsFxSettings
@@ -881,6 +885,7 @@ private fun playerGlassModifier(
     moves: Boolean,
 ): Modifier {
     val shader = liquidGlassShader ?: return Modifier
+    val quality = LocalLowPerformance.current.renderQuality
     // Unlike the lyric glass and the panel, which pin uLiquid to 1, this
     // surface's motion is user-tunable — and every uTime term in the shader is
     // scaled by uLiquid, so at zero it renders identically frame to frame and
@@ -943,7 +948,8 @@ private fun playerGlassModifier(
                 // skips). Above 0.15 body the rim is untouched.
                 rimGain = g.rimBrightness * (g.bodyOpacity / 0.15f).coerceIn(0f, 1f),
                 dispersion = g.dispersion,
-                sampleRings = g.sampleRings.toFloat(),
+                // Held to what the rendering quality runs (RenderQuality).
+                sampleRings = quality.glassRings(g.sampleRings).toFloat(),
                 roundness = g.roundness,
                 depth = g.depth,
                 // Player-tunable relight (Studio "Player Glass" tab). Surface

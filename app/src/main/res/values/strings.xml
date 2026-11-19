@@ -3269,6 +3269,12 @@
     <string name="settings_frame_rate_limit">Frame rate limit</string>
     <string name="settings_frame_rate_limit_desc">The most frames a second the app draws, with its animations, Trypt Mania and the visualizer. Lower saves battery and heat. Max draws on every display refresh.</string>
     <string name="settings_frame_rate_limit_chip">At most %1$d frames a second</string>
+    <string name="settings_render_quality">Rendering quality</string>
+    <string name="settings_render_quality_desc">How much the graphics chip draws for the glass and the lyrics’ light. Fast draws them smaller with fewer samples and scales them up: fewer pixels, more frames a second and less heat. High draws everything in full.</string>
+    <string name="settings_render_quality_high">High</string>
+    <string name="settings_render_quality_balanced">Balanced</string>
+    <string name="settings_render_quality_fast">Fast</string>
+    <string name="settings_render_quality_chip">The glass behind panes at %1$d%% of its pixels, up to %2$d reads a pixel</string>
     <string name="settings_fps_counter">FPS counter</string>
     <string name="settings_fps_counter_desc">Show the frames drawn each second and the display’s refresh rate in the top corner</string>
     <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>

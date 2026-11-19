@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import dev.chrisbanes.haze.HazeArea
 import dev.chrisbanes.haze.HazeState
+import tf.monochrome.android.performance.LocalLowPerformance
 import kotlin.math.ceil
 
 /**
@@ -81,7 +82,9 @@ internal fun Modifier.liveGlassLens(
 ): Modifier {
     val shader = liveLensShader ?: return this
     val view = LocalView.current
-    val divisor = LocalLensDivisor.current
+    // The screen's own ask (the galaxy's lighter glass) or the app-wide
+    // rendering quality, whichever draws it smaller.
+    val divisor = maxOf(LocalLensDivisor.current, LocalLowPerformance.current.renderQuality.lensDivisor)
     // Where this pane is on screen. Written by layout, read by draw; not state,
     // because the pre-draw check below is what turns a change into a redraw.
     val anchor = remember { LensAnchor() }
@@ -161,7 +164,7 @@ internal fun Modifier.liveGlassLens(
             // slope is a ratio of its own width — and the clip, the slab and
             // its rim light on top stay at full resolution, so the edge is as
             // crisp as ever.
-            val k = if (divisor > 1 && blurPx >= REDUCED_LENS_MIN_BLUR_PX) divisor.toFloat() else 1f
+            val k = lensDivisorFor(divisor, blurPx).toFloat()
             backdrop.renderEffect = effect.get(
                 LensEffectKey(size, margin, blurPx, lensR, lensW, glass, frost, k),
             ) {
@@ -339,6 +342,19 @@ internal val LocalLensDivisor = staticCompositionLocalOf { 1 }
  * switch the listener judges by eye. Narrower than this, the lens stays full.
  */
 private const val REDUCED_LENS_MIN_BLUR_PX = 12f
+
+/**
+ * The divisor a lens blurred by [blurPx] really runs at when [asked] for one:
+ * the largest up to it that still leaves the blur [REDUCED_LENS_MIN_BLUR_PX]
+ * wide at half size, the same six of the small layer's own px at any divisor.
+ * So a third of the size needs a blur of 18 px, and a lens with a narrower
+ * one is run at half, or whole. 1 when nothing smaller was asked for.
+ */
+internal fun lensDivisorFor(asked: Int, blurPx: Float): Int {
+    var k = asked.coerceAtLeast(1)
+    while (k > 1 && blurPx < REDUCED_LENS_MIN_BLUR_PX * k / 2f) k--
+    return k
+}
 
 private const val LENS_TAG = "LiveGlassLens"
 

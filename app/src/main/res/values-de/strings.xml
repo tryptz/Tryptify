@@ -3266,6 +3266,12 @@
     <string name="settings_frame_rate_limit">Bildratenbegrenzung</string>
     <string name="settings_frame_rate_limit_desc">Die meisten Bilder pro Sekunde, die die App, ihre Animationen, Trypt Mania und der Visualizer zeichnen. Weniger spart Akku und Wärme. Max zeichnet bei jeder Bildwiederholung.</string>
     <string name="settings_frame_rate_limit_chip">Höchstens %1$d Bilder pro Sekunde</string>
+    <string name="settings_render_quality">Renderqualität</string>
+    <string name="settings_render_quality_desc">Wie viel der Grafikchip für das Glas und das Licht der Songtexte zeichnet. Schnell zeichnet sie kleiner und mit weniger Abtastungen und skaliert sie hoch: weniger Pixel, mehr Bilder pro Sekunde und weniger Wärme. Hoch zeichnet alles vollständig.</string>
+    <string name="settings_render_quality_high">Hoch</string>
+    <string name="settings_render_quality_balanced">Ausgewogen</string>
+    <string name="settings_render_quality_fast">Schnell</string>
+    <string name="settings_render_quality_chip">Das Glas hinter den Flächen mit %1$d %% seiner Pixel, bis zu %2$d Lesezugriffe pro Pixel</string>
     <string name="settings_fps_counter">FPS-Zähler</string>
     <string name="settings_fps_counter_desc">Zeigt oben rechts die pro Sekunde gezeichneten Bilder und die Bildwiederholrate des Displays</string>
     <string name="fps_counter_reading">%1$d FPS (%2$d) · %3$d Hz</string>

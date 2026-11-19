@@ -20,6 +20,13 @@ data class LowPerformanceSettings(
     val disableAnimations: Boolean = false,
     val legacyPlayer: Boolean = false,
     val disableLiquidGlass: Boolean = false,
+    /**
+     * Rendering quality: how much of the glass and the lyrics' light the GPU
+     * is asked to draw ([RenderQuality]). Not one of the low-performance
+     * switches and not part of [allEnabled]: with the glass removed there is
+     * nothing for it to scale.
+     */
+    val renderQuality: RenderQuality = RenderQuality.HIGH,
 ) {
     /**
      * Whether the "Low performance mode" master switch reads as on.

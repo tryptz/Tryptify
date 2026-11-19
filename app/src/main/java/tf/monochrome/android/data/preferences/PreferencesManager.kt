@@ -32,6 +32,7 @@ import tf.monochrome.android.domain.model.ToneControls
 import tf.monochrome.android.performance.FrameRateLimit
 import tf.monochrome.android.performance.LowPerformanceSettings
 import tf.monochrome.android.performance.PerformanceProfile
+import tf.monochrome.android.performance.RenderQuality
 import tf.monochrome.android.visualizer.AmbientVisualizerSettings
 import tf.monochrome.android.visualizer.PresetRotationMode
 import tf.monochrome.android.visualizer.VisualizerBlendMode
@@ -315,6 +316,9 @@ class PreferencesManager @Inject constructor(
         private val LEGACY_PLAYER = booleanPreferencesKey("legacy_player")
         private val DISABLE_LIQUID_GLASS = booleanPreferencesKey("disable_liquid_glass")
         private val FRAME_RATE_LIMIT = intPreferencesKey("frame_rate_limit")
+        // Settings › System › Performance › Rendering quality (RenderQuality.id).
+        // Per-device, like the frame rate limit: not in SETTINGS_SYNC_KEYS.
+        private val RENDER_QUALITY = stringPreferencesKey("render_quality")
         private val SHOW_FPS_COUNTER = booleanPreferencesKey("show_fps_counter")
 
         // Interface
@@ -3080,7 +3084,15 @@ class PreferencesManager @Inject constructor(
             disableAnimations = prefs[DISABLE_ANIMATIONS] ?: false,
             legacyPlayer = prefs[LEGACY_PLAYER] ?: false,
             disableLiquidGlass = prefs[DISABLE_LIQUID_GLASS] ?: false,
+            renderQuality = RenderQuality.of(prefs[RENDER_QUALITY]),
         )
+    }.distinctUntilChanged()
+
+    /** Settings › System › Performance › Rendering quality. */
+    val renderQuality: Flow<RenderQuality> = dataStore.data.map { RenderQuality.of(it[RENDER_QUALITY]) }
+
+    suspend fun setRenderQuality(quality: RenderQuality) {
+        dataStore.edit { it[RENDER_QUALITY] = quality.id }
     }
 
     suspend fun setLowPerformanceMode(enabled: Boolean) {

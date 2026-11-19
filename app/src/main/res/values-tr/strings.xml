@@ -3266,6 +3266,12 @@
     <string name="settings_frame_rate_limit">Kare hızı sınırı</string>
     <string name="settings_frame_rate_limit_desc">Uygulamanın, animasyonlarının, Trypt Mania’nın ve görselleştiricinin saniyede çizdiği en fazla kare sayısı. Düşük değer pil ve ısıdan tasarruf sağlar. Maks. her ekran yenilemesinde çizer.</string>
     <string name="settings_frame_rate_limit_chip">Saniyede en fazla %1$d kare</string>
+    <string name="settings_render_quality">Görüntü oluşturma kalitesi</string>
+    <string name="settings_render_quality_desc">Grafik yongasının cam ve şarkı sözü ışığı için ne kadar çizim yaptığı. Hızlı, bunları daha az örnekle daha küçük çizip büyütür: daha az piksel, saniyede daha fazla kare ve daha az ısı. Yüksek her şeyi tam olarak çizer.</string>
+    <string name="settings_render_quality_high">Yüksek</string>
+    <string name="settings_render_quality_balanced">Dengeli</string>
+    <string name="settings_render_quality_fast">Hızlı</string>
+    <string name="settings_render_quality_chip">Panellerin arkasındaki cam piksellerinin %%%1$d kadarıyla, piksel başına en çok %2$d okuma</string>
     <string name="settings_fps_counter">FPS sayacı</string>
     <string name="settings_fps_counter_desc">Saniyede çizilen kareleri ve ekran yenileme hızını sağ üst köşede gösterir</string>
     <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>

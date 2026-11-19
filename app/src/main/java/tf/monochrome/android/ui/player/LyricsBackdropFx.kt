@@ -199,6 +199,8 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
     }
     RaysProbe.backdropState = "composed"
     val origin = remember { mutableStateOf<Offset?>(null) }
+    // SHAFTS_SCALE at the High rendering quality; smaller below it.
+    val shaftsScale = LocalLowPerformance.current.renderQuality.shaftsScale
     val fxLayer = rememberGraphicsLayer()
     val shadeLayer = rememberGraphicsLayer()
 
@@ -218,7 +220,7 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                 val f = light?.frameFor(at)
                 if (raysLight != null && f == null) RaysProbe.hit(RaysProbe.Backdrop.NO_LIGHT_FRAME)
                 // The shafts are drawn small and scaled up ([SHAFTS_SCALE]).
-                val down = SHAFTS_SCALE
+                val down = shaftsScale
                 // No shafts while the light is out (nothing is being sung):
                 // the layer would march every pixel to draw nothing. The
                 // shadow stays, falling the way the light stands.

@@ -3190,6 +3190,12 @@
     <string name="settings_frame_rate_limit">帧率上限</string>
     <string name="settings_frame_rate_limit_desc">应用及其动画、Trypt Mania 和可视化每秒最多绘制的帧数。调低可省电并减少发热。“最大”会在每次屏幕刷新时绘制。</string>
     <string name="settings_frame_rate_limit_chip">每秒最多 %1$d 帧</string>
+    <string name="settings_render_quality">渲染质量</string>
+    <string name="settings_render_quality_desc">图形芯片为玻璃效果和歌词光效绘制多少内容。“快速”会以更小的尺寸、更少的采样绘制后再放大：像素更少、帧率更高、发热更低。“高”则完整绘制一切。</string>
+    <string name="settings_render_quality_high">高</string>
+    <string name="settings_render_quality_balanced">均衡</string>
+    <string name="settings_render_quality_fast">快速</string>
+    <string name="settings_render_quality_chip">面板后的玻璃以 %1$d%% 的像素绘制，每像素最多读取 %2$d 次</string>
     <string name="settings_fps_counter">帧率计数器</string>
     <string name="settings_fps_counter_desc">在右上角显示每秒绘制的帧数和屏幕刷新率</string>
     <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>

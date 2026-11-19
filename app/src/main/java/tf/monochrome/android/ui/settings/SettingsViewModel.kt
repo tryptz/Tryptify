@@ -378,6 +378,8 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val disableLiquidGlass: StateFlow<Boolean> = preferences.disableLiquidGlass
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val renderQuality: StateFlow<tf.monochrome.android.performance.RenderQuality> = preferences.renderQuality
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.performance.RenderQuality.HIGH)
     val frameRateLimit: StateFlow<Int> = preferences.frameRateLimit
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.performance.FrameRateLimit.MAX)
     val showFpsCounter: StateFlow<Boolean> = preferences.showFpsCounter
@@ -678,6 +680,9 @@ class SettingsViewModel @Inject constructor(
     fun setLegacyPlayer(enabled: Boolean) { viewModelScope.launch { preferences.setLegacyPlayer(enabled) } }
     fun setDisableLiquidGlass(enabled: Boolean) { viewModelScope.launch { preferences.setDisableLiquidGlass(enabled) } }
     fun setFrameRateLimit(fps: Int) { viewModelScope.launch { preferences.setFrameRateLimit(fps) } }
+    fun setRenderQuality(quality: tf.monochrome.android.performance.RenderQuality) {
+        viewModelScope.launch { preferences.setRenderQuality(quality) }
+    }
     fun setShowFpsCounter(enabled: Boolean) { viewModelScope.launch { preferences.setShowFpsCounter(enabled) } }
     fun setVisualizerVsyncEnabled(value: Boolean) { viewModelScope.launch { preferences.setVisualizerVsyncEnabled(value) } }
     fun setVisualizerShowFps(enabled: Boolean) { viewModelScope.launch { preferences.setVisualizerShowFps(enabled) } }

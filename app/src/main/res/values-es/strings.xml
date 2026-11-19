@@ -3342,6 +3342,12 @@
     <string name="settings_frame_rate_limit">Límite de frecuencia de fotogramas</string>
     <string name="settings_frame_rate_limit_desc">El máximo de fotogramas por segundo que dibujan la app, sus animaciones, Trypt Mania y el visualizador. Más bajo ahorra batería y calor. Máx. dibuja en cada refresco de la pantalla.</string>
     <string name="settings_frame_rate_limit_chip">Como máximo %1$d fotogramas por segundo</string>
+    <string name="settings_render_quality">Calidad de renderizado</string>
+    <string name="settings_render_quality_desc">Cuánto dibuja el chip gráfico para el cristal y la luz de la letra. Rápida los dibuja más pequeños, con menos muestras, y los amplía: menos píxeles, más fotogramas por segundo y menos calor. Alta lo dibuja todo completo.</string>
+    <string name="settings_render_quality_high">Alta</string>
+    <string name="settings_render_quality_balanced">Equilibrada</string>
+    <string name="settings_render_quality_fast">Rápida</string>
+    <string name="settings_render_quality_chip">El cristal tras los paneles al %1$d %% de sus píxeles, hasta %2$d lecturas por píxel</string>
     <string name="settings_fps_counter">Contador de FPS</string>
     <string name="settings_fps_counter_desc">Muestra arriba a la derecha los fotogramas dibujados cada segundo y la frecuencia de refresco de la pantalla</string>
     <string name="fps_counter_reading">%1$d FPS (%2$d) · %3$d Hz</string>

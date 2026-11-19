@@ -3190,6 +3190,12 @@
     <string name="settings_frame_rate_limit">フレームレートの上限</string>
     <string name="settings_frame_rate_limit_desc">アプリとそのアニメーション、Trypt Mania、ビジュアライザが 1 秒に描画する最大フレーム数。下げるとバッテリーと発熱を抑えられます。「最大」は画面のリフレッシュごとに描画します。</string>
     <string name="settings_frame_rate_limit_chip">1 秒に最大 %1$d フレーム</string>
+    <string name="settings_render_quality">描画品質</string>
+    <string name="settings_render_quality_desc">ガラスと歌詞の光のためにグラフィックチップが描画する量。「高速」は少ないサンプルで小さく描いて拡大します。ピクセルが減り、フレームレートが上がり、発熱が抑えられます。「高」はすべてをそのまま描画します。</string>
+    <string name="settings_render_quality_high">高</string>
+    <string name="settings_render_quality_balanced">バランス</string>
+    <string name="settings_render_quality_fast">高速</string>
+    <string name="settings_render_quality_chip">パネル背後のガラスを %1$d%% のピクセルで描画、1 ピクセルあたり最大 %2$d 回の読み取り</string>
     <string name="settings_fps_counter">FPS カウンター</string>
     <string name="settings_fps_counter_desc">1 秒に描画したフレーム数と画面のリフレッシュレートを右上に表示します</string>
     <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>

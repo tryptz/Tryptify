@@ -2069,6 +2069,39 @@ wide enough (`REDUCED_LENS_MIN_BLUR_PX`); the clip, the slab and its rim stay at
 full resolution. The shrink before the blur is not exact, which is why it is a
 switch and not the default.
 
+**Rendering quality is one setting for the whole app, and High is the app as
+it was** (`RenderQuality`, Settings › System › Performance, per device, not
+synced and not in a theme). A shader costs the pixels it covers times the work
+on each, and on the owner's phone the glass covered 7 to 10 megapixels a frame
+on the player, three to four screens, at 9 ms of GPU against a 6 ms frame
+(log of 2026-11-18). Balanced and Fast move those two factors and nothing
+else:
+
+- the live lens under a pane runs at a half or a third of its size, a quarter
+  or a ninth of its pixels (`lensDivisor`, the larger of it and a screen's own
+  `LocalLensDivisor`), and only as small as its blur hides
+  (`lensDivisorFor`: the blur stays six of the small layer's px or more, so a
+  third needs an 18 px blur and a narrower one falls back to half, then
+  whole);
+- the god rays' shafts are drawn at 0.4 or a third of the screen, not half
+  (`shaftsScale`; `SHAFTS_SCALE` is High's), with their samples capped
+  (`maxRayQuality`, through `LyricRayLight.maxQuality`);
+- a slab pixel reads the picture at most 9 or 5 times, not 13
+  (`maxGlassRings`, at the two places `liquidGlassEffect` is called);
+- at Fast the gradients' dither pass does not run.
+
+Every cap is applied where the value is drawn, never to the saved setting:
+the Studio's sliders show what the listener chose, and High runs exactly
+that. **The slab is never drawn smaller.** Its layer holds the pane's rim
+and, on the player, its icons, and `LIQUID_GLASS_SRC` measures its bevel,
+ripples and cells in px: at half size the rim and the icons go soft, which is
+a third look. A frosted pane's backdrop is already blurred at a sixteenth of
+its pixels (`frostInputScale`) and is left alone. A new shader layer that
+could be drawn small takes its size from `RenderQuality`, not a constant of
+its own. `RenderQualityTest` holds the levels; none of it had been seen on a
+phone when it was written, so the two lower levels' look is the owner's to
+judge.
+
 **Each map frame is reported in the debug log** (`GalaxyFrameStats`, tag
 `GalaxyFx`): fps, frame, main thread, render thread and GPU times, late frames,
 and how often each pass ran. Judge GPU work by those lines, before and after.

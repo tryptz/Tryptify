@@ -3342,6 +3342,12 @@
     <string name="settings_frame_rate_limit">Limite frame rate</string>
     <string name="settings_frame_rate_limit_desc">Il numero massimo di fotogrammi al secondo che disegnano l’app, le sue animazioni, Trypt Mania e il visualizzatore. Più basso fa risparmiare batteria e calore. Max disegna a ogni aggiornamento dello schermo.</string>
     <string name="settings_frame_rate_limit_chip">Al massimo %1$d fotogrammi al secondo</string>
+    <string name="settings_render_quality">Qualità di rendering</string>
+    <string name="settings_render_quality_desc">Quanto disegna il chip grafico per il vetro e la luce dei testi. Veloce li disegna più piccoli, con meno campioni, e li ingrandisce: meno pixel, più fotogrammi al secondo e meno calore. Alta disegna tutto per intero.</string>
+    <string name="settings_render_quality_high">Alta</string>
+    <string name="settings_render_quality_balanced">Bilanciata</string>
+    <string name="settings_render_quality_fast">Veloce</string>
+    <string name="settings_render_quality_chip">Il vetro dietro i pannelli al %1$d%% dei suoi pixel, fino a %2$d letture per pixel</string>
     <string name="settings_fps_counter">Contatore FPS</string>
     <string name="settings_fps_counter_desc">Mostra in alto a destra i fotogrammi disegnati ogni secondo e la frequenza di aggiornamento dello schermo</string>
     <string name="fps_counter_reading">%1$d fps (%2$d) · %3$d Hz</string>

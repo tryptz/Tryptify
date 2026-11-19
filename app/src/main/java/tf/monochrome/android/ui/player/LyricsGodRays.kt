@@ -143,6 +143,12 @@ internal class LyricRayLight(
      * nothing switches.
      */
     private val level: () -> Float = { 1f },
+    /**
+     * The highest quality step these rays run at (1 to 4), whatever the
+     * Studio's slider says: the app-wide rendering quality's cap
+     * ([tf.monochrome.android.performance.RenderQuality.maxRayQuality]).
+     */
+    val maxQuality: Int = 4,
 ) {
     /**
      * This frame's settings: [baseFx] with whatever the music links are moving.
@@ -316,9 +322,10 @@ internal fun rememberLyricRayLight(
     val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
     val window = LocalWindowInfo.current.containerSize
     val scale = min(window.width, window.height).toFloat()
-    val light = remember(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level) {
+    val maxQuality = LocalLowPerformance.current.renderQuality.maxRayQuality
+    val light = remember(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level, maxQuality) {
         RaysProbe.lightsBuilt++
-        LyricRayLight(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level)
+        LyricRayLight(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level, maxQuality)
     }
     // Keyed on nothing, so a light rebuilt every recomposition still gets
     // reported, as a high "lights built", instead of restarting the timer.
@@ -428,6 +435,10 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
  * second with the GPU 19 to 28 ms in each, against 119 with them off (the
  * live log, 2026-11-14, a 165 Hz screen). The light on the letters themselves
  * ([RayOutput.ON_LETTERS]) stays at full size: that is the letters' own edge.
+ *
+ * This is the size at the High rendering quality, the app's own; Balanced and
+ * Fast draw them smaller still
+ * ([tf.monochrome.android.performance.RenderQuality.shaftsScale]).
  */
 internal const val SHAFTS_SCALE = 0.5f
 
@@ -476,7 +487,7 @@ internal fun Density.setGodRayUniforms(
     px: Float = 1f,
 ) {
     val fx = light.fx
-    val samples = GodRayGeometry.samplesFor(fx.godRayQuality)
+    val samples = GodRayGeometry.samplesFor(minOf(fx.godRayQuality, light.maxQuality))
     val decay = GodRayGeometry.perSampleDecay(fx.godRayDecay, samples)
 
     shader.setFloatUniform("uLight", f.light.x * px, f.light.y * px)

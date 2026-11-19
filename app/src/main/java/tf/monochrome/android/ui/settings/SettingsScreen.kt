@@ -3154,6 +3154,57 @@ private fun SystemTab(viewModel: SettingsViewModel, navController: NavController
             )
         }
 
+        // Rendering quality: how much the GPU draws for the glass and the
+        // lyrics' light, app-wide (RenderQuality). High is the app as it was.
+        val renderQuality by viewModel.renderQuality.collectAsStateWithLifecycle()
+        val renderQualityTitle = stringResource(R.string.settings_render_quality)
+        Text(
+            renderQualityTitle,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.settingsAnchor(renderQualityTitle).padding(top = 8.dp, bottom = 2.dp),
+        )
+        Text(
+            stringResource(R.string.settings_render_quality_desc),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            tf.monochrome.android.performance.RenderQuality.entries.forEach { quality ->
+                tf.monochrome.android.ui.mixer.GlassChoiceChip(
+                    label = stringResource(
+                        when (quality) {
+                            tf.monochrome.android.performance.RenderQuality.HIGH -> R.string.settings_render_quality_high
+                            tf.monochrome.android.performance.RenderQuality.BALANCED -> R.string.settings_render_quality_balanced
+                            tf.monochrome.android.performance.RenderQuality.FAST -> R.string.settings_render_quality_fast
+                        },
+                    ),
+                    selected = renderQuality == quality,
+                    accent = MaterialTheme.colorScheme.primary,
+                    onClick = { viewModel.setRenderQuality(quality) },
+                    description = stringResource(
+                        R.string.settings_render_quality_chip,
+                        quality.lensPixelPercent,
+                        quality.maxGlassReads,
+                    ),
+                )
+            }
+        }
+        // What the chosen one costs, in the two numbers it moves.
+        Text(
+            stringResource(
+                R.string.settings_render_quality_chip,
+                renderQuality.lensPixelPercent,
+                renderQuality.maxGlassReads,
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+        )
+
         // The frame rate limit. Not a display-mode vote (the window holds
         // none): the app draws on fewer of the panel's refreshes, and the
         // visualizer's render threads wait out the same interval.
