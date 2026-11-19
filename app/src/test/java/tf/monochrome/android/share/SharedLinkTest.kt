@@ -258,4 +258,16 @@ class SharedLinkTest {
         // The party's own links stay the party's.
         assertNull(SharedLink.parse("https", "tryptify.com", "/party/K7QD"))
     }
+
+    @Test
+    fun `an album's link is waited for until its preview is made, a song's is not`() {
+        val query = tf.monochrome.android.data.api.HiFiApiClient::shareLinkQuery
+        // An album: no start (it has none), and wait=1 when asked.
+        assertEquals("source=tidal&album=222119186&wait=1", query("tidal", "222119186", null, 95, true))
+        assertEquals("source=tidal&album=222119186", query("tidal", "222119186", null, null, false))
+        // A song: its start, and no waiting.
+        assertEquals("source=deezer&album=6575789&track=67238728&t=95", query("deezer", "6575789", 67238728L, 95, false))
+        // A Qobuz album's id is a slug: it goes in as it is, encoded.
+        assertEquals("source=qobuz&album=abc123xyz&wait=1", query("qobuz", "abc123xyz", null, null, true))
+    }
 }

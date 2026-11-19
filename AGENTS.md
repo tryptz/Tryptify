@@ -591,6 +591,17 @@ falls back to YouTube the same way; an album link does not.
 `SharedLinkTest` and `SharedSongResolverTest` hold the shapes, the
 signature and its fallback, the match and the routing.
 
+**An album's link is waited for.** In Discord an album link plays a video
+TrypT-hifi makes, a player in a picture: the cover, the track list, a few
+seconds of each song (Discord runs no page of ours, only a video). It takes
+longer to make than Discord waits for it, and a link pasted before it was
+ready showed nothing, which Discord then remembers for half an hour
+(2026-11-18). So the album page's share asks `/api/share/link` with `wait=1`
+(`HiFiApiClient.shareLink(wait = true)`), which answers when the video can be
+played or after 45 seconds, says it is preparing the album
+(`share_preparing`) and opens the share sheet when the link comes; it waits
+50 seconds at most. A song's link is not waited for.
+
 **A file of the listener's own has a link too** (`ShareLinks.localLink`): a
 file bought or downloaded from TIDAL, Qobuz or Deezer is the catalogue's
 song, and is shared as it. Its ISRC tag is asked of Qobuz, which finds a

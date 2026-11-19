@@ -105,6 +105,19 @@ class HiFiApiClient @Inject constructor(
         // wait-for-all-children semantics.
         private const val QOBUZ_REQUEST_TIMEOUT_MS = 6_000L
 
+        /** A share link waited for until its preview is made: the server's 45 s and some. */
+        private const val SHARE_WAIT_TIMEOUT_MS = 50_000L
+
+        /**
+         * What /api/share/link is asked: the release, the song on it, where
+         * the song's preview starts ([startSec], a song only) and whether to
+         * [wait] for the preview.
+         */
+        internal fun shareLinkQuery(source: String, album: String, track: Long?, startSec: Int?, wait: Boolean): String =
+            "source=$source&album=${java.net.URLEncoder.encode(album, "UTF-8")}" + (track?.let { "&track=$it" } ?: "") +
+                (startSec?.takeIf { track != null && it >= 0 }?.let { "&t=$it" } ?: "") +
+                (if (wait) "&wait=1" else "")
+
         // TrypT HiFi checks the Atmos manifest (one HiFi API round trip plus
         // the manifest fetch) before answering; give it longer than a search.
         private const val TIDAL_ATMOS_TIMEOUT_MS = 10_000L
@@ -597,8 +610,14 @@ class HiFiApiClient @Inject constructor(
      * Discord plays a preview; TrypT-hifi also puts the song's ISRC in it.
      * Null when none answers (a HiFi API that is not TrypT-hifi has no such
      * route): the caller then makes the link itself, which still plays.
+     *
+     * [wait]: the server answers only once the link's preview can be played
+     * (or after 45 seconds), and this waits that long. For an album, whose
+     * preview takes longer to make than Discord waits for it: pasted before
+     * it was ready, the link showed nothing, and Discord remembers that for
+     * half an hour. A TrypT-hifi from before `wait` answers at once.
      */
-    suspend fun shareLink(source: String, album: String, track: Long?, startSec: Int? = null): String? {
+    suspend fun shareLink(source: String, album: String, track: Long?, startSec: Int? = null, wait: Boolean = false): String? {
         val first = when (source) {
             "qobuz" -> instanceManager.qobuzInstanceOrNull()
             "deezer" -> instanceManager.deezerInstanceOrNull()
@@ -611,12 +630,19 @@ class HiFiApiClient @Inject constructor(
         ).map { it.url.trimEnd('/') }.distinct()
         // t: where the preview starts, for a song shared while it plays. A
         // TrypT-hifi from before it ignores the parameter.
-        val query = "source=$source&album=${java.net.URLEncoder.encode(album, "UTF-8")}" + (track?.let { "&track=$it" } ?: "") +
-            (startSec?.takeIf { track != null && it >= 0 }?.let { "&t=$it" } ?: "")
+        val query = shareLinkQuery(source, album, track, startSec, wait)
+        val patience = if (wait) SHARE_WAIT_TIMEOUT_MS else QOBUZ_REQUEST_TIMEOUT_MS
         for (base in bases) {
-            val url = withTimeoutOrNull(QOBUZ_REQUEST_TIMEOUT_MS) {
+            val url = withTimeoutOrNull(patience) {
                 runCatching {
-                    val res = httpClient.get("$base/api/share/link?$query")
+                    val res = httpClient.get("$base/api/share/link?$query") {
+                        // The engine's 30 s read timeout would end a waited-for
+                        // link before the server's 45 s are up.
+                        if (wait) timeout {
+                            socketTimeoutMillis = patience
+                            requestTimeoutMillis = patience
+                        }
+                    }
                     if (!res.status.isSuccess()) return@runCatching null
                     val body = json.parseToJsonElement(res.bodyAsText()) as? JsonObject
                     ((body?.get("data") as? JsonObject)?.get("url") as? JsonPrimitive)?.contentOrNull

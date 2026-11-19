@@ -95,7 +95,12 @@ class ShareLinks @Inject constructor(
                 ?: (SharedLink.Source.TIDAL to albumId.toString())
         }
         val link = SharedLink(source, album, null, title = detail.album.title, artist = detail.album.artist?.name)
-        share(link, detail.album.title)
+        // An album's preview is a video of its track list with a part of each
+        // song, which the server takes many seconds to make. The link is
+        // waited for until it is there: pasted in Discord sooner, it showed
+        // nothing at all.
+        toast(text().getString(R.string.share_preparing, detail.album.title))
+        share(link, detail.album.title, waitForPreview = true)
     }
 
     /**
@@ -148,8 +153,8 @@ class ShareLinks @Inject constructor(
         return share
     }
 
-    private suspend fun share(link: SharedLink, title: String, previewStartSec: Int? = null) {
-        val url = link.album?.let { apiClient.shareLink(link.source.slug, it, link.track, previewStartSec) } ?: SharedLink.url(link)
+    private suspend fun share(link: SharedLink, title: String, previewStartSec: Int? = null, waitForPreview: Boolean = false) {
+        val url = link.album?.let { apiClient.shareLink(link.source.slug, it, link.track, previewStartSec, waitForPreview) } ?: SharedLink.url(link)
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, url)
