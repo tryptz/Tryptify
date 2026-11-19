@@ -2032,6 +2032,8 @@
     <string name="fx_god_ray_sway">Salınım</string>
     <string name="fx_god_ray_sway_desc">Işık, orijinal Shadertoy’un yolunu izleyerek sözlerin üzerinde gezinir.</string>
     <string name="fx_god_ray_tilt_desc">Telefonu eğmenin ışığı ne kadar savurduğu.</string>
+    <string name="fx_god_ray_transition">Işık geçişi</string>
+    <string name="fx_god_ray_transition_desc">Bir kelime veya satır başladığında ışığın yanması, bittiğinde sönmesi ve bir kelimeden diğerine geçmesi için gereken süre. 0’da anında değişir.</string>
     <string name="fx_god_ray_samples_value">%1$d örnek</string>
     <string name="fx_god_ray_quality_desc">Piksel başına örnek: daha temiz huzmeler ile GPU maliyeti arasında denge.</string>
     <string name="fx_motion_blur">Hareket bulanıklığı</string>

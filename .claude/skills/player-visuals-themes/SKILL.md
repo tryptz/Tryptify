@@ -171,7 +171,7 @@ Personal fields are omitted here — never set them in a preset.
 |---|---|---|---|
 | `fontSizeSp` | 14..64 | 23 | Base type size; the **ceiling** the width-fitter shrinks from. Bigger ⇒ larger but more per-line shrink on long lines. |
 | `letterSpacingSp` | -1..1 | -0.2 | Tracking. Negative = condensed/dense; positive = airy/editorial. |
-| `edgeMarginDp` | 0..48 | 0 | Side inset (added to a fixed bevel-safe pad). Larger narrows the column ⇒ earlier shrink / more centred. |
+| `edgeMarginDp` | 0..48 | 0 | Side inset of the text (added to a fixed bevel-safe pad). Larger narrows the column ⇒ earlier shrink / more centred. It moves the text only: the glass and the other layers stay the surface's full width, so letters moving past the text's edge are not cut. |
 | `maxWrapLines` | 1..3 | 3 | Rows a line may wrap before shrinking. **1 = strict single-line ticker.** |
 | `liquidGlass` | bool | true | Master glass relight. **Off = flat solid text** and every `glass*` field below becomes a no-op. |
 | `glassBodyOpacity` | 0.2..1 | 0.62 | Letter face alpha. Low = see-through ghost text; high = solid. |
@@ -219,6 +219,7 @@ Personal fields are omitted here — never set them in a preset.
 | `godRaySpinDps` | -45..45 | 0 | The light orbits the line, degrees per second; sign = direction. |
 | `godRaySway` | 0..1 | 0 | The light wanders on the Shadertoy's own path, `(sin(t), sin(0.913·t))`, out to half the window's short side at 1. Runs a frame clock. |
 | `godRayTilt` | 0..1.5 | 0 | How far tilting the phone swings the light. Device only; > 0 holds the gravity sensor. |
+| `godRayFadeMs` | 0..1000 | 250 | Light transition, ms: how long the light takes to come up when a word or line starts being sung, to go out when it is over, and to glide from one sung word or line to the next. 0 = switches and jumps. The light is out whenever nothing is sung (before the first line, between words when following the word, after a word-timed line's last word). Not music-linkable. |
 
 ## Player Glass parameter reference
 

@@ -2083,6 +2083,8 @@
     <string name="fx_god_ray_sway">Oscillazione</string>
     <string name="fx_god_ray_sway_desc">La luce si sposta sul testo seguendo la traiettoria originale di Shadertoy.</string>
     <string name="fx_god_ray_tilt_desc">Di quanto l’inclinazione del telefono sposta la luce.</string>
+    <string name="fx_god_ray_transition">Transizione della luce</string>
+    <string name="fx_god_ray_transition_desc">Il tempo che la luce impiega ad accendersi quando inizia una parola o una riga, a spegnersi quando finisce e a passare da una parola alla successiva. A 0 cambia all’istante.</string>
     <string name="fx_god_ray_samples_value">%1$d campioni</string>
     <string name="fx_god_ray_quality_desc">Campioni per pixel: fasci più nitidi al costo di un maggior carico sulla GPU.</string>
     <string name="fx_motion_blur">Sfocatura di movimento</string>

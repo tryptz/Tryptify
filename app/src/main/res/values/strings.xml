@@ -2033,6 +2033,8 @@
     <string name="fx_god_ray_sway">Sway</string>
     <string name="fx_god_ray_sway_desc">The light wanders over the lyrics on the Shadertoy\'s own path.</string>
     <string name="fx_god_ray_tilt_desc">How far tilting the phone swings the light.</string>
+    <string name="fx_god_ray_transition">Light transition</string>
+    <string name="fx_god_ray_transition_desc">How long the light takes to come on when a word or line starts, to go out when it ends, and to move from one word to the next. 0 switches at once.</string>
     <string name="fx_god_ray_samples_value">%1$d samples</string>
     <string name="fx_god_ray_quality_desc">Samples per pixel: cleaner shafts against GPU cost.</string>
     <string name="fx_motion_blur">Motion blur</string>

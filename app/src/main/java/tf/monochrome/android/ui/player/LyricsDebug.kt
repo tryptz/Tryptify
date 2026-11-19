@@ -85,11 +85,15 @@ internal object LyricsDebug {
  * preview, on the same settings, did, and nothing in the log said why.
  */
 internal object RaysProbe {
-    /** How the backdrop's draw went. */
-    enum class Backdrop { NO_ORIGIN, LETTERS_RELEASED, NO_LIGHT_FRAME, NO_EFFECT, SHADOW_ONLY, RAYS }
+    /**
+     * How the backdrop's draw went. LIGHT_OUT is a frame with the light
+     * faded out because nothing is being sung ([LyricSung]): no shafts are
+     * drawn then, on purpose (the shadow still is).
+     */
+    enum class Backdrop { NO_ORIGIN, LETTERS_RELEASED, NO_LIGHT_FRAME, NO_EFFECT, SHADOW_ONLY, RAYS, LIGHT_OUT }
 
     /** How a lyric surface's own rays layer went (the light on the letters, or the legacy rays). */
-    enum class Surface { NO_ORIGIN, NO_LIGHT_FRAME, LIT }
+    enum class Surface { NO_ORIGIN, NO_LIGHT_FRAME, LIT, LIGHT_OUT }
 
     private val backdrop = IntArray(Backdrop.entries.size)
     private val surface = IntArray(Surface.entries.size)

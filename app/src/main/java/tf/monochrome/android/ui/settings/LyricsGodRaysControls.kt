@@ -89,6 +89,14 @@ internal fun GodRaysControls(
             description = stringResource(R.string.fx_god_ray_follow_word_desc),
         ) { on -> onUpdate { it.copy(godRaysFollowWord = on) } }
     }
+    // Not linked to the music: it is how long an animation runs, not a value
+    // drawn each frame.
+    FxSlider(
+        stringResource(R.string.fx_god_ray_transition), String.format(Locale.US, "%.0f ms", fx.godRayFadeMs),
+        fx.godRayFadeMs, 0f..1000f,
+        description = stringResource(R.string.fx_god_ray_transition_desc),
+        defaultValue = LyricsFxSettings.DEFAULT.godRayFadeMs,
+    ) { v -> onUpdate { it.copy(godRayFadeMs = v) } }
 
     FxSlider(
         stringResource(R.string.fx_god_ray_glass_catch), "${(fx.glassRayCatch * 100).roundToInt()}%",

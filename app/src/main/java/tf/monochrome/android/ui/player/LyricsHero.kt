@@ -436,11 +436,40 @@ internal fun SyncedLyricsView(
     val trackWord = followWord || curveTarget == LyricsFxSettings.CURVE_WORD
     val sungWord = remember { SungWordAnchor() }
     val listBox = remember { androidx.compose.runtime.mutableStateOf(Rect.Zero) }
-    val bandInRoot: () -> Rect? = remember(listState, currentLineState, followWord) {
+    // What is being sung this moment, for the light: out before the first
+    // line, and again when a word (or, following the line, the line) is over
+    // (LyricSung). Derived, so it changes at a word's start and end and not on
+    // every position poll, and read outside composition: nothing recomposes.
+    val lightByWord = followWord && !fx.godRaysAllLyrics
+    val sungNow = remember(lines, syncDelayMs, lightByWord) {
+        derivedStateOf { LyricSung.at(lines, position - syncDelayMs, byWord = lightByWord) }
+    }
+    // The transition (Lyrics FX › God rays): the fade in and out, and the
+    // light's glide from one sung word or line to the next.
+    val lightFadeMs = if (fx.godRays) fx.godRayFadeMs.toInt() else 0
+    val lightLevel = if (fx.godRays) {
+        rememberLyricLightLevel(lit = remember(sungNow) { { sungNow.value.lit } }, fadeMs = lightFadeMs)
+    } else {
+        null
+    }
+    val lightGlide = if (fx.godRays) {
+        rememberLyricBandGlide(place = remember(sungNow) { { sungNow.value.place } }, glideMs = lightFadeMs)
+    } else {
+        null
+    }
+    val lightLevelOf: () -> Float = remember(lightLevel) { { lightLevel?.value ?: 1f } }
+    val bandInRoot: () -> Rect? = remember(listState, currentLineState, followWord, sungNow, lightGlide, lightLevel) {
         {
             val line = currentLineState.value
-            (if (followWord) sungWord.rectFor(line) else null)
+            val band = (if (followWord) sungWord.rectFor(line) else null)
                 ?: activeLineBand(listState, line)?.translate(listBox.value.topLeft)
+            if (lightGlide == null) {
+                band
+            } else {
+                // A light that is out comes up on the new word; one that is
+                // on is carried there.
+                lightGlide.rect(sungNow.value.place, band, carry = (lightLevel?.value ?: 1f) > 0.05f)
+            }
         }
     }
     // Prefer the player-provided shared pulse (one analyzer stake; the pump
@@ -462,10 +491,14 @@ internal fun SyncedLyricsView(
             band = bandInRoot,
             lettersBox = remember { { listBox.value.takeUnless { it.isEmpty } } },
             debugName = "lyric view",
+            level = lightLevelOf,
         )
     }
     if (backdrop != null) {
-        androidx.compose.runtime.SideEffect { backdrop.capture.bandInRoot = bandInRoot }
+        androidx.compose.runtime.SideEffect {
+            backdrop.capture.bandInRoot = bandInRoot
+            backdrop.capture.lightLevel = lightLevelOf
+        }
     }
     // The box the curve's dome covers, in root px, read in the draw phase:
     // the sung line, or its sung word (the line on line-timed lyrics); null
@@ -497,10 +530,12 @@ internal fun SyncedLyricsView(
         // there are plenty of upcoming lines, the anchor scroll is unaffected.
         val halfViewport = maxHeight / 2
         val tailPadding = (maxHeight * 0.12f).coerceAtLeast(24.dp)
-        // A fixed bevel-safe inset (on top of the user's edge margin) keeps the
-        // outermost glyphs — and their puffy 3D glass bevels — off the layer's
-        // clip edge, so edge letters never get corner-cut against the border.
-        val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
+        // Where the text starts and ends: the user's edge margin plus a fixed
+        // bevel-safe inset. It is content padding inside the list, never a
+        // padding around it: the glass, the curve and the other layers run the
+        // surface's whole width, so a letter that pumps, waves or bows past
+        // the text's edge is drawn, not cut off at it.
+        val sideInset = lyricSideInset(fx)
         // The line width is the same for every item, so read it once here:
         // inside that inset, less room for the bass bounce (lyricFitWidth).
         val fitWidth = lyricFitWidth(maxWidth, fx)
@@ -592,10 +627,9 @@ internal fun SyncedLyricsView(
                 // the shafts pass over it, and outside the inset so its blur is
                 // not cut off at the edge. The backdrop draws it when there is one.
                 .then(if (backdrop == null) Modifier.lyricShadow(rayLight) else Modifier)
-                // User edge margin + a fixed bevel-safe inset, so the outermost
-                // glyphs (and their glass bevels) never sit flush against the
-                // clip edge where they'd be corner-cut.
-                .padding(horizontal = sideInset)
+                // No padding here: every layer below is as wide as the surface
+                // (the screen, in the player). The edge margin is the list's
+                // content padding, which moves the text and no layer's edge.
                 .fxaa()
                 // The same light, so the glass letters catch what the shafts
                 // stream from.
@@ -618,7 +652,12 @@ internal fun SyncedLyricsView(
                 // list, only while it moves; a layer per line would cut each
                 // line's blur off at its own box.
                 .lyricMotionBlur(glideBlur),
-            contentPadding = PaddingValues(top = halfViewport, bottom = tailPadding),
+            contentPadding = PaddingValues(
+                start = sideInset,
+                top = halfViewport,
+                end = sideInset,
+                bottom = tailPadding,
+            ),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             itemsIndexed(lines) { index, line ->
@@ -1024,10 +1063,26 @@ private const val INACTIVE_LINE_SCALE = 0.95f
 
 /**
  * Fixed side inset that keeps the outermost glyphs (and their puffy 3D glass
- * bevels) clear of the lyric layer's clip edge, so edge letters are never
- * corner-cut against the screen border. Added on top of the user's edge margin.
+ * bevels) clear of the lyric surface's edge, the screen border in the player,
+ * so edge letters are never corner-cut against it. Added on top of the user's
+ * edge margin.
  */
 private val LYRIC_BEVEL_SAFE_DP = 14.dp
+
+/**
+ * How far in from each side of the lyric surface the text starts: the user's
+ * edge margin ([LyricsFxSettings.edgeMarginDp]) plus [LYRIC_BEVEL_SAFE_DP].
+ *
+ * It is the lyric list's content padding and nothing else. The layers that
+ * draw the letters (the glass, the copy for the rays, the curve, the motion
+ * blur) are the surface's full width, because a layer cannot draw past its
+ * own bounds: while this was a padding around the list, those layers ended
+ * where the text did, and a letter the beat, the wave or the curve carried
+ * past the text's edge was cut off there in a straight line (seen on device,
+ * on lines that start from the left). The margin moves the text; the box the
+ * letters are drawn in stays the surface.
+ */
+internal fun lyricSideInset(fx: LyricsFxSettings): Dp = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
 
 /**
  * Extra width reserved beyond the raw peak bounce scale when fitting a
@@ -1042,19 +1097,18 @@ private val EDGE_FEATHER_MAX = 14.dp
 
 /**
  * The width a width-constrained lyric line is fitted to inside a surface
- * [maxWidth] wide: less the user's edge margin and the bevel-safe inset on
- * each side, then less headroom for the bass bounce. The line pumps via a
- * graphicsLayer scale (bassBeat), but it lives inside the lyric surface's
- * glass render-layer, which only captures the line width — so a long line
- * swelling past that would be clipped. The box reserves the PEAK pump scale
- * plus a small edge-safety margin, so at full pump the glyphs stay INSIDE the
- * glass clip edge — leaving room for the glass bevel/refraction, which lenses
- * a few px beyond the glyph geometry and would otherwise get corner-cut on a
- * hard kick. (The bass pulse caps at ~1.6 in rememberBassPulse.) Short lines
- * aren't width-constrained, so the fitter leaves them as-is.
+ * [maxWidth] wide: less [lyricSideInset] on each side, then less headroom for
+ * the bass bounce. The line pumps via a graphicsLayer scale (bassBeat), and a
+ * long line swelling past the text's width would run into the edge margin the
+ * listener set, and at a small margin off the screen. The box reserves the
+ * PEAK pump scale plus a small edge-safety margin, so at full pump the glyphs
+ * stay inside the text's edges, with room for the glass bevel/refraction,
+ * which lenses a few px beyond the glyph geometry. (The bass pulse caps at
+ * ~1.6 in rememberBassPulse.) Short lines aren't width-constrained, so the
+ * fitter leaves them as-is.
  */
 internal fun lyricFitWidth(maxWidth: Dp, fx: LyricsFxSettings): Dp {
-    val sideInset = fx.edgeMarginDp.dp + LYRIC_BEVEL_SAFE_DP
+    val sideInset = lyricSideInset(fx)
     val lineWidth = (maxWidth - sideInset * 2).coerceAtLeast(0.dp)
     val bounceHeadroom = if (fx.bassReact > 0.01f) {
         val pumpPeak = 1f + fx.pumpAmount * fx.bassReact * 1.6f
@@ -1383,7 +1437,9 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
             modifier = Modifier
                 .fillMaxSize()
                 .then(Modifier.lyricsTv())
-                .padding(horizontal = sidePadding)
+                // The side padding is the list's content padding, as in the
+                // synced view: the glass and the curve are the surface's
+                // width, so a bowed line is not cut off where the text ends.
                 .fxaa()
                 .liquidGlass()
                 // No line is sung here: the curve is on only over all the lyrics.
@@ -1397,7 +1453,7 @@ internal fun UnsyncedLyricsView(lines: List<LyricLine>) {
                         Modifier
                     },
                 ),
-            contentPadding = PaddingValues(vertical = 60.dp),
+            contentPadding = PaddingValues(horizontal = sidePadding, vertical = 60.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             itemsIndexed(lines) { _, line ->

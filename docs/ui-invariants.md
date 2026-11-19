@@ -474,6 +474,26 @@ takes them back:
   no line has a blur or an animation for it at all. It is seen in the player,
   not in the Studio's sample, which is one line. Android 12 and later.
 
+**The edge margin moves the text, never the box the letters are drawn in.**
+The lyric text starts `lyricSideInset` in from each side of the lyric surface
+(Edge margin plus a fixed 14 dp), and that inset is the lyric list's
+**content padding**: the list itself, and every layer on it (the glass, FXAA,
+the copy for the rays, the curve, the motion blur), is the surface's full
+width, which in the player is the screen's. It was a `padding` around the
+list, outside the glass, so the glass layer ended exactly where the text did,
+and a layer cannot draw past its own bounds: a letter the beat, the 3D wave or
+the curve carried past the text's edge, and the glass bevel of any first
+letter, was cut off there in a straight line. Lines that start from the left
+showed it on every line, since their first letter sits on that edge (seen on
+device, 2026-11-19). Never put a horizontal padding, a clip or a narrower box
+between the surface and those layers; to move the text, change the content
+padding. A line is still fitted to the width between the insets less the
+beat's headroom (`lyricFitWidth`), so no line changed size. The unsynced view
+and the Studio's sample line are built the same way: the sample's glass, copy
+and curve are the whole preview, with the inset as a padding inside them (its
+layers used to hug the text block, and it sat on the preview's very edge when
+lines start from the left). `LyricSungTest` holds the inset and the fit.
+
 ### Lyrics: letter glass and god rays
 
 **Every slider on the Studio's Lyrics tab has a reset.** `FxSlider` takes a
@@ -609,11 +629,12 @@ sits on the artist's line without making that line taller. In one row with
 the heart, the title stopped a button and a gap short of it and cut off long
 titles early.
 
-**God rays drawn in the lyric surface (no backdrop) wrap the lyric list outside
-its side inset and outside the glass.**
+**God rays drawn in the lyric surface (no backdrop) wrap the lyric list at its
+full width and outside the glass.**
 `lyricGodRays` is a RenderEffect, and a layer cannot draw past its own bounds,
-so a rays layer inside the inset cuts every shaft off in a hard vertical line
-14dp from the edge. Outside the glass, so the shafts are gathered from the
+so a rays layer narrower than the surface cuts every shaft off in a hard
+vertical line (it did, 14dp from the edge, while the list had a side inset
+around it). Outside the glass, so the shafts are gathered from the
 finished glass letters. The effect is rebuilt in the layer block every draw,
 like the glass: a RuntimeShader effect takes its uniforms when it is created.
 
@@ -629,6 +650,39 @@ a darker rectangle wherever the sung line was. The band's sides
 are `GodRayGeometry.UNBOUNDED`, not infinity: an infinity reaching
 `smoothstep` comes back NaN. The one exception is "All lyrics shine", which is
 the Shadertoy's whole image as the light and asks for exactly that trade.
+
+**The light is on only while something is sung, and it fades.** `LyricSung`
+says what is sung at a moment of the song: nothing before the first line;
+following the word, a word from its start to its end and nothing between
+words or after a line's last word; following the line, a word-timed line from
+its first word to the end of its last. A line with no word timings has no end
+of its own and is sung until the next line; an empty one (a break, drawn ♪) is
+not sung. The lyric view turns that into a level, 0 to 1
+(`rememberLyricLightLevel`), which the one light multiplies its exposure by,
+so the shafts, the light on the letters and what the glass catches go out and
+come up together; "All lyrics shine" follows the line's level too. Before
+this, the light rested on the last sung word through every gap, and before
+the first line there was no band at all, which the shader reads as "everything
+shines": the whole page streamed light through a song's intro (seen on
+device, 2026-11-19). In Letters mode a missing band is now no light. While it
+is out the backdrop draws no shafts and the light on the letters is not run;
+the lyric view's own rays (no backdrop) still run at exposure 0, because that
+shader also lays the letters over their shadow.
+
+**Light transition** (`godRayFadeMs`, 0 to 1000 ms, 250 as shipped) is the
+time of that fade, and of the light's move from one sung word or line to the
+next (`LyricBandGlide`): the band handed to the light is on its way from
+where it was last drawn to where it belongs, edge by edge. A fade turned
+round midway takes only the time for the way left, so a short gap between two
+words is a dip. A light that was out comes up on the new word; it does not
+sweep in from the one it went out on. The move is first seen in the draw
+phase (`LyricBandGlide.rect`), not in the coroutine that runs it: started
+from the coroutine alone, the new word was lit for a frame before the glide
+began. 0 switches and jumps, as it did. Not linked to the music: it is an
+animation's length. The Studio's sample is always being sung, so its light is
+never out, and its word hops glide. `LyricSungTest` holds the rule and the
+glide's arithmetic; the fade and the glide themselves were not seen on a
+phone when they were written.
 
 **The Letters march is the Shadertoy, tap for tap.** "Crepuscular light"
 (ls2Xzd) starts from a centre tap, `texture(tc) * 0.4`, and steps *before* it

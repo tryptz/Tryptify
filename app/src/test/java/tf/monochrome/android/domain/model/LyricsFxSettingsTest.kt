@@ -357,7 +357,7 @@ class LyricsFxSettingsTest {
         s.godRays, s.godRaySource, s.godRaysOnTop, s.godRaysFollowWord, s.godRaysAllLyrics,
         s.godRayExposure, s.godRayDensity,
         s.godRayDecay, s.godRayAzimuthDeg, s.godRayElevationDeg, s.godRaySunSize, s.godRayShimmer,
-        s.godRayBeat, s.godRaySpinDps, s.godRaySway, s.godRayTilt,
+        s.godRayBeat, s.godRaySpinDps, s.godRaySway, s.godRayTilt, s.godRayFadeMs,
     )
 
     @Test
@@ -406,6 +406,7 @@ class LyricsFxSettingsTest {
             glassFrost = 7f, godRaySource = 5, godRayExposure = 9f, godRayDensity = 0f, godRayDecay = 0.5f,
             godRayAzimuthDeg = -10f, godRayElevationDeg = 120f, godRaySunSize = 1f, godRayShimmer = 2f,
             godRayBeat = -1f, godRaySpinDps = 100f, godRaySway = 3f, godRayTilt = 9f, godRayQuality = 0,
+            godRayFadeMs = 5000f,
         ).clamped()
         assertEquals(2f, c.glassRoundness, 0f)
         assertEquals(0.5f, c.glassDepth, 0f)
@@ -428,6 +429,8 @@ class LyricsFxSettingsTest {
         assertEquals(45f, c.godRaySpinDps, 0f)
         assertEquals(1f, c.godRaySway, 0f)
         assertEquals(1.5f, c.godRayTilt, 0f)
+        assertEquals(1000f, c.godRayFadeMs, 0f)
+        assertEquals("0 is a light that switches", 0f, LyricsFxSettings(godRayFadeMs = -40f).clamped().godRayFadeMs, 0f)
         assertEquals(1, c.godRayQuality)
         assertEquals("4 is the Shadertoy's 50 samples, and the most", 4, LyricsFxSettings(godRayQuality = 9).clamped().godRayQuality)
 

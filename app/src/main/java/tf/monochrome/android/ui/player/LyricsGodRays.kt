@@ -4,6 +4,10 @@ import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -14,7 +18,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -31,6 +38,7 @@ import tf.monochrome.android.domain.model.LyricsFxSettings
 import tf.monochrome.android.domain.model.VisualLinkTargets
 import tf.monochrome.android.performance.LocalLowPerformance
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
@@ -70,8 +78,9 @@ import kotlin.math.sin
  * the full width ([GodRayGeometry.UNBOUNDED] either side), or with
  * [LyricsFxSettings.godRaysFollowWord] the one word. It decides what shines in
  * Letters mode, where the light sits when it faces you head-on, and where the
- * shafts are dimmed so the words stay readable. Null makes the whole surface
- * shine, with no legibility guard.
+ * shafts are dimmed so the words stay readable. With no band nothing shines
+ * (the song's intro, a sung line scrolled out of view), unless every lyric is
+ * set to ([LyricsFxSettings.godRaysAllLyrics]), which needs none.
  *
  * Requires API 33 (RuntimeShader). Below that, with the low-performance glass
  * switch on, or if the shader will not compile, this is a no-op.
@@ -127,6 +136,13 @@ internal class LyricRayLight(
     private val scale: Float,
     /** The music links moving any of these settings; read in the draw phase through [fx]. */
     private val live: VisualLinkLive = VisualLinkLive.None,
+    /**
+     * How much of the light is on, 0 to 1, read in the draw phase: the lyric
+     * view fades it out when what was sung is over and in when the next word
+     * or line starts ([LyricSung], [rememberLyricLightLevel]). 1 for a light
+     * nothing switches.
+     */
+    private val level: () -> Float = { 1f },
 ) {
     /**
      * This frame's settings: [baseFx] with whatever the music links are moving.
@@ -163,6 +179,13 @@ internal class LyricRayLight(
         val t = if (moving) time.value else 0f
         // "All lyrics" is the Shadertoy's whole image shining: no band at all.
         val line = if (fx.godRaysAllLyrics) null else band()?.takeIf { it.height > 0f && it.width > 0f }
+        // Letters shine from what is sung. With nothing sung there is no
+        // band, and the shader reads no band as "everything shines": the
+        // whole page of lyrics streamed light before the first line (seen on
+        // device). A backlight is its own source and needs no band.
+        val nothingToShine = line == null && !fx.godRaysAllLyrics &&
+            fx.godRaySource == LyricsFxSettings.GOD_RAYS_LETTERS
+        val on = if (nothingToShine) 0f else level().coerceIn(0f, 1f)
         val center = GodRayGeometry.lightCenter(line, box)
         val (az, el) = GodRayGeometry.animatedAngles(fx, t)
         val tiltNow = tilt.value
@@ -175,7 +198,7 @@ internal class LyricRayLight(
             light = point,
             center = center,
             line = line,
-            exposure = fx.godRayExposure * (1f + 1.2f * beat),
+            exposure = fx.godRayExposure * (1f + 1.2f * beat) * on,
             density = (fx.godRayDensity * (1f + 0.15f * beat)).coerceAtMost(1f),
             elevationDeg = el,
             scale = scale,
@@ -218,6 +241,14 @@ internal data class RayFrame(
     val scale: Float,
     val time: Float,
 ) {
+    /**
+     * False while the light is out (nothing is being sung, or the exposure is
+     * 0): a layer that draws only the light draws nothing then, and skips the
+     * march. [exposure] scales everything the shader adds, so under this no
+     * pixel changes by a whole step of 8-bit colour.
+     */
+    val lit: Boolean get() = exposure > GodRayGeometry.DARK_EXPOSURE
+
     fun shiftedBy(d: Offset): RayFrame = copy(light = light + d, center = center + d, line = line?.translate(d))
 }
 
@@ -237,6 +268,8 @@ internal fun rememberLyricRayLight(
     /** Who this light is for, in the Debug Log's rays report. */
     debugName: String = "lyrics",
     live: VisualLinkLive = LocalVisualLinks.current,
+    /** How much of the light is on, 0 to 1; read in the draw phase. Pass a remembered lambda. */
+    level: () -> Float = AlwaysLit,
 ): LyricRayLight? = rememberLyricRayLight(
     // A new accent is a new light, as it always was for a fixed colour.
     accentOf = remember(accent) { { accent } },
@@ -246,7 +279,11 @@ internal fun rememberLyricRayLight(
     fx = fx,
     debugName = debugName,
     live = live,
+    level = level,
 )
+
+/** A light nothing switches off: one lambda for all, so a default is never a new light. */
+private val AlwaysLit: () -> Float = { 1f }
 
 /**
  * The same light with an accent read in the draw phase ([accentOf]): the player hands it
@@ -265,6 +302,8 @@ internal fun rememberLyricRayLight(
     /** Who this light is for, in the Debug Log's rays report. */
     debugName: String = "lyrics",
     live: VisualLinkLive = LocalVisualLinks.current,
+    /** How much of the light is on, 0 to 1; read in the draw phase. Pass a remembered lambda. */
+    level: () -> Float = AlwaysLit,
 ): LyricRayLight? {
     if (!fx.godRays) return null
     if (LocalLowPerformance.current.disableLiquidGlass) return null
@@ -277,9 +316,9 @@ internal fun rememberLyricRayLight(
     val tilt = if (fx.godRayTilt > 0f) rememberGravityTilt() else NoTilt
     val window = LocalWindowInfo.current.containerSize
     val scale = min(window.width, window.height).toFloat()
-    val light = remember(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live) {
+    val light = remember(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level) {
         RaysProbe.lightsBuilt++
-        LyricRayLight(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live)
+        LyricRayLight(fx, accentOf, moving, time, tilt, pulse, band, lettersBox, scale, live, level)
     }
     // Keyed on nothing, so a light rebuilt every recomposition still gets
     // reported, as a high "lights built", instead of restarting the timer.
@@ -355,8 +394,18 @@ private fun godRaysModifier(light: LyricRayLight, output: RayOutput): Modifier {
     return Modifier.rayLayerOrigin(origin).graphicsLayer {
         val at = origin.value
         val f = at?.let(light::frameFor)
-        renderEffect = if (f == null || size.minDimension <= 0f) {
-            RaysProbe.hit(if (at == null) RaysProbe.Surface.NO_ORIGIN else RaysProbe.Surface.NO_LIGHT_FRAME)
+        // The light on the letters alone adds nothing while the light is out,
+        // so it is not run. The lyric view's own rays still are: that shader
+        // also lays the letters over their shadow, light or none.
+        val out = f != null && !f.lit && output == RayOutput.ON_LETTERS
+        renderEffect = if (f == null || out || size.minDimension <= 0f) {
+            RaysProbe.hit(
+                when {
+                    at == null -> RaysProbe.Surface.NO_ORIGIN
+                    out -> RaysProbe.Surface.LIGHT_OUT
+                    else -> RaysProbe.Surface.NO_LIGHT_FRAME
+                },
+            )
             null
         } else {
             RaysProbe.hit(RaysProbe.Surface.LIT)
@@ -497,6 +546,115 @@ internal class SungWordAnchor {
 }
 
 /**
+ * How much of the lyrics' light is on, 0 to 1, as a state to read in a draw
+ * block: it fades to 1 while [lit] says something is being sung and to 0 when
+ * it is over, over [fadeMs] for the whole way (Lyrics FX › God rays › Light
+ * transition), so the light comes and goes instead of switching. 0 ms switches.
+ *
+ * [lit] is read as snapshot state outside composition: a word ending
+ * recomposes nothing. A fade turned round midway takes only the time for the
+ * way left, so a short gap between two words is a dip, not a blackout.
+ */
+@Composable
+internal fun rememberLyricLightLevel(lit: () -> Boolean, fadeMs: Int): State<Float> {
+    val isLit = rememberUpdatedState(lit)
+    // Read unobserved: observed here, every word's start and end would
+    // recompose the lyric view this is called from.
+    val level = remember { Animatable(if (Snapshot.withoutReadObservation { lit() }) 1f else 0f) }
+    LaunchedEffect(level, fadeMs) {
+        snapshotFlow { isLit.value() }.collectLatest { on ->
+            val target = if (on) 1f else 0f
+            val ms = (fadeMs * abs(target - level.value)).roundToInt()
+            if (ms <= 0) level.snapTo(target) else level.animateTo(target, tween(ms, easing = LinearEasing))
+        }
+    }
+    return level.asState()
+}
+
+/**
+ * Carries the lyrics' light from one sung word (or line) to the next instead
+ * of letting it jump: for [glideMs] after the place it is at changes, the band
+ * handed out is on its way from where the light was drawn last to where it
+ * belongs now.
+ *
+ * [place] names what is sung ([LyricSung.Now.place]); a new number is a move.
+ * It is read in the draw phase, by [rect], and that is where a move is first
+ * seen: the frame that draws the new word starts from the old one's box,
+ * whether or not the coroutine that runs the glide has woken yet. Started from
+ * the coroutine alone, the light was drawn on the new word for a frame and
+ * then glided to where it already was. Until the glide's run for this place
+ * has begun ([running]), the band stays where it was.
+ *
+ * Main thread only: [rect] is called from draw and layer blocks.
+ */
+@Stable
+internal class LyricBandGlide {
+    private val progress = Animatable(1f)
+
+    /** The place the current run of [progress] belongs to. State: its change redraws the layers reading [rect]. */
+    private var running by mutableStateOf(NO_PLACE)
+
+    private var shownPlace = NO_PLACE
+    private var shown: Rect? = null
+    private var from: Rect? = null
+
+    /**
+     * The band to draw for [place], whose own box is [target] (null: none,
+     * and no glide into the next one). [carry] says whether the light is on
+     * as it moves: a light that was out comes up where it belongs, it does
+     * not sweep in from the word it went out on.
+     */
+    fun rect(place: Long, target: Rect?, carry: Boolean = true): Rect? {
+        if (place != shownPlace) {
+            from = if (carry) shown else null
+            shownPlace = place
+        }
+        val start = from
+        val k = if (running == place) progress.value else 0f
+        val band = if (target == null || start == null || k >= 1f) target else glideRect(start, target, k)
+        shown = band
+        return band
+    }
+
+    /** Runs the glide for [place], over [ms]; 0 lands at once. Cancel it and the next takes over from where this one is drawn. */
+    suspend fun run(place: Long, ms: Int) {
+        if (ms <= 0) {
+            progress.snapTo(1f)
+            running = place
+            return
+        }
+        progress.snapTo(0f)
+        running = place
+        progress.animateTo(1f, tween(ms, easing = FastOutSlowInEasing))
+    }
+
+    private companion object {
+        const val NO_PLACE = Long.MIN_VALUE
+    }
+}
+
+/** [from] on its way to [to], [k] of the way (0 to 1), each edge by itself. */
+internal fun glideRect(from: Rect, to: Rect, k: Float): Rect {
+    val t = k.coerceIn(0f, 1f)
+    fun mix(a: Float, b: Float) = a + (b - a) * t
+    return Rect(mix(from.left, to.left), mix(from.top, to.top), mix(from.right, to.right), mix(from.bottom, to.bottom))
+}
+
+/**
+ * A [LyricBandGlide] run from [place], which is read as snapshot state
+ * outside composition, with each move taking [glideMs].
+ */
+@Composable
+internal fun rememberLyricBandGlide(place: () -> Long, glideMs: Int): LyricBandGlide {
+    val glide = remember { LyricBandGlide() }
+    val current = rememberUpdatedState(place)
+    LaunchedEffect(glide, glideMs) {
+        snapshotFlow { current.value() }.collectLatest { glide.run(it, glideMs) }
+    }
+    return glide
+}
+
+/**
  * The arithmetic behind the rays, kept off the GPU so it can be tested: where
  * a 3D light lands on the screen, and how the article's decay and sample
  * weight survive a change in sample count.
@@ -515,6 +673,9 @@ internal object GodRayGeometry {
 
     /** Letters mode never marches further than this share of the long side. */
     const val REACH_CAP_SHARE = 0.8f
+
+    /** An exposure at or under this is the light out ([RayFrame.lit]). */
+    const val DARK_EXPOSURE = 0.002f
 
     /** How far a full tilt of the phone swings the light, as a share of the long side. */
     const val TILT_SHARE = 0.3f

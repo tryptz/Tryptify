@@ -226,6 +226,12 @@ data class LyricsFxSettings(
     /** How strongly tilting the phone swings the light. */
     val godRayTilt: Float = 0f,
     /**
+     * How long the light takes to come up when a word or a line starts being
+     * sung, to go out when it is over, and to move from one sung word to the
+     * next, in ms. 0 switches and jumps.
+     */
+    val godRayFadeMs: Float = 250f,
+    /**
      * Samples per pixel: 1/2/3/4 → 16/24/32/50, 50 being the Shadertoy's
      * own count. Higher = cleaner shafts, heavier
      * GPU. Device/perf setting, like [glassSampleRings] — preserved when a
@@ -332,6 +338,7 @@ data class LyricsFxSettings(
             godRaySpinDps = godRaySpinDps.c(-45f, 45f, d.godRaySpinDps),
             godRaySway = godRaySway.c(0f, 1f, d.godRaySway),
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
+            godRayFadeMs = godRayFadeMs.c(0f, 1000f, d.godRayFadeMs),
             godRayQuality = godRayQuality.coerceIn(1, 4),
             motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
             lineAlign = if (lineAlign == ALIGN_START) ALIGN_START else ALIGN_CENTER,

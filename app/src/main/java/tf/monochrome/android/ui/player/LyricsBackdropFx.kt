@@ -86,6 +86,13 @@ internal class LyricLetterCapture {
     var bandInRoot: () -> Rect? = { null }
 
     /**
+     * How much of the light is on, 0 to 1: out before the first line and when
+     * what was sung is over ([rememberLyricLightLevel]). Set by the lyric
+     * view; read in the draw phase.
+     */
+    var lightLevel: () -> Float = { 1f }
+
+    /**
      * True while [captureLetters] records [layer]. Anything that would draw
      * the copy then is inside the letters, and drawing it would put the layer
      * inside itself: a loop the render thread walks until its stack runs out.
@@ -212,7 +219,10 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                 if (raysLight != null && f == null) RaysProbe.hit(RaysProbe.Backdrop.NO_LIGHT_FRAME)
                 // The shafts are drawn small and scaled up ([SHAFTS_SCALE]).
                 val down = SHAFTS_SCALE
-                val rays = if (raysLight != null && f != null && shader != null &&
+                // No shafts while the light is out (nothing is being sung):
+                // the layer would march every pixel to draw nothing. The
+                // shadow stays, falling the way the light stands.
+                val rays = if (raysLight != null && f != null && f.lit && shader != null &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 ) {
                     setGodRayUniforms(shader, raysLight, f, RayOutput.SHAFTS, emission = LYRIC_COPY_EMISSION, px = down)
@@ -221,11 +231,18 @@ internal fun LyricBackdropFx(backdrop: LyricBackdrop, modifier: Modifier = Modif
                     null
                 }
                 val shade = if (shadow) lyricShadowEffect(live.lyrics(fx), f) else null
+                val lightOut = raysLight != null && f != null && !f.lit
                 if (rays == null && shade == null) {
-                    RaysProbe.hit(RaysProbe.Backdrop.NO_EFFECT)
+                    RaysProbe.hit(if (lightOut) RaysProbe.Backdrop.LIGHT_OUT else RaysProbe.Backdrop.NO_EFFECT)
                     return@drawBehind
                 }
-                RaysProbe.hit(if (rays != null) RaysProbe.Backdrop.RAYS else RaysProbe.Backdrop.SHADOW_ONLY)
+                RaysProbe.hit(
+                    when {
+                        rays != null -> RaysProbe.Backdrop.RAYS
+                        lightOut -> RaysProbe.Backdrop.LIGHT_OUT
+                        else -> RaysProbe.Backdrop.SHADOW_ONLY
+                    },
+                )
                 // Every length in px before recording, and recorded with a
                 // plain Density rather than through the node's own record { }:
                 // inside that block the node's draw scope reads its density

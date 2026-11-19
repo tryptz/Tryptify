@@ -51,6 +51,8 @@ enum class LinkArea(@StringRes val title: Int, val prefix: String) {
  *  - Anything that gates a clock or a sensor (surface motion, tilt), or lays
  *    the lyrics out (size, spacing, margins, lines): those are read in
  *    composition, and moving them every frame would rebuild the lyric list.
+ *  - Lengths of time an animation runs for (the colour transition, the god
+ *    rays' light transition): they are read when a fade starts, not drawn.
  *  - Stepped quality (sample rings, ray quality, the CRT's pixel size and mask
  *    size): each step rebuilds what the GPU draws with.
  *  - The CRT's zoom: not linked yet. Taps would follow it as they follow the

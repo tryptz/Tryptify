@@ -2318,6 +2318,7 @@ internal fun StudioPreview(
                 lettersBox = remember(letters) { { letters.boxInRoot } },
                 fx = fx,
                 debugName = "studio",
+                level = remember(letters) { { letters.lightLevel() } },
             )
             val backdrop = remember(letters, rayLight) { LyricBackdrop(letters, rayLight) }
             LyricBackdropFx(backdrop)
@@ -2433,10 +2434,21 @@ internal fun StudioPreview(
                         }
                     }
                 }
+                // The light moves from word to word over the transition time,
+                // as in the player; the sample is always being sung, so its
+                // light is never out.
+                val sampleWordAt: () -> Long = {
+                    if (wordSpans.isEmpty() || !followWord) -1L else (clock.value * 2f).toInt().mod(wordSpans.size).toLong()
+                }
+                val wordGlide = tf.monochrome.android.ui.player.rememberLyricBandGlide(
+                    place = sampleWordAt,
+                    glideMs = fx.godRayFadeMs.toInt(),
+                )
                 androidx.compose.runtime.SideEffect {
+                    letters.lightLevel = { 1f }
                     letters.bandInRoot = {
                         val block = blockBand
-                        if (block == null || !followWord) block else sampleWord() ?: block
+                        if (block == null || !followWord) block else wordGlide.rect(sampleWordAt(), sampleWord() ?: block)
                     }
                 }
                 // The curve over the sample: all of it, the block as the sung
@@ -2450,26 +2462,33 @@ internal fun StudioPreview(
                     LyricsFxSettings.CURVE_WORD -> { { sampleWord() ?: blockBand } }
                     else -> null
                 }
+                // As in the player: the glass, the copy and the curve are the
+                // whole preview's size, and the edge margin is a padding inside
+                // them that moves the text alone. Wrapped tight round the text,
+                // those layers cut off every letter the beat, the wave or the
+                // curve carried past the text's own box.
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .lyricRaysOnLetters(backdrop)
+                        .fxaa()
+                        .liquidGlass(tint = accent, rayLight = rayLight)
+                        // Before the pump, so the copy pumps with the letters.
+                        .captureLetters(letters)
+                        // Bent inside the copy, as in the player.
+                        .lyricCurvature(
+                            { if (appCurved) 0f else curveLinks.lyrics(fx).curvatureDeg },
+                            { if (appCurved) 0f else curveLinks.lyrics(fx).effectiveCurvatureSideDeg },
+                            curveFocus,
+                            wide = curveTarget == LyricsFxSettings.CURVE_WORD,
+                        )
+                        .padding(horizontal = tf.monochrome.android.ui.player.lyricSideInset(fx)),
                     contentAlignment = if (fx.lineAlign == LyricsFxSettings.ALIGN_START) Alignment.CenterStart else Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = tf.monochrome.android.ui.player.lyricLineAlignment(fx),
                         modifier = Modifier
                             .onGloballyPositioned { blockBand = it.boundsInRoot() }
-                            .lyricRaysOnLetters(backdrop)
-                            .fxaa()
-                            .liquidGlass(tint = accent, rayLight = rayLight)
-                            // Before the pump, so the copy pumps with the letters.
-                            .captureLetters(letters)
-                            // Bent inside the copy, as in the player.
-                            .lyricCurvature(
-                                { if (appCurved) 0f else curveLinks.lyrics(fx).curvatureDeg },
-                                { if (appCurved) 0f else curveLinks.lyrics(fx).effectiveCurvatureSideDeg },
-                                curveFocus,
-                                wide = curveTarget == LyricsFxSettings.CURVE_WORD,
-                            )
                             .bassBeat(pulse, fx, anchors, LocalVisualLinks.current),
                     ) {
                         // The ripple runs on across rows, as in the player.

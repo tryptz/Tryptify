@@ -672,6 +672,8 @@ fun MainPlayerRoute(
             lettersBox = remember(lyricLetters) { { lyricLetters.boxInRoot } },
             fx = lyricsFx,
             debugName = "player",
+            // Out until something is sung, and when it is over.
+            level = remember(lyricLetters) { { lyricLetters.lightLevel() } },
             // Built out here, before the provider below, so it is handed the
             // links rather than reading them from a local it is not inside.
             live = visualLive,
