@@ -700,7 +700,12 @@ data class UnifiedTrack(
             // URI; without this guard the player drops the artwork entirely.
             album = if (albumTitle != null || coverFallback != null) {
                 Album(
-                    id = albumId?.hashCode()?.toLong() ?: tidalId,
+                    // A catalogue's album id is a number, kept as it is. It
+                    // used to be hashed like a local one ("local_album_7"),
+                    // so a TIDAL song queued from Search carried the hash of
+                    // its album's number: "Go to album" opened an album TIDAL
+                    // never had, and a share link named one.
+                    id = albumId?.toLongOrNull()?.takeIf { it > 0L } ?: albumId?.hashCode()?.toLong() ?: tidalId,
                     title = albumTitle.orEmpty(),
                     cover = coverFallback
                 )

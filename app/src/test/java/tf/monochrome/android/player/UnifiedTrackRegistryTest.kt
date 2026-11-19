@@ -191,4 +191,15 @@ class UnifiedTrackRegistryTest {
         queue.setQueue(put(11L..20L), 0)
         assertEquals(20, registry.size)
     }
+
+    @Test
+    fun `a saved file of the listener's own is known as one, by its number alone`() {
+        val saved = "local_17".hashCode().toLong()
+        assertFalse(registry.isSavedLocal(saved))
+        registry.markLocalHash(saved)
+        assertTrue(registry.isSavedLocal(saved))
+        assertFalse("another number is still whatever claims it", registry.isSavedLocal(saved + 1))
+        // Nothing is made up for it: a caller still gets no record.
+        assertNull(registry[saved])
+    }
 }

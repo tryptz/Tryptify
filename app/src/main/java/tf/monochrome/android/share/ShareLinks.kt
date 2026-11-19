@@ -48,6 +48,7 @@ class ShareLinks @Inject constructor(
     private val apiClient: HiFiApiClient,
     private val qobuzIdRegistry: QobuzIdRegistry,
     private val scxyt: ScxytRepository,
+    private val unifiedTrackRegistry: tf.monochrome.android.player.UnifiedTrackRegistry,
 ) {
     /**
      * Shares [track], played as [unified] says (null: a legacy track, its
@@ -67,10 +68,17 @@ class ShareLinks @Inject constructor(
         }.also {
             Log.i(TAG, "share link: $why, ${if (it == null) "found in no catalogue" else "found as ${it.source.slug} ${it.track}"} (isrc ${SharedLink.isrcOf(unified?.isrc) ?: "none"}, ${track.duration} s)")
         }
-        val link = when (source) {
+        // A liked or playlisted file of the listener's own, known here only
+        // by its saved number: looked for like any file, never linked by that
+        // number, which is no catalogue's.
+        val savedLocal = source == null && unifiedTrackRegistry.isSavedLocal(track.id)
+        val link = when {
+            savedLocal -> found("a saved local file")
+            else -> when (source) {
             is PlaybackSource.Scxyt -> signedSongLink(track, source, unified?.pageUrl) { preview(track.title, it, previewStartSec) }
             // A file of the listener's own: the song it is in a catalogue, if it is in one.
-            is PlaybackSource.LocalFile -> found("a local file")
+            // A download first by the number it was downloaded under.
+            is PlaybackSource.LocalFile -> downloadLink(track, unified) ?: found("a local file")
             // A catalogue's song whose album is not known here (one from a
             // playlist or an import, played from its copy on the phone) has
             // no link of its own making: it is looked for like a file.
@@ -78,12 +86,30 @@ class ShareLinks @Inject constructor(
             is PlaybackSource.DeezerPreview, is PlaybackSource.HiFiApi, null ->
                 linkFor(track, source, unified?.pageUrl) ?: found("a ${source?.let { it::class.simpleName } ?: "catalogue"} song with no album")
             else -> linkFor(track, source, unified?.pageUrl)
+            }
         }
         if (link == null) {
             toast(text().getString(R.string.share_link_unavailable))
             return
         }
         share(link, track.title, previewStartSec)
+    }
+
+    /**
+     * The link of a song downloaded in the app: a download is kept under the
+     * number its catalogue gave it ("download_<number>"), so the song it is
+     * a copy of is known exactly and nothing has to be searched for. It used
+     * to be looked for by name like any file, and a name finds another
+     * edition as easily as the right one. Only where TIDAL has that number
+     * and it is this song ([exactLink]): a Qobuz or Deezer download's number
+     * is not TIDAL's, and is looked for.
+     */
+    private suspend fun downloadLink(track: Track, unified: UnifiedTrack?): SharedLink? {
+        val id = unified?.id?.takeIf { it.startsWith("download_") }?.removePrefix("download_")
+            ?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+        if (qobuzIdRegistry.isQobuzTrack(id) || qobuzIdRegistry.isDeezerTrack(id) || qobuzIdRegistry.isAppleTrack(id)) return null
+        val theirs = withContext(Dispatchers.IO) { runCatching { apiClient.getTidalTrack(id) }.getOrNull() } ?: return null
+        return exactLink(track, theirs)?.also { Log.i(TAG, "share link: a download, by its own number ${it.track}") }
     }
 
     /** Shares [detail], from the catalog its page loaded it from. */
@@ -115,6 +141,8 @@ class ShareLinks @Inject constructor(
             is PlaybackSource.DeezerPreview -> SharedLink.Source.DEEZER to source.deezerId
             is PlaybackSource.HiFiApi -> SharedLink.Source.TIDAL to source.tidalId
             null -> when {
+                // A made-up number: there is no link to make from it.
+                unifiedTrackRegistry.isSavedLocal(track.id) -> return null
                 track.appleId != null -> SharedLink.Source.APPLE to track.appleId
                 track.deezerId != null -> SharedLink.Source.DEEZER to track.deezerId
                 qobuzIdRegistry.isQobuzTrack(track.id) -> SharedLink.Source.QOBUZ to track.id
@@ -226,6 +254,22 @@ class ShareLinks @Inject constructor(
             val found = sameSong(byName(listOfNotNull(artist, title).joinToString(" ")), track) ?: return null
             val album = found.album?.id?.takeIf { it > 0 } ?: return null
             return SharedLink(SharedLink.Source.TIDAL, album.toString(), found.id, code, title, artist, length)
+        }
+
+        /**
+         * The link to [theirs], the catalogue song a file's own number names,
+         * when it is [file]'s song by title, artist and length ([sameSong]);
+         * null when it is another song, which is what a number from another
+         * catalogue finds on TIDAL.
+         */
+        fun exactLink(file: Track, theirs: Track): SharedLink? {
+            if (sameSong(listOf(theirs), file) == null) return null
+            val album = theirs.album?.id?.takeIf { it > 0 } ?: return null
+            return SharedLink(
+                SharedLink.Source.TIDAL, album.toString(), theirs.id, null,
+                file.title.takeIf { it.isNotBlank() }, file.displayArtist.takeIf { it.isNotBlank() },
+                file.duration.takeIf { it > 0 },
+            )
         }
 
         /** How far a catalogue song's length may be from the file's, in seconds, and still be it. */

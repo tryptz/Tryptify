@@ -138,8 +138,107 @@ cmake -S app/src/main/cpp/archive/tests -B build/archive-tests
 cmake --build build/archive-tests && ctest --test-dir build/archive-tests --output-on-failure
 ```
 
+The tag reader is a fifth (`tags/tests/`, over the `third_party/taglib`
+submodule, on TagLib's own test files, one of every format and the broken
+ones):
+
+```
+cmake -S app/src/main/cpp/tags/tests -B build/tags-tests
+cmake --build build/tags-tests && ctest --test-dir build/tags-tests --output-on-failure
+```
+
 Nothing runs any of these automatically: the one CI workflow
 (`.github/workflows/main.yml`) only builds and signs a release.
+
+## The library reads its own folders and tags
+
+Until 2026-11-19 the local library was what Android's media index said it
+was, read with Android's `MediaMetadataRetriever`, and a track was its path.
+All three are the app's own now (`data/local/scanner/`, `data/local/tags/`).
+
+**Files.** With folders picked, `FolderWalker` reads the folders (one
+`Os.stat` a file: folder or not, size and date at once) and `LibraryFiles`
+adds what Android's index has under them that the walk was not shown, while
+the file exists. A file is in the library because it is in the folder; a scan
+no longer waits for Android to index it (it is only told, `FolderIndexer.
+tell`). With no folder picked the library is "the music on this phone", which
+only the index can answer, so that case is `MediaStoreSource` as before, and
+so are the Atmos music videos. A `.nomedia` folder below a picked folder is
+left out; the picked folder itself is read whatever it holds. What an app may
+list still depends on Android: from Android 11 on, without "All files
+access" (which the app does not ask for), it is shown audio files only and
+nothing under `.nomedia`. A date is kept to the second, as the index keeps
+it: finer, and every file would look changed against a row the index wrote.
+
+**Identity.** A file read again keeps its row (`insertKeepingDynamicRange`
+writes it under the id it has; `insertTracks` is REPLACE, and with no id it
+made a new row every time). A file that moved keeps it too: `TrackMoves`
+matches files the library has nothing for against tracks whose file is gone,
+by size to the byte and the same name or the same second of change, and
+`MediaScanner.planMoves` moves the listener's corrections
+(`local_track_edits`) and found cover to the new path before the file is
+read. Rows removed by a scan or by taking a folder out are remembered in
+`local_departed_tracks` (v26, half a year), so "remove the old folder, add
+the new one" finds the same tracks in either order. A track on a memory card
+that is out is not pruned (`TrackMoves.withoutOffline`). A saved queue or
+history entry holds the old path; `StreamResolver.whereItIsNow` asks the row.
+Everything that knows a local song by `"local_<id>".hashCode()` (likes,
+playlists, history, play events, timed lyrics, Trypt Mania charts and
+scores) depends on that id not changing: never write a scanned row without
+its id again.
+
+**Tags.** `cpp/tags/tag_reader.cpp` over TagLib 2.3.2 (`third_party/taglib`,
+a submodule with its own, utfcpp; LGPL-2.1 / MPL-1.1) reads a file's fields,
+stream and cover in one JNI call that returns one byte array
+(`NativeTags`, layout in `tag_reader.h`): no Java object is built natively
+and nothing is reached by reflection, so R8 has nothing to strip. The file is
+opened read-only (TagLib's own constructor asks for write access, and Android
+re-indexes a file closed after that). A file named for another format is read
+by what it holds. `TagReader.readTags` asks it first; Android's retriever
+with jaudiotagger is behind it (`readTagsWithPlatform`) for a file TagLib
+refuses and a phone where the library did not load. Track info
+(`FileTagsReader`) and the download tagger (`TrackDownloader`) are still
+jaudiotagger.
+
+- The native reader runs in the app's process, so a file that crashes it
+  crashes the app. `NativeTagGuard` notes each file while it is read; one
+  still noted at the next start is read by Android's reader from then on.
+  Keep every native read inside it.
+- Text a tag calls Latin-1 is one of three things. ASCII and undeclared
+  UTF-8 are settled natively; the rest comes back marked (U+E000, one byte a
+  character) and `LegacyText` decides by the phone's languages, then by a
+  built-in detector (Android does not expose its own), else Windows-1252.
+  It is a guess and its tests say which way each case goes.
+- The first full scan after the change reads every file again with the new
+  reader (`TAG_READER_VERSION`), then compares the two readers on 200 files
+  and logs it (tag `TagReader`: time each, fields that differ, examples).
+  Every full scan logs one line (tag `MediaScanner`): files listed, how many
+  from the folders, how many read by which reader, how long.
+- R8 and jaudiotagger: beside the ID3 frame bodies it makes its WMA chunk
+  readers with `Class.newInstance()`; a release build logged "Class<cj.h>
+  cannot be instantiated" 33 times and read no WMA tag (a phone's log of
+  2026-11-18). `proguard-rules.pro` keeps those constructors now.
+
+## A song's number does not say whose it is
+
+Liked Songs, playlists and history hand back bare `Track`s: a number, with
+no service. Each catalogue's numbers are claimed in a registry as they
+arrive (`QobuzIdRegistry`, `UnifiedTrackRegistry`), and TIDAL is what is left
+when nobody claims one. A file of the listener's own, liked or in a playlist,
+has a made-up number (`"local_<id>".hashCode()`) and its row says
+`source = "local"`: `rememberSource` marks it (`markLocalHash`), and every
+road to a catalogue asks `UnifiedTrackRegistry.isSavedLocal` before taking a
+bare number for TIDAL's: "Go to album" and the artist page (`CatalogNav`,
+`albumDestinationOf`), a share link (`ShareLinks`), a stream
+(`StreamResolver`), the source tag (`TrackSourceResolver`). Before, "Go to
+album" on such a song asked TIDAL for an album it never had ("HTTP 404", a
+phone's report of 2026-11-18) and a share link named whatever TIDAL keeps
+under that number. `toLegacyTrack` keeps a catalogue album's number as it is;
+it hashed it like a local one, so a TIDAL song queued from Search had the
+same 404. A new place that sends a `Track.id` or `album.id` to a catalogue
+asks the same question first. Such a song is still shared: it is looked for
+by ISRC, else name and length (`localLink`), and a download by the number it
+was downloaded under (`downloadLink`). `CatalogNavTest` holds the album rule.
 
 ## Strings
 

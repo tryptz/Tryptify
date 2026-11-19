@@ -245,24 +245,72 @@ fun NavController.trackArtistAction(
         SourceType.COLLECTION, SourceType.LIVE_RADIO, SourceType.SUBSONIC,
         SourceType.YOUTUBE, SourceType.SOUNDCLOUD -> null
         else -> {
-            val id = track.artist?.id ?: 0L
+            // A saved file of the listener's own has a made-up artist number
+            // (a hash of the name): the artist is found by name alone.
+            val madeUp = unified == null && isSavedLocal(track.id)
+            val id = if (madeUp) 0L else track.artist?.id ?: 0L
             val name = track.artist?.name?.takeIf { it.isNotBlank() } ?: track.displayArtist
             if (id <= 0L && name.isBlank()) null else ({ openCatalogArtist(id, name) })
         }
     }
 }
 
-/** "Go to album" — the album twin of [trackArtistAction], by the same rules. */
+/** Where "Go to album" leads: an album id as the app writes it ([openAlbum]), or a catalogue's number. */
+internal sealed interface AlbumDestination {
+    data class Known(val albumId: String) : AlbumDestination
+    data class Catalogue(val id: Long) : AlbumDestination
+}
+
+/**
+ * Where "Go to album" on [track] leads, or null for nowhere.
+ *
+ * The album's id is taken from [unified] whenever there is one, because the
+ * legacy [track] carries a *made-up* album number for anything whose album id
+ * is not a plain number, and a hash of it for anything that came through
+ * `toLegacyTrack`: a TIDAL song queued from Search opened `album/<hash of its
+ * real album id>`, an album TIDAL never had (error 404). [savedLocal]: the
+ * track is a liked or playlisted file of the listener's own, known only by its
+ * saved number (`UnifiedTrackRegistry.isSavedLocal`); its album number is made
+ * up as well, so it has no album page to open.
+ */
+internal fun albumDestinationOf(
+    track: tf.monochrome.android.domain.model.Track,
+    unified: tf.monochrome.android.domain.model.UnifiedTrack?,
+    savedLocal: Boolean,
+): AlbumDestination? = when (unified?.sourceType) {
+    SourceType.LOCAL, SourceType.COLLECTION ->
+        unified.albumId?.takeIf { isNavigableAlbumId(it) }?.let { AlbumDestination.Known(it) }
+    SourceType.LIVE_RADIO, SourceType.SUBSONIC, SourceType.YOUTUBE, SourceType.SOUNDCLOUD -> null
+    null -> if (savedLocal) null else track.album?.id?.takeIf { it > 0L }?.let { AlbumDestination.Catalogue(it) }
+    // The catalogue's own number, as the song's record holds it; the legacy
+    // track's only where the record has none.
+    else -> (unified.albumId?.toLongOrNull() ?: track.album?.id)
+        ?.takeIf { it > 0L }?.let { AlbumDestination.Catalogue(it) }
+}
+
+@dagger.hilt.EntryPoint
+@dagger.hilt.InstallIn(dagger.hilt.components.SingletonComponent::class)
+internal interface CatalogNavEntryPoint {
+    fun unifiedTrackRegistry(): tf.monochrome.android.player.UnifiedTrackRegistry
+}
+
+/** Whether [trackId] is a saved file of the listener's own, known only by its number. */
+private fun NavController.isSavedLocal(trackId: Long): Boolean = runCatching {
+    dagger.hilt.android.EntryPointAccessors
+        .fromApplication(context.applicationContext, CatalogNavEntryPoint::class.java)
+        .unifiedTrackRegistry().isSavedLocal(trackId)
+}.getOrDefault(false)
+
+/** "Go to album" — the album twin of [trackArtistAction], by the same rules ([albumDestinationOf]). */
 fun NavController.trackAlbumAction(
     track: tf.monochrome.android.domain.model.Track?,
     unified: tf.monochrome.android.domain.model.UnifiedTrack?,
 ): (() -> Unit)? {
     if (track == null) return null
-    return when (unified?.sourceType) {
-        SourceType.LOCAL, SourceType.COLLECTION ->
-            unified.albumId?.takeIf { isNavigableAlbumId(it) }?.let { id -> { openAlbum(id) } }
-        SourceType.LIVE_RADIO, SourceType.SUBSONIC, SourceType.YOUTUBE, SourceType.SOUNDCLOUD -> null
-        else -> track.album?.id?.takeIf { it > 0L }?.let { id -> { openCatalogAlbum(id) } }
+    return when (val to = albumDestinationOf(track, unified, unified == null && isSavedLocal(track.id))) {
+        is AlbumDestination.Known -> ({ openAlbum(to.albumId) })
+        is AlbumDestination.Catalogue -> ({ openCatalogAlbum(to.id) })
+        null -> null
     }
 }
 

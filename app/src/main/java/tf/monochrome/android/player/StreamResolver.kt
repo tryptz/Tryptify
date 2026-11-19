@@ -154,6 +154,13 @@ class StreamResolver @Inject constructor(
             return Pair(null, null)
         }
 
+        // A saved file of the listener's own that is not on the phone any
+        // more (no copy was found above): its number is made up, and TIDAL
+        // would play whatever it has under it, under this song's name.
+        if (unifiedTrackRegistry.isSavedLocal(track.id)) {
+            return Pair(null, null)
+        }
+
         // Deezer ids share the number range with TIDAL's, so this must come
         // before the TIDAL lookup below — and before its Qobuz fallback, which
         // would fetch the ISRC of the TIDAL track that has this number.
@@ -302,7 +309,7 @@ class StreamResolver @Inject constructor(
         }
 
         return when (source) {
-            is PlaybackSource.LocalFile -> resolveLocalFile(track, source)
+            is PlaybackSource.LocalFile -> resolveLocalFile(track, whereItIsNow(track, source))
             is PlaybackSource.CollectionDirect -> resolveCollectionDirect(track, source)
             is PlaybackSource.HiFiApi -> resolveHiFiApi(track, source, askForOtherService, quality)
             is PlaybackSource.QobuzCached -> resolveQobuzCached(track, source, quality)
@@ -664,6 +671,19 @@ class StreamResolver @Inject constructor(
         } else {
             Uri.fromFile(File(filePath))
         }
+
+    /**
+     * [source] at the path its file has now. A saved queue or a Recently
+     * Played entry holds the path the file had when it was saved; a file that
+     * moved since keeps its library row, and the row knows where it went.
+     */
+    private suspend fun whereItIsNow(track: UnifiedTrack, source: PlaybackSource.LocalFile): PlaybackSource.LocalFile {
+        val path = source.filePath
+        if (path.contains("://") || File(path).exists()) return source
+        val rowId = track.id.takeIf { it.startsWith("local_") }?.removePrefix("local_")?.toLongOrNull() ?: return source
+        val now = runCatching { localTrackLocator.pathOfLibraryTrack(rowId) }.getOrNull() ?: return source
+        return if (now != path && File(now).exists()) source.copy(filePath = now) else source
+    }
 
     private fun resolveLocalFile(
         track: UnifiedTrack,

@@ -101,6 +101,28 @@ class UnifiedTrackRegistry @Inject constructor(queueManager: QueueManager) {
         savedScxyt.add(trackId)
     }
 
+    // A liked or playlisted file of the listener's own keeps only a made-up
+    // number too (a hash of its library row's name), with the row's source
+    // saying "local". Without this the number read as TIDAL's, since TIDAL is
+    // what is left when no other catalogue claims an id: "Go to album" asked
+    // TIDAL for an album it never had (error 404), a share link pointed at
+    // whatever TIDAL keeps under that number, and with the file gone TIDAL
+    // would have played it.
+    private val localHashes = ConcurrentHashMap.newKeySet<Long>()
+
+    /** A saved song's row says it is a file on this phone: [trackId] is no catalogue's. */
+    fun markLocalHash(trackId: Long) {
+        localHashes.add(trackId)
+    }
+
+    /**
+     * Whether [trackId] is a file of the listener's own known only by its
+     * saved number. The one question every road to a catalogue asks before
+     * taking a bare number for TIDAL's: the album page, the artist page, a
+     * share link, a stream.
+     */
+    fun isSavedLocal(trackId: Long): Boolean = trackId in localHashes
+
     /** A YouTube or SoundCloud song known only by its hash: nothing here can play it. */
     fun isUnresolvedScxyt(trackId: Long): Boolean =
         (trackId in scxytHashes || tf.monochrome.android.domain.model.isScxytLegacyId(trackId)) &&

@@ -93,6 +93,7 @@ class LibraryRepository @Inject constructor(
             TrackSource.DEEZER -> qobuzIdRegistry.registerDeezerTrack(id)
             TrackSource.APPLE -> qobuzIdRegistry.registerAppleTrack(id)
             TrackSource.YOUTUBE, TrackSource.SOUNDCLOUD -> unifiedTrackRegistry.markScxytHash(id)
+            TrackSource.LOCAL -> unifiedTrackRegistry.markLocalHash(id)
         }
     }
 

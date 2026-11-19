@@ -27,6 +27,8 @@ class TrackSourceResolver @Inject constructor(
         unified[track.id]?.sourceType
             ?.takeIf { it == SourceType.YOUTUBE || it == SourceType.SOUNDCLOUD }
             ?.let { return it }
+        // A saved file of the listener's own, likewise: it is Local, not TIDAL.
+        if (unified[track.id] == null && unified.isSavedLocal(track.id)) return SourceType.LOCAL
         return when {
             track.deezerId != null || registry.isDeezerTrack(track.id) -> SourceType.DEEZER
             registry.isAppleTrack(track.id) -> SourceType.APPLE

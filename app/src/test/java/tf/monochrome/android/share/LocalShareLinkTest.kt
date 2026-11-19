@@ -115,4 +115,19 @@ class LocalShareLinkTest {
         assertNull(SharedLink.isrcOf(null))
         assertEquals("GBAYE0601498", SharedLink.isrcOf(" gb-aye-06-01498 "))
     }
+
+    @Test
+    fun `a download is linked by the number it was downloaded under, when that is its song`() {
+        val file = track(0, "Flying High", "DJ Splash", 215)
+        val theirs = track(77, "Flying High (Original Mix)", "DJ Splash", 216, album = 900)
+        val link = ShareLinks.exactLink(file, theirs)
+        assertEquals(SharedLink.Source.TIDAL, link?.source)
+        assertEquals("900", link?.album)
+        assertEquals(77L, link?.track)
+        // A Qobuz or Deezer download's number names some other song on TIDAL: no link from it.
+        assertNull(ShareLinks.exactLink(file, track(77, "Something Else", "Someone", 215, album = 900)))
+        assertNull(ShareLinks.exactLink(file, track(77, "Flying High", "DJ Splash", 400, album = 900)))
+        // And none without the album the link names.
+        assertNull(ShareLinks.exactLink(file, track(77, "Flying High", "DJ Splash", 215)))
+    }
 }
