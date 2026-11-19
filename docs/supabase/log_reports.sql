@@ -76,7 +76,7 @@ declare
         'DspEngineManager', 'DynamicRange', 'EqProcessor', 'EqRepository', 'FloatPcmGuard', 'FolderIndexer',
         'FrameStall', 'GalaxyFx', 'GlyphAssets', 'GlyphAttempts', 'GlyphSongs', 'GlyphStyleLibrary',
         'GlyphTvShader', 'GlyphViewModel', 'HeadphoneAutoEqApi', 'HiFiApiClient', 'ImportSync',
-        'IndexedFragMp4', 'LastFmAuth', 'LibraryRestore', 'LibraryWatcher', 'LibusbAudioSink',
+        'IndexedFragMp4', 'LastFmAuth', 'LibraryFiles', 'LibraryRestore', 'LibraryWatcher', 'LibusbAudioSink',
         'LibusbUacDriver', 'ListTrackLoader', 'LiveGlassLens', 'LiveLog', 'LogReport', 'LyricsCurvature',
         'LyricsFx', 'LyricsResolver', 'MediaScanner', 'MonochromeDSP', 'MonochromeDSP_JNI', 'MonoPerf',
         'MusicDatabase', 'MusicLinkPresetStore', 'OfflineMeasurements', 'OpenedAudio', 'PartyClient',
@@ -86,7 +86,7 @@ declare
         'RadioQueueManager', 'RarNative', 'RoomClient', 'SafeClipboard', 'ScanCoordinator', 'Scrobbling',
         'SearchViewModel', 'SettingsSync', 'ShareLinks', 'ShareShrinker', 'SofaHrtfApi', 'SongPreview',
         'SourceDepthCodec', 'SquiglinkApi', 'StepManiaConversion', 'StreamResolver', 'SupabaseAuth',
-        'SupabaseSync', 'SystemAudioEq', 'TimedLyrics', 'TrackDownloader', 'TrackShareHelper',
+        'SupabaseSync', 'SystemAudioEq', 'TagReader', 'TimedLyrics', 'TrackDownloader', 'TrackShareHelper',
         'TryptifyConnect', 'TryptifyGlyph', 'TryptifyMotion', 'UsbExclusiveCtl', 'UsbJni', 'YoutubeOnDevice'
     ];
     -- app-tags:end

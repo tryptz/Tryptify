@@ -62,6 +62,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         // Local media
         LocalTrackEntity::class,
         tf.monochrome.android.data.local.db.LocalTrackEditEntity::class,
+        tf.monochrome.android.data.local.db.LocalDepartedTrackEntity::class,
         LocalAlbumEntity::class,
         LocalArtistEntity::class,
         LocalGenreEntity::class,
@@ -76,7 +77,7 @@ import tf.monochrome.android.data.local.db.ScanStateEntity
         CollectionTrackArtistCrossRef::class,
         CollectionAlbumArtistCrossRef::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -504,6 +505,20 @@ abstract class MusicDatabase : RoomDatabase() {
         val MIGRATION_24_25 = object : Migration(24, 25) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `eq_presets` ADD COLUMN `headphoneJson` TEXT")
+            }
+        }
+
+        /**
+         * Tracks removed from the library, remembered by size, name and date
+         * so a file that was moved gets its row number back (`TrackMoves`).
+         */
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `local_departed_tracks` (`id` INTEGER NOT NULL, " +
+                        "`filePath` TEXT NOT NULL, `fileSizeBytes` INTEGER NOT NULL, `lastModified` INTEGER NOT NULL, " +
+                        "`dynamicRange` REAL, `departedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
             }
         }
 

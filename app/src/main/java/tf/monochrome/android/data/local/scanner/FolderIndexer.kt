@@ -63,6 +63,16 @@ class FolderIndexer @Inject constructor(
      * [timeoutMs] runs out. Whatever is not indexed by then is still on its
      * way, and LibraryWatcher picks it up when it lands.
      */
+    /**
+     * Tells Android about [paths] and does not wait: the library has read
+     * them already, from their folders. This is for everything else that goes
+     * by Android's index (other apps, the count onboarding shows).
+     */
+    fun tell(paths: List<String>) {
+        if (paths.isEmpty()) return
+        runCatching { MediaScannerConnection.scanFile(context, paths.take(MAX_TOLD).toTypedArray(), null, null) }
+    }
+
     suspend fun index(paths: List<String>, timeoutMs: Long = timeoutFor(paths.size)) {
         if (paths.isEmpty()) return
         val remaining = AtomicInteger(paths.size)
@@ -80,8 +90,8 @@ class FolderIndexer @Inject constructor(
     companion object {
         private const val TAG = "FolderIndexer"
 
-        /** Deep enough for any real library, and a stop for a link that loops. */
-        private const val MAX_DEPTH = 32
+        /** No more than this many files are handed to Android in one go. */
+        private const val MAX_TOLD = 2_000
 
         /** 15 s, plus a quarter of a second a file, at most 3 minutes. */
         internal fun timeoutFor(files: Int): Long = (15_000L + files * 250L).coerceAtMost(180_000L)
@@ -125,33 +135,7 @@ class FolderIndexer @Inject constructor(
             excluded: Set<String>,
             nomedia: MutableList<String>? = null,
         ): List<String> {
-            val files = mutableListOf<String>()
-            val visited = HashSet<String>()
-            val pending = ArrayDeque<Pair<File, Int>>()
-            pending.addLast(root to 0)
-            while (pending.isNotEmpty()) {
-                val (dir, depth) = pending.removeFirst()
-                if (depth > MAX_DEPTH) continue
-                if (MediaStoreSource.isExcluded(dir.absolutePath, excluded)) continue
-                // A symlink back up the tree would otherwise be walked forever.
-                val canonical = runCatching { dir.canonicalPath }.getOrNull() ?: continue
-                if (!visited.add(canonical)) continue
-                val children = dir.listFiles() ?: continue
-                if (children.any { it.name == ".nomedia" }) {
-                    nomedia?.add(dir.absolutePath)
-                    continue
-                }
-                for (child in children) {
-                    if (child.isDirectory) {
-                        if (!child.name.startsWith(".")) pending.addLast(child to depth + 1)
-                    } else if (child.extension.lowercase() in AUDIO_EXTENSIONS &&
-                        !MediaStoreSource.isExcluded(child.absolutePath, excluded)
-                    ) {
-                        files += child.absolutePath
-                    }
-                }
-            }
-            return files
+            return FolderWalker.walk(root, excluded, nomedia).map { it.path }
         }
     }
 }

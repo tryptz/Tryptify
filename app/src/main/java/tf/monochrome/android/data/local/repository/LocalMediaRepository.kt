@@ -40,6 +40,9 @@ class LocalMediaRepository @Inject constructor(
     private val mediaScanner: MediaScanner
 ) {
 
+    /** Where track [rowId]'s file is now; null when the library has no such track. */
+    suspend fun pathOfTrack(rowId: Long): String? = localMediaDao.pathOfTrack(rowId)
+
     // ── Scanning ────────────────────────────────────────────────────
 
     fun fullScan(

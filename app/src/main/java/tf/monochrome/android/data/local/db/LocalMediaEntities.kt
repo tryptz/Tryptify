@@ -302,3 +302,20 @@ fun trackEditFrom(filePath: String, file: LocalTrackEntity, typed: TypedTags): L
         discNumber = number(typed.discNumber, file.discNumber),
     )
 }
+
+/**
+ * A track whose row was removed (its file was gone at a scan, or its folder
+ * was taken out of the library), kept so the same file can be known again if
+ * it turns up elsewhere: see `scanner/TrackMoves`. [id] is the row number it
+ * had, which SQLite never gives to another row, so the track can have it back.
+ */
+@Entity(tableName = "local_departed_tracks")
+data class LocalDepartedTrackEntity(
+    @PrimaryKey val id: Long,
+    val filePath: String,
+    val fileSizeBytes: Long,
+    val lastModified: Long,
+    /** Measured by the player; a file cannot give it back. */
+    val dynamicRange: Float?,
+    val departedAt: Long,
+)

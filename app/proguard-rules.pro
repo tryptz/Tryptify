@@ -37,6 +37,19 @@
 # unsupported and its text is lost: BPM, key and ReplayGain from an MP3, and a
 # WAV's ID3 tags, would come back empty in release builds only.
 -keep class org.jaudiotagger.tag.id3.framebody.** { <init>(...); }
+# The same library makes two more kinds of object by class, not by name in
+# code: its WMA (ASF) chunk readers, each through Class.newInstance() in
+# ChunkContainerReader, and a tag's data fields when a frame is copied
+# (ID3Tags.copyObject, through the class's own copy constructor). R8 saw no
+# caller for those constructors and took them out: a release build logged
+# "java.lang.Class<cj.h> cannot be instantiated" 33 times at its first tag
+# read (a phone's log of 2026-11-18, under jaudiotagger's logger
+# "org.jaudiotabgger.audio"), and no WMA file's tags could be read there.
+# The scan reads tags with the app's own reader now (cpp/tags, TagLib), which
+# has no reflection at all; jaudiotagger is what a file TagLib refuses falls
+# back to, what Track info shows, and what a download's tags are written with.
+-keep class org.jaudiotagger.audio.asf.io.** { <init>(); }
+-keep class org.jaudiotagger.tag.datatype.** { <init>(...); }
 
 # LiveGlassLens reads Haze's internal "source is recording" flag by name, so a
 # lens inside its own source skips it instead of looping (HazeContentDrawing).

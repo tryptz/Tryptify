@@ -39,6 +39,12 @@ data class AudioTags(
     val channels: Int = 2,
     val durationSeconds: Int = 0,
 
+    // What the same recording is called everywhere: read by the app's own
+    // reader, for matching a file to a catalogue song exactly.
+    val isrc: String? = null,
+    val musicbrainzTrack: String? = null,
+    val musicbrainzAlbum: String? = null,
+
     // Tempo, key and ReplayGain: tag fields the platform retriever never
     // surfaces, read from the tag block by jaudiotagger or OggComments.
     val musical: MusicalTags = MusicalTags(),
@@ -68,9 +74,56 @@ class TagReader @Inject constructor(
     private val artworkStore: ArtworkStore,
 ) {
 
+    // The app's own reader's crash notes ([NativeTagGuard]); null when the
+    // folder cannot be made, and reads then go unnoted.
+    private val nativeGuard: NativeTagGuard? by lazy {
+        runCatching { NativeTagGuard(File(context.noBackupFilesDir, "tags")) }.getOrNull()
+    }
+
+    private val nativeReads = java.util.concurrent.atomic.AtomicInteger()
+    private val platformReads = java.util.concurrent.atomic.AtomicInteger()
+
+    /** How many files each reader has read since the last call: (the app's own, Android's). */
+    fun takeReadCounts(): Pair<Int, Int> = nativeReads.getAndSet(0) to platformReads.getAndSet(0)
+
+    /** The phone's languages, most wanted first: what an old tag's code page is guessed from. */
+    private fun languages(): List<String> = runCatching {
+        val locales = android.os.LocaleList.getDefault()
+        List(locales.size()) { locales[it].toLanguageTag() }
+    }.getOrDefault(emptyList())
+
+    /** [filePath] read by the app's own reader ([NativeTags]); null when it cannot, and Android's is asked. */
+    private fun readNative(filePath: String, wantPicture: Boolean): NativeTagData? =
+        NativeTags.read(filePath, wantPicture, nativeGuard, languages(), LegacyText.BuiltIn)
+
+    /**
+     * [filePath]'s tags, stream and cover.
+     *
+     * By the app's own reader first: one call inside this process, the same
+     * answer on every phone and Android version. Android's
+     * MediaMetadataRetriever (with jaudiotagger for what it leaves out) is
+     * kept behind it, for a file TagLib does not know and for a phone where
+     * the native library did not load.
+     */
     suspend fun readTags(
         filePath: String,
         folderArtCache: MutableMap<String, String?>? = null
+    ): AudioTags {
+        val file = File(filePath)
+        if (!file.exists()) return AudioTags(filePath = filePath)
+
+        readNative(filePath, wantPicture = true)?.let { native ->
+            nativeReads.incrementAndGet()
+            return tagsFrom(native, file, folderArtCache)
+        }
+        platformReads.incrementAndGet()
+        return readTagsWithPlatform(filePath, folderArtCache)
+    }
+
+    /** [readTags] as it was before the app had a reader of its own: for comparing the two, and as its fallback. */
+    internal fun readTagsWithPlatform(
+        filePath: String,
+        folderArtCache: MutableMap<String, String?>? = null,
     ): AudioTags {
         val file = File(filePath)
         if (!file.exists()) return AudioTags(filePath = filePath)
@@ -89,6 +142,175 @@ class TagReader @Inject constructor(
         } finally {
             try { retriever.release() } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * Reads [paths] with both readers, the app's own and Android's, and
+     * writes what it found to the log (tag "TagReader"): how long each took,
+     * how many files the app's reader could not open, and in which fields
+     * they disagree, with a few examples. Each file is read by both, in turn
+     * first, so neither always has the file already in memory.
+     */
+    fun compareReaders(paths: List<String>) {
+        var ownNs = 0L
+        var platformNs = 0L
+        var compared = 0
+        var refused = 0
+        val differing = java.util.TreeMap<String, Int>()
+        val examples = ArrayList<String>()
+        for ((index, path) in paths.withIndex()) {
+            val file = File(path)
+            if (!file.isFile) continue
+            fun own(): AudioTags? {
+                val start = System.nanoTime()
+                val tags = readNative(path, wantPicture = true)?.let { tagsFrom(it, file, null) }
+                ownNs += System.nanoTime() - start
+                return tags
+            }
+            fun platform(): AudioTags {
+                val start = System.nanoTime()
+                val tags = readTagsWithPlatform(path)
+                platformNs += System.nanoTime() - start
+                return tags
+            }
+            val mine: AudioTags?
+            val theirs: AudioTags
+            if (index % 2 == 0) { mine = own(); theirs = platform() } else { theirs = platform(); mine = own() }
+            if (mine == null) { refused++; continue }
+            compared++
+            val name = path.substringAfterLast('/')
+            fun differ(field: String, a: Any?, b: Any?) {
+                if (a == b) return
+                differing.merge(field, 1, Int::plus)
+                if (examples.size < 12) examples += "$field: app '${a.toString().take(60)}' Android '${b.toString().take(60)}' ($name)"
+            }
+            differ("title", mine.title, theirs.title)
+            differ("artist", mine.artist, theirs.artist)
+            differ("album artist", mine.albumArtist, theirs.albumArtist)
+            differ("album", mine.album, theirs.album)
+            differ("genre", mine.genre, theirs.genre)
+            differ("year", mine.year, theirs.year)
+            differ("track", mine.trackNumber, theirs.trackNumber)
+            differ("disc", mine.discNumber, theirs.discNumber)
+            differ("codec", mine.codec, theirs.codec)
+            differ("sample rate", mine.sampleRate, theirs.sampleRate)
+            differ("channels", mine.channels, theirs.channels)
+            if (kotlin.math.abs(mine.durationSeconds - theirs.durationSeconds) > 1) {
+                differ("length", mine.durationSeconds, theirs.durationSeconds)
+            }
+            differ("has cover", mine.hasEmbeddedArt, theirs.hasEmbeddedArt)
+        }
+        fun ms(ns: Long) = ns / 1_000_000
+        val each = compared.coerceAtLeast(1)
+        android.util.Log.i(
+            "TagReader",
+            "readers compared on $compared files ($refused the app's reader did not open): " +
+                "the app's ${ms(ownNs)} ms (${ownNs / each / 1000} us a file), " +
+                "Android's ${ms(platformNs)} ms (${platformNs / each / 1000} us a file); " +
+                if (differing.isEmpty()) "no field differs" else "fields that differ: $differing",
+        )
+        examples.forEach { android.util.Log.i("TagReader", "differs: $it") }
+    }
+
+    /** [native]'s answer as the scan keeps it. */
+    private fun tagsFrom(
+        native: NativeTagData,
+        file: File,
+        folderArtCache: MutableMap<String, String?>?,
+    ): AudioTags {
+        val filePath = file.absolutePath
+        val fields = native.asMap()
+        val title = native.first("TITLE")
+        val album = native.first("ALBUM")
+        val (trackNumber, trackOf) = parseTrackNumber(native.first("TRACKNUMBER"))
+        val (discNumber, discOf) = parseTrackNumber(native.first("DISCNUMBER"))
+        val codec = codecOf(native, filePath)
+
+        val isThx = tf.monochrome.android.domain.model.isThxSpatialAudio(title = title, albumTitle = album) ||
+            (codec == AudioCodec.FLAC && listOfNotNull(title, album, fields["COMMENT"], fields["VERSION"])
+                .any { tf.monochrome.android.domain.model.isThxSpatialAudio(version = it) })
+
+        // Only a container that can hold E-AC-3 is opened a second time, by
+        // the platform's extractor: it alone says "eac3-joc", the Atmos mark.
+        val mayBeAtmos = codec == AudioCodec.EAC3 || codec == AudioCodec.AC3 || native.container == "MATROSKA" ||
+            (native.container == "MP4" && native.codec.isEmpty())
+        val isAtmos = tf.monochrome.android.domain.model.isDolbyAtmos(
+            mimeType = (if (mayBeAtmos) audioTrackMime(filePath) else null)
+                ?: if (codec == AudioCodec.EAC3) "audio/eac3" else null,
+            title = title,
+            albumTitle = album,
+        )
+
+        val artworkCacheKey = native.picture?.let { artworkStore.put(it, filePath) }
+            ?: artworkStore.foundFor(filePath)
+            ?: findPerTrackSidecar(filePath)
+            ?: findFolderCoverArt(filePath, folderArtCache)
+
+        val tagArtist = native.joined("ARTIST")
+        var finalArtist = tagArtist
+        var finalTitle = title
+        if (tagArtist == null) {
+            val (derivedArtist, derivedTitle) = deriveArtistFromTitle(title, filePath)
+            if (derivedArtist != null) {
+                finalArtist = derivedArtist
+                finalTitle = derivedTitle
+            }
+        }
+
+        return AudioTags(
+            title = finalTitle,
+            artist = finalArtist,
+            albumArtist = native.joined("ALBUMARTIST") ?: native.joined("ALBUM ARTIST"),
+            album = album,
+            genre = native.first("GENRE"),
+            year = parseYear(native.first("DATE", "YEAR", "ORIGINALDATE")),
+            trackNumber = trackNumber,
+            trackTotal = trackOf ?: native.first("TRACKTOTAL", "TOTALTRACKS")?.toIntOrNull(),
+            discNumber = discNumber,
+            discTotal = discOf ?: native.first("DISCTOTAL", "TOTALDISCS")?.toIntOrNull(),
+            composer = native.joined("COMPOSER"),
+            codec = codec,
+            sampleRate = native.sampleRate.takeIf { it > 0 } ?: 44100,
+            bitDepth = native.bitsPerSample.takeIf { it > 0 },
+            bitRate = native.bitrateKbps,
+            channels = native.channels.takeIf { it > 0 } ?: 2,
+            durationSeconds = native.lengthMs / 1000,
+            hasEmbeddedArt = artworkCacheKey != null,
+            artworkCacheKey = artworkCacheKey,
+            isThxSpatialAudio = isThx,
+            isDolbyAtmos = isAtmos,
+            musical = MusicalTags.from(fields),
+            isrc = native.first("ISRC")?.replace("-", "")?.uppercase()?.takeIf { it.length == 12 },
+            musicbrainzTrack = native.first("MUSICBRAINZ_TRACKID", "MUSICBRAINZ_RELEASETRACKID"),
+            musicbrainzAlbum = native.first("MUSICBRAINZ_ALBUMID"),
+            filePath = filePath,
+            fileSizeBytes = file.length(),
+            lastModified = file.lastModified(),
+        )
+    }
+
+    /** The codec the library lists [native] under. */
+    private fun codecOf(native: NativeTagData, filePath: String): AudioCodec = when (native.container) {
+        "MPEG" -> if (native.codec == "AAC") AudioCodec.AAC else AudioCodec.MP3
+        "FLAC", "OGG_FLAC" -> AudioCodec.FLAC
+        "MP4" -> when (native.codec) {
+            "AAC" -> AudioCodec.AAC
+            "ALAC" -> AudioCodec.ALAC
+            "EAC3" -> AudioCodec.EAC3
+            "AC3" -> AudioCodec.AC3
+            "FLAC" -> AudioCodec.FLAC
+            "OPUS" -> AudioCodec.OPUS
+            // A sample entry TagLib does not name: the platform's extractor is asked.
+            else -> detectCodec(null, filePath)
+        }
+        "OGG_VORBIS" -> AudioCodec.OGG_VORBIS
+        "OGG_OPUS" -> AudioCodec.OPUS
+        "WAV" -> AudioCodec.WAV
+        "AIFF" -> AudioCodec.AIFF
+        "APE" -> AudioCodec.APE
+        "ASF" -> AudioCodec.WMA
+        "MATROSKA" -> detectCodec(null, filePath)
+        else -> AudioCodec.UNKNOWN
     }
 
     private fun extractTags(
@@ -260,6 +482,10 @@ class TagReader @Inject constructor(
      * read; null when the file cannot be read at all.
      */
     fun readMusicalTags(filePath: String): MusicalTags? =
+        readNative(filePath, wantPicture = false)?.let { MusicalTags.from(it.asMap()) }
+            ?: readMusicalTagsWithPlatform(filePath)
+
+    private fun readMusicalTagsWithPlatform(filePath: String): MusicalTags? =
         if (filePath.substringAfterLast('.', "").lowercase() == "wav") {
             readWavTags(filePath)?.musical
         } else {
@@ -273,6 +499,12 @@ class TagReader @Inject constructor(
      * read; a content:// document is not a file and is not read here.
      */
     fun readEmbeddedLyrics(filePath: String): String? {
+        readNative(filePath, wantPicture = false)?.let { native ->
+            // ID3 names a lyrics frame by its description as well: "LYRICS:DESC".
+            return (native.first("LYRICS", "UNSYNCEDLYRICS", "UNSYNCED LYRICS")
+                ?: native.fields.firstOrNull { it.first.startsWith("LYRICS:") && it.second.isNotBlank() }?.second)
+                ?.takeIf { it.isNotBlank() }
+        }
         val ext = filePath.substringAfterLast('.', "").lowercase()
         val text = when (ext) {
             in OGG_EXTENSIONS -> OggComments.read(File(filePath))?.let { it["LYRICS"] ?: it["UNSYNCEDLYRICS"] }

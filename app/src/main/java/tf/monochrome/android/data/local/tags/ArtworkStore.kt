@@ -121,6 +121,21 @@ class ArtworkStore @Inject constructor(
         null
     }
 
+    /**
+     * The found cover of the song that was at [fromAudioPath] becomes the one
+     * of the song at [toAudioPath]: a found cover is kept by the song's path,
+     * and a moved file is still the song it was found for. Its new path, or
+     * null when there was none.
+     */
+    fun moveFound(fromAudioPath: String, toAudioPath: String): String? {
+        val from = foundPrefix(fromAudioPath)
+        val to = foundPrefix(toAudioPath)
+        val old = foundRoot.listFiles { f -> f.name.startsWith(from) && f.name.endsWith(".jpg") }
+            ?.maxByOrNull { it.lastModified() } ?: return null
+        val moved = File(foundRoot, to + old.name.removePrefix(from))
+        return if (moved.exists() || old.renameTo(moved)) moved.absolutePath else null
+    }
+
     private fun foundPrefix(audioPath: String): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256").digest(audioPath.toByteArray(Charsets.UTF_8))
         return digest.take(12).joinToString("") { "%02x".format(it) } + "-"

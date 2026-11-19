@@ -334,11 +334,42 @@ interface LocalMediaDao {
     @Query("SELECT filePath FROM local_tracks")
     suspend fun getAllTrackPaths(): List<String>
 
-    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks")
+    /** [getAllTrackScanInfo] for every track beneath [folderPath], by the same boundary as [deleteTracksUnder]. */
+    @Query(
+        """
+        SELECT id, filePath, fileSizeBytes, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange
+        FROM local_tracks
+        WHERE substr(filePath, 1, length(:folderPath) + 1) = :folderPath || '/'
+        """
+    )
+    suspend fun scanInfoUnder(folderPath: String): List<TrackScanInfo>
+
+    /** Where track [id]'s file is now: a saved queue or history entry may hold the path it had before a move. */
+    @Query("SELECT filePath FROM local_tracks WHERE id = :id")
+    suspend fun pathOfTrack(id: Long): String?
+
+    // Tracks that left the library, for knowing a moved file again (TrackMoves).
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDeparted(tracks: List<LocalDepartedTrackEntity>)
+
+    @Query("SELECT * FROM local_departed_tracks")
+    suspend fun getDeparted(): List<LocalDepartedTrackEntity>
+
+    @Query("DELETE FROM local_departed_tracks WHERE id IN (:ids)")
+    suspend fun deleteDeparted(ids: List<Long>)
+
+    @Query("DELETE FROM local_departed_tracks WHERE departedAt < :before")
+    suspend fun dropDepartedBefore(before: Long)
+
+    /** The listener's corrections follow a moved file; one already made at the new path is kept. */
+    @Query("UPDATE OR IGNORE local_track_edits SET filePath = :to WHERE filePath = :from")
+    suspend fun moveTrackEdit(from: String, to: String)
+
+    @Query("SELECT id, filePath, fileSizeBytes, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks")
     suspend fun getAllTrackScanInfo(): List<TrackScanInfo>
 
     /** [getAllTrackScanInfo] for just [paths]: at most a few hundred, under SQLite's bound-variable limit. */
-    @Query("SELECT filePath, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks WHERE filePath IN (:paths)")
+    @Query("SELECT id, filePath, fileSizeBytes, lastModified, artworkCacheKey, hasEmbeddedArt, artist, title, dynamicRange FROM local_tracks WHERE filePath IN (:paths)")
     suspend fun scanInfoFor(paths: List<String>): List<TrackScanInfo>
 
     /** What the player needs to measure track [id]'s dynamic range: its file, its length, and whether it has one. */
@@ -620,7 +651,9 @@ data class DynamicRangeTarget(val filePath: String, val durationSeconds: Int, va
  * of issuing a per-file SELECT.
  */
 data class TrackScanInfo(
+    val id: Long = 0,
     val filePath: String,
+    val fileSizeBytes: Long = 0,
     val lastModified: Long,
     val artworkCacheKey: String?,
     val hasEmbeddedArt: Boolean,

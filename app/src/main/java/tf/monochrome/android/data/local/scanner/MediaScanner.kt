@@ -51,6 +51,7 @@ class MediaScanner @Inject constructor(
     private val genreGraph: tf.monochrome.android.data.repository.GenreGraphRepository,
     private val artworkStore: tf.monochrome.android.data.local.tags.ArtworkStore,
     private val folderIndexer: FolderIndexer,
+    private val libraryFiles: LibraryFiles,
     private val packs: tf.monochrome.android.glyph.pack.GlyphPackLibrary,
     private val ownPack: tf.monochrome.android.glyph.pack.OwnPackStore,
 ) {
@@ -97,30 +98,26 @@ class MediaScanner @Inject constructor(
             // ScanCoordinator.runFullScan — has nothing to pass, so the setting
             // was written by the UI and then ignored by every scan.
             val excluded = excludedPaths + preferences.excludedPaths.first() + ownPackPaths()
-            // A scan sees only what Android has indexed, and not every way of
-            // putting a file in a folder tells it: a new song stayed missing
-            // through any number of rescans (#136). Ask for the ones it has
-            // not indexed, and wait, before reading. A failure here costs only
-            // those files, never the scan.
-            val unindexed = try {
-                folderIndexer.findUnindexed(folderRoots, excluded)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.w("MediaScanner", "could not check the folders for unindexed files", e)
-                emptyList()
-            }
-            if (unindexed.isNotEmpty()) {
-                emit(ScanProgress.Grouping("Indexing ${unindexed.size} new file${if (unindexed.size == 1) "" else "s"}..."))
-                folderIndexer.index(unindexed)
-            }
-            val mediaStoreFiles =
-                mediaStoreSource.queryAllAudio(excluded, folderRoots)
+            // The folders are read here, by the app ([LibraryFiles]): a file
+            // is in the library because it is in the folder, not because
+            // Android has indexed it. A new song used to stay missing through
+            // any number of rescans until it had (#136), and the scan waited
+            // on Android for up to three minutes to index what it had found.
+            val startedAt = android.os.SystemClock.elapsedRealtime()
+            val listing = libraryFiles.list(folderRoots, excluded, includeAtmosVideos = true)
+            val mediaStoreFiles = listing.files
+            // Android is still told, without waiting, for what else goes by
+            // its index.
+            folderIndexer.tell(listing.unindexed)
+            val listedAt = android.os.SystemClock.elapsedRealtime()
             emit(ScanProgress.Started(totalFiles = mediaStoreFiles.size))
 
             // One projection query up front instead of a findByPath() SELECT
             // per file — the re-read decision then runs entirely in memory.
             val scanInfoByPath = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
+            // Before anything is read: a moved file's corrections and found
+            // cover have to be at its new path when its tags are.
+            val moved = planMoves(mediaStoreFiles, scanInfoByPath)
 
             // Titles are written here, at scan time, so switching between tag
             // and file-name titles has to re-read every file once. Nothing
@@ -130,13 +127,19 @@ class MediaScanner @Inject constructor(
             // Rows an older scan gave a number for an artist are healed by one
             // full scan, not by every one: see needsReRead.
             val healNumbering = preferences.localNumberingHealScanned.first() < NUMBERING_HEAL_VERSION
+            // The library was read by Android's reader until the app had its
+            // own. One full scan reads every file again with it, so the whole
+            // library is read one way; a row keeps its number through it.
+            // Not on a first scan, which reads everything anyway.
+            val newReader = preferences.localTagReaderScanned.first() < TAG_READER_VERSION
+            val readAgain = newReader && scanInfoByPath.isNotEmpty()
             val packTags = packTags()
 
             val addedCount = processFiles(
                 files = mediaStoreFiles,
                 shouldRead = {
                     val existing = scanInfoByPath[it.absolutePath]
-                    titleModeChanged ||
+                    titleModeChanged || readAgain ||
                         needsPackRetag(existing, packTags[it.absolutePath]) ||
                         needsReRead(
                             existing, it.dateModified,
@@ -147,7 +150,9 @@ class MediaScanner @Inject constructor(
                 progressChunkSize = 50,
                 titleFromFileName = titleFromFileName,
                 packTags = packTags,
+                moved = moved,
             )
+            val readAt = android.os.SystemClock.elapsedRealtime()
 
             // Prune deleted files
             emit(ScanProgress.Grouping("Removing deleted tracks..."))
@@ -165,6 +170,7 @@ class MediaScanner @Inject constructor(
             updateScanState(full = true)
             preferences.setLocalTitleModeScanned(titleFromFileName)
             if (healNumbering) preferences.setLocalNumberingHealScanned(NUMBERING_HEAL_VERSION)
+            if (newReader) preferences.setLocalTagReaderScanned(TAG_READER_VERSION)
 
             // App data now, not a cache the OS bounds for us, and a scan is
             // the one moment we know which covers are still spoken for. Best
@@ -172,12 +178,33 @@ class MediaScanner @Inject constructor(
             runCatching {
                 artworkStore.sweepOrphans(localMediaDao.getAllReferencedArtworkKeys())
             }
+            runCatching { localMediaDao.dropDepartedBefore(System.currentTimeMillis() - DEPARTED_KEPT_MS) }
+
+            // What a report of a slow or wrong scan is read from.
+            val (ownReads, platformReads) = tagReader.takeReadCounts()
+            android.util.Log.i(
+                "MediaScanner",
+                "full scan: ${mediaStoreFiles.size} files (${listing.walked} from the folders, " +
+                    "${listing.unindexed.size} Android had not indexed) listed in ${listedAt - startedAt} ms; " +
+                    "$addedCount read in ${readAt - listedAt} ms ($ownReads by the app's reader, $platformReads by Android's); " +
+                    "${moved.size} moved, $removedCount removed; ${android.os.SystemClock.elapsedRealtime() - startedAt} ms in all",
+            )
 
             emit(ScanProgress.Complete(
                 scanned = mediaStoreFiles.size,
                 added = addedCount,
                 removed = maxOf(0, removedCount)
             ))
+
+            // Once, after the scan has said it is done: the two readers on a
+            // sample of the library, timed and compared, into the log. It is
+            // how the change of reader is judged on a real phone's files.
+            if (readAgain) {
+                runCatching {
+                    val step = (mediaStoreFiles.size / COMPARE_SAMPLE).coerceAtLeast(1)
+                    tagReader.compareReaders(mediaStoreFiles.filterIndexed { i, _ -> i % step == 0 }.take(COMPARE_SAMPLE).map { it.absolutePath })
+                }
+            }
         } catch (e: Exception) {
             emit(ScanProgress.Error(e.message ?: "Unknown scan error"))
         }
@@ -210,10 +237,9 @@ class MediaScanner @Inject constructor(
             // incremental scan import it straight back — the removal held only
             // until the next song landed in that folder.
             val excluded = preferences.excludedPaths.first() + ownPackPaths()
-            val audio = mediaStoreSource.queryAllAudio(
-                excluded, folderRoots, includeAtmosVideos = false,
-            )
+            val audio = libraryFiles.list(folderRoots, excluded, includeAtmosVideos = false).files
             val known = localMediaDao.getAllTrackScanInfo().associateBy { it.filePath }
+            val moved = planMoves(audio, known)
             val packTags = packTags()
             val changed = audio.filter {
                 val existing = known[it.absolutePath]
@@ -229,6 +255,7 @@ class MediaScanner @Inject constructor(
                     progressChunkSize = 20,
                     titleFromFileName = preferences.localTitleFromFileName.first(),
                     packTags = packTags,
+                    moved = moved,
                 )
             }
 
@@ -279,6 +306,7 @@ class MediaScanner @Inject constructor(
         progressChunkSize: Int,
         titleFromFileName: Boolean,
         packTags: Map<String, tf.monochrome.android.glyph.pack.GlyphPackLibrary.LibraryTags> = emptyMap(),
+        moved: Map<String, DepartedTrack> = emptyMap(),
     ): Int {
         val parallelism = Runtime.getRuntime().availableProcessors().coerceIn(2, 8)
         val tagDispatcher = Dispatchers.IO.limitedParallelism(parallelism)
@@ -305,6 +333,12 @@ class MediaScanner @Inject constructor(
                             buildTrackEntity(audioFile, tags, titleFromFileName)
                                 .withPackTags(packTags[audioFile.absolutePath])
                                 .withEdit(edits[audioFile.absolutePath])
+                                // A moved file is the track it was: its row
+                                // number, and what the player measured of it.
+                                .let { row ->
+                                    moved[audioFile.absolutePath]
+                                        ?.let { row.copy(id = it.id, dynamicRange = it.dynamicRange) } ?: row
+                                }
                         } catch (e: CancellationException) {
                             throw e
                         } catch (_: Exception) {
@@ -336,20 +370,75 @@ class MediaScanner @Inject constructor(
     }
 
     /**
-     * Writes [tracks] (a re-read replaces its row whole), each keeping the
-     * dynamic range its row holds now while its file is the same one
-     * ([keptDynamicRange]): the player measures it, so a read cannot give it
-     * back. The rows are read and written in one transaction, so a value the
-     * player saves while the scan runs is kept too, where a copy read when the
-     * scan began would have put back an empty one.
+     * Writes [tracks]. A file read again keeps its row number: the row is
+     * replaced under the id it has. It used to be written with no id, so every
+     * re-read (a tag edited, a cover gone missing) made the song a new row,
+     * and whatever knew it by number lost it: its place in the queue, its
+     * likes and playlists (found again only by title), its Trypt Mania charts
+     * and scores, its timed lyrics.
+     *
+     * Each also keeps the dynamic range its row holds now while its file is
+     * the same one ([keptDynamicRange]): the player measures it, so a read
+     * cannot give it back. The rows are read and written in one transaction,
+     * so a value the player saves while the scan runs is kept too, where a
+     * copy read when the scan began would have put back an empty one.
      */
     private suspend fun insertKeepingDynamicRange(tracks: List<LocalTrackEntity>) {
         musicDatabase.withTransaction {
             val now = localMediaDao.scanInfoFor(tracks.map { it.filePath }).associateBy { it.filePath }
             localMediaDao.insertTracks(
-                tracks.map { t -> keptDynamicRange(now[t.filePath], t.lastModified)?.let { t.copy(dynamicRange = it) } ?: t },
+                tracks.map { t ->
+                    // A moved file comes with its id already ([planMoves]).
+                    if (t.id != 0L) return@map t
+                    val existing = now[t.filePath]
+                    val kept = keptDynamicRange(existing, t.lastModified)
+                    t.copy(id = existing?.id ?: 0, dynamicRange = kept ?: t.dynamicRange)
+                },
             )
         }
+    }
+
+    /**
+     * Finds the files that moved ([TrackMoves]): tracks whose file is gone,
+     * now or at an earlier scan, against files the library has nothing for.
+     * Each one's corrections (Edit info) and found cover are moved to its new
+     * path here, before it is read, and the result says which row number each
+     * new path takes. Empty when nothing moved, which is nearly every scan.
+     */
+    private suspend fun planMoves(
+        files: List<AudioFileInfo>,
+        known: Map<String, TrackScanInfo>,
+    ): Map<String, DepartedTrack> = try {
+        val arrived = files.filter { it.absolutePath !in known }
+            .map { ArrivedFile(it.absolutePath, it.sizeBytes, it.dateModified) }
+        if (arrived.isEmpty()) {
+            emptyMap()
+        } else {
+            val listed = files.mapTo(HashSet()) { it.absolutePath }
+            val gone = known.values.filter { it.filePath !in listed }
+                .map { DepartedTrack(it.id, it.filePath, it.fileSizeBytes, it.lastModified, it.dynamicRange) }
+            // A row removed earlier whose id is in use again is not offered:
+            // the track came back another way.
+            val ids = known.values.mapTo(HashSet()) { it.id }
+            val earlier = localMediaDao.getDeparted().filter { it.id !in ids && it.filePath !in listed }
+                .map { DepartedTrack(it.id, it.filePath, it.fileSizeBytes, it.lastModified, it.dynamicRange) }
+            val moves = TrackMoves.match(gone + earlier, arrived)
+            if (moves.isNotEmpty()) {
+                musicDatabase.withTransaction {
+                    moves.forEach { (to, from) -> localMediaDao.moveTrackEdit(from.filePath, to) }
+                    moves.values.map { it.id }.chunked(DELETE_CHUNK_SIZE).forEach { localMediaDao.deleteDeparted(it) }
+                }
+                moves.forEach { (to, from) -> runCatching { artworkStore.moveFound(from.filePath, to) } }
+                android.util.Log.i("MediaScanner", "${moves.size} file(s) moved and kept as the tracks they were")
+            }
+            moves
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Without it the files are read as new ones, as they always were.
+        android.util.Log.w("MediaScanner", "could not look for moved files", e)
+        emptyMap()
     }
 
     /**
@@ -365,7 +454,19 @@ class MediaScanner @Inject constructor(
      */
     private suspend fun pruneDeleted(mediaStorePaths: Set<String>, cautious: Boolean = false): Int {
         val library = localMediaDao.getAllTrackPaths()
-        val toDelete = library.filterNot { it in mediaStorePaths }
+        val missing = library.filterNot { it in mediaStorePaths }
+        // A memory card that is out is not music deleted: its tracks keep
+        // their rows, and a scan with the card back finds them unchanged.
+        val toDelete = TrackMoves.withoutOffline(missing) { volume ->
+            val state = runCatching { android.os.Environment.getExternalStorageState(java.io.File(volume)) }.getOrNull()
+            state == android.os.Environment.MEDIA_MOUNTED || state == android.os.Environment.MEDIA_MOUNTED_READ_ONLY
+        }
+        if (toDelete.size < missing.size) {
+            android.util.Log.i(
+                "MediaScanner",
+                "${missing.size - toDelete.size} tracks are on storage that is not there now; they are kept",
+            )
+        }
         if (cautious && !pruneLooksReal(library.size, toDelete.size)) {
             // Left for a full scan, which someone asked for and which says so.
             android.util.Log.w(
@@ -377,11 +478,28 @@ class MediaScanner @Inject constructor(
         if (toDelete.isNotEmpty()) {
             musicDatabase.withTransaction {
                 toDelete.chunked(DELETE_CHUNK_SIZE).forEach {
+                    // Remembered, so the same file found elsewhere later is
+                    // the same track ([planMoves]).
+                    remember(localMediaDao.scanInfoFor(it))
                     localMediaDao.deleteTracksByPaths(it)
                 }
             }
         }
         return toDelete.size
+    }
+
+    /** Keeps what a moved file needs of [rows], which are about to be removed. */
+    private suspend fun remember(rows: List<TrackScanInfo>) {
+        if (rows.isEmpty()) return
+        val now = System.currentTimeMillis()
+        localMediaDao.insertDeparted(
+            rows.map {
+                tf.monochrome.android.data.local.db.LocalDepartedTrackEntity(
+                    id = it.id, filePath = it.filePath, fileSizeBytes = it.fileSizeBytes,
+                    lastModified = it.lastModified, dynamicRange = it.dynamicRange, departedAt = now,
+                )
+            },
+        )
     }
 
     private fun buildTrackEntity(
@@ -411,6 +529,9 @@ class MediaScanner @Inject constructor(
             discTotal = tags.discTotal,
             composer = tags.composer,
             lyrics = tags.lyrics,
+            isrc = tags.isrc,
+            musicbrainzTrack = tags.musicbrainzTrack,
+            musicbrainzAlbum = tags.musicbrainzAlbum,
             codec = tags.codec.name,
             sampleRate = tags.sampleRate,
             bitDepth = tags.bitDepth,
@@ -551,7 +672,13 @@ class MediaScanner @Inject constructor(
         // there would have the next scan re-find what the exclusion just
         // removed — the two settings pulling against each other.
         preferences.removeUserFolderRoot(folder)
-        localMediaDao.deleteTracksUnder(folder)
+        // Taking the old folder out and adding the new one is how a library
+        // is pointed somewhere else: the tracks are remembered, so the files
+        // found in the new folder are the same tracks.
+        musicDatabase.withTransaction {
+            remember(localMediaDao.scanInfoUnder(folder))
+            localMediaDao.deleteTracksUnder(folder)
+        }
         rebuildGroupings()
         rebuildFolders()
         localLibraryRevision.bump()
@@ -686,6 +813,19 @@ class MediaScanner @Inject constructor(
          * when the numbering rule changes, so the next full scan heals again.
          */
         const val NUMBERING_HEAL_VERSION = 1
+
+        /**
+         * The tag reader a full scan reads the whole library with, once
+         * (fullScan). 1: the app's own reader, in place of Android's. Raise
+         * it when the reader reads something it did not before.
+         */
+        const val TAG_READER_VERSION = 1
+
+        /** How many files the two tag readers are compared on, once. */
+        private const val COMPARE_SAMPLE = 200
+
+        /** How long a removed track is remembered, for knowing its file again elsewhere: half a year. */
+        private const val DEPARTED_KEPT_MS = 180L * 24 * 60 * 60 * 1000
 
         /** Rows per insertTracks() call — one Room transaction per batch. */
         private const val INSERT_BATCH_SIZE = 500

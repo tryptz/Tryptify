@@ -486,6 +486,7 @@ class PreferencesManager @Inject constructor(
         private val LOCAL_TITLE_FROM_FILENAME = booleanPreferencesKey("local_title_from_filename")
         private val LOCAL_TITLE_MODE_SCANNED = booleanPreferencesKey("local_title_mode_scanned")
         private val LOCAL_NUMBERING_HEAL_SCANNED = intPreferencesKey("local_numbering_heal_scanned")
+        private val LOCAL_TAG_READER_SCANNED = intPreferencesKey("local_tag_reader_scanned")
 
         // DSP Mixer
         private val DSP_ENABLED = booleanPreferencesKey("dsp_enabled")
@@ -2355,6 +2356,14 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setLocalNumberingHealScanned(version: Int) {
         dataStore.edit { it[LOCAL_NUMBERING_HEAL_SCANNED] = version }
+    }
+
+    /** The version of the tag reader the library was last read whole with (MediaScanner.TAG_READER_VERSION). */
+    val localTagReaderScanned: Flow<Int> =
+        dataStore.data.map { it[LOCAL_TAG_READER_SCANNED] ?: 0 }
+
+    suspend fun setLocalTagReaderScanned(version: Int) {
+        dataStore.edit { it[LOCAL_TAG_READER_SCANNED] = version }
     }
     val excludedPathsJson: Flow<String> = dataStore.data.map { it[EXCLUDED_PATHS_JSON] ?: "[]" }
 

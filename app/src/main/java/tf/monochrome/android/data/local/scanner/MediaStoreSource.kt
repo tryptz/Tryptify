@@ -19,7 +19,8 @@ data class AudioFileInfo(
     val sizeBytes: Long,
     val dateModified: Long,
     val duration: Long,
-    val uri: Uri
+    /** Android's own address for it; null for a file found by reading its folder. */
+    val uri: Uri?
 )
 
 @Singleton
@@ -215,10 +216,19 @@ class MediaStoreSource @Inject constructor(
      * found by opening every candidate video on the device: right for a full
      * scan, too much for one that runs on every change.
      */
+    /** The Atmos music videos alone ([queryEac3Video]): for a scan that lists its audio itself. */
+    fun queryAtmosVideos(excludedPaths: Set<String> = emptySet()): List<AudioFileInfo> = queryEac3Video(excludedPaths)
+
+    /**
+     * [musicOnly] false also takes what Android files as a ringtone, a
+     * podcast or a recording: in a folder the listener picked, everything
+     * there is music, whatever the folder is called.
+     */
     fun queryAllAudio(
         excludedPaths: Set<String> = emptySet(),
         folderRoots: Set<String> = emptySet(),
         includeAtmosVideos: Boolean = true,
+        musicOnly: Boolean = true,
     ): List<AudioFileInfo> {
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -230,7 +240,7 @@ class MediaStoreSource @Inject constructor(
         // them intros, interludes, skits and short sketches. A duration the
         // indexer does not know (NULL) failed even ">= 0", so there is no
         // duration clause at all.
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} = 1"
+        val selection = if (musicOnly) "${MediaStore.Audio.Media.IS_MUSIC} = 1" else null
         val sortOrder = "${MediaStore.Audio.Media.DATE_MODIFIED} DESC"
 
         val results = mutableListOf<AudioFileInfo>()

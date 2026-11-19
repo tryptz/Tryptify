@@ -165,6 +165,28 @@ target_compile_options(monochrome_archive PRIVATE -O2 -fno-exceptions -fno-rtti)
 set_target_properties(monochrome_archive PROPERTIES DEBUG_POSTFIX "")
 target_link_libraries(monochrome_archive archive_rar)
 
+# ── Tag reader (the library's own, over TagLib) ───────────────────────────
+# TagLib is built static and linked into this one library. Not -ffast-math
+# and not -fno-exceptions / -fno-rtti: TagLib tells its file types apart with
+# dynamic_cast, and a broken file's impossible size is an exception that
+# tag_reader.cpp catches. Host tests: tags/tests.
+include(${CMAKE_CURRENT_SOURCE_DIR}/tags/taglib.cmake)
+
+add_library(monochrome_tags SHARED
+    tags/tag_reader.cpp
+    tags/tags_jni.cpp
+)
+
+target_include_directories(monochrome_tags PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tags
+    ${TAGLIB_INCLUDE_DIRS}
+)
+target_compile_features(monochrome_tags PRIVATE cxx_std_17)
+target_compile_options(monochrome_tags PRIVATE -O2 -fvisibility=hidden -ffunction-sections -fdata-sections)
+target_link_options(monochrome_tags PRIVATE -Wl,--gc-sections)
+set_target_properties(monochrome_tags PROPERTIES DEBUG_POSTFIX "")
+target_link_libraries(monochrome_tags tag z)
+
 # ── libusb (USB Audio Class direct output) ────────────────────────────────
 # Vendored at third_party/libusb. Upstream uses autotools + Android.mk;
 # we list the platform source files directly here so the existing CMake

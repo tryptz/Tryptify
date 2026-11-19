@@ -6,3 +6,6 @@
 	path = third_party/libusb
 	url = https://github.com/libusb/libusb
 	branch = master
+[submodule "third_party/taglib"]
+	path = third_party/taglib
+	url = https://github.com/taglib/taglib
