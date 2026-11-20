@@ -188,12 +188,15 @@ class DspChain private constructor(
             val inflator = InflatorEffect()
             val compressor = CompressorEffect()
             val crossfeed = CrossfeedEffect()
+            // Nobody else holds this copy's engine, so reset() may free it.
+            val mixBus = MixBusProcessor(inflator, compressor, crossfeed).apply { destroyEngineOnReset = true }
             return DspChain(
                 channelDetector = ChannelDetectorProcessor(),
                 replayGain = tf.monochrome.android.audio.replaygain.ReplayGainProcessor(),
-                downmix = DownmixProcessor(crossfeed, placement),
-                // Nobody else holds this copy's engine, so reset() may free it.
-                mixBus = MixBusProcessor(inflator, compressor, crossfeed).apply { destroyEngineOnReset = true },
+                // As in the main chain: a room on the mixer's master is
+                // folded, not placed again.
+                downmix = DownmixProcessor(crossfeed, placement).apply { mixerRenderedRoom = { mixBus.roomTookBed } },
+                mixBus = mixBus,
                 autoEq = AutoEqProcessor(),
                 parametricEq = ParametricEqProcessor(),
                 inflator = inflator,

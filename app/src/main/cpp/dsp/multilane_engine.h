@@ -34,11 +34,19 @@
  *   with no input is skipped outright, so each channel group runs through
  *   its own strip and nothing else. Meters for a bus come from the lane that
  *   feeds it; the master's are the loudest across the lanes.
+ * - A Binaural Room on the master is one room for the whole stream, where
+ *   Kotlin has said which speaker each channel is (configureLanes' roles):
+ *   the front lane's room is handed every other lane's master signal and
+ *   plays each from its own speaker, and those lanes' rooms play nothing
+ *   (snapins/binaural_room.h, "A surround mix"). What leaves this engine is
+ *   then the binaural pair on the front two channels and silence on the
+ *   rest, which a fold after it adds up to that pair (roomTookBed() says so,
+ *   for a fold that would otherwise place the channels itself).
  *
  * Threads: control calls fan out under laneMutex_; meter reads take only
  * shapeMutex_, which guards the lane list itself. The audio thread only
  * ever *tries* it; if a fan-out is mid-flight it runs that one block with the
- * lanes unlinked rather than wait, so it never blocks on the UI.
+ * master dynamics unlinked rather than wait, so it never blocks on the UI.
  *
  * configureLanes() and processPlanar() must be called from the same thread —
  * MixBusProcessor calls both from Media3's playback thread (configure/flush
@@ -88,8 +96,14 @@ public:
      * unless it is negative (a mono lane). While spreading (setSpread), lane
      * k is routed to bus k + 1 — see the class notes. Builds or drops engines as needed —
      * allocation, so never from the audio thread. Lane 0 must be a pair.
+     *
+     * [roleFirst] and [roleSecond], when given, say which speaker each of
+     * those channels is (RoomRole; -1 for none): what a Binaural Room on the
+     * master places the stream by. Without them, or with a channel that has
+     * none, every lane keeps a room of its own.
      */
-    void configureLanes(const int* first, const int* second, int count) {
+    void configureLanes(const int* first, const int* second, int count,
+                        const int* roleFirst = nullptr, const int* roleSecond = nullptr) {
         count = std::max(1, std::min(count, MAX_LANES));
         // Route (and so grow or shrink) the lanes that stay first, so that
         // the new ones below are cloned with the bus count already right.
@@ -136,8 +150,18 @@ public:
             for (int k = 0; k < count; k++) {
                 laneFirst_[k] = first[k];
                 laneSecond_[k] = second[k];
+                roleFirst_[k] = roleFirst ? roleFirst[k] : -1;
+                roleSecond_[k] = roleSecond && second[k] >= 0 ? roleSecond[k] : -1;
                 lanes_[k]->setMonoLane(k > 0 && second[k] < 0);
             }
+            // A bed needs every channel placed, and a front pair for the
+            // room's own two.
+            bool placed = count > 1 && second[0] >= 0 &&
+                          roleFirst_[0] == RoomRole::kL && roleSecond_[0] == RoomRole::kR;
+            for (int k = 1; placed && k < count; k++) {
+                placed = roleFirst_[k] >= 0 && (second[k] < 0 || roleSecond_[k] >= 0);
+            }
+            bedPlaced_ = placed;
         }
     }
 
@@ -149,11 +173,13 @@ public:
     void processPlanar(float* const* channels, int numChannels, int numFrames) {
         const int block = maxBlock_.load(std::memory_order_relaxed);
         bool unchanged = true;
+        tookBed_ = false;
         for (int done = 0; done < numFrames; done += block) {
             const int n = std::min(block, numFrames - done);
             unchanged = processChunk(channels, numChannels, done, n) && unchanged;
         }
         unchanged_ = unchanged;
+        roomTookBed_.store(tookBed_, std::memory_order_relaxed);
     }
 
     /**
@@ -163,6 +189,13 @@ public:
      * From the thread that called processPlanar().
      */
     bool lastProcessUnchanged() const { return unchanged_; }
+
+    /**
+     * Whether, in the last processPlanar(), a Binaural Room on the master
+     * took the whole stream: the front two channels are then a finished
+     * binaural pair. Any thread.
+     */
+    bool roomTookBed() const { return roomTookBed_.load(std::memory_order_relaxed); }
 
     /**
      * Whether a wide stream is spread across the mixer, one bus per channel
@@ -290,32 +323,35 @@ private:
     // One chunk of processPlanar(); returns whether it came out as it went in.
     bool processChunk(float* const* ch, int numChannels, int offset, int n) {
         std::unique_lock<std::mutex> lanesLock(laneMutex_, std::try_to_lock);
+        if (lanesLock.owns_lock()) return stepLanes(ch, numChannels, offset, n, /* linked = */ true);
+        // A control change is fanning out: this block runs with the master
+        // dynamics unlinked, rather than wait for it.
+        //
+        // laneMutex_ is not held here, and configureLanes pushes and pops
+        // lanes_ under it — reading lanes_ bare raced that, and a track
+        // change from stereo to 7.1.4 mid-block read a lane that was being
+        // destroyed (engine_stress_test's chaos run found it). shapeMutex_
+        // is the lock configureLanes holds for exactly that swap, and
+        // otherwise only meter reads take it, for microseconds, so waiting
+        // on it is bounded.
+        //
+        // The lanes are still stepped together, slot by slot, where each
+        // used to run whole on its own: a Binaural Room on the master needs
+        // every lane's signal at its slot, and one block of a room a lane
+        // (the centre and the LFE through dry, the rest doubled) on every
+        // turn of a knob would be heard. The fan-out takes one lane's chain
+        // lock at a time and holds no other while it waits, so taking them
+        // all here cannot lock against it.
+        std::lock_guard<std::mutex> shape(shapeMutex_);
+        return stepLanes(ch, numChannels, offset, n, /* linked = */ false);
+    }
+
+    // The lanes through one chunk, slot by slot. [linked]: laneMutex_ is
+    // held, so every lane has the same chain and a detecting master slot can
+    // be handed one key. Otherwise shapeMutex_ is, and the chains may differ
+    // for this block.
+    bool stepLanes(float* const* ch, int numChannels, int offset, int n, bool linked) {
         bool unchanged = true;
-
-        if (!lanesLock.owns_lock()) {
-            // A control change is fanning out: this block runs each lane on
-            // its own, unlinked, rather than wait for it.
-            //
-            // laneMutex_ is not held here, and configureLanes pushes and pops
-            // lanes_ under it — reading lanes_ bare raced that, and a track
-            // change from stereo to 7.1.4 mid-block read a lane that was being
-            // destroyed (engine_stress_test's chaos run found it). shapeMutex_
-            // is the lock configureLanes holds for exactly that swap, and
-            // otherwise only meter reads take it, for microseconds, so waiting
-            // on it is bounded.
-            std::lock_guard<std::mutex> shape(shapeMutex_);
-            const int count = laneCount();
-            for (int k = 0; k < count; k++) {
-                float* l;
-                float* r;
-                if (!lanePointers(k, ch, numChannels, offset, n, l, r)) continue;
-                lanes_[k]->process(l, r, n);
-                unchanged = lanes_[k]->lastProcessUnchanged() && unchanged;
-                foldMono(k, ch, offset, n);
-            }
-            return unchanged;
-        }
-
         const int count = laneCount();
         float* laneL[MAX_LANES];
         float* laneR[MAX_LANES];
@@ -345,8 +381,31 @@ private:
         int slots = 0;
         for (int k = 0; k < count; k++) slots = std::max(slots, lanes_[k]->masterSlotCountLocked());
         for (int s = 0; s < slots; s++) {
+            if (count > 1 && bedPlaced_ && active[0] && lanes_[0]->masterSlotIsRoomLocked(s)) {
+                // One room for the whole bed: the front lane's, handed every
+                // other lane's signal as it stands at this slot.
+                RoomBedChannel bed[2 * MAX_LANES];
+                int width = 0;
+                for (int k = 1; k < count; k++) {
+                    if (!active[k]) continue;
+                    const float* sl = lanes_[k]->masterSumL();
+                    const float* sr = lanes_[k]->masterSumR();
+                    if (laneSecond_[k] >= 0) {
+                        bed[width++] = {sl, nullptr, roleFirst_[k]};
+                        bed[width++] = {sr, nullptr, roleSecond_[k]};
+                    } else {
+                        bed[width++] = {sl, sr, roleFirst_[k]};
+                    }
+                }
+                lanes_[0]->processMasterRoomHostLocked(s, n, bed, width);
+                for (int k = 1; k < count; k++) {
+                    if (active[k]) lanes_[k]->processMasterRoomGuestLocked(s, n);
+                }
+                tookBed_ = true;
+                continue;
+            }
             const float* key = nullptr;
-            if (count > 1 && lanes_[0]->masterSlotLinkableLocked(s)) {
+            if (linked && count > 1 && lanes_[0]->masterSlotLinkableLocked(s)) {
                 // The loudest sample across every lane, at this slot's input.
                 float* kb = key_.data();
                 std::fill(kb, kb + n, 0.0f);
@@ -379,6 +438,11 @@ private:
     bool spread_ = true;  // guarded by laneMutex_
     int laneFirst_[MAX_LANES] = {};
     int laneSecond_[MAX_LANES] = {};
+    // Which speaker each lane's channels are (RoomRole), and whether every
+    // one has one. Written with the lanes, under both locks.
+    int roleFirst_[MAX_LANES] = {};
+    int roleSecond_[MAX_LANES] = {};
+    bool bedPlaced_ = false;
     std::atomic<int> sampleRate_;
     // Read by the audio thread without a lock, to cut blocks.
     std::atomic<int> maxBlock_;
@@ -392,4 +456,6 @@ private:
     std::vector<float> monoL_[MAX_LANES];
     std::vector<float> monoR_[MAX_LANES];
     bool unchanged_ = false;  // audio thread only
+    bool tookBed_ = false;    // audio thread only: this processPlanar() so far
+    std::atomic<bool> roomTookBed_{false};
 };

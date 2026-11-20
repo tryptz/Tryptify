@@ -78,4 +78,49 @@ class ChannelLayoutTest {
         // Even a 9.1.6 bed (nine groups) fits the mixer's sixteen buses.
         assertTrue((2..ChannelLayout.MAX_CHANNELS).all { ChannelLayout.lanes(it).size <= 16 })
     }
+
+    @Test
+    fun `every channel of a known layout names its speaker, a left with its right`() {
+        val r = ChannelLayout.Role
+        // FFmpeg's 9.1.6, which the upmix makes: the rears before the wides.
+        assertEquals(
+            listOf(r.L, r.R, r.C, r.LFE, r.LRS, r.RRS, r.LW, r.RW, r.LSS, r.RSS, r.LTF, r.RTF, r.LTR, r.RTR, r.LTS, r.RTS),
+            ChannelLayout.roles(16).toList(),
+        )
+        // 5.1's surrounds are its own, at 110 degrees; 7.1 has rears and sides.
+        assertEquals(listOf(r.L, r.R, r.C, r.LFE, r.LS, r.RS), ChannelLayout.roles(6).toList())
+        assertEquals(listOf(r.L, r.R, r.C, r.LFE, r.LRS, r.RRS, r.LSS, r.RSS), ChannelLayout.roles(8).toList())
+        for (n in listOf(2, 3, 4, 5, 6, 7, 8, 10, 12, 16)) {
+            val roles = ChannelLayout.roles(n)
+            assertEquals("count $n", n, roles.size)
+            assertTrue("count $n: every channel has a speaker", roles.all { it >= 0 })
+            assertEquals("count $n: no speaker twice", n, roles.toSet().size)
+            assertEquals("count $n", r.LFE == roles.getOrNull(3), ChannelLayout.isLfe(n, 3))
+            // A pair's two channels are one speaker's left and right: the
+            // roles come in left/right twins, a right one after its left.
+            val sides = ChannelLayout.sides(n)
+            for (lane in ChannelLayout.lanes(n)) {
+                if (lane.isMono) {
+                    assertEquals("count $n ch ${lane.first}", Side.CENTER, sides[lane.first])
+                    assertTrue(roles[lane.first] in listOf(r.C, r.LFE, r.BACK_CENTRE))
+                } else {
+                    assertEquals("count $n ch ${lane.first}", roles[lane.first] + 1, roles[lane.second])
+                    assertEquals("count $n ch ${lane.first}: a left", 0, roles[lane.first] % 2)
+                }
+            }
+            assertEquals("count $n: the front pair first", listOf(r.L, r.R), roles.take(2))
+        }
+        // The numbers cross JNI: RoomRole in snapin_processor.h has the same.
+        assertEquals(
+            (0..18).toList(),
+            listOf(r.L, r.R, r.C, r.LFE, r.LS, r.RS, r.LSS, r.RSS, r.LRS, r.RRS, r.LTF, r.RTF, r.LTR, r.RTR, r.LTS, r.RTS, r.LW, r.RW, r.BACK_CENTRE),
+        )
+    }
+
+    @Test
+    fun `a count with no layout names no speaker, so nothing places it`() {
+        for (n in listOf(1, 9, 11, 13, 14, 15)) {
+            assertTrue("count $n", ChannelLayout.roles(n).all { it == ChannelLayout.Role.NONE })
+        }
+    }
 }

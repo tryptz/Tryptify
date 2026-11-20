@@ -77,7 +77,9 @@ floats cannot hold a 20 Hz filter's poles at 192 kHz), the mixer's Binaural
 Room (`binaural_room_test`: `snapins/binaural_room.h` is the spatial
 renderer's own `atmos/render/virtual_room.h` with a stereo pair in it, so the
 mixer library now compiles headers from `cpp/atmos/` and the rules below for
-that code hold there too), the finite guards
+that code hold there too; on the master of a stream wider than stereo it is
+one room with every channel at its own speaker, not a room a channel pair,
+which summed to a comb), the finite guards
 (`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music

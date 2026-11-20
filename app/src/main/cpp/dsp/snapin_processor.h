@@ -104,6 +104,13 @@ public:
     // effect that answers each sample with that sample.
     virtual int ownLatency() const { return 0; }
 
+    // False for an effect oversampling does nothing for: the factor asked for
+    // is still saved and shown, and 1x runs. The binaural room is linear and
+    // works at its own rate inside, so 2x of it was two more filters and the
+    // same sound; and the bed it is handed on a wide stream's master
+    // (RoomBedChannel) is at the stream's rate, which it must then be too.
+    virtual bool oversamples() const { return true; }
+
     // Holds [left]/[right] back by latency(), in place: the dry signal of a
     // blend, or the whole signal while the effect is bypassed, so a bus's
     // delay does not change with the bypass switch.
@@ -174,7 +181,7 @@ private:
     }
 
     void applyOS() {
-        osRun_ = ChannelOversampler::effectiveFactor(osBaseRate_, osFactor_);
+        osRun_ = oversamples() ? ChannelOversampler::effectiveFactor(osBaseRate_, osFactor_) : 1;
         osBaseBlock_ = std::max(1, osBaseBlock_);
         // The engine is prepared for blocks of up to 16384 frames; scratch
         // for that at 4x is 768 KB per effect per lane, and a wide stream has
@@ -228,3 +235,30 @@ SnapinProcessor* createSnapin(SnapinType type);
 // the layout has lost one. See BinauralRoomProcessor::ringSpeakers.
 constexpr int kBinauralRoomRing = 6;
 int binauralRoomRing(int* left, int* right, float* degrees);
+
+// And where a channel of a surround mix plays from in that room, by its
+// RoomRole: up to kBinauralRoomMaxTaps of the room's speakers and how loud
+// each. See BinauralRoomProcessor::roleSpeakers.
+constexpr int kBinauralRoomMaxTaps = 8;
+int binauralRoomRoleSpeakers(int role, int* speakers, float* gains);
+
+// One channel of a surround mix, handed to a Binaural Room on the master of a
+// wide stream beside the front pair it processes (MultiLaneEngine): the room
+// plays it from that channel's own speaker. [a] holds the block's samples at
+// the stream's rate. A mono lane travels as two equal halves; [b] is the
+// other, and the room plays their mean.
+struct RoomBedChannel {
+    const float* a = nullptr;
+    const float* b = nullptr;
+    int role = -1;  // RoomRole
+};
+
+// Which speaker a channel is. The first eighteen are tf::atmos::SpeakerRole's
+// (dsp_engine.cpp holds them to it); Kotlin's ChannelLayout.roles names the
+// same numbers. A channel with none (-1) cannot be placed, and a stream with
+// one is not played as a bed.
+namespace RoomRole {
+constexpr int kL = 0, kR = 1, kC = 2, kLfe = 3, kLs = 4, kRs = 5, kLss = 6, kRss = 7,
+    kLrs = 8, kRrs = 9, kLtf = 10, kRtf = 11, kLtr = 12, kRtr = 13, kLts = 14, kRts = 15,
+    kLw = 16, kRw = 17, kBackCentre = 18, kCount = 19;
+}

@@ -697,6 +697,9 @@ class PlaybackService : MediaSessionService() {
             }
         }
         upmixProcessor.afterAtmosRender = { atmosAudioProcessor.rendersConfiguredStream }
+        // A Binaural Room on the mixer's master renders a wide stream for
+        // headphones itself; the fold after it must not place it again.
+        downmixProcessor.mixerRenderedRoom = { mixBusProcessor.roomTookBed }
         upmixProcessor.onNeedsConfigure = { serviceScope.launch { reconfigureAudioChain(stereoToo = true) } }
         // The Atmos stage, the fold and the upmix each decide in configure()
         // whether they are in the chain and how wide their output is, and

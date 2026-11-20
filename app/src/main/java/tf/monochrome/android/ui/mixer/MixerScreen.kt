@@ -170,6 +170,7 @@ fun MixerScreen(
     val buses by viewModel.buses.collectAsStateWithLifecycle()
     val selectedBusIndex by viewModel.selectedBusIndex.collectAsStateWithLifecycle()
     val spreadChannels by viewModel.spreadChannels.collectAsStateWithLifecycle()
+    val streamChannels by viewModel.streamChannels.collectAsStateWithLifecycle()
     val showPluginPicker by viewModel.showPluginPicker.collectAsStateWithLifecycle()
     val editingPlugin by viewModel.editingPlugin.collectAsStateWithLifecycle()
     val presets by viewModel.presets.collectAsStateWithLifecycle()
@@ -412,6 +413,10 @@ fun MixerScreen(
                     // Every knob in the chain can follow the music: hold one.
                     androidx.compose.runtime.CompositionLocalProvider(
                         tf.monochrome.android.ui.musiclinks.LocalMusicLinkHost provides knobLinkHost,
+                        // A Binaural Room on the master of a wide stream is
+                        // one room for all of it: its picture draws them all.
+                        tf.monochrome.android.ui.mixer.fxchain.LocalRoomBedChannels provides
+                            if (buses.getOrNull(selectedBusIndex)?.isMaster == true) streamChannels else 0,
                     ) {
                     tf.monochrome.android.ui.mixer.fxchain.FxChainPage(
                         buses = buses,

@@ -1,14 +1,19 @@
 // Host test: the mixer's Binaural Room (snapins/binaural_room.h) is the
 // spatial renderer's own room with a stereo pair in it, at every rate the
-// engine runs at, and the engine knows how late it answers.
+// engine runs at, and the engine knows how late it answers. And on the
+// master of a surround mix it is one room with every channel at its own
+// speaker, not a room a channel pair.
 //
 // Built with -ffast-math, as the phone builds it: nothing here leans on NaN,
 // and finiteness is asked of dspAllFinite (util/finite.h).
+#include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <thread>
 #include <vector>
 
 #include "../dsp_engine.h"
+#include "../multilane_engine.h"
 #include "../snapins/binaural_room.h"
 #include "../util/finite.h"
 
@@ -253,6 +258,397 @@ void inTheEngine() {
     check(same, "bypassed, the song comes through 7 samples later and otherwise untouched");
 }
 
+// ── A surround mix ──────────────────────────────────────────────────────
+
+// 9.1.6 as the upmix makes it and ChannelLayout reads it (FFmpeg's order):
+// FL FR FC LFE BL BR FLC FRC SL SR TFL TFR TBL TBR TSL TSR.
+constexpr int kWide = 16;
+const int kWideFirst[] = {0, 2, 3, 4, 6, 8, 10, 12, 14};
+const int kWideSecond[] = {1, -1, -1, 5, 7, 9, 11, 13, 15};
+constexpr int kWideLanes = 9;
+// ChannelLayout.roles(16), by channel.
+const int kWideRoles[kWide] = {
+    RoomRole::kL, RoomRole::kR, RoomRole::kC, RoomRole::kLfe, RoomRole::kLrs, RoomRole::kRrs,
+    RoomRole::kLw, RoomRole::kRw, RoomRole::kLss, RoomRole::kRss, RoomRole::kLtf, RoomRole::kRtf,
+    RoomRole::kLtr, RoomRole::kRtr, RoomRole::kLts, RoomRole::kRts};
+
+/** Sixteen channels, each a tone of its own with a little noise: nothing cancels. */
+std::vector<std::vector<float>> bedSong(int n, double rate) {
+    std::vector<std::vector<float>> ch(kWide, std::vector<float>(static_cast<size_t>(n)));
+    unsigned s = 99u;
+    for (int c = 0; c < kWide; c++) {
+        const double hz = c == 3 ? 55.0 : 180.0 + 97.0 * c;
+        for (int i = 0; i < n; i++) {
+            s = s * 1664525u + 1013904223u;
+            const float noise = (static_cast<int>(s >> 8) / 8388608.0f - 1.0f) * 0.01f;
+            ch[c][static_cast<size_t>(i)] = static_cast<float>(0.08 * std::sin(6.2831853 * hz * i / rate)) + noise;
+        }
+    }
+    return ch;
+}
+
+/** The speaker [role] plays from when it has one of its own, as (azimuth, elevation); false if shared. */
+bool ownSpeaker(int role, float& az, float& el) {
+    int at[BinauralRoomProcessor::kMaxTaps];
+    float g[BinauralRoomProcessor::kMaxTaps];
+    if (BinauralRoomProcessor::roleSpeakers(role, at, g) != 1 || g[0] != 1.0f) return false;
+    const auto layout = tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12);
+    az = layout[static_cast<size_t>(at[0])].azimuth;
+    el = layout[static_cast<size_t>(at[0])].elevation;
+    return true;
+}
+
+void whereEachChannelStands() {
+    std::printf("-- a surround mix: where each channel stands\n");
+    const auto layout = tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12);
+    struct Want { int role; float az, el; const char* what; };
+    const Want own[] = {
+        {RoomRole::kL, -30, 0, "front left at 30 degrees"}, {RoomRole::kR, 30, 0, "front right"},
+        {RoomRole::kC, 0, 0, "the centre straight ahead"},
+        {RoomRole::kLw, -60, 0, "a front wide at 60"}, {RoomRole::kRw, 60, 0, "and its right"},
+        {RoomRole::kLss, -90, 0, "a side surround at 90"}, {RoomRole::kRss, 90, 0, "and its right"},
+        {RoomRole::kLs, -110, 0, "a 5.1 surround at 110"}, {RoomRole::kRs, 110, 0, "and its right"},
+        {RoomRole::kLrs, -135, 0, "a rear at 135, behind"}, {RoomRole::kRrs, 135, 0, "and its right"},
+        {RoomRole::kLtf, -45, 60, "top front overhead, ahead"}, {RoomRole::kRtf, 45, 60, "and its right"},
+        {RoomRole::kLtr, -135, 60, "top rear overhead, behind"}, {RoomRole::kRtr, 135, 60, "and its right"},
+    };
+    for (const Want& w : own) {
+        float az = 0.0f, el = 0.0f;
+        check(ownSpeaker(w.role, az, el) && az == w.az && el == w.el, w.what);
+    }
+    int at[BinauralRoomProcessor::kMaxTaps];
+    float g[BinauralRoomProcessor::kMaxTaps];
+    int n = BinauralRoomProcessor::roleSpeakers(RoomRole::kLfe, at, g);
+    check(n == 1 && g[0] == 1.0f && tf::atmos::is_lfe(layout[static_cast<size_t>(at[0])]), "the LFE at the sub");
+    // Top side has no speaker of its own in the room: the two overhead on
+    // its side share it, at the power of one.
+    n = BinauralRoomProcessor::roleSpeakers(RoomRole::kLts, at, g);
+    bool shared = n == 2;
+    float power = 0.0f;
+    for (int t = 0; t < n; t++) {
+        const auto& d = layout[static_cast<size_t>(at[t])];
+        shared = shared && d.azimuth < 0.0f && d.elevation == 60.0f && std::fabs(g[t] - 0.70710678f) < 1e-4f;
+        power += g[t] * g[t];
+    }
+    check(shared && std::fabs(power - 1.0f) < 1e-4f, "top side between top front and top rear, on its own side");
+    n = BinauralRoomProcessor::roleSpeakers(RoomRole::kBackCentre, at, g);
+    bool behind = n == 2;
+    for (int t = 0; t < n; t++) {
+        const auto& d = layout[static_cast<size_t>(at[t])];
+        behind = behind && std::fabs(d.azimuth) == 160.0f && d.elevation == 0.0f;
+    }
+    check(behind && at[0] != at[1], "a back centre between the two speakers behind");
+    bool all = true;
+    for (int role = 0; role < RoomRole::kCount; role++) {
+        n = BinauralRoomProcessor::roleSpeakers(role, at, g);
+        power = 0.0f;
+        for (int t = 0; t < n; t++) power += g[t] * g[t];
+        all = all && n >= 1 && std::fabs(power - 1.0f) < 1e-4f;
+    }
+    check(all, "every role plays, at the power of one speaker");
+    check(BinauralRoomProcessor::roleSpeakers(-1, at, g) == 0 && BinauralRoomProcessor::roleSpeakers(RoomRole::kCount, at, g) == 0,
+          "and a channel with no role plays from nowhere");
+}
+
+/** The whole bed through one processor: the front pair in place, the rest handed over. */
+void runBed(BinauralRoomProcessor& p, std::vector<std::vector<float>>& ch, int block) {
+    const int n = static_cast<int>(ch[0].size());
+    for (int at = 0; at < n; at += block) {
+        const int len = std::min(block, n - at);
+        RoomBedChannel bed[kWide];
+        int width = 0;
+        for (int k = 1; k < kWideLanes; k++) {
+            const int a = kWideFirst[k], b = kWideSecond[k];
+            if (b >= 0) {
+                bed[width++] = {ch[a].data() + at, nullptr, kWideRoles[a]};
+                bed[width++] = {ch[b].data() + at, nullptr, kWideRoles[b]};
+            } else {
+                // A mono lane travels as two equal halves.
+                bed[width++] = {ch[a].data() + at, ch[a].data() + at, kWideRoles[a]};
+            }
+        }
+        p.setBed(bed, width);
+        p.process(ch[0].data() + at, ch[1].data() + at, len);
+    }
+}
+
+void theBedInTheRoom() {
+    std::printf("-- a surround mix: one room, every channel from its own speaker\n");
+    using namespace tf::atmos;
+    const int rate = 48000, n = 24000;
+    const std::vector<std::vector<float>> in = bedSong(n, rate);
+
+    // The renderer's room itself, fed each channel at the speakers above.
+    const std::vector<SpeakerDef> layout = layout_speakers(OutputLayout::k15_1_12);
+    std::vector<render::RoomSpeaker> speakers;
+    for (const SpeakerDef& d : layout) speakers.push_back({d.azimuth, d.elevation, is_lfe(d)});
+    auto room = std::make_unique<render::VirtualRoom>();
+    room->configure(rate, speakers);
+    room->set_bass_management(true, 80);
+    room->set_params(1.0f, 0.25f);
+    const int count = room->speaker_count();
+    std::vector<float> feeds(static_cast<size_t>(256) * count), out(512), wantL(n), wantR(n);
+    for (int at = 0; at < n; at += 256) {
+        const int len = std::min(256, n - at);
+        std::fill(feeds.begin(), feeds.end(), 0.0f);
+        // The front pair first, then the lanes in order: as the effect adds them.
+        const int order[kWide] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+        for (int c : order) {
+            int sp[BinauralRoomProcessor::kMaxTaps];
+            float g[BinauralRoomProcessor::kMaxTaps];
+            const int taps = BinauralRoomProcessor::roleSpeakers(kWideRoles[c], sp, g);
+            for (int t = 0; t < taps; t++) {
+                for (int i = 0; i < len; i++) {
+                    feeds[static_cast<size_t>(i) * count + sp[t]] += in[c][static_cast<size_t>(at + i)] * g[t];
+                }
+            }
+        }
+        room->render(feeds.data(), len, out.data());
+        for (int i = 0; i < len; i++) { wantL[at + i] = out[2 * i]; wantR[at + i] = out[2 * i + 1]; }
+    }
+
+    BinauralRoomProcessor p;
+    p.prepare(rate, 1024);
+    std::vector<std::vector<float>> got = in;
+    runBed(p, got, 1024);
+    check(got[0] == wantL && got[1] == wantR, "it is the renderer's room with the sixteen channels at their speakers, sample for sample");
+    bool untouched = true;
+    for (int c = 2; c < kWide; c++) untouched = untouched && got[c] == in[c];
+    check(untouched, "the channels handed over are read, never written");
+
+    // The stereo sound is in there too: without the bed, the pair alone.
+    BinauralRoomProcessor alone, quiet;
+    alone.prepare(rate, 1024);
+    quiet.prepare(rate, 1024);
+    std::vector<float> al = in[0], ar = in[1], ql = in[0], qr = in[1];
+    run(alone, al, ar, 1024);
+    const std::vector<float> silence(1024, 0.0f);
+    for (int at = 0; at < n; at += 1024) {
+        const int len = std::min(1024, n - at);
+        const RoomBedChannel bed[2] = {{silence.data(), nullptr, RoomRole::kLrs}, {silence.data(), silence.data(), RoomRole::kC}};
+        quiet.setBed(bed, 2);
+        quiet.process(ql.data() + at, qr.data() + at, len);
+    }
+    check(al == ql && ar == qr, "a bed of silence is the stereo pair's room and nothing else");
+    check(al != got[0], "and the bed is heard: with it the sound is another");
+
+    // A bed is for one block: the next, given none, has none.
+    BinauralRoomProcessor once;
+    once.prepare(rate, 1024);
+    std::vector<std::vector<float>> first = in;
+    for (auto& c : first) c.resize(1024);
+    runBed(once, first, 1024);
+    std::vector<float> zl(48000, 0.0f), zr(48000, 0.0f);
+    run(once, zl, zr, 1024);
+    check(rms(zl, 43200) < 1e-5 && rms(zr, 43200) < 1e-5, "a bed handed over once is not played again: the room rings out to silence");
+}
+
+// The bed's own way through the rate change, against the pair's: a pair at
+// 90 degrees stands on the side surrounds alone, so the same two signals
+// handed over as a bed's side surrounds are the same sound.
+void theBedAtEveryRate() {
+    std::printf("-- a surround mix: the bed at every rate\n");
+    for (double rate : {44100.0, 48000.0, 96000.0, 192000.0}) {
+        const int n = static_cast<int>(rate * 0.4);
+        std::vector<float> l(static_cast<size_t>(n)), r(static_cast<size_t>(n));
+        song(l, r, rate);
+        BinauralRoomProcessor pair, bed, odd;
+        for (BinauralRoomProcessor* p : {&pair, &bed, &odd}) p->prepare(rate, 4096);
+        pair.setParameter(BinauralRoomProcessor::ANGLE, 90.0f);
+        pair.reset();
+        std::vector<float> pl = l, pr = r;
+        run(pair, pl, pr, 1024);
+
+        std::vector<float> bl(static_cast<size_t>(n), 0.0f), br(static_cast<size_t>(n), 0.0f);
+        for (int at = 0; at < n; at += 1024) {
+            const int len = std::min(1024, n - at);
+            const RoomBedChannel ch[2] = {{l.data() + at, nullptr, RoomRole::kLss}, {r.data() + at, nullptr, RoomRole::kRss}};
+            bed.setBed(ch, 2);
+            bed.process(bl.data() + at, br.data() + at, len);
+        }
+        char what[160];
+        std::snprintf(what, sizeof what, "%6.0f Hz: handed over as side surrounds, the pair's sound at 90 degrees, sample for sample", rate);
+        check(bl == pl && br == pr, what);
+
+        // In blocks of any length, a mono lane's two halves among them.
+        std::vector<float> ol(static_cast<size_t>(n), 0.0f), orr(static_cast<size_t>(n), 0.0f);
+        const int blocks[] = {1, 7, 333, 256, 1024, 4095, 3, 511, 2};
+        int at = 0, b = 0;
+        while (at < n) {
+            const int len = std::min(n - at, blocks[b++ % 9]);
+            const RoomBedChannel ch[2] = {{l.data() + at, l.data() + at, RoomRole::kLss}, {r.data() + at, nullptr, RoomRole::kRss}};
+            odd.setBed(ch, 2);
+            odd.process(ol.data() + at, orr.data() + at, len);
+            at += len;
+        }
+        // Each run is within 1e-4 of the peak of an exact convolution (the
+        // room's FFTs round by where a block ends, see theRendererItself),
+        // so two runs cut differently are within twice that of each other.
+        float worst = 0.0f, peak = 0.0f;
+        for (int i = 0; i < n; i++) {
+            worst = std::max(worst, std::max(std::fabs(ol[i] - pl[i]), std::fabs(orr[i] - pr[i])));
+            peak = std::max(peak, std::max(std::fabs(pl[i]), std::fabs(pr[i])));
+        }
+        std::snprintf(what, sizeof what, "%6.0f Hz: and in blocks of any length (worst %.2g of a peak of %.3f)", rate, worst, peak);
+        check(peak > 0.05f && worst < 2e-4f * peak, what);
+    }
+}
+
+/** Sixteen planar channels a block at a time through [lanes]; returns them all. */
+std::vector<std::vector<float>> throughLanes(MultiLaneEngine& lanes, const std::vector<std::vector<float>>& in, int block,
+                                             bool* tookBed = nullptr) {
+    std::vector<std::vector<float>> out = in;
+    const int n = static_cast<int>(in[0].size());
+    bool took = true;
+    for (int at = 0; at < n; at += block) {
+        float* ptr[kWide];
+        for (int c = 0; c < kWide; c++) ptr[c] = out[c].data() + at;
+        lanes.processPlanar(ptr, kWide, std::min(block, n - at));
+        took = took && lanes.roomTookBed();
+    }
+    if (tookBed) *tookBed = took;
+    return out;
+}
+
+void wideLanes(MultiLaneEngine& lanes, bool withRoles) {
+    int ra[kWideLanes], rb[kWideLanes];
+    for (int k = 0; k < kWideLanes; k++) {
+        ra[k] = kWideRoles[kWideFirst[k]];
+        rb[k] = kWideSecond[k] >= 0 ? kWideRoles[kWideSecond[k]] : -1;
+    }
+    if (withRoles) lanes.configureLanes(kWideFirst, kWideSecond, kWideLanes, ra, rb);
+    else lanes.configureLanes(kWideFirst, kWideSecond, kWideLanes);
+}
+
+bool silent(const std::vector<float>& x) {
+    for (float v : x) if (v != 0.0f) return false;
+    return true;
+}
+
+void onTheMasterOfASurroundMix() {
+    std::printf("-- a surround mix: the room on the mixer's master\n");
+    const int rate = 48000, block = 512, n = block * 40;
+    const std::vector<std::vector<float>> in = bedSong(n, rate);
+    const int room = static_cast<int>(SnapinType::BINAURAL_ROOM);
+    const int late = tf::atmos::render::VirtualRoom::kLatency;
+
+    // What one room makes of the sixteen channels.
+    BinauralRoomProcessor p;
+    p.prepare(rate, block);
+    std::vector<std::vector<float>> want = in;
+    runBed(p, want, block);
+
+    MultiLaneEngine lanes(rate, block);
+    lanes.forEach([&](DspEngine& e) { e.addPlugin(MASTER_BUS, 0, room); });
+    wideLanes(lanes, true);
+    bool took = false;
+    const std::vector<std::vector<float>> got = throughLanes(lanes, in, block, &took);
+    check(took, "the mixer says the room took the stream");
+    check(got[0] == want[0] && got[1] == want[1], "the front two channels are that one room's binaural pair, sample for sample");
+    bool rest = true;
+    for (int c = 2; c < kWide; c++) rest = rest && silent(got[c]);
+    check(rest, "and every other channel, the centre and the LFE too, is silence: nothing is left to be added twice");
+
+    // The one before: a room a lane, each pair at the front, the centre and
+    // the LFE through dry. What it is no longer.
+    MultiLaneEngine before(rate, block);
+    before.forEach([&](DspEngine& e) { e.addPlugin(MASTER_BUS, 0, room); });
+    wideLanes(before, false);
+    took = true;
+    const std::vector<std::vector<float>> old = throughLanes(before, in, block, &took);
+    check(!took && !silent(old[4]) && !silent(old[2]), "without the channels' speakers named, every lane keeps a room of its own, as before");
+
+    // While a control change fans out the mixer cannot wait for it: that
+    // block must be the same room, not a room a lane.
+    {
+        MultiLaneEngine busy(rate, block);
+        busy.forEach([&](DspEngine& e) { e.addPlugin(MASTER_BUS, 0, room); });
+        wideLanes(busy, true);
+        std::atomic<bool> holding{false}, release{false};
+        std::thread ui([&] {
+            bool first = true;
+            busy.forEach([&](DspEngine&) {
+                if (!first) return;
+                first = false;
+                holding.store(true);
+                while (!release.load()) std::this_thread::yield();
+            });
+        });
+        while (!holding.load()) std::this_thread::yield();
+        const std::vector<std::vector<float>> during = throughLanes(busy, in, block, &took);
+        release.store(true);
+        ui.join();
+        bool same = took && during[0] == want[0] && during[1] == want[1];
+        for (int c = 2; c < kWide; c++) same = same && silent(during[c]);
+        check(same, "with a control change in flight it is still the one room");
+    }
+
+    // The slot's mix knob: half the room, and half of each channel where it
+    // was, as late as the room.
+    {
+        MultiLaneEngine half(rate, block);
+        half.forEach([&](DspEngine& e) {
+            e.addPlugin(MASTER_BUS, 0, room);
+            e.setPluginDryWet(MASTER_BUS, 0, 0.5f);
+        });
+        wideLanes(half, true);
+        const std::vector<std::vector<float>> mixed = throughLanes(half, in, block, &took);
+        bool dry = took;
+        for (int c = 2; c < kWide; c++) {
+            for (int i = late; i < n; i++) dry = dry && mixed[c][i] == in[c][i - late] * 0.5f;
+        }
+        check(dry, "at 50% mix the other channels keep half of themselves, 7 samples later");
+        bool blend = true;
+        for (int i = late; i < n; i++) {
+            blend = blend && std::fabs(mixed[0][i] - (in[0][i - late] * 0.5f + want[0][i] * 0.5f)) < 1e-6f;
+        }
+        check(blend, "and the front pair is half itself and half the whole room");
+    }
+
+    // Bypassed, there is no room: every channel through, as late as the room.
+    {
+        MultiLaneEngine off(rate, block);
+        off.forEach([&](DspEngine& e) {
+            e.addPlugin(MASTER_BUS, 0, room);
+            e.setPluginBypassed(MASTER_BUS, 0, true);
+        });
+        wideLanes(off, true);
+        const std::vector<std::vector<float>> through = throughLanes(off, in, block, &took);
+        bool same = !took;
+        for (int c = 0; c < kWide; c++) {
+            for (int i = late; i < n; i++) same = same && through[c][i] == in[c][i - late];
+        }
+        check(same, "bypassed, all sixteen channels come through untouched, 7 samples later");
+    }
+
+    // A stereo stream is the effect it always was.
+    {
+        MultiLaneEngine stereo(rate, block);
+        stereo.forEach([&](DspEngine& e) { e.addPlugin(MASTER_BUS, 0, room); });
+        BinauralRoomProcessor q;
+        q.prepare(rate, block);
+        std::vector<float> wl = in[0], wr = in[1], gl = in[0], gr = in[1];
+        run(q, wl, wr, block);
+        for (int at = 0; at < n; at += block) {
+            float* ptr[2] = {gl.data() + at, gr.data() + at};
+            stereo.processPlanar(ptr, 2, block);
+        }
+        check(gl == wl && gr == wr && !stereo.roomTookBed(), "a stereo stream is the pair's room, as it was");
+    }
+
+    // 2x asked of it is 1x run: the bed is at the stream's rate.
+    {
+        MultiLaneEngine twice(rate, block);
+        twice.forEach([&](DspEngine& e) {
+            e.addPlugin(MASTER_BUS, 0, room);
+            e.setPluginOversampling(MASTER_BUS, 0, 2);
+        });
+        wideLanes(twice, true);
+        const std::vector<std::vector<float>> os = throughLanes(twice, in, block, &took);
+        check(took && os[0] == want[0] && os[1] == want[1], "asked to oversample, it runs as it is: the same pair");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -260,6 +656,10 @@ int main() {
     everyRate();
     theKnobs();
     inTheEngine();
+    whereEachChannelStands();
+    theBedInTheRoom();
+    theBedAtEveryRate();
+    onTheMasterOfASurroundMix();
     std::puts(failures == 0 ? "all passed" : "FAILED");
     return failures == 0 ? 0 : 1;
 }

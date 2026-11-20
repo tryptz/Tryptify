@@ -873,6 +873,9 @@ class DspEngineManager @Inject constructor(
     /** The channel groups of the stream playing, in bus order; empty for stereo. */
     val channelGroups: StateFlow<List<String>> get() = processor.channelGroups
 
+    /** How many channels the stream in the mixer has; 2 for stereo. */
+    val streamChannels: StateFlow<Int> get() = processor.streamChannels
+
     /** Re-reads the whole mixer from the engine, grown buses included. */
     private fun syncFromEngine() {
         val ptr = processor.getEnginePtr()

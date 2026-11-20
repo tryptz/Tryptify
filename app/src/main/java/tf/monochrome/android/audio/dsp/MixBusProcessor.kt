@@ -48,9 +48,26 @@ class MixBusProcessor @Inject constructor(
     private val _channelGroups = MutableStateFlow<List<String>>(emptyList())
     val channelGroups: StateFlow<List<String>> = _channelGroups.asStateFlow()
 
+    // How many channels the stream in the mixer has: 2 for stereo (and with
+    // nothing playing). The Binaural Room's picture draws a wide stream's
+    // channels at their speakers by it.
+    private val _streamChannels = MutableStateFlow(2)
+    val streamChannels: StateFlow<Int> = _streamChannels.asStateFlow()
+
     @Volatile private var spreadChannels = true
     // Channel count of the stream the lanes were last configured for.
     @Volatile private var laneChannels = 2
+
+    /**
+     * Whether a Binaural Room on the mixer's master took the whole of the
+     * last wide block: its front two channels are then a finished binaural
+     * pair and the rest silence (or what the room's mix knob left dry). The
+     * fold after the mixer reads it, so that it adds the channels up and
+     * does not place them, or cross-feed them, a second time.
+     */
+    @Volatile
+    var roomTookBed: Boolean = false
+        private set
 
     /**
      * Spread a wide stream one channel group per bus (true), or run all of it
@@ -66,6 +83,7 @@ class MixBusProcessor @Inject constructor(
 
     private fun publishChannelGroups() {
         val channels = laneChannels
+        _streamChannels.value = channels
         _channelGroups.value = if (spreadChannels && channels > 2) {
             ChannelLayout.laneLabels(channels)
         } else {
@@ -105,8 +123,10 @@ class MixBusProcessor @Inject constructor(
     // constructors re-allocate FFT tables etc. — audible as a gap between
     // tracks of different sample rates (44.1k → 48k is the common case).
     private external fun nativeReconfigure(enginePtr: Long, sampleRate: Int, maxBlockSize: Int)
-    // Lane k carries channel first[k], and second[k] unless it is -1.
-    private external fun nativeConfigureLanes(enginePtr: Long, first: IntArray, second: IntArray)
+    // Lane k carries channel first[k], and second[k] unless it is -1. roles
+    // names each channel's speaker (ChannelLayout.roles), by channel index.
+    private external fun nativeConfigureLanes(enginePtr: Long, first: IntArray, second: IntArray, roles: IntArray)
+    private external fun nativeRoomTookBed(enginePtr: Long): Boolean
     private external fun nativeSetSpreadChannels(enginePtr: Long, spread: Boolean)
     // Planar direct float buffer, channel c at c * stride, processed in place.
     // Both return whether the mixer handed the block back unchanged: no
@@ -274,6 +294,7 @@ class MixBusProcessor @Inject constructor(
         // touch the audio thread's float scratch arrays. Same as the
         // no-engine pass-through below.
         if (bypassed || enginePtr == 0L) {
+            roomTookBed = false
             val size = inputBuffer.remaining()
             // Nothing to forward — leave outputBuffer as-is so getOutput
             // returns whatever it returned last time (or EMPTY_BUFFER on
@@ -500,6 +521,7 @@ class MixBusProcessor @Inject constructor(
             }
             processed += n
         }
+        roomTookBed = nativeRoomTookBed(enginePtr)
 
         val bytesPerSample = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
         val outBytes = numFrames * channels * bytesPerSample
@@ -612,6 +634,9 @@ class MixBusProcessor @Inject constructor(
                 enginePtr,
                 IntArray(lanes.size) { lanes[it].first },
                 IntArray(lanes.size) { lanes[it].second },
+                // Which speaker each channel is: a Binaural Room on the
+                // master places a wide stream by it.
+                if (inputFormat.channelCount > 2) ChannelLayout.roles(inputFormat.channelCount) else IntArray(0),
             )
             laneChannels = inputFormat.channelCount
             publishChannelGroups()

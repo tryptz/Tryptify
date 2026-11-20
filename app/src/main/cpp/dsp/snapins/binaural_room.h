@@ -45,6 +45,16 @@
 // rate change adds its filters' delay. ownLatency() says how much, and the
 // engine holds the dry signal and the other buses back by it.
 //
+// A surround mix. On the master of a stream wider than stereo each channel
+// group runs its own copy of the chain, so this effect there used to be one
+// room a pair, every pair stood at the front, and the fold added them: seven
+// copies of the same ear filters and reflections, a comb (heard on a phone,
+// 2026-11-20). There the mixer hands the front pair's room every other
+// channel instead (setBed, MultiLaneEngine), and the room plays each from its
+// own speaker, as the renderer plays a bed: the rears behind, the tops above,
+// the centre from the centre speaker, the LFE from the sub. Angle still
+// places the front pair. The other channels' rooms play nothing.
+//
 // Memory and time. One instance is about 1.2 MB and takes a few ms to
 // prepare (it builds 56 ear filters); both in prepare(), never in process().
 class BinauralRoomProcessor : public SnapinProcessor {
@@ -80,6 +90,82 @@ public:
     // Which of the room's speakers (OutputLayout::k15_1_12's order, which is
     // AtmosNative.nativeRoomLayout's) stand on the ring: [left] and [right],
     // kRing each, nearest the centre first. False if the layout has lost one.
+    // The most channels a bed can hand the room: two a lane.
+    static constexpr int kMaxBed = 32;
+    // A channel with no speaker of its own in the room is shared between the
+    // nearest: two layers of two rows of two at most.
+    static constexpr int kMaxTaps = 8;
+
+    // Which of the room's speakers play a bed channel of [role] (RoomRole),
+    // and how loud each: its own speaker where the room has one (the fronts,
+    // the centre, the wides, the sides, a 5.1 bed's surrounds, the rears, the
+    // LFE), else the place the renderer gives that channel
+    // (tf::atmos::bed_channel_room), shared between the speakers round it by
+    // the renderer's own room panner. The tops land on the upper ring. Returns
+    // how many, 0 for a role the room cannot place. Allocates: never from
+    // process().
+    static int roleSpeakers(int role, int* speakers, float* gains) {
+        using tf::atmos::SpeakerRole;
+        using tf::atmos::cavern::ReferenceChannel;
+        if (role < 0 || role >= RoomRole::kCount) return 0;
+        const std::vector<tf::atmos::SpeakerDef> layout =
+            tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12);
+        if (role < RoomRole::kBackCentre) {
+            const SpeakerRole want = static_cast<SpeakerRole>(role);
+            for (size_t s = 0; s < layout.size(); s++) {
+                if (layout[s].role == want) {
+                    speakers[0] = static_cast<int>(s);
+                    gains[0] = 1.0f;
+                    return 1;
+                }
+            }
+        }
+        tf::atmos::Vec3 at{0.5f, 1.0f, 0.0f};  // the back centre: the middle of the back wall
+        switch (role) {
+            case RoomRole::kBackCentre: break;
+            case RoomRole::kLtf: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopFrontLeft); break;
+            case RoomRole::kRtf: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopFrontRight); break;
+            case RoomRole::kLtr: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopRearLeft); break;
+            case RoomRole::kRtr: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopRearRight); break;
+            case RoomRole::kLts: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopSideLeft); break;
+            case RoomRole::kRts: at = tf::atmos::bed_channel_room(ReferenceChannel::kTopSideRight); break;
+            default: return 0;
+        }
+        std::vector<int> all;
+        for (size_t s = 0; s < layout.size(); s++) all.push_back(static_cast<int>(s));
+        tf::atmos::BalancePanner panner;
+        panner.configure(layout, all);
+        std::vector<float> power(layout.size(), 0.0f);
+        panner.accumulate_power(at, 1.0f, power.data());
+        int n = 0;
+        for (size_t s = 0; s < layout.size() && n < kMaxTaps; s++) {
+            if (power[s] <= 0.0f) continue;
+            speakers[n] = static_cast<int>(s);
+            gains[n] = std::sqrt(power[s]);
+            n++;
+        }
+        return n;
+    }
+
+    // The rest of a surround mix, for the next process() only: see the notes
+    // above. The samples are read during that call and not kept. A channel
+    // with no role is left out.
+    void setBed(const RoomBedChannel* bed, int count) {
+        bedCount_ = 0;
+        if (!bed) return;
+        for (int j = 0; j < count && bedCount_ < kMaxBed; j++) {
+            if (!bed[j].a || bed[j].role < 0 || bed[j].role >= RoomRole::kCount) continue;
+            bed_[bedCount_++] = bed[j];
+        }
+    }
+
+    // Whether there is a room at the rate this was prepared for. Without one
+    // the signal passes untouched, and a bed must not be handed over: it
+    // would be dropped.
+    bool hasRoom() const { return factor_ != 0 && room_ != nullptr; }
+
+    bool oversamples() const override { return false; }
+
     static bool ringSpeakers(int* left, int* right) {
         const std::vector<tf::atmos::SpeakerDef> layout =
             tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12);
@@ -137,38 +223,50 @@ public:
                 return;
             }
         }
+        // Where each kind of bed channel plays from, worked out once.
+        for (int role = 0; role < RoomRole::kCount; role++) {
+            int at[kMaxTaps];
+            float g[kMaxTaps];
+            const int n = roleSpeakers(role, at, g);
+            tapCount_[role] = 0;
+            for (int t = 0; t < n; t++) {
+                if (at[t] < 0 || at[t] >= count_) continue;
+                taps_[role][tapCount_[role]++] = {at[t], g[t]};
+            }
+        }
         feeds_.assign(static_cast<size_t>(kPiece) * count_, 0.0f);
         stereo_.assign(static_cast<size_t>(kPiece) * 2, 0.0f);
+        low_.assign(kPiece, 0.0f);
+        lowL_.assign(kPiece, 0.0f);
+        lowR_.assign(kPiece, 0.0f);
 
         if (factor_ > 1) {
             downL_.prepare(roomRate, factor_);
             downR_.prepare(roomRate, factor_);
-            const size_t high = static_cast<size_t>(kChunk) * factor_;
-            inL_.assign(high, 0.0f);
-            inR_.assign(high, 0.0f);
-            hiL_.assign(high, 0.0f);
-            hiR_.assign(high, 0.0f);
-            lowL_.assign(kChunk, 0.0f);
-            lowR_.assign(kChunk, 0.0f);
-            fifoL_.assign(high + static_cast<size_t>(factor_) + 8, 0.0f);
+            bedDown_.assign(kMaxBed, ChannelOversampler());
+            for (ChannelOversampler& d : bedDown_) d.prepare(roomRate, factor_);
+            bedCarry_.assign(static_cast<size_t>(kMaxBed) * kMaxFactor, 0.0f);
+            const size_t piece = static_cast<size_t>(kPiece) * factor_;
+            hi_.assign(piece, 0.0f);
+            hiL_.assign(piece, 0.0f);
+            hiR_.assign(piece, 0.0f);
+            fifoL_.assign(static_cast<size_t>(kChunk) * factor_ + static_cast<size_t>(factor_) + 8, 0.0f);
             fifoR_.assign(fifoL_.size(), 0.0f);
             // The rate change's own delay, measured: an impulse down and up.
-            std::fill(inL_.begin(), inL_.end(), 0.0f);
-            inL_[0] = 1.0f;
-            downL_.downsample(inL_.data(), lowL_.data(), kChunk);
-            downL_.upsample(lowL_.data(), hiL_.data(), kChunk);
+            const size_t high = static_cast<size_t>(kChunk) * factor_;
+            std::vector<float> in(high, 0.0f), low(kChunk, 0.0f), out(high, 0.0f);
+            in[0] = 1.0f;
+            downL_.downsample(in.data(), low.data(), kChunk);
+            downL_.upsample(low.data(), out.data(), kChunk);
             int peak = 0;
             for (size_t i = 1; i < high; i++) {
-                if (std::fabs(hiL_[i]) > std::fabs(hiL_[static_cast<size_t>(peak)])) peak = static_cast<int>(i);
+                if (std::fabs(out[i]) > std::fabs(out[static_cast<size_t>(peak)])) peak = static_cast<int>(i);
             }
             downL_.reset();
-            std::fill(inL_.begin(), inL_.end(), 0.0f);
-            std::fill(lowL_.begin(), lowL_.end(), 0.0f);
-            std::fill(hiL_.begin(), hiL_.end(), 0.0f);
             ownLatency_ = peak + VirtualRoom::kLatency * factor_ + (factor_ - 1);
         } else {
-            lowL_.assign(kChunk, 0.0f);
-            lowR_.assign(kChunk, 0.0f);
+            bedDown_.clear();
+            bedCarry_.clear();
             ownLatency_ = VirtualRoom::kLatency;
         }
         reset();
@@ -177,42 +275,44 @@ public:
     int ownLatency() const override { return ownLatency_; }
 
     void process(float* left, float* right, int numFrames) override {
+        // The bed is for this call alone.
+        const int bedCount = bedCount_;
+        bedCount_ = 0;
         if (factor_ == 0 || !room_ || numFrames <= 0) return;  // no room at this rate: untouched
+        if (bedCount != bedShape_) {
+            // The stream has widened or narrowed: what the bed's rate
+            // filters hold belongs to other channels.
+            bedShape_ = bedCount;
+            for (ChannelOversampler& d : bedDown_) d.reset();
+            std::fill(bedCarry_.begin(), bedCarry_.end(), 0.0f);
+        }
         if (factor_ == 1) {
-            for (int done = 0; done < numFrames; done += kChunk) {
-                const int n = std::min(kChunk, numFrames - done);
-                renderRoom(left + done, right + done, n);
+            for (int done = 0; done < numFrames; done += kPiece) {
+                const int len = std::min(kPiece, numFrames - done);
+                beginPiece(len);
+                placePair(left + done, right + done, len);
+                for (int j = 0; j < bedCount; j++) {
+                    const RoomBedChannel& c = bed_[j];
+                    const float* x = c.a + done;
+                    if (c.b) {
+                        for (int i = 0; i < len; i++) low_[static_cast<size_t>(i)] = 0.5f * (c.a[done + i] + c.b[done + i]);
+                        x = low_.data();
+                    }
+                    addBed(x, c.role, len);
+                }
+                finishPiece(left + done, right + done, len);
             }
             return;
         }
         // Down to the room's rate, through it, and back up. A block need not
         // be a whole number of the room's samples: what is left over waits
-        // for the next one, and the output is read from a line that starts
-        // factor - 1 samples full, so there is always enough in it.
+        // for the next one (carry_), and the output is read from a line that
+        // starts factor - 1 samples full, so there is always enough in it.
         const int cap = kChunk * factor_;
-        int done = 0;
-        while (done < numFrames) {
-            const int take = std::min(numFrames - done, cap - have_);
-            std::memcpy(inL_.data() + have_, left + done, sizeof(float) * static_cast<size_t>(take));
-            std::memcpy(inR_.data() + have_, right + done, sizeof(float) * static_cast<size_t>(take));
-            have_ += take;
-            const int groups = have_ / factor_;
-            if (groups > 0) {
-                downL_.downsample(inL_.data(), lowL_.data(), groups);
-                downR_.downsample(inR_.data(), lowR_.data(), groups);
-                renderRoom(lowL_.data(), lowR_.data(), groups);
-                downL_.upsample(lowL_.data(), hiL_.data(), groups);
-                downR_.upsample(lowR_.data(), hiR_.data(), groups);
-                const int used = groups * factor_;
-                push(hiL_.data(), hiR_.data(), used);
-                have_ -= used;
-                if (have_ > 0) {
-                    std::memmove(inL_.data(), inL_.data() + used, sizeof(float) * static_cast<size_t>(have_));
-                    std::memmove(inR_.data(), inR_.data() + used, sizeof(float) * static_cast<size_t>(have_));
-                }
-            }
+        for (int done = 0; done < numFrames; done += cap) {
+            const int take = std::min(cap, numFrames - done);
+            throughAtLowRate(left + done, right + done, done, take, bedCount);
             pop(left + done, right + done, take);
-            done += take;
         }
     }
 
@@ -221,6 +321,8 @@ public:
         if (factor_ > 1) {
             downL_.reset();
             downR_.reset();
+            for (ChannelOversampler& d : bedDown_) d.reset();
+            std::fill(bedCarry_.begin(), bedCarry_.end(), 0.0f);
             std::fill(fifoL_.begin(), fifoL_.end(), 0.0f);
             std::fill(fifoR_.begin(), fifoR_.end(), 0.0f);
             fifoRead_ = 0;
@@ -228,7 +330,8 @@ public:
             fifoWrite_ = factor_ - 1;
             fifoFill_ = factor_ - 1;
         }
-        have_ = 0;
+        carry_ = 0;
+        for (int i = 0; i < kMaxFactor; i++) carryL_[i] = carryR_[i] = 0.0f;
         // A setting is where it was put, not on its way there.
         roomNow_ = room01_;
         strengthNow_ = strength01_;
@@ -271,59 +374,139 @@ public:
     SnapinType getType() const override { return SnapinType::BINAURAL_ROOM; }
 
 private:
-    // The most the room is given at once, in its own samples, and the piece
-    // a moving knob is followed in: the room reads its two settings once a
-    // call, so a turn of Room or Binaural is heard in steps of this.
+    // The most the room is given between two reads of its output at a high
+    // rate, in its own samples, and the piece a moving knob is followed in:
+    // the room reads its two settings once a call, so a turn of Room or
+    // Binaural is heard in steps of this.
     static constexpr int kChunk = 1024;
     static constexpr int kPiece = 256;
+    static constexpr int kMaxFactor = 4;
     // How far a setting moves toward where it was put in one piece: all the
     // way in about 50 ms at 48 kHz.
     static constexpr float kFollow = 0.35f;
     // The Angle knob's speed, degrees a sample: the whole ring in 0.2 s.
     static constexpr float kAnglePerSample = 110.0f / 9600.0f;
 
-    // [n] of the room's own samples, in place.
-    void renderRoom(float* l, float* r, int n) {
-        for (int done = 0; done < n; done += kPiece) {
-            const int len = std::min(kPiece, n - done);
-            roomNow_ = follow(roomNow_, room01_);
-            strengthNow_ = follow(strengthNow_, strength01_);
-            room_->set_params(strengthNow_, roomNow_);
-            std::memset(feeds_.data(), 0, sizeof(float) * static_cast<size_t>(len) * count_);
-            const float* inL = l + done;
-            const float* inR = r + done;
-            if (angleNow_ == angle_) {
-                int k;
-                float gi, go;
-                pairOnRing(angleNow_, k, gi, go);
-                place(inL, inR, len, k, gi, go);
-            } else {
-                // The pair is on its way round the ring: placed sample by
-                // sample, so it moves and does not jump.
-                for (int i = 0; i < len; i++) {
-                    const float d = angle_ - angleNow_;
-                    angleNow_ = std::fabs(d) <= kAnglePerSample ? angle_
-                        : angleNow_ + (d > 0.0f ? kAnglePerSample : -kAnglePerSample);
-                    int k;
-                    float gi, go;
-                    pairOnRing(angleNow_, k, gi, go);
-                    float* f = feeds_.data() + static_cast<size_t>(i) * count_;
-                    f[left_[k]] += inL[i] * gi;
-                    f[left_[k + 1]] += inL[i] * go;
-                    f[right_[k]] += inR[i] * gi;
-                    f[right_[k + 1]] += inR[i] * go;
-                }
-            }
-            room_->render(feeds_.data(), len, stereo_.data());
-            const float g0 = gainNow_;
-            gainNow_ = follow(gainNow_, gainTarget_);
-            const float step = (gainNow_ - g0) / static_cast<float>(len);
-            for (int i = 0; i < len; i++) {
-                const float g = g0 + step * static_cast<float>(i + 1);
-                l[done + i] = stereo_[static_cast<size_t>(2 * i)] * g;
-                r[done + i] = stereo_[static_cast<size_t>(2 * i + 1)] * g;
-            }
+    struct Tap {
+        int speaker;
+        float gain;
+    };
+
+    // One piece of the room's own samples, [len] of them: the settings are
+    // read and the speakers emptied (beginPiece), the pair and the bed are
+    // put on their speakers (placePair, addBed), and the room plays them
+    // (finishPiece).
+    void beginPiece(int len) {
+        roomNow_ = follow(roomNow_, room01_);
+        strengthNow_ = follow(strengthNow_, strength01_);
+        room_->set_params(strengthNow_, roomNow_);
+        std::memset(feeds_.data(), 0, sizeof(float) * static_cast<size_t>(len) * count_);
+    }
+
+    void placePair(const float* inL, const float* inR, int len) {
+        if (angleNow_ == angle_) {
+            int k;
+            float gi, go;
+            pairOnRing(angleNow_, k, gi, go);
+            place(inL, inR, len, k, gi, go);
+            return;
         }
+        // The pair is on its way round the ring: placed sample by sample, so
+        // it moves and does not jump.
+        for (int i = 0; i < len; i++) {
+            const float d = angle_ - angleNow_;
+            angleNow_ = std::fabs(d) <= kAnglePerSample ? angle_
+                : angleNow_ + (d > 0.0f ? kAnglePerSample : -kAnglePerSample);
+            int k;
+            float gi, go;
+            pairOnRing(angleNow_, k, gi, go);
+            float* f = feeds_.data() + static_cast<size_t>(i) * count_;
+            f[left_[k]] += inL[i] * gi;
+            f[left_[k + 1]] += inL[i] * go;
+            f[right_[k]] += inR[i] * gi;
+            f[right_[k + 1]] += inR[i] * go;
+        }
+    }
+
+    void addBed(const float* x, int role, int len) {
+        const int n = tapCount_[role];
+        for (int t = 0; t < n; t++) {
+            const int at = taps_[role][t].speaker;
+            const float g = taps_[role][t].gain;
+            float* f = feeds_.data() + at;
+            for (int i = 0; i < len; i++) f[static_cast<size_t>(i) * count_] += x[i] * g;
+        }
+    }
+
+    void finishPiece(float* outL, float* outR, int len) {
+        room_->render(feeds_.data(), len, stereo_.data());
+        const float g0 = gainNow_;
+        gainNow_ = follow(gainNow_, gainTarget_);
+        const float step = (gainNow_ - g0) / static_cast<float>(len);
+        for (int i = 0; i < len; i++) {
+            const float g = g0 + step * static_cast<float>(i + 1);
+            outL[i] = stereo_[static_cast<size_t>(2 * i)] * g;
+            outR[i] = stereo_[static_cast<size_t>(2 * i + 1)] * g;
+        }
+    }
+
+    // [take] samples at the stream's rate, with what was left of the last
+    // call ahead of them: every whole group of [factor_] goes down to the
+    // room's rate, through the room and back up into the output line. The bed
+    // is read from [offset] samples into its buffers.
+    void throughAtLowRate(const float* l, const float* r, int offset, int take, int bedCount) {
+        const int total = carry_ + take;
+        const int groups = total / factor_;
+        for (int g0 = 0; g0 < groups; g0 += kPiece) {
+            const int len = std::min(kPiece, groups - g0);
+            const int start = g0 * factor_;
+            const int hiLen = len * factor_;
+            beginPiece(len);
+            gather(carryL_, l, nullptr, start, hiLen);
+            downL_.downsample(hi_.data(), lowL_.data(), len);
+            gather(carryR_, r, nullptr, start, hiLen);
+            downR_.downsample(hi_.data(), lowR_.data(), len);
+            placePair(lowL_.data(), lowR_.data(), len);
+            for (int j = 0; j < bedCount; j++) {
+                const RoomBedChannel& c = bed_[j];
+                gather(bedCarry_.data() + static_cast<size_t>(j) * kMaxFactor, c.a + offset,
+                       c.b ? c.b + offset : nullptr, start, hiLen);
+                bedDown_[static_cast<size_t>(j)].downsample(hi_.data(), low_.data(), len);
+                addBed(low_.data(), c.role, len);
+            }
+            finishPiece(lowL_.data(), lowR_.data(), len);
+            downL_.upsample(lowL_.data(), hiL_.data(), len);
+            downR_.upsample(lowR_.data(), hiR_.data(), len);
+            push(hiL_.data(), hiR_.data(), hiLen);
+        }
+        const int used = groups * factor_;
+        const int left = total - used;
+        keep(carryL_, l, nullptr, used, left);
+        keep(carryR_, r, nullptr, used, left);
+        for (int j = 0; j < bedCount; j++) {
+            const RoomBedChannel& c = bed_[j];
+            keep(bedCarry_.data() + static_cast<size_t>(j) * kMaxFactor, c.a + offset,
+                 c.b ? c.b + offset : nullptr, used, left);
+        }
+        carry_ = left;
+    }
+
+    // Sample [at] of a channel's line: the [carry_] left from the last call,
+    // then this call's ([a], and [b] for the other half of a mono lane).
+    inline float lineAt(const float* carry, const float* a, const float* b, int at) const {
+        if (at < carry_) return carry[at];
+        const int i = at - carry_;
+        return b ? 0.5f * (a[i] + b[i]) : a[i];
+    }
+
+    void gather(const float* carry, const float* a, const float* b, int start, int count) {
+        for (int i = 0; i < count; i++) hi_[static_cast<size_t>(i)] = lineAt(carry, a, b, start + i);
+    }
+
+    void keep(float* carry, const float* a, const float* b, int used, int left) {
+        float next[kMaxFactor] = {};
+        for (int i = 0; i < left && i < kMaxFactor; i++) next[i] = lineAt(carry, a, b, used + i);
+        for (int i = 0; i < kMaxFactor; i++) carry[i] = next[i];
     }
 
     void place(const float* inL, const float* inR, int len, int k, float gi, float go) {
@@ -373,9 +556,22 @@ private:
     int left_[kRing] = {}, right_[kRing] = {};
     std::vector<float> feeds_, stereo_;
 
+    // The bed: what the next process() is given, and where each kind of
+    // channel plays from.
+    RoomBedChannel bed_[kMaxBed];
+    int bedCount_ = 0;
+    int bedShape_ = 0;  // how many the last process() had
+    Tap taps_[RoomRole::kCount][kMaxTaps] = {};
+    int tapCount_[RoomRole::kCount] = {};
+
+    // The rate change (factor_ > 1): a filter a channel, the samples of each
+    // that did not make a whole group, and the output line.
     ChannelOversampler downL_, downR_;
-    std::vector<float> inL_, inR_, lowL_, lowR_, hiL_, hiR_, fifoL_, fifoR_;
-    int have_ = 0;
+    std::vector<ChannelOversampler> bedDown_;
+    std::vector<float> bedCarry_;
+    float carryL_[kMaxFactor] = {}, carryR_[kMaxFactor] = {};
+    int carry_ = 0;
+    std::vector<float> hi_, low_, lowL_, lowR_, hiL_, hiR_, fifoL_, fifoR_;
     int fifoRead_ = 0, fifoWrite_ = 0, fifoFill_ = 0;
 
     // What the knobs say (the defaults), and where the sound is.

@@ -81,6 +81,12 @@ int binauralRoomRing(int* left, int* right, float* degrees) {
     return BinauralRoomProcessor::kRing;
 }
 
+static_assert(kBinauralRoomMaxTaps == BinauralRoomProcessor::kMaxTaps, "the taps the picture is told are the effect's");
+
+int binauralRoomRoleSpeakers(int role, int* speakers, float* gains) {
+    return BinauralRoomProcessor::roleSpeakers(role, speakers, gains);
+}
+
 SnapinProcessor* createSnapin(SnapinType type) {
     switch (type) {
         case SnapinType::GAIN:       return new GainProcessor();
@@ -407,6 +413,68 @@ bool DspEngine::masterSlotLinkableLocked(int slot) const {
     const auto& plugin = master.plugins[static_cast<size_t>(slot)];
     return plugin && !plugin->isBypassed() && plugin->getDryWet() > 0.001f &&
            plugin->supportsLinkedDetection();
+}
+
+// The numbers the bed's channels are named by are the renderer's own roles.
+static_assert(RoomRole::kL == static_cast<int>(tf::atmos::SpeakerRole::kL) &&
+              RoomRole::kLfe == static_cast<int>(tf::atmos::SpeakerRole::kLfe) &&
+              RoomRole::kLs == static_cast<int>(tf::atmos::SpeakerRole::kLs) &&
+              RoomRole::kLrs == static_cast<int>(tf::atmos::SpeakerRole::kLrs) &&
+              RoomRole::kLtf == static_cast<int>(tf::atmos::SpeakerRole::kLtf) &&
+              RoomRole::kLts == static_cast<int>(tf::atmos::SpeakerRole::kLts) &&
+              RoomRole::kRw == static_cast<int>(tf::atmos::SpeakerRole::kRw) &&
+              RoomRole::kBackCentre == static_cast<int>(tf::atmos::SpeakerRole::kOther),
+              "RoomRole follows tf::atmos::SpeakerRole");
+
+static BinauralRoomProcessor* runningRoom(SnapinProcessor* plugin) {
+    if (!plugin || plugin->getType() != SnapinType::BINAURAL_ROOM) return nullptr;
+    if (plugin->isBypassed() || plugin->getDryWet() <= 0.001f) return nullptr;
+    return static_cast<BinauralRoomProcessor*>(plugin);
+}
+
+bool DspEngine::masterSlotIsRoomLocked(int slot) const {
+    const Bus& master = buses_[MASTER_BUS];
+    if (slot < 0 || slot >= static_cast<int>(master.plugins.size())) return false;
+    const BinauralRoomProcessor* room = runningRoom(master.plugins[static_cast<size_t>(slot)].get());
+    return room && room->hasRoom();
+}
+
+void DspEngine::processMasterRoomHostLocked(int slot, int numFrames, const RoomBedChannel* bed, int count) {
+    Bus& master = buses_[MASTER_BUS];
+    BinauralRoomProcessor* room = slot >= 0 && slot < static_cast<int>(master.plugins.size())
+        ? runningRoom(master.plugins[static_cast<size_t>(slot)].get()) : nullptr;
+    if (room) room->setBed(bed, count);
+    processMasterSlotLocked(slot, numFrames, nullptr);
+    // Read or not (a slot that did not run after all), it is this block's.
+    if (room) room->setBed(nullptr, 0);
+}
+
+void DspEngine::processMasterRoomGuestLocked(int slot, int numFrames) {
+    Bus& master = buses_[MASTER_BUS];
+    BinauralRoomProcessor* room = slot >= 0 && slot < static_cast<int>(master.plugins.size())
+        ? runningRoom(master.plugins[static_cast<size_t>(slot)].get()) : nullptr;
+    if (!room) {
+        processMasterSlotLocked(slot, numFrames, nullptr);
+        return;
+    }
+    const size_t s = static_cast<size_t>(slot);
+    float* l = sumL_.data();
+    float* r = sumR_.data();
+    master.slotInPeak[s].store(stereoPeak(l, r, numFrames), std::memory_order_relaxed);
+    // The dry part, as late as the front lane's; the wet part is silence.
+    room->delayDry(l, r, numFrames);
+    const float dry = 1.0f - room->getDryWet();
+    if (dry <= 0.001f) {
+        std::fill(l, l + numFrames, 0.0f);
+        std::fill(r, r + numFrames, 0.0f);
+    } else {
+        for (int i = 0; i < numFrames; i++) {
+            l[i] *= dry;
+            r[i] *= dry;
+        }
+    }
+    master.slotOutPeak[s].store(stereoPeak(l, r, numFrames), std::memory_order_relaxed);
+    masterUnchanged_ = false;
 }
 
 bool DspEngine::skippedOnThisLane(const SnapinProcessor& plugin) const {

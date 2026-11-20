@@ -35,4 +35,31 @@ object BinauralRoomNative {
     }
 
     class Ring(val left: IntArray, val right: IntArray, val degrees: FloatArray)
+
+    /** The most speakers one channel of a surround mix is shared between. */
+    const val MAX_TAPS = 8
+
+    /**
+     * Where a channel of a surround mix plays from when the room is on the
+     * mixer's master: [speakers] gets the room speakers' indices and [gains]
+     * how loud each, for [role] ([ChannelLayout.Role]). Returns how many
+     * (`BinauralRoomProcessor::roleSpeakers`), 0 for a role it cannot place.
+     */
+    @JvmStatic
+    external fun nativeRoleSpeakers(role: Int, speakers: IntArray, gains: FloatArray): Int
+
+    /** One of a channel's speakers and its share of the channel. */
+    class Tap(val speaker: Int, val gain: Float)
+
+    private val taps = java.util.concurrent.ConcurrentHashMap<Int, List<Tap>>()
+
+    /** [nativeRoleSpeakers], read once a role; empty where the library is missing. */
+    fun roleSpeakers(role: Int): List<Tap> = taps.getOrPut(role) {
+        runCatching {
+            val speakers = IntArray(MAX_TAPS)
+            val gains = FloatArray(MAX_TAPS)
+            val n = nativeRoleSpeakers(role, speakers, gains).coerceIn(0, MAX_TAPS)
+            List(n) { Tap(speakers[it], gains[it]) }
+        }.getOrDefault(emptyList())
+    }
 }

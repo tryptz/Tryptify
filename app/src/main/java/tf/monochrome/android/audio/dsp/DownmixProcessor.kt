@@ -70,6 +70,18 @@ class DownmixProcessor @Inject constructor(
     private val placement: tf.monochrome.android.audio.dsp.spatial.SpatialPlacementStore?,
 ) : AudioProcessor {
 
+    /**
+     * Whether the mixer before this fold has already rendered the stream for
+     * headphones: a Binaural Room on its master that took every channel
+     * ([MixBusProcessor.roomTookBed]). The front two channels are then the
+     * binaural pair and the rest silence, so this fold only adds them up:
+     * the spatial map would stand that pair at the front speakers and filter
+     * it for the ears a second time, and crossfeed would blur it. Read every
+     * block; set where the two processors are put in one chain.
+     */
+    @Volatile
+    var mixerRenderedRoom: () -> Boolean = { false }
+
     // pendingFormat == NOT_SET ⇔ inactive. IMPORTANT: unlike
     // MixBusProcessor, isActive() must NOT also consider a lingering
     // inputFormat — Media3's AudioProcessingPipeline.configure() does
@@ -268,8 +280,9 @@ class DownmixProcessor @Inject constructor(
         val outBytes = numFrames * outFrameSize
         ensureOutput(outBytes)
 
+        val roomPair = mixerRenderedRoom()
         val spatial = placement?.current
-        if (spatial != null && spatial.enabled && placer != 0L) {
+        if (!roomPair && spatial != null && spatial.enabled && placer != 0L) {
             placeBlock(inputBuffer, numFrames, channels, isFloat, spatial)
             return
         }
@@ -319,8 +332,9 @@ class DownmixProcessor @Inject constructor(
         }
         inputBuffer.position(startPos + numFrames * frameSize)
 
-        // Now stereo, the crossfeed can place its two speakers.
-        crossfeed?.processArrays(foldL, foldR, numFrames)
+        // Now stereo, the crossfeed can place its two speakers; a pair the
+        // mixer's room made already has them placed.
+        if (!roomPair) crossfeed?.processArrays(foldL, foldR, numFrames)
         writeFold(numFrames, isFloat)
         outputBuffer.position(0)
         outputBuffer.limit(outBytes)

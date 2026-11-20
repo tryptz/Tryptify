@@ -3585,6 +3585,41 @@ into the mixer.
   up to 327 at 176.4 kHz (`ownLatency`, added to `SnapinProcessor::latency`),
   so the engine holds the dry signal and the other buses back by it, and
   bypassed it is the song that much later and nothing else.
+- **On the master of a wide stream it is one room, not one a channel pair.**
+  A stream wider than stereo runs as lanes, a channel group each, and every
+  lane has its own copy of the master's chain (`MultiLaneEngine`). So this
+  effect there was seven rooms for a 9.1.6 upmix, every pair stood at the
+  front at 30 degrees, the centre and the LFE through dry, and the fold added
+  them: the same ear filters and reflections seven times over, which the
+  owner heard as "phasey" (2026-11-20). Now the front lane's room is handed
+  every other lane's master signal (`setBed`, `RoomBedChannel`) and plays
+  each from its own speaker, as the renderer plays a bed
+  (`BinauralRoomProcessor::roleSpeakers`: the rears at 135, the wides at 60,
+  the sides at 90, a 5.1 bed's surrounds at 110, the tops on the upper ring,
+  the centre and the LFE at theirs). Angle still places the front pair. The
+  other lanes' rooms play nothing, so what leaves the mixer is the binaural
+  pair on the front two channels and silence on the rest.
+  - Which speaker a channel is comes from Kotlin (`ChannelLayout.roles`,
+    numbers shared with `RoomRole`). A count with no layout (9, 11, 13 to 15)
+    names none and keeps a room a lane, as before.
+  - **The fold after the mixer must only add that pair up.**
+    `DownmixProcessor.mixerRenderedRoom` (`MixBusProcessor.roomTookBed`)
+    turns the spatial map and the crossfeed off for those blocks: either
+    would filter a finished binaural pair for the ears again. A new stage
+    after the mixer that places or widens channels asks the same.
+  - It is one room in the block a control change is fanning out in, too
+    (`MultiLaneEngine::stepLanes`, unlinked): a room a lane for one block on
+    every turn of a knob would click.
+  - It never oversamples (`SnapinProcessor::oversamples`): the bed arrives
+    at the stream's rate, and 2x of a linear effect that picks its own rate
+    inside bought nothing.
+  - The picture lights the whole bed's speakers there
+    (`LocalRoomBedChannels`, `BinauralRoomNative.roleSpeakers`), all at the
+    master's level: there is one reading at that slot, not one a channel.
+  - With "One bus" routing it is the same room: the lanes still exist.
+  `binaural_room_test` holds where each channel stands, the room against the
+  renderer's sample for sample, every rate, the silent lanes, the mix knob,
+  bypass and the block with a change in flight.
 - **What it does not have yet:** the listener's own HRTF and a room from
   "Size and shape" or a measurement. Both reach the renderer as a prepared
   table, and the mixer has no way to be handed one; the effect plays the

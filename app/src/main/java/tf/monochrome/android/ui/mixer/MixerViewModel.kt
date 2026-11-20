@@ -111,6 +111,9 @@ class MixerViewModel @Inject constructor(
     val spreadChannels: StateFlow<Boolean> = dspManager.spreadChannels
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /** How many channels the stream in the mixer has; 2 for stereo. */
+    val streamChannels: StateFlow<Int> get() = dspManager.streamChannels
+
     fun setSpreadChannels(spread: Boolean) = dspManager.setSpreadChannels(spread)
 
     val presets: StateFlow<List<MixPreset>> = presetRepository.getAllPresets()

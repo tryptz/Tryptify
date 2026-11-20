@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import tf.monochrome.android.audio.atmos.AtmosNative
 import tf.monochrome.android.audio.dsp.BinauralRoomNative
+import tf.monochrome.android.audio.dsp.ChannelLayout
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
 import tf.monochrome.android.domain.model.RoomShape
@@ -28,6 +29,13 @@ import kotlin.math.pow
  * the effect itself names through [BinauralRoomNative.ring]), as bright as
  * the signal going in, and the room's air holds as much as Room lets in.
  * Bypassed, nothing plays in it. Drag sideways to walk round it.
+ *
+ * On the master of a stream wider than stereo ([LocalRoomBedChannels]) the
+ * room has every channel, each at its own speaker, and so does the picture:
+ * the speakers the effect itself names for each
+ * ([BinauralRoomNative.roleSpeakers]). They all light as bright as the
+ * master's level, the one reading there is at that slot, not each as loud as
+ * its own channel.
  */
 @Composable
 internal fun BinauralRoomVisual(
@@ -42,6 +50,14 @@ internal fun BinauralRoomVisual(
     val layout = remember { roomLayout() }
     val ring = remember { BinauralRoomNative.ring }
     val count = layout.size / AtmosNative.ROOM_FIELDS
+    val bedChannels = LocalRoomBedChannels.current
+    // The rest of a surround mix's channels: where each plays from.
+    val bed = remember(bedChannels) {
+        val roles = if (bedChannels in 3..ChannelLayout.MAX_CHANNELS) ChannelLayout.roles(bedChannels) else IntArray(0)
+        // As the mixer: a stream with a channel it cannot place has no bed.
+        if (roles.isEmpty() || roles.any { it < 0 }) emptyList()
+        else roles.drop(2).flatMap { BinauralRoomNative.roleSpeakers(it) }
+    }
 
     // Each speaker's level, in the layout's order: null when nothing plays.
     val speakers: FloatArray? = if (ring == null || count == 0 || plugin.bypassed || live == null || slotIndex < 0) {
@@ -55,6 +71,8 @@ internal fun BinauralRoomVisual(
                 side.getOrNull(inner)?.takeIf { it in 0 until count }?.let { out[it] += level * gInner }
                 side.getOrNull(inner + 1)?.takeIf { it in 0 until count }?.let { out[it] += level * gOuter }
             }
+            for (tap in bed) if (tap.speaker in 0 until count) out[tap.speaker] += level * tap.gain
+            for (i in out.indices) out[i] = out[i].coerceAtMost(1f)
         }
     }
     AtmosRoom3d(
@@ -71,6 +89,12 @@ internal fun BinauralRoomVisual(
         slowLevels = true,
     )
 }
+
+/**
+ * How many channels the stream has when this card is on the master of one
+ * wider than stereo, where the room takes them all; 0 anywhere else.
+ */
+internal val LocalRoomBedChannels = androidx.compose.runtime.compositionLocalOf { 0 }
 
 private const val ROOM = 0
 private const val ANGLE = 2

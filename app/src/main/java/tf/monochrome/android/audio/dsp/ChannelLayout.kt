@@ -118,6 +118,65 @@ object ChannelLayout {
         ),
     )
 
+    /**
+     * Which speaker a channel is, as the native mixer names them
+     * (`RoomRole` in snapin_processor.h, the spatial renderer's speaker
+     * roles): what a Binaural Room on the master of a wide stream places each
+     * channel by. The numbers cross JNI, so they are held to the native side
+     * by `binaural_room_test` and to this table by `ChannelLayoutTest`.
+     */
+    object Role {
+        const val NONE = -1
+        const val L = 0
+        const val R = 1
+        const val C = 2
+        const val LFE = 3
+        /** A 5.x layout's surrounds, at 110 degrees. */
+        const val LS = 4
+        const val RS = 5
+        /** A 7.x layout's side surrounds, at 90. */
+        const val LSS = 6
+        const val RSS = 7
+        /** Its rear surrounds, at 135. */
+        const val LRS = 8
+        const val RRS = 9
+        const val LTF = 10
+        const val RTF = 11
+        const val LTR = 12
+        const val RTR = 13
+        const val LTS = 14
+        const val RTS = 15
+        const val LW = 16
+        const val RW = 17
+        const val BACK_CENTRE = 18
+    }
+
+    private val ROLES: Map<Int, IntArray> = with(Role) {
+        mapOf(
+            2 to intArrayOf(L, R),
+            3 to intArrayOf(L, R, C),
+            4 to intArrayOf(L, R, LS, RS),
+            5 to intArrayOf(L, R, C, LS, RS),
+            6 to intArrayOf(L, R, C, LFE, LS, RS),
+            7 to intArrayOf(L, R, C, LFE, LS, RS, BACK_CENTRE),
+            8 to intArrayOf(L, R, C, LFE, LRS, RRS, LSS, RSS),
+            10 to intArrayOf(L, R, C, LFE, LS, RS, LTF, RTF, LTR, RTR),
+            12 to intArrayOf(L, R, C, LFE, LRS, RRS, LSS, RSS, LTF, RTF, LTR, RTR),
+            // FFmpeg's 9.1.6: FLC/FRC are its front wides.
+            16 to intArrayOf(L, R, C, LFE, LRS, RRS, LW, RW, LSS, RSS, LTF, RTF, LTR, RTR, LTS, RTS),
+        )
+    }
+
+    /**
+     * The speaker each channel of a [count]-channel stream is ([Role]), in
+     * the stream's order. A count with no layout of its own (1, 9, 11,
+     * 13–15) has none: every channel is [Role.NONE], and nothing places it.
+     */
+    fun roles(count: Int): IntArray {
+        require(count in 1..MAX_CHANNELS) { "unsupported channel count $count" }
+        return ROLES[count]?.copyOf() ?: IntArray(count) { Role.NONE }
+    }
+
     /** Counts whose Android layout carries an LFE, always at index 3. */
     private val LFE_COUNTS = setOf(6, 7, 8, 10, 12, 16)
 }

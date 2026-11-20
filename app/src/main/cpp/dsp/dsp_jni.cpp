@@ -373,11 +373,14 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeRemoveBus(
 
 /**
  * Sets the lanes for the next stream: lane k is channel first[k], plus
- * second[k] unless that is negative. From the playback thread, like process.
+ * second[k] unless that is negative. [roles] says which speaker each channel
+ * of the stream is (RoomRole, by channel index; -1 or a short array for
+ * none), for a Binaural Room on the master. From the playback thread, like
+ * process.
  */
 extern "C" JNIEXPORT void JNICALL
 Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeConfigureLanes(
-    JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jintArray first, jintArray second) {
+    JNIEnv* env, jobject /*thiz*/, jlong enginePtr, jintArray first, jintArray second, jintArray roles) {
     auto* engine = getEngine(enginePtr);
     if (!engine || !first || !second) return;
     const int count = std::min(env->GetArrayLength(first), env->GetArrayLength(second));
@@ -389,7 +392,28 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeConfigureLanes(
     int fa[MultiLaneEngine::MAX_LANES];
     int fb[MultiLaneEngine::MAX_LANES];
     for (int k = 0; k < count; k++) { fa[k] = a[k]; fb[k] = b[k]; }
-    engine->configureLanes(fa, fb, count);
+    jint byChannel[2 * MultiLaneEngine::MAX_LANES];
+    const int roleCount = roles ? std::min<int>(env->GetArrayLength(roles), 2 * MultiLaneEngine::MAX_LANES) : 0;
+    if (roleCount > 0) env->GetIntArrayRegion(roles, 0, roleCount, byChannel);
+    auto roleOf = [&](int channel) {
+        return channel >= 0 && channel < roleCount ? static_cast<int>(byChannel[channel]) : -1;
+    };
+    int ra[MultiLaneEngine::MAX_LANES];
+    int rb[MultiLaneEngine::MAX_LANES];
+    for (int k = 0; k < count; k++) { ra[k] = roleOf(fa[k]); rb[k] = roleOf(fb[k]); }
+    engine->configureLanes(fa, fb, count, ra, rb);
+}
+
+/**
+ * Whether a Binaural Room on the master took the whole stream in the last
+ * block: its front two channels are then a finished binaural pair
+ * (MultiLaneEngine::roomTookBed).
+ */
+extern "C" JNIEXPORT jboolean JNICALL
+Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeRoomTookBed(
+    JNIEnv* /*env*/, jobject /*thiz*/, jlong enginePtr) {
+    auto* engine = getEngine(enginePtr);
+    return engine && engine->roomTookBed() ? JNI_TRUE : JNI_FALSE;
 }
 
 /** Spread a wide stream one channel group per bus, or run it whole. */
@@ -439,5 +463,23 @@ Java_tf_monochrome_android_audio_dsp_BinauralRoomNative_nativeRing(
     for (int k = 0; k < n; k++) { both[k] = left[k]; both[n + k] = right[k]; }
     env->SetIntArrayRegion(speakers, 0, 2 * n, both);
     env->SetFloatArrayRegion(degrees, 0, n, az);
+    return n;
+}
+
+// Where a channel of a surround mix plays from in that room, for the same
+// picture (BinauralRoomProcessor::roleSpeakers). Returns how many speakers,
+// 0 for a role the room cannot place or arrays too short.
+extern "C" JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_dsp_BinauralRoomNative_nativeRoleSpeakers(
+        JNIEnv* env, jclass /*clazz*/, jint role, jintArray speakers, jfloatArray gains) {
+    int at[kBinauralRoomMaxTaps];
+    float g[kBinauralRoomMaxTaps];
+    const int n = binauralRoomRoleSpeakers(role, at, g);
+    if (n <= 0 || !speakers || !gains) return 0;
+    if (env->GetArrayLength(speakers) < n || env->GetArrayLength(gains) < n) return 0;
+    jint out[kBinauralRoomMaxTaps];
+    for (int k = 0; k < n; k++) out[k] = at[k];
+    env->SetIntArrayRegion(speakers, 0, n, out);
+    env->SetFloatArrayRegion(gains, 0, n, g);
     return n;
 }

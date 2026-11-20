@@ -153,6 +153,19 @@ public:
     // detectorKey, when non-null, replaces the slot's own level detection:
     // one non-negative sample per frame.
     void processMasterSlotLocked(int slot, int numFrames, const float* detectorKey);
+    // A Binaural Room on the master of a wide stream is one room for the
+    // whole bed, not one a lane (snapins/binaural_room.h, "A surround mix").
+    // Whether master slot [slot] holds one that would run and has a room at
+    // this rate:
+    bool masterSlotIsRoomLocked(int slot) const;
+    // The front lane's: its room is handed the other lanes' channels
+    // ([bed], each read during this call) and the slot runs as ever.
+    void processMasterRoomHostLocked(int slot, int numFrames, const RoomBedChannel* bed, int count);
+    // Any other lane's, after the host has read it: the room has this lane,
+    // so its own plays nothing. What the slot's mix knob leaves dry stays,
+    // held back by the room's delay as on the front lane. A lane whose slot
+    // is not a room (a chain change still fanning out) runs it as ever.
+    void processMasterRoomGuestLocked(int slot, int numFrames);
     void finishBlockLocked(float* left, float* right, int numFrames);
     // After finishBlockLocked: whether that block came out as it went into
     // processMixBusesLocked, as lastProcessUnchanged() says it of a whole
