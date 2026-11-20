@@ -244,6 +244,38 @@ asks the same question first. Such a song is still shared: it is looked for
 by ISRC, else name and length (`localLink`), and a download by the number it
 was downloaded under (`downloadLink`). `CatalogNavTest` holds the album rule.
 
+## The USB DAC is never taken from under Android's audio
+
+Exclusive mode claims the DAC's interfaces with libusb's auto-detach on
+(`libusb_uac_driver.cpp`, `open`). That is not a no-op on Android: the
+kernel's `snd-usb-audio` is bound to the DAC whatever Developer options
+say ("Disable USB audio routing" only keeps Android's audio from opening
+the card), and every claim detaches it, so the sound card disappears from
+under Android. On 2026-11-20 the owner's phone (a OnePlus on Android
+17, Snapdragon, which usually plays USB audio from its DSP) restarted when the
+Quick Settings tile took the DAC back. That tile exists to hand the DAC
+to other apps, so USB audio routing is on and Android may be playing to
+the card at that moment. No log survived; the claim under a live stream
+is the likely cause, not a proven one.
+
+So a stream that is not running yet (the first start after the DAC opens,
+or after a stop: `stop` releases the interfaces and libusb binds Android's
+driver again) is started only when `LibusbUacDriver.mayTakeFromAndroid`
+says so (`DacHandOff`): Android has no USB output (routing off), or no
+media has played and no call been up for 4 s, past Android's 3 s standby,
+which closes the card. Until then `LibusbAudioSink` holds the song where
+it is (`waitingForAndroid`), with its own Android output paused, since
+that would keep Android busy. Paused, it waits as long as it takes;
+playing, 8 s, then it plays through Android until the next pause.
+`DacHandOffTest` holds the timing.
+
+`DacClaimNote` puts a synced note in `noBackupFilesDir` before each such
+claim and removes it 15 s later. A note found at the next start is logged
+by `UsbExclusiveCtl`: an error if the phone restarted in between, a
+warning if only the app's process ended. So a sent log after a restart
+says whether a claim was in flight (`DacClaimNoteTest`). Ask for one
+before naming a cause for the next restart.
+
 ## Strings
 
 Every user-facing string is a row of `app/l10n/strings.tsv`, one column per

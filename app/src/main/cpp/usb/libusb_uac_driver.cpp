@@ -293,10 +293,15 @@ bool LibusbUacDriver::open(int fileDescriptor) {
     }
     device_ = handle;
     fd_ = fileDescriptor;
-    // Best-effort kernel-driver detach. On Android the snd-usb-audio
-    // driver isn't present in user space (the framework owns USB
-    // audio via tinyalsa), so this is normally a no-op — but if a
-    // future Android version exposes it, this pre-emptively releases.
+    // Not a no-op on Android: the kernel's snd-usb-audio is bound to the
+    // DAC's audio interfaces whatever Developer options say ("Disable USB
+    // audio routing" only keeps Android's audio from opening the card).
+    // With this set, every libusb_claim_interface below detaches it
+    // (USBDEVFS_DISCONNECT_CLAIM): the sound card disappears from Android,
+    // and libusb_release_interface binds it again. That is what makes the
+    // claim succeed at all, and also why it must never happen while Android
+    // plays to the card: the Kotlin side waits for Android to go quiet first
+    // (LibusbUacDriver.mayTakeFromAndroid, DacHandOff).
     libusb_set_auto_detach_kernel_driver(device_, 1);
     LOGI("opened device via fd=%d", fileDescriptor);
     return true;

@@ -1,5 +1,6 @@
 package tf.monochrome.android.audio.usb
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.common.Format
@@ -258,6 +259,41 @@ class LibusbAudioSink(
 
     private var lastEngageFailHash = 0
 
+    /**
+     * The DAC is open for this sink but Android may still be playing on it
+     * ([LibusbUacDriver.mayTakeFromAndroid]): nothing is claimed yet, and no
+     * buffer is taken, so the song waits where it is rather than go through
+     * Android's output (which would keep Android on the DAC). Playback thread
+     * only, like the rest.
+     */
+    private var waitingForAndroid = false
+
+    /** When the wait began, or play() came during it: the clock for [ANDROID_WAIT_MAX_MS]. */
+    private var androidWaitStartMs = 0L
+
+    /**
+     * The delegate was paused for the wait while the transport plays. It is
+     * played again when it next carries the audio ([resumeHeldDelegate]),
+     * and left paused when the DAC takes over: its tail would go to a sound
+     * card the claim has just taken from Android.
+     */
+    private var delegateHeldPaused = false
+
+    /**
+     * Android stayed on the DAC for [ANDROID_WAIT_MAX_MS] while this sink
+     * played: someone else plays on, through the audio focus this app holds.
+     * The song goes through Android's output and the DAC is not taken until
+     * the next pause, which clears this.
+     */
+    private var gaveUpOnAndroid = false
+
+    /**
+     * The transport plays: [play] came, and no [pause] or [reset] since.
+     * Not the same as `!paused`, which is also true before the first play.
+     * Only the wait for Android reads it.
+     */
+    private var started = false
+
     private var firstWriteNs = 0L
     private var lastPlayedFrames = 0L
     private var lastPlayedAdvanceNs = 0L
@@ -459,6 +495,14 @@ class LibusbAudioSink(
             yielded = true
             playedSinceYield = false
             Log.i(TAG, "configured under ${driver.streamHolder.value}'s stream while paused — waiting for play")
+            return
+        }
+
+        // Android may still be playing on the DAC: not taken now. The
+        // delegate is configured for the song already, as with no DAC;
+        // tryLazyEngage takes the DAC once Android has left it.
+        if (mustWaitForAndroid()) {
+            bypassActive = false
             return
         }
 
@@ -688,6 +732,10 @@ class LibusbAudioSink(
         checkDriverStillOwned()
 
         if (!bypassActive) {
+            // Held back until Android leaves the DAC; Media3 offers the
+            // buffer again on the next round.
+            if (waitingForAndroid) return false
+            resumeHeldDelegate()
             return when (halMode) {
                 HalMode.DIRECT -> super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)
                 HalMode.HIRES -> handleThroughHalChain(halChain, buffer, presentationTimeUs, encodedAccessUnitCount)
@@ -1137,6 +1185,9 @@ class LibusbAudioSink(
      */
     private fun retakeStream(): Boolean {
         yielded = false
+        // Not from under Android: the next buffer goes through tryLazyEngage,
+        // which waits for it.
+        if (mustWaitForAndroid()) return false
         val fmt = configuredFormat ?: return false
         val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
         if (input.sampleRate <= 0 || input.channelCount <= 0 || sourceBytesPerSample(input.encoding) <= 0) return false
@@ -1162,19 +1213,83 @@ class LibusbAudioSink(
         return dacOut != null
     }
 
-    private fun tryLazyEngage() {
-        if (bypassActive || !driver.isOpen.value) return
-        // Not from under the other player while paused; see configureStream.
-        if (paused && driver.streamHeldByAnother(claimant)) return
+    /**
+     * True when the DAC must not be claimed now, because Android may still be
+     * playing on it ([LibusbUacDriver.mayTakeFromAndroid]). The claim detaches
+     * Android's USB audio driver from the DAC, and doing that under a live
+     * stream is thought to have restarted a phone (2026-11-20, the Quick
+     * Settings tile taking the DAC back from another app).
+     *
+     * The first time, the wait starts: the delegate is paused if the song
+     * plays ([started]), since its output is Android's and would keep Android
+     * on the DAC. Paused, the wait has no end; playing, it ends after
+     * [ANDROID_WAIT_MAX_MS] ([gaveUpOnAndroid]): someone else plays on, and
+     * the song goes through Android's output until the next pause.
+     */
+    private fun mustWaitForAndroid(): Boolean {
+        // Gave up while playing: this sink's own output keeps Android on the
+        // DAC now, so there is nothing to ask until the next pause.
+        if (gaveUpOnAndroid && started && !driver.isStreaming.value) {
+            waitingForAndroid = false
+            return true
+        }
+        if (driver.mayTakeFromAndroid()) {
+            if (waitingForAndroid) Log.i(TAG, "Android left the USB DAC — taking it (${driver.handOffState()})")
+            waitingForAndroid = false
+            return false
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (!waitingForAndroid) {
+            waitingForAndroid = true
+            androidWaitStartMs = now
+            if (started) {
+                super.pause()
+                delegateHeldPaused = true
+            }
+            Log.i(TAG, "$claimant waits for Android to leave the USB DAC before taking it (${driver.handOffState()})")
+        } else if (started && now - androidWaitStartMs >= ANDROID_WAIT_MAX_MS) {
+            waitingForAndroid = false
+            gaveUpOnAndroid = true
+            Log.w(
+                TAG,
+                "Android stayed on the USB DAC for ${ANDROID_WAIT_MAX_MS / 1000} s of play " +
+                    "(${driver.handOffState()}) — playing through Android's output until the next pause",
+            )
+        }
+        return true
+    }
 
-        val fmt = configuredFormat ?: return
+    private fun stopWaitingForAndroid() {
+        waitingForAndroid = false
+    }
+
+    /** Plays the delegate again if the wait for Android paused it under a playing transport. */
+    private fun resumeHeldDelegate() {
+        if (!delegateHeldPaused) return
+        delegateHeldPaused = false
+        if (started) super.play()
+    }
+
+    private fun tryLazyEngage() {
+        // Every way out before the DAC would be claimed is no reason to wait
+        // for Android: the DAC closed, the other player holds the stream, or
+        // this format already failed and the delegate carries it.
+        if (bypassActive || !driver.isOpen.value) return stopWaitingForAndroid()
+        // Not from under the other player while paused; see configureStream.
+        if (paused && driver.streamHeldByAnother(claimant)) return stopWaitingForAndroid()
+
+        val fmt = configuredFormat ?: return stopWaitingForAndroid()
         val input = AudioProcessor.AudioFormat(fmt.sampleRate, fmt.channelCount, fmt.pcmEncoding)
         if (input.sampleRate <= 0 || input.channelCount <= 0 ||
             sourceBytesPerSample(input.encoding) <= 0
-        ) return
+        ) return stopWaitingForAndroid()
 
         val fmtHash = engageHash(input.sampleRate, input.channelCount, input.encoding)
-        if (fmtHash == lastEngageFailHash) return
+        if (fmtHash == lastEngageFailHash) return stopWaitingForAndroid()
+
+        // Android may still be playing on the DAC: wait (or, having waited
+        // long enough while playing, let the delegate carry the song).
+        if (mustWaitForAndroid()) return
 
         // configure() skipped the chain while the driver was closed, so it is
         // configured for nothing (or for an earlier track). Configure it for
@@ -1296,6 +1411,11 @@ class LibusbAudioSink(
         // stayed up — so the next engage refused every buffer forever, with
         // no log and no recovery short of reset().
         paused = true
+        started = false
+        // The delegate is paused with the transport now, and a pause is
+        // where the DAC may be taken from Android again.
+        delegateHeldPaused = false
+        gaveUpOnAndroid = false
         if (bypassActive) {
             pendingProcessedOutput = AudioProcessor.EMPTY_BUFFER
             driver.flushRing(claimant)
@@ -1308,7 +1428,17 @@ class LibusbAudioSink(
     }
 
     override fun play() {
-        super.play()
+        // While the DAC waits for Android, the delegate stays paused: its
+        // output would keep Android on the DAC. The wait's clock starts now,
+        // as the song is playing.
+        started = true
+        if (waitingForAndroid) {
+            delegateHeldPaused = true
+            androidWaitStartMs = SystemClock.elapsedRealtime()
+        } else {
+            super.play()
+            delegateHeldPaused = false
+        }
         // Before anything else, so a park on its way cannot land after the
         // resume below.
         disarmIdlePark()
@@ -1381,6 +1511,11 @@ class LibusbAudioSink(
 
     override fun playToEndOfStream() {
         if (!bypassActive) {
+            // The song ends while the DAC waits for Android: its last buffers
+            // go through Android's output, which is safe, and the next song
+            // asks again.
+            stopWaitingForAndroid()
+            resumeHeldDelegate()
             // The hi-res chain's stages hold audio of their own — up to ~350 ms
             // in the time-stretcher — which only comes out once they are told
             // the stream ended. Hand all of it, and anything the delegate has
@@ -1549,6 +1684,10 @@ class LibusbAudioSink(
 
         bypassActive = false
         yielded = false
+        waitingForAndroid = false
+        delegateHeldPaused = false
+        gaveUpOnAndroid = false
+        started = false
         // No stream, so nothing has gone elsewhere: a key press before the
         // next one starts still sets the DAC. Unless the other player's
         // stream is what the DAC carries now, which is its sink's to say.
@@ -1810,6 +1949,13 @@ class LibusbAudioSink(
 
         /** Paused this long, the DAC's stream is parked (see [armIdlePark]). */
         internal const val PAUSE_IDLE_MS = 10_000L
+
+        /**
+         * How long a playing song waits for Android to leave the DAC before
+         * it goes through Android's output instead: Android's quiet time
+         * ([DacHandOff.QUIET_MS]) and as much again.
+         */
+        internal const val ANDROID_WAIT_MAX_MS = 2 * DacHandOff.QUIET_MS
 
         /**
          * One daemon thread for every sink's park timer. A park blocks for

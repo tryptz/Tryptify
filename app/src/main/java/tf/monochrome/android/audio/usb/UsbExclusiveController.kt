@@ -126,7 +126,12 @@ class UsbExclusiveController @Inject constructor(
         preferences.setUsbExclusiveBitPerfectEnabled(false)
     }
 
-    /** Claims the DAC again after [releaseForOtherApps]. Playback stays paused until the listener plays. */
+    /**
+     * Claims the DAC again after [releaseForOtherApps]. Playback stays paused
+     * until the listener plays. The DAC is opened at once, but its interfaces
+     * are taken only once Android has left it ([LibusbUacDriver.mayTakeFromAndroid]):
+     * the app it was handed to may still be playing on it.
+     */
     suspend fun takeBack() {
         preferences.setUsbExclusiveBitPerfectEnabled(true)
     }
@@ -159,6 +164,14 @@ class UsbExclusiveController @Inject constructor(
             appContext.registerReceiver(attachReceiver, filter)
         }
 
+        // A claim note left by the last process: the phone, or the app, went
+        // down while the DAC had just been taken. Said once, in the log, so
+        // a sent log carries it (the crash itself is never in one).
+        scope.launch {
+            driver.claimNoteFromBefore()?.let { report ->
+                if (report.phoneRestarted) Log.e(TAG, report.text) else Log.w(TAG, report.text)
+            }
+        }
         scope.launch {
             preferences.usbExclusiveBitPerfectEnabled
                 .distinctUntilChanged()

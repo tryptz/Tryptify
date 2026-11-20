@@ -8,14 +8,22 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
+import android.media.AudioManager
 import android.os.Build
+import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.File
 import java.nio.ByteBuffer
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -107,6 +115,20 @@ class LibusbUacDriver @Inject constructor(
     val dacInfo: StateFlow<DacInfo?> = _dacInfo.asStateFlow()
 
     private var connection: UsbDeviceConnection? = null
+
+    /** Whether the DAC may be taken from Android's own audio now; see [mayTakeFromAndroid]. */
+    private val handOff = DacHandOff(
+        DacHandOff.Of(appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager),
+        SystemClock::elapsedRealtime,
+    )
+
+    /** On disk while a claim is fresh, so a restart of the phone in it is known afterwards. */
+    private val claimNote = DacClaimNote(File(appContext.noBackupFilesDir, "dac_claim_note"))
+    private val noteLock = Any()
+    private val noteClearer: ScheduledExecutorService by lazy {
+        Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "DacClaimNote").apply { isDaemon = true } }
+    }
+    private var noteClearing: ScheduledFuture<*>? = null
 
     init {
         UsbNativeLoader.ensureLoaded()
@@ -232,9 +254,66 @@ class LibusbUacDriver @Inject constructor(
      *    follow-up commit.
      */
     fun start(who: StreamClaimant, sampleRate: Int, bitsPerSample: Int, channels: Int): Boolean {
+        // With no stream running, this start claims the interfaces, and the
+        // claim detaches Android's own driver from them. The note on disk
+        // says so until the claim has gone by without trouble.
+        val claiming = !_isStreaming.value
+        if (claiming) {
+            noteClaim(
+                "$sampleRate Hz, $bitsPerSample-bit, ${channels}ch, " +
+                    "DAC ${_dacInfo.value?.displayName ?: "unknown"}; ${handOff.describe()}",
+            )
+        }
         val ok = lease.take(who) { nativeStart(sampleRate, bitsPerSample, channels) }
+        if (claiming) clearClaimNote(afterMs = if (ok) DacClaimNote.WATCH_MS else 0L)
         publishStart(ok)
         return ok
+    }
+
+    /**
+     * Whether a [start] now may take the DAC from Android. Always while a
+     * stream runs: its interfaces are this app's already, and nothing is
+     * taken. Otherwise only once Android has left the DAC ([DacHandOff]):
+     * the claim detaches Android's USB audio driver, and doing that while
+     * Android plays to the DAC is thought to have restarted a phone. A
+     * binder call at most every [DacHandOff.LOOK_EVERY_MS]; not for the
+     * realtime thread.
+     */
+    fun mayTakeFromAndroid(): Boolean = _isStreaming.value || handOff.clear()
+
+    /** Why [mayTakeFromAndroid] said what it did last, for the log. */
+    fun handOffState(): String = handOff.describe()
+
+    /**
+     * What a claim note left by an earlier process says ([DacClaimNote]):
+     * the phone, or the app, went down while a claim was fresh. Null when
+     * there was none. Reads a file; not for the main thread.
+     */
+    internal fun claimNoteFromBefore(): DacClaimNote.Report? = synchronized(noteLock) { claimNote.atStart(boot()) }
+
+    private fun noteClaim(detail: String) = synchronized(noteLock) {
+        noteClearing?.cancel(false)
+        noteClearing = null
+        claimNote.write(boot(), System.currentTimeMillis(), detail)
+    }
+
+    private fun clearClaimNote(afterMs: Long) = synchronized(noteLock) {
+        if (afterMs <= 0L) {
+            claimNote.clear()
+        } else {
+            noteClearing = noteClearer.schedule(
+                { synchronized(noteLock) { claimNote.clear() } },
+                afterMs,
+                TimeUnit.MILLISECONDS,
+            )
+        }
+    }
+
+    private fun boot(): DacClaimNote.Boot {
+        val count = runCatching {
+            Settings.Global.getInt(appContext.contentResolver, Settings.Global.BOOT_COUNT, -1)
+        }.getOrDefault(-1)
+        return DacClaimNote.Boot(count, System.currentTimeMillis() - SystemClock.elapsedRealtime())
     }
 
     /**
