@@ -55,7 +55,7 @@ class LiveLogTest {
             next = 4,
             missed = 12,
         )
-        val rows = liveLogRows(lines, uid = "u", device = "phone", build = "1.9.52 (abc)")
+        val rows = liveLogRows(lines, uid = "u", device = "phone", build = "1.9.6 (abc)")
         assertEquals(3, rows.size)
         // What was missed is said first, as a line of its own.
         assertEquals(LiveLog.TAG, rows[0].tag)
@@ -63,7 +63,7 @@ class LiveLogTest {
         assertEquals("line 1", rows[1].message)
         assertEquals("E", rows[2].level)
         assertEquals(4_000, rows[2].message.length)
-        assertTrue(rows.all { it.user_id == "u" && it.device == "phone" && it.build == "1.9.52 (abc)" })
+        assertTrue(rows.all { it.user_id == "u" && it.device == "phone" && it.build == "1.9.6 (abc)" })
     }
 
     @Test

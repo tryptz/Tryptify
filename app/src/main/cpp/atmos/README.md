@@ -132,7 +132,7 @@ worth knowing when debugging:
   at every bit (`cavern/extensible_metadata_decoder.h`), and a candidate is
   taken only when its payloads and protection fill its stated length to the
   byte, because the syncword turns up by chance in audio data about once in
-  three frames. Looked for at whole bytes, as it was until 1.9.52, it was
+  three frames. Looked for at whole bytes, as it was until 1.9.6, it was
   found in a quarter of the frames (2% of Dolby's channel-check tones), which
   this file used to describe as payloads being sparse.
 - **The last update holds while the stream is Atmos.** For a frame whose
@@ -182,7 +182,7 @@ accepts 1-8, 10, 12 and 24 channels).
 - **Panning**: a sin/cos balance along each axis of the room between the
   speakers either side of the object (`BalancePanner`): rows of speakers by
   y, speakers in a row by x, layers by z. This is the law the stream's own 5.1
-  follows. It replaced a cube-to-angle warp and VBAP (1.9.52), which put an
+  follows. It replaced a cube-to-angle warp and VBAP (1.9.6), which put an
   overhead object evenly round the room and kept pans against L/R. A layout
   with nothing overhead plays an object at its place on the floor.
 - **Timing**: an update takes hold `sample_offset + 32 x block_offset_factor`
@@ -231,7 +231,7 @@ equalizer, no room) is gone from the pipeline: nothing called it once the
 room was the headphone render. `BinauralRenderer` (`render/hrir_renderer.h`)
 stays for the mixer's spatial map (`render/channel_placer.h`).
 
-## The virtual room's low end (fixed 1.9.52)
+## The virtual room's low end (fixed 1.9.6)
 
 (The built-in set is the KU100 of SADIE II since 2026-11-18, which has its
 low end and gets no shelf; this is the MIT KEMAR set it replaced, and any
@@ -250,7 +250,7 @@ low end is level, never more than 9 dB. Level to within 1.5 dB from 50 Hz up
 for the speakers ahead (`test_low_end`). On a real TIDAL stream the render's
 80-630 Hz is now within 1 dB of the stream's own stereo fold.
 
-## Measured rooms, and rooms worked out from their size (1.9.52)
+## Measured rooms, and rooms worked out from their size (1.9.6)
 
 The virtual room's reflections and tail can be replaced by a room
 (`VirtualRoom::set_room_response`): a mono send of all the speaker feeds,
@@ -301,7 +301,7 @@ code here are this project's own; that site publishes no coordinates. Its
 author asks to be contacted before commercial software implementing the
 approach is released, and states patent and design applications.
 
-## The stage ahead sounded hollow (fixed 1.9.52)
+## The stage ahead sounded hollow (fixed 1.9.6)
 
 Sound panned between the front pair reaches each ear from both speakers, a
 fraction of a millisecond apart, and partly cancels: measured through the
@@ -319,7 +319,7 @@ where they spanned 7. It is a tone for the front stage: a sound from the
 side or behind gets the same lift and is that much brighter there. Not
 checked by ear here.
 
-## Nothing above 15 kHz (fixed 1.9.52)
+## Nothing above 15 kHz (fixed 1.9.6)
 
 (Likewise: the KU100 set reaches the top and gets nothing here.)
 
@@ -341,7 +341,7 @@ The three corrections (`design_dfe`, `design_tone_correction`,
 is folded into the equalizer's 512 taps when a set is published, so the
 render runs no extra stage for it.
 
-## Positions were NaN on phones (fixed 1.9.52)
+## Positions were NaN on phones (fixed 1.9.6)
 
 The JNI library is built `-O3 -ffast-math`. `ObjectState::distance` was NaN
 for "inside the room" and tested with `std::isnan`, which that flag folds
@@ -456,7 +456,7 @@ present in the binaural path too:
   corner while the silent objects moved. The core LFE is now spliced in at the
   OAMD LFE slot (latency-matched), as Cavern's EnhancedAC3Renderer does.
 
-Results on the test clip (1.9.52): the moving objects' paths track the core at
+Results on the test clip (1.9.6): the moving objects' paths track the core at
 +0.985..+0.995; every 5.1 speaker tracks the core at +0.999 or better and
 within 0.1 dB; the per-window speaker-energy distribution matches with median
 and 10th-percentile similarity 1.000. The check fails under 0.98 or past

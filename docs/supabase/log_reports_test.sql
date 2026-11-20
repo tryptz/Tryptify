@@ -32,7 +32,7 @@ set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 insert into public.log_reports (user_id, manufacturer, model, device, android_release, android_sdk, app_version,
                                 app_version_code, git_commit, note, context, previous_exits, log)
-values ('00000000-0000-0000-0000-000000000001', 'Maker', 'Phone 1', 'p1', '16', 36, '1.9.52', 197, 'abc1234', 'it stutters', '{}', '[]',
+values ('00000000-0000-0000-0000-000000000001', 'Maker', 'Phone 1', 'p1', '16', 36, '1.9.6', 198, 'abc1234', 'it stutters', '{}', '[]',
 $log$(12 earlier lines left out: the log was too long to send whole)
 11-18 10:00:00.001  1234  1234 D Player: starting
 11-18 10:00:00.002  1234  1234 E HWUI: dequeueBuffer returned unrecognized buffer due to compatible with vulkan.

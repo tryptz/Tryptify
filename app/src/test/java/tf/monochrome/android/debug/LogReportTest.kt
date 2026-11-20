@@ -70,7 +70,7 @@ class LogReportTest {
     fun `the row has the table's columns and no other`() {
         val row = LogReportRow(
             user_id = "u", manufacturer = "Maker", model = "Phone 1", device = "phone1", android_release = "16",
-            android_sdk = 36, app_version = "1.9.52", app_version_code = 197, git_commit = "abc1234", note = "",
+            android_sdk = 36, app_version = "1.9.6", app_version_code = 198, git_commit = "abc1234", note = "",
             context = JsonObject(emptyMap()), previous_exits = JsonArray(emptyList()), log = "",
         )
         val sent = Json.encodeToJsonElement(LogReportRow.serializer(), row).jsonObject.keys

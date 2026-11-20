@@ -4,8 +4,6 @@
 
 ## [1.9.6]
 
-Everything built as 1.9.52, which went out to testers only, ships as 1.9.6.
-
 ### Added
 
 #### Playlists
