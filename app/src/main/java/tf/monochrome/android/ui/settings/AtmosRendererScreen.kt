@@ -859,7 +859,7 @@ private fun RoomThumbnail(
 // ── Building blocks ─────────────────────────────────────────────────────────
 
 /** The built-in room's tail, in seconds (VirtualRoom::kTailSeconds). */
-private const val BUILT_IN_ROOM_DECAY = 0.32f
+internal const val BUILT_IN_ROOM_DECAY = 0.32f
 
 /** How long the panning envelope stays lit in the room after its settings last moved, and how long it takes to fade. */
 private const val ENVELOPE_GLOW_HOLD_MS = 700L

@@ -423,3 +423,21 @@ Java_tf_monochrome_android_audio_dsp_MixBusProcessor_nativeProcessPlanar(
     engine->processPlanar(channels, numChannels, numFrames);
     return engine->lastProcessUnchanged() ? JNI_TRUE : JNI_FALSE;
 }
+
+// The Binaural Room's ring, for its card's picture (BinauralRoomNative):
+// which of the room's speakers its pair can stand at, left then right, and
+// their angles. Returns how many a side, 0 if the arrays are too short.
+extern "C" JNIEXPORT jint JNICALL
+Java_tf_monochrome_android_audio_dsp_BinauralRoomNative_nativeRing(
+        JNIEnv* env, jclass /*clazz*/, jintArray speakers, jfloatArray degrees) {
+    int left[kBinauralRoomRing], right[kBinauralRoomRing];
+    float az[kBinauralRoomRing];
+    const int n = binauralRoomRing(left, right, az);
+    if (n <= 0 || !speakers || !degrees) return 0;
+    if (env->GetArrayLength(speakers) < 2 * n || env->GetArrayLength(degrees) < n) return 0;
+    jint both[2 * kBinauralRoomRing];
+    for (int k = 0; k < n; k++) { both[k] = left[k]; both[n + k] = right[k]; }
+    env->SetIntArrayRegion(speakers, 0, 2 * n, both);
+    env->SetFloatArrayRegion(degrees, 0, n, az);
+    return n;
+}

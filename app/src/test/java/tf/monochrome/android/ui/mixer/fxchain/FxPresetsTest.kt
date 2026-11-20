@@ -16,7 +16,7 @@ import kotlin.math.round
  */
 class FxPresetsTest {
 
-    private val all = SnapinType.values().filter { it.ordinal < 36 }
+    private val all = SnapinType.values().filter { it.ordinal < 37 }
 
     @Test
     fun `every effect has five presets with distinct names`() {

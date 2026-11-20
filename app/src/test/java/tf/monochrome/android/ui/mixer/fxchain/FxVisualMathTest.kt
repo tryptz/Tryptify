@@ -351,4 +351,38 @@ class FxVisualMathTest {
         val far = M.formantDb(8000f, 0f, 0f, 8f, 0f, 0f)
         assertTrue(atF1 > far + 12f)
     }
+
+    @Test
+    fun `the room's pair is shared between two speakers as the effect shares it`() {
+        // The numbers binaural_room_test holds BinauralRoomProcessor::pairOnRing to.
+        assertEquals(Triple(0, 1f, 0f), M.roomPair(0f))
+        assertEquals(Triple(1, 0f, 1f), M.roomPair(30f))
+        val (k, inner, outer) = M.roomPair(45f)
+        assertEquals(2, k)
+        assertEquals(inner, outer, 1e-6f)
+        assertEquals(1f, inner * inner + outer * outer, 1e-6f)
+        // Past either end it is the ring's own end.
+        assertEquals(Triple(4, 0f, 1f), M.roomPair(500f))
+        assertEquals(Triple(0, 1f, 0f), M.roomPair(-20f))
+        // The same power all the way round, and the knob's whole range is on the ring.
+        var angle = 0f
+        while (angle <= 110f) {
+            val (_, a, b) = M.roomPair(angle)
+            assertEquals("at $angle", 1f, a * a + b * b, 1e-5f)
+            angle += 0.5f
+        }
+        assertEquals(110f, M.ROOM_RING_DEGREES.last(), 0f)
+        assertEquals(
+            M.ROOM_RING_DEGREES.last(),
+            tf.monochrome.android.ui.mixer.getParamDefs(tf.monochrome.android.audio.dsp.SnapinType.BINAURAL_ROOM)[2].max, 0f,
+        )
+    }
+
+    @Test
+    fun `a silent bus lights no speaker`() {
+        assertEquals(0f, dbToLevel(-60f), 0f)
+        assertEquals(1f, dbToLevel(0f), 1e-6f)
+        assertEquals(1f, dbToLevel(6f), 0f)
+        assertEquals(0.5f, dbToLevel(-6.0206f), 1e-4f)
+    }
 }

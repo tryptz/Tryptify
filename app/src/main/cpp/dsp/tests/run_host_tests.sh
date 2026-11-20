@@ -37,6 +37,13 @@ echo "== biquad_low_freq_test"
 $cxx $flags -ffast-math "$here/biquad_low_freq_test.cpp" -o "$out/biquad_low_freq_test"
 "$out/biquad_low_freq_test"
 
+# The Binaural Room is the spatial renderer's own room with a stereo pair in
+# it: sample for sample at 48 kHz, the same room at every rate from 44.1 to
+# 192 kHz and untouched outside them, as late as it says, no click on a knob.
+echo "== binaural_room_test"
+$cxx $flags -ffast-math "$here/binaural_room_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/binaural_room_test"
+"$out/binaural_room_test"
+
 # The effects' delay lines and rings: read as they did before their % went,
 # never past their ends at any knob setting (DSP_CHECK_DELAY_RANGE counts
 # that), silent after a rate change; the limiter past its old 2^31-sample

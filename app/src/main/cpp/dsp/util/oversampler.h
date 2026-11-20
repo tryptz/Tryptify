@@ -272,7 +272,10 @@ private:
 // re-set on the audio thread.
 class LatencyLine {
 public:
-    static constexpr int kMaxDelay = kMaxEvenTaps * 2;
+    // Twice the longest oversampling round trip: an effect may add a delay
+    // of its own to it (SnapinProcessor::ownLatency), and the binaural room
+    // at 176.4 kHz is 327 samples late.
+    static constexpr int kMaxDelay = kMaxEvenTaps * 4;
 
     void prepare(int delay) {
         delay_ = std::max(0, std::min(kMaxDelay, delay));

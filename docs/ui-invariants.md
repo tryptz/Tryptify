@@ -3549,6 +3549,45 @@ donation"). It is the same `SupportButton`, tinted mark and all, so it reads
 as another place to go and not a third tip jar; it is not a filled button
 and not a list row. The invite is `SupportLinks.DISCORD`.
 
+### The mixer's Binaural Room is the renderer's room
+
+The FX chain's **Binaural Room** (`SnapinType.BINAURAL_ROOM`, in Space) is
+not a second room. `snapins/binaural_room.h` runs the spatial renderer's own
+`VirtualRoom`, laid out with the same 28 speakers, and plays a stereo pair
+from two of them: at 30 degrees, at 48 kHz, its output is the renderer's for
+a stereo bed sample for sample (`binaural_room_test`). Change the room and
+both change; never copy its filters, its reflections or its speaker table
+into the mixer.
+
+- **Knobs.** Room and Binaural are the room's own two settings
+  (`set_params`); Angle is where the pair stands, shared between two of the
+  ear-level ring's speakers at equal power (`pairOnRing`), so a turn moves
+  the sound and builds no filter; Output is a gain after it. The room takes
+  3 dB off (`kTrim`) and Output is 0 dB as shipped: the same level as the
+  renderer.
+- **Its picture is `AtmosRoom3d`**, the room this section's rules describe,
+  drawn by `BinauralRoomVisual` in place of a graph: the built-in room's
+  shape, the renderer's layout (`AtmosNative.nativeRoomLayout`), and lit
+  speakers that are the ones the pair stands at
+  (`BinauralRoomNative.ring`, asked of the effect's own code, with
+  `FxVisualMath.roomPair` mirroring its sharing, both held to the same
+  numbers). The room drawn is the room heard here too: bypassed, nothing
+  plays in it. It has no handles (`FxHandlesTest` says why); a drag turns it.
+- **The rate.** The room is 48 kHz. It runs at the stream's rate from 38.4 to
+  50 kHz with the ear filters squeezed to suit (`EarTune::size`), at a half
+  or a quarter of it above that, and where neither lands in that band (8 kHz,
+  384 kHz) the effect passes the signal through untouched.
+- **Its delay is counted.** It answers 7 samples late at 44.1 and 48 kHz and
+  up to 327 at 176.4 kHz (`ownLatency`, added to `SnapinProcessor::latency`),
+  so the engine holds the dry signal and the other buses back by it, and
+  bypassed it is the song that much later and nothing else.
+- **What it does not have yet:** the listener's own HRTF and a room from
+  "Size and shape" or a measurement. Both reach the renderer as a prepared
+  table, and the mixer has no way to be handed one; the effect plays the
+  built-in set in the built-in room.
+
+None of it had been heard on a phone when it was written.
+
 ### The spatial renderer's room map
 
 Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererScreen.kt`).

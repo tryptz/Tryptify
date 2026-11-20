@@ -127,6 +127,11 @@ internal fun FxVisual(
     onParam: ((paramIndex: Int, value: Float) -> Unit)? = null,
 ) {
     val type = plugin.type ?: return
+    if (type == SnapinType.BINAURAL_ROOM) {
+        // Not a graph: the room itself, as the spatial renderer's page draws it.
+        BinauralRoomVisual(plugin, modifier, slotIndex, live)
+        return
+    }
     val defs = getParamDefs(type)
     val raw = plugin.parameters
     val handles = remember(type) { if (onParam != null) FxHandles.forType(type) else emptyList() }
@@ -379,6 +384,8 @@ internal fun FxVisual(
             SnapinType.DELAY -> drawDelay(style, p, time)
             SnapinType.REVERB -> drawReverb(style, p)
             SnapinType.REVERSER -> drawReverser(style, p, time)
+            // Drawn above, as the room in three dimensions; never reached.
+            SnapinType.BINAURAL_ROOM -> Unit
         }
 
         // The handles, over everything; the held one says what it is set to.

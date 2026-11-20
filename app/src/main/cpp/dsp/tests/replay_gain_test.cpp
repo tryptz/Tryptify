@@ -744,6 +744,7 @@ const char* const kNames[] = {
     "Phase distortion", "Pitch shifter", "Resonator", "Reverser",
     "Ring mod", "Tape stop", "Trance gate",
     "EQ 10-band", "Disperser", "Misstortion",
+    "Binaural room",
 };
 static_assert(sizeof(kNames) / sizeof(kNames[0]) == static_cast<int>(SnapinType::COUNT), "a name for every snapin");
 
@@ -769,7 +770,15 @@ void everySnapin() {
         with.engine.addPlugin(0, 0, t);
         with.engine.setPluginBypassed(0, 0, true);
         const auto a = with.run(60, kQuiet), b = without.run(60, kQuiet);
-        if (a.left != b.left) {
+        // Untouched, but as late as when it runs: an effect with a delay of
+        // its own (the binaural room, 7 samples) keeps it bypassed, so the
+        // bus's timing does not change with the switch. 0 for all the others.
+        std::unique_ptr<SnapinProcessor> probe(createSnapin(static_cast<SnapinType>(t)));
+        probe->prepareOS(kRate, kBlock);
+        const size_t late = static_cast<size_t>(probe->latency());
+        bool same = a.left.size() == b.left.size() && late < a.left.size();
+        for (size_t i = late; same && i < a.left.size(); i++) same = a.left[i] == b.left[i - late];
+        if (!same) {
             unityTransparentWhenBypassed = false;
             std::printf("      %s bypassed changes the signal\n", kNames[t]);
         }

@@ -365,5 +365,16 @@ object FxPresets {
             c("Reverse Stutter", 0 to 125f, 2 to 5f, 3 to 60f),
             c("Reverse Solo", 2 to 15f, 3 to 100f),
         )
+        // The renderer's room with a stereo pair in it. On a finished song:
+        // speakers at the usual 30 degrees, little or no room, or only part
+        // of the ear filters, which is a crossfeed. The room takes 3 dB off,
+        // so the wider and livelier ones give some back.
+        SnapinType.BINAURAL_ROOM -> listOf(
+            m("Studio Monitors", 0 to 12f),
+            m("Dry Speakers", 0 to 0f),
+            m("Gentle Crossfeed", 0 to 8f, 1 to 45f),
+            c("Wide Stage", 0 to 30f, 2 to 60f, 3 to 1.5f),
+            c("Surrounded", 0 to 45f, 2 to 110f, 3 to 3f),
+        )
     }
 }

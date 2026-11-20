@@ -56,6 +56,13 @@ class FxHandlesTest {
     fun `every graph has a handle, and every handle moves a real parameter`() {
         for (type in SnapinType.values()) {
             val handles = FxHandles.forType(type)
+            // The Binaural Room has no graph: its picture is the renderer's
+            // room in three dimensions, turned by a drag, with nothing on it
+            // to take hold of.
+            if (type == SnapinType.BINAURAL_ROOM) {
+                assertTrue("the room has no graph to put a handle on", handles.isEmpty())
+                continue
+            }
             assertTrue("$type has no handle", handles.isNotEmpty())
             val count = getParamDefs(type).size
             for (h in handles) {

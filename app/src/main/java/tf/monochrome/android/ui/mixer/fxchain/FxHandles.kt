@@ -395,6 +395,9 @@ internal object FxHandles {
                 linearUp(2, 1f, 50f),
             ) { p -> (p(0) / 2000f).coerceIn(0.025f, 1f) * 0.9f + 0.08f to 0.5f },
         )
+        // No graph and so no handles: its picture is the renderer's room in
+        // three dimensions (BinauralRoomVisual), which a drag turns.
+        SnapinType.BINAURAL_ROOM -> emptyList()
     }
 
     /** A waveshaper's output on FxVisual.drawShaperCurve's vertical axis. */
