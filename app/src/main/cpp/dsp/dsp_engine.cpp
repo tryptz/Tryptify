@@ -35,6 +35,7 @@
 #include "snapins/eq_10band.h"
 #include "snapins/disperser.h"
 #include "snapins/misstortion.h"
+#include "snapins/binaural_room.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -71,6 +72,14 @@ static inline void enableFlushToZero() {}
 #endif
 
 // ── Factory ─────────────────────────────────────────────────────────────
+
+static_assert(kBinauralRoomRing == BinauralRoomProcessor::kRing, "the ring the picture is told is the effect's");
+
+int binauralRoomRing(int* left, int* right, float* degrees) {
+    if (!BinauralRoomProcessor::ringSpeakers(left, right)) return 0;
+    for (int k = 0; k < BinauralRoomProcessor::kRing; k++) degrees[k] = BinauralRoomProcessor::kRingAz[k];
+    return BinauralRoomProcessor::kRing;
+}
 
 SnapinProcessor* createSnapin(SnapinType type) {
     switch (type) {
@@ -110,6 +119,7 @@ SnapinProcessor* createSnapin(SnapinType type) {
         case SnapinType::EQ_10BAND:  return new Eq10BandProcessor();
         case SnapinType::DISPERSER:  return new DisperserProcessor();
         case SnapinType::MISSTORTION: return new MisstortionProcessor();
+        case SnapinType::BINAURAL_ROOM: return new BinauralRoomProcessor();
         default:
             LOGE("Unsupported snapin type: %d", static_cast<int>(type));
             return nullptr;
@@ -407,6 +417,8 @@ bool DspEngine::skippedOnThisLane(const SnapinProcessor& plugin) const {
         case SnapinType::STEREO:
         case SnapinType::HAAS:
         case SnapinType::CHANNEL_MIXER:
+        // The room stands a left and a right in front of the listener.
+        case SnapinType::BINAURAL_ROOM:
             return true;
         default:
             return false;

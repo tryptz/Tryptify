@@ -16,6 +16,7 @@ enum class SnapinType : int32_t {
     PHASE_DISTORTION, PITCH_SHIFTER, RESONATOR, REVERSER,
     RING_MOD, TAPE_STOP, TRANCE_GATE,
     EQ_10BAND, DISPERSER, MISSTORTION,
+    BINAURAL_ROOM,
     COUNT
 };
 
@@ -90,8 +91,18 @@ public:
     // The factor running at the current rate.
     int getEffectiveOversampling() const { return osRun_; }
 
-    // Base-rate samples the effect's output lags its input by.
+    // Base-rate samples the effect's output lags its input by: the
+    // oversampling round trip, and whatever the effect itself adds
+    // (ownLatency()).
     int latency() const { return osLatency_; }
+
+    // Samples the effect itself delays its output by, at the rate it was
+    // prepared at, known once prepare() has run: an effect that works in
+    // blocks or through filters of its own (the binaural room). The engine
+    // holds the dry signal and the other buses back by it, as it does for
+    // oversampling, so a blend with the dry never comb-filters. 0 for an
+    // effect that answers each sample with that sample.
+    virtual int ownLatency() const { return 0; }
 
     // Holds [left]/[right] back by latency(), in place: the dry signal of a
     // blend, or the whole signal while the effect is bypassed, so a bus's
@@ -183,11 +194,15 @@ private:
             osL_.prepare(osBaseRate_, 1);
             osR_.prepare(osBaseRate_, 1);
         }
-        osLatency_ = osL_.latency();
-        dryL_.prepare(osLatency_);
-        dryR_.prepare(osLatency_);
         // Oversampled, the effect only ever sees one piece at a time.
         prepare(osBaseRate_ * osRun_, osRun_ > 1 ? osChunk_ * osRun_ : osBaseBlock_);
+        // After prepare(): the effect's own delay depends on the rate it was
+        // given. It is counted at that rate, so at the base rate it is that
+        // many over the factor, to the nearest sample.
+        const int own = std::max(0, ownLatency());
+        osLatency_ = osL_.latency() + (own + osRun_ / 2) / osRun_;
+        dryL_.prepare(osLatency_);
+        dryR_.prepare(osLatency_);
     }
 
     static constexpr int kOsChunk = 1024;
@@ -205,3 +220,11 @@ private:
 
 // Factory — implemented in dsp_engine.cpp
 SnapinProcessor* createSnapin(SnapinType type);
+
+// The Binaural Room's ring of speakers, for the picture of it: the indices
+// (in the spatial renderer's room layout) of the speakers its pair can stand
+// at, [left] and [right], nearest the centre first, and their angles from
+// straight ahead in [degrees]. Each array holds the count returned; 0 when
+// the layout has lost one. See BinauralRoomProcessor::ringSpeakers.
+constexpr int kBinauralRoomRing = 6;
+int binauralRoomRing(int* left, int* right, float* degrees);

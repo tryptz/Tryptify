@@ -19,7 +19,7 @@
 
 namespace {
 
-constexpr int kTypes = 36;
+constexpr int kTypes = 37;
 
 std::vector<float> nativeDefaults(int type) {
     DspEngine e(48000, 512);

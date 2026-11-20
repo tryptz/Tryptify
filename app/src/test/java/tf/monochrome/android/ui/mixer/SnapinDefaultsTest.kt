@@ -29,7 +29,7 @@ class SnapinDefaultsTest {
     fun `every knob's default is the engine's default`() {
         val types = SnapinType.values()
         var compared = 0
-        for (t in 0 until 36) {
+        for (t in 0 until 37) {
             val defs = getParamDefs(types[t])
             val native = table.keys.count { it.first == t }
             assertEquals("${types[t]} parameter count", native, defs.size)

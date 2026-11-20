@@ -37,7 +37,8 @@ enum class SnapinType(val displayName: String, val category: SnapinCategory) {
     TRANCE_GATE("Trance Gate", SnapinCategory.DYNAMICS),
     EQ_10BAND("10-Band EQ", SnapinCategory.EQ_FILTER),
     DISPERSER("Disperser", SnapinCategory.EQ_FILTER),
-    MISSTORTION("Misstortion", SnapinCategory.DISTORTION);
+    MISSTORTION("Misstortion", SnapinCategory.DISTORTION),
+    BINAURAL_ROOM("Binaural Room", SnapinCategory.SPACE);
 
     val isAvailable: Boolean
         get() = true  // Every snapin in this enum has a native processor

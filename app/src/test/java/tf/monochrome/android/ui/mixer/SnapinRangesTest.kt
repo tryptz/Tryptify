@@ -20,7 +20,7 @@ class SnapinRangesTest {
     private fun expected(): String = buildString {
         append("# type_ordinal,param_index,min,max — mirrors ParamDefs.kt, checked by SnapinRangesTest\n")
         val types = SnapinType.values()
-        for (t in 0 until 36) {
+        for (t in 0 until 37) {
             getParamDefs(types[t]).forEachIndexed { i, def ->
                 append(t).append(',').append(i).append(',')
                     .append(def.min).append(',').append(def.max).append('\n')

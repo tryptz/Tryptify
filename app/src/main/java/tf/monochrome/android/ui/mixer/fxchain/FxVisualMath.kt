@@ -371,6 +371,27 @@ internal object FxVisualMath {
         }
     }
 
+    /** The Binaural Room's ring, degrees to each side: `BinauralRoomProcessor::kRingAz`. */
+    val ROOM_RING_DEGREES = floatArrayOf(0f, 15f, 30f, 60f, 90f, 110f)
+
+    /**
+     * How the Binaural Room shares a pair [angle] degrees to each side between
+     * two of its ring's speakers, mirroring `BinauralRoomProcessor::pairOnRing`:
+     * the index (into [ring]) of the one nearer the centre, its gain, and the
+     * gain of the next one out. Equal power between them; on a speaker, all of
+     * it there. The picture lights the speakers by these.
+     */
+    fun roomPair(angle: Float, ring: FloatArray = ROOM_RING_DEGREES): Triple<Int, Float, Float> {
+        val a = angle.coerceIn(0f, ring.last())
+        var k = 0
+        while (k < ring.size - 2 && a > ring[k + 1]) k++
+        val t = (a - ring[k]) / (ring[k + 1] - ring[k])
+        if (t <= 0f) return Triple(k, 1f, 0f)
+        if (t >= 1f) return Triple(k, 0f, 1f)
+        val quarter = (Math.PI / 2.0).toFloat()
+        return Triple(k, kotlin.math.cos(t * quarter), kotlin.math.sin(t * quarter))
+    }
+
     /**
      * Misstortion transfer curve, mirroring `snapins/misstortion.h`:
      * hard clip → atan soft clip into the asymmetric window [-1+sym, sym] →

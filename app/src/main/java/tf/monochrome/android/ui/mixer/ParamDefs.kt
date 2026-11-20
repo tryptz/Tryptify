@@ -320,6 +320,15 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Out", -50f, 50f, 0f, "dB"),
         ParamDef("Mix", 0f, 100f, 100f, "%")
     )
+    // The spatial renderer's headphone room with a stereo pair in it
+    // (snapins/binaural_room.h). Room and Binaural are its two own settings;
+    // Angle is where the pair stands, each side of straight ahead.
+    SnapinType.BINAURAL_ROOM -> listOf(
+        ParamDef("Room", 0f, 100f, 25f, "%"),
+        ParamDef("Binaural", 0f, 100f, 100f, "%"),
+        ParamDef("Angle", 0f, 110f, 30f, "°"),
+        ParamDef("Output", -12f, 12f, 0f, "dB")
+    )
     null -> emptyList()
 }
 
