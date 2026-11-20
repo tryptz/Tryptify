@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## [1.9.52]
+## [1.9.6]
+
+Everything built as 1.9.52, which went out to testers only, ships as 1.9.6.
 
 ### Added
 
@@ -15,6 +17,14 @@
 - **Lines can start from the left.** Player Visuals Studio › Lyrics FX › Typography › Line start: Middle, as before, or From the left, where every line starts at the edge and grows from it as it is sung.
 - **Soft focus.** In the same place, a slider that takes the lines away from the sung one out of focus and dims them, more with each line of distance, so the eye stays on the line being sung; a line comes into focus as its turn nears. Off as shipped. Android 12 and later.
 - **An "Apple Music" lyric theme.** Among the Lyrics FX presets: plain bold lyrics from the left with the sung line sharp and the others soft and dim, and no glass, wave, pump, glow or shadow. It is the two settings above, made into a look.
+
+- **A light transition for the god rays.** Lyrics FX › God rays › Light transition: how long the light takes to come up when a word or line starts being sung, to go out when it ends, and to glide from one sung word or line to the next, 0 to 1000 ms (250 as shipped). A switch above it turns the transition off (the light switches and jumps) and keeps the time for when it is turned on again. Saved, synced, shared and carried by Theme Store packs; a look from before reads as on, at 250 ms.
+
+#### Mixer
+- **Binaural Room, a mixer effect.** Under Space in the FX chain: the spatial renderer's own headphone room (`VirtualRoom`, the same 28 speakers, ear filters and reflections) with a stereo pair standing in it. Room, Binaural, Angle (where the pair stands on the ear-level ring, 0 to 110 degrees) and Output, and the room in 3D with the speakers that play lit. Runs at the stream's rate from 38.4 to 50 kHz and at a half or a quarter of it above; its delay is counted, so a blend with the dry and the other buses line up. On the master of a stream wider than stereo (a 5.1 or Atmos bed, the 9.1.6 upmix) it is one room for the whole mix, each channel at its own speaker: see Fixed.
+
+#### Performance
+- **Rendering quality.** Settings › System › Performance: High (as before), Balanced or Fast. Balanced and Fast draw the live glass lens behind bars and panels at a half or a third of the screen's size, the god rays' shafts smaller, and cap the glass's sample rings and the rays' samples a pixel; Fast also skips the glass's dither. The slab itself is never drawn smaller, so rims and icons stay sharp. Per phone, not synced.
 
 #### Sharing
 - **A shared song's preview starts where the song is playing.** Share link on the song that is playing (or paused) sends its position with the share, and the 30-second preview Discord plays starts there; shared in the last seconds, the clip is the song's last thirty. A song that is not the one playing starts a third of the way in, as before. Needs the servers' side (TrypT-hifi and trypt-hifi-scxyt, which take `t=` and sign it with the link); an older server ignores it.
@@ -88,6 +98,11 @@
 - **An Atmos stream nothing renders is still shown as one.** With Binaural render off the Audio pipeline sheet read "6 (5.1)" and had no Atmos row: the stream's object count is now read off its frames (once a second), so it reads "6 (5.1 core) + 16 Atmos objects, not rendered" and says the core is being folded.
 - **The Atmos page says why there are no objects.** A multichannel stream with none rendering read "Live: 5.1 · 6 ch", the same as before any of this. It now says that Binaural render is off for the output in use (only the core is playing, folded), or that the stream carries none. The Audio pipeline sheet's Channels row splits the objects into the ones parked as the mix's bed, the ones moving, and the LFE.
 - **Ridgeline's spectrum sits on the cover's bottom edge.** The front line stands a little inside the bottom so its stroke is not cut, and the dark ground under it stopped at the line, leaving a strip of the cover a few pixels high under it. The front line's ground now goes down to the edge.
+- **Lyric letters were cut at the side.** A letter moved past the text by the beat, the wave or the curve was clipped at the text's box. The box is now the screen's edge, and Edge margin moves only the text (it is the list's content padding, not a padding of the layer).
+- **The god rays shone through a song's intro and rested on finished words.** Before the first line they lit every lyric, and between words they stayed on the last one. The light is now on only while something is sung: from a word's start to its end when following the word, from a line's first word to its last word's end otherwise.
+- **Downloads had no covers.** A download's record carries the catalogue's cover id, and the Downloads screen handed that bare id to the image loader. It is turned into the cover's address (640 px), and the library's own cover is used where the record has none.
+- **Low bands in the mixer's effects sat too high.** `util/biquad.h` held a band's frequency to at least a thousandth of the sample rate: 31 Hz played at 44 Hz on a CD-rate song and 192 Hz on a 192 kHz one, higher with oversampling. It now holds it to 1 Hz, and keeps its coefficients and state in doubles, since floats cannot hold a 20 Hz filter's poles at 192 kHz. The 10-band and 3-band EQ, Filter, and the low cuts of the reverb, delay and distortion change; a saved mix with a band that low now sounds as it was set.
+- **The Binaural Room on the master of a surround mix sounded phasey.** Every channel group of a wide stream runs its own copy of the master's chain, so the effect was a room a channel pair (seven for the 9.1.6 upmix), each pair at the front, the centre and the LFE dry, all added together. The front lane's room now takes every other lane's signal and plays each from its own speaker (rears at 135 degrees, wides at 60, sides at 90, the tops overhead); the other lanes' rooms are silent, and the fold after the mixer only adds the binaural pair up instead of placing or cross-feeding it again.
 - **A song added to a playlist after one was removed goes last.** It took the playlist's song count as its place, which the last song already had, so the two had no order between them.
 - **Discover on TIDAL no longer uses up the server's searches.** TIDAL gives an account a fixed number of searches a day, and the account is the server's, shared by everyone on it. Each record on a chart was looked up with four searches (songs, albums, artists, playlists) and only the songs were read, so one Discover page sent about 850 in two and a half minutes and search then failed on that server until midnight UTC, for everyone. A lookup now asks only for what it reads: one search for a chart's record, one for an artist, and one where four went for the lyrics of a song that is not TIDAL's own.
 - **TIDAL searches are sent once, a few at a time.** The same search asked twice at the same moment is one request, at most four run at once, 150 ms apart, and a search the server refuses (429) is not tried again half a second later: searching waits for the time the server names, up to a minute. A search that was refused is no longer kept for a week as "TIDAL does not have this record".

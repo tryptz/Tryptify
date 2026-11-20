@@ -89,6 +89,9 @@ object WhatsNew {
         MUSIC_LINKS -> R.string.whats_new_section_music_links
         SHARING -> R.string.whats_new_section_sharing
         WIDGET -> R.string.whats_new_section_widget
+        PLAYER -> R.string.whats_new_section_player
+        MIXER -> R.string.whats_new_section_mixer
+        APP -> R.string.whats_new_section_app
         else -> 0
     }
 
@@ -197,9 +200,41 @@ object WhatsNew {
     /** Newest first. */
     val releases: List<WhatsNewRelease> = listOf(
         WhatsNewRelease(
-            versionCode = 197,
-            versionName = "1.9.52",
+            versionCode = 198,
+            versionName = "1.9.6",
             entries = listOf(
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Lyrics from the left, and soft focus",
+                    body = "Player Visuals Studio › Lyrics FX › Typography: start every line from the left instead of the middle, and let the lines away from the sung one go soft and dim.",
+                    titleRes = R.string.whats_new_196_lyrics_left_title,
+                    bodyRes = R.string.whats_new_196_lyrics_left_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "A light transition for the god rays",
+                    body = "Lyrics FX › God rays: the light fades on and off and glides from word to word over a time you set. Its switch turns the fade off without losing that time.",
+                    titleRes = R.string.whats_new_196_light_title,
+                    bodyRes = R.string.whats_new_196_light_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Binaural Room, a mixer effect",
+                    body = "The Atmos headphone room for any song: add it from the FX Chain, under Space. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker.",
+                    titleRes = R.string.whats_new_196_binaural_room_title,
+                    bodyRes = R.string.whats_new_196_binaural_room_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "Swipe the cover to see the next song",
+                    body = "As you swipe, the next or previous song's cover slides in beside the playing one, and stays when you let go.",
+                    titleRes = R.string.whats_new_196_swipe_title,
+                    bodyRes = R.string.whats_new_196_swipe_body,
+                ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYLISTS,
@@ -295,6 +330,62 @@ object WhatsNew {
                     body = "The built-in HRTF is now the Neumann KU100, measured at the University of York: smoother, with real bass and a full top end, finer directions and sound from straight overhead. Your own SOFA sets work as before and are read again once.",
                     titleRes = R.string.whats_new_1952_atmos_head_title,
                     bodyRes = R.string.whats_new_1952_atmos_head_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = APP,
+                    title = "Rendering quality",
+                    body = "Settings › System › Performance: Balanced and Fast draw the glass and the lyrics' light smaller and scale them up, for more frames a second and less heat. High is as before.",
+                    titleRes = R.string.whats_new_196_render_quality_title,
+                    bodyRes = R.string.whats_new_196_render_quality_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "Share a file from your phone",
+                    body = "Share link on a file that came from TIDAL, Qobuz or Deezer finds that song in the catalogue and shares it.",
+                    titleRes = R.string.whats_new_196_share_file_title,
+                    bodyRes = R.string.whats_new_196_share_file_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = SHARING,
+                    title = "A shared preview starts where you are",
+                    body = "Share link on the song that is playing sends the moment you are at, and the preview Discord plays starts there.",
+                    titleRes = R.string.whats_new_196_share_start_title,
+                    bodyRes = R.string.whats_new_196_share_start_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The god rays follow the singing",
+                    body = "They stay off until the first word is sung, and go out when the sung word or line ends instead of resting on it.",
+                    titleRes = R.string.whats_new_196_rays_sung_title,
+                    bodyRes = R.string.whats_new_196_rays_sung_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "Lyric letters are no longer cut off",
+                    body = "A letter that moves past the text with the beat, the wave or the curve is drawn all the way to the screen's edge. Edge margin moves the text only.",
+                    titleRes = R.string.whats_new_196_letters_title,
+                    bodyRes = R.string.whats_new_196_letters_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "Low bands sit where their knob says",
+                    body = "In the mixer's EQs, Filter and the low cuts of reverb, delay and distortion, a band below a thousandth of the sample rate was moved up. A mix with a band that low now sounds as it was set.",
+                    titleRes = R.string.whats_new_196_low_bands_title,
+                    bodyRes = R.string.whats_new_196_low_bands_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LIBRARY,
+                    title = "Downloads show their covers again",
+                    body = "Songs on the Downloads screen had gone without a cover for a long time. They show their album's cover again.",
+                    titleRes = R.string.whats_new_196_download_covers_title,
+                    bodyRes = R.string.whats_new_196_download_covers_body,
                 ),
             ),
         ),
