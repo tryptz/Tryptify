@@ -678,7 +678,11 @@ words is a dip. A light that was out comes up on the new word; it does not
 sweep in from the one it went out on. The move is first seen in the draw
 phase (`LyricBandGlide.rect`), not in the coroutine that runs it: started
 from the coroutine alone, the new word was lit for a frame before the glide
-began. 0 switches and jumps, as it did. Not linked to the music: it is an
+began. 0 switches and jumps, as it did, and so does its switch turned off
+(`godRayFade`, on as shipped; the player and the Studio's sample both read
+`godRayFadeTimeMs`, never `godRayFadeMs` itself, so off is off in both). The
+slider is shown only while the switch is on and keeps its time while it is
+off. Not linked to the music: it is an
 animation's length. The Studio's sample is always being sung, so its light is
 never out, and its word hops glide. `LyricSungTest` holds the rule and the
 glide's arithmetic; the fade and the glide themselves were not seen on a

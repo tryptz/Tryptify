@@ -1983,6 +1983,8 @@
     <string name="fx_god_ray_tilt_desc">スマホを傾けたとき光がどれだけ振れるか。</string>
     <string name="fx_god_ray_transition">光の切り替え</string>
     <string name="fx_god_ray_transition_desc">単語や行が始まるときに光が点き、終わるときに消え、単語から次の単語へ移るまでの時間。0 にするとすぐに切り替わります。</string>
+    <string name="fx_god_ray_transition_time">切り替え時間</string>
+    <string name="fx_god_ray_transition_on_desc">光がゆっくり点いたり消えたりし、歌っている単語から次の単語へ滑らかに移ります。オフにすると、すぐに切り替わって移動します。</string>
     <string name="fx_god_ray_samples_value">%1$d サンプル</string>
     <string name="fx_god_ray_quality_desc">ピクセルあたりのサンプル数。光の筋のきれいさと GPU 負荷のバランス。</string>
     <string name="fx_motion_blur">モーションブラー</string>

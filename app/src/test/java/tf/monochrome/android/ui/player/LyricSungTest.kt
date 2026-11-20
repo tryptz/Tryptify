@@ -151,6 +151,48 @@ class LyricSungTest {
     }
 
     @Test
+    fun `the transition's switch is on as shipped, and off it is a light that switches`() {
+        assertTrue(LyricsFxSettings.DEFAULT.godRayFade)
+        assertEquals(250, LyricsFxSettings.DEFAULT.godRayFadeTimeMs)
+        LyricsFxSettings.PRESETS.forEach { (name, preset) -> assertTrue(name, preset.godRayFade) }
+        // Off runs no transition and keeps the time for the next time it is on.
+        val off = LyricsFxSettings.DEFAULT.copy(godRays = true, godRayFadeMs = 600f, godRayFade = false)
+        assertEquals(0, off.godRayFadeTimeMs)
+        assertEquals(600f, off.clamped().godRayFadeMs, 0f)
+        assertFalse(off.clamped().godRayFade)
+        assertEquals(600, off.copy(godRayFade = true).godRayFadeTimeMs)
+
+        // Saved and synced (lyrics_fx_json) with the rest of the look; a blob
+        // from before the switch reads as on, and a preset saved then still
+        // lights its chip.
+        val saved = Json { ignoreUnknownKeys = true }
+        val blob = saved.encodeToString(off)
+        assertTrue(blob, blob.contains("\"godRayFade\":false"))
+        assertEquals(off, saved.decodeFromString<LyricsFxSettings>(blob))
+        val before = saved.decodeFromString<LyricsFxSettings>("""{"godRays":true,"godRayFadeMs":600.0}""")
+        assertTrue(before.godRayFade)
+        assertEquals(600, before.godRayFadeTimeMs)
+        val oldPreset = saved.decodeFromString<LyricsFxPreset>(
+            """{"name":"Mine","settings":{"godRays":true,"godRayFadeMs":600.0}}""",
+        )
+        assertTrue(before.matchesPreset(oldPreset.settings))
+        // It is part of the look: a theme applied over it turns it on again,
+        // and still lights its own chip.
+        LyricsFxSettings.PRESETS.forEach { (name, preset) ->
+            val applied = preset.withPersonalFrom(off)
+            assertTrue(name, applied.godRayFade)
+            assertTrue(name, applied.matchesPreset(preset))
+        }
+        // A share code and a Theme Store pack carry it, published too.
+        val code = LyricsFxPreset.encode(LyricsFxPreset("Hard light", off))
+        assertFalse(LyricsFxPreset.decode(code)!!.settings.godRayFade)
+        val pack = ThemePackCodec.decode(ThemePackCodec.encode(ThemePack(name = "Hard light", lyrics = off)))!!
+        assertFalse(pack.lyrics!!.godRayFade)
+        assertFalse(ThemePackCodec.forSharing(ThemePack(name = "Hard light", lyrics = off)).lyrics!!.godRayFade)
+        assertTrue(ThemePackCodec.decode("""{"format":"tryptheme","lyrics":{"godRays":true}}""")!!.lyrics!!.godRayFade)
+    }
+
+    @Test
     fun `the transition is saved, synced and shared like any other part of the look`() {
         val mine = LyricsFxSettings.DEFAULT.copy(godRays = true, godRayFadeMs = 600f)
         // The saved blob, which is also what the settings sync sends to

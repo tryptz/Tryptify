@@ -2085,6 +2085,8 @@
     <string name="fx_god_ray_tilt_desc">À quel point incliner le téléphone fait pivoter la lumière.</string>
     <string name="fx_god_ray_transition">Transition de la lumière</string>
     <string name="fx_god_ray_transition_desc">Le temps que met la lumière à s’allumer quand un mot ou une ligne commence, à s’éteindre quand il se termine et à passer d’un mot au suivant. À 0, elle bascule d’un coup.</string>
+    <string name="fx_god_ray_transition_time">Durée de la transition</string>
+    <string name="fx_god_ray_transition_on_desc">La lumière s’allume et s’éteint en fondu et glisse d’un mot chanté au suivant. Désactivée, elle bascule et saute d’un coup.</string>
     <string name="fx_god_ray_samples_value">%1$d échantillons</string>
     <string name="fx_god_ray_quality_desc">Échantillons par pixel : des faisceaux plus nets contre le coût GPU.</string>
     <string name="fx_motion_blur">Flou de mouvement</string>

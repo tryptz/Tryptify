@@ -220,6 +220,7 @@ Personal fields are omitted here — never set them in a preset.
 | `godRaySway` | 0..1 | 0 | The light wanders on the Shadertoy's own path, `(sin(t), sin(0.913·t))`, out to half the window's short side at 1. Runs a frame clock. |
 | `godRayTilt` | 0..1.5 | 0 | How far tilting the phone swings the light. Device only; > 0 holds the gravity sensor. |
 | `godRayFadeMs` | 0..1000 | 250 | Light transition, ms: how long the light takes to come up when a word or line starts being sung, to go out when it is over, and to glide from one sung word or line to the next. 0 = switches and jumps. The light is out whenever nothing is sung (before the first line, between words when following the word, after a word-timed line's last word). Not music-linkable. |
+| `godRayFade` | bool | true | The Light transition's switch. Off, the light switches and jumps as at 0 ms and `godRayFadeMs` keeps its value. Code reads `godRayFadeTimeMs` (the time, or 0 when off), never `godRayFadeMs` directly. |
 
 ## Player Glass parameter reference
 

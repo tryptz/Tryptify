@@ -2034,6 +2034,8 @@
     <string name="fx_god_ray_tilt_desc">Telefonu eğmenin ışığı ne kadar savurduğu.</string>
     <string name="fx_god_ray_transition">Işık geçişi</string>
     <string name="fx_god_ray_transition_desc">Bir kelime veya satır başladığında ışığın yanması, bittiğinde sönmesi ve bir kelimeden diğerine geçmesi için gereken süre. 0’da anında değişir.</string>
+    <string name="fx_god_ray_transition_time">Geçiş süresi</string>
+    <string name="fx_god_ray_transition_on_desc">Işık yavaşça yanıp söner ve söylenen bir kelimeden diğerine kayar. Kapalıyken anında değişir ve atlar.</string>
     <string name="fx_god_ray_samples_value">%1$d örnek</string>
     <string name="fx_god_ray_quality_desc">Piksel başına örnek: daha temiz huzmeler ile GPU maliyeti arasında denge.</string>
     <string name="fx_motion_blur">Hareket bulanıklığı</string>

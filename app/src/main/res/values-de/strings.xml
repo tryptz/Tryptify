@@ -2034,6 +2034,8 @@
     <string name="fx_god_ray_tilt_desc">Wie weit das Neigen des Handys das Licht schwenkt.</string>
     <string name="fx_god_ray_transition">Lichtübergang</string>
     <string name="fx_god_ray_transition_desc">Wie lange das Licht braucht, um anzugehen, wenn ein Wort oder eine Zeile beginnt, auszugehen, wenn es endet, und von einem Wort zum nächsten zu wandern. Bei 0 schaltet es sofort um.</string>
+    <string name="fx_god_ray_transition_time">Übergangsdauer</string>
+    <string name="fx_god_ray_transition_on_desc">Das Licht blendet ein und aus und gleitet von einem gesungenen Wort zum nächsten. Ausgeschaltet schaltet und springt es sofort um.</string>
     <string name="fx_god_ray_samples_value">%1$d Samples</string>
     <string name="fx_god_ray_quality_desc">Samples pro Pixel: sauberere Bündel gegen GPU-Last.</string>
     <string name="fx_motion_blur">Bewegungsunschärfe</string>

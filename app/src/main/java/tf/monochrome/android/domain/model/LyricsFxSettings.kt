@@ -232,6 +232,12 @@ data class LyricsFxSettings(
      */
     val godRayFadeMs: Float = 250f,
     /**
+     * The transition's switch. Off, the light switches and jumps as at 0 ms,
+     * and [godRayFadeMs] keeps its value for when it is turned on again. On as
+     * shipped, so a look saved before the switch reads as it did.
+     */
+    val godRayFade: Boolean = true,
+    /**
      * Samples per pixel: 1/2/3/4 → 16/24/32/50, 50 being the Shadertoy's
      * own count. Higher = cleaner shafts, heavier
      * GPU. Device/perf setting, like [glassSampleRings] — preserved when a
@@ -272,6 +278,13 @@ data class LyricsFxSettings(
 
     /** The cover bloom's peak alpha: its own if pinned, else the lyric glow's. */
     val effectiveArtGlowBrightness: Float get() = artGlowBrightness ?: glowBrightness
+
+    /**
+     * The light's transition as it runs, in ms: [godRayFadeMs] while the
+     * switch ([godRayFade]) is on, 0 (a light that switches and jumps) while
+     * it is off.
+     */
+    val godRayFadeTimeMs: Int get() = if (godRayFade) godRayFadeMs.toInt() else 0
 
     /** Every field coerced into its slider range; non-finite values reset to default. */
     fun clamped(): LyricsFxSettings {
@@ -339,6 +352,7 @@ data class LyricsFxSettings(
             godRaySway = godRaySway.c(0f, 1f, d.godRaySway),
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
             godRayFadeMs = godRayFadeMs.c(0f, 1000f, d.godRayFadeMs),
+            godRayFade = godRayFade,
             godRayQuality = godRayQuality.coerceIn(1, 4),
             motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
             lineAlign = if (lineAlign == ALIGN_START) ALIGN_START else ALIGN_CENTER,

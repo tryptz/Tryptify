@@ -446,7 +446,7 @@ internal fun SyncedLyricsView(
     }
     // The transition (Lyrics FX › God rays): the fade in and out, and the
     // light's glide from one sung word or line to the next.
-    val lightFadeMs = if (fx.godRays) fx.godRayFadeMs.toInt() else 0
+    val lightFadeMs = if (fx.godRays) fx.godRayFadeTimeMs else 0
     val lightLevel = if (fx.godRays) {
         rememberLyricLightLevel(lit = remember(sungNow) { { sungNow.value.lit } }, fadeMs = lightFadeMs)
     } else {

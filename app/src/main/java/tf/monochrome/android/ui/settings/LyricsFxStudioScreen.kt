@@ -2442,7 +2442,7 @@ internal fun StudioPreview(
                 }
                 val wordGlide = tf.monochrome.android.ui.player.rememberLyricBandGlide(
                     place = sampleWordAt,
-                    glideMs = fx.godRayFadeMs.toInt(),
+                    glideMs = fx.godRayFadeTimeMs,
                 )
                 androidx.compose.runtime.SideEffect {
                     letters.lightLevel = { 1f }

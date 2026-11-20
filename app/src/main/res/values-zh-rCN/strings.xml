@@ -1983,6 +1983,8 @@
     <string name="fx_god_ray_tilt_desc">倾斜手机时光源摆动的幅度。</string>
     <string name="fx_god_ray_transition">光线过渡</string>
     <string name="fx_god_ray_transition_desc">光线在字词或歌词行开始时亮起、结束时熄灭，以及从一个字词移到下一个字词所用的时间。设为 0 则立即切换。</string>
+    <string name="fx_god_ray_transition_time">过渡时间</string>
+    <string name="fx_god_ray_transition_on_desc">光线渐亮、渐灭，并从一个演唱的字词滑向下一个。关闭后，光线会立即切换并跳转。</string>
     <string name="fx_god_ray_samples_value">%1$d 个采样</string>
     <string name="fx_god_ray_quality_desc">每像素采样数：光束更干净，但 GPU 开销更大。</string>
     <string name="fx_motion_blur">动态模糊</string>

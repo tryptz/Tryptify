@@ -2085,6 +2085,8 @@
     <string name="fx_god_ray_tilt_desc">Cuánto mueve la luz inclinar el teléfono.</string>
     <string name="fx_god_ray_transition">Transición de la luz</string>
     <string name="fx_god_ray_transition_desc">Cuánto tarda la luz en encenderse cuando empieza una palabra o una línea, en apagarse cuando termina y en pasar de una palabra a la siguiente. Con 0 cambia al instante.</string>
+    <string name="fx_god_ray_transition_time">Duración de la transición</string>
+    <string name="fx_god_ray_transition_on_desc">La luz se enciende y se apaga gradualmente y se desliza de una palabra cantada a la siguiente. Desactivada, cambia y salta al instante.</string>
     <string name="fx_god_ray_samples_value">%1$d muestras</string>
     <string name="fx_god_ray_quality_desc">Muestras por píxel: haces más limpios frente al coste de GPU.</string>
     <string name="fx_motion_blur">Desenfoque de movimiento</string>

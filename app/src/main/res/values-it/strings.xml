@@ -2085,6 +2085,8 @@
     <string name="fx_god_ray_tilt_desc">Di quanto l’inclinazione del telefono sposta la luce.</string>
     <string name="fx_god_ray_transition">Transizione della luce</string>
     <string name="fx_god_ray_transition_desc">Il tempo che la luce impiega ad accendersi quando inizia una parola o una riga, a spegnersi quando finisce e a passare da una parola alla successiva. A 0 cambia all’istante.</string>
+    <string name="fx_god_ray_transition_time">Durata della transizione</string>
+    <string name="fx_god_ray_transition_on_desc">La luce si accende e si spegne in dissolvenza e scorre da una parola cantata alla successiva. Se disattivata, cambia e salta all’istante.</string>
     <string name="fx_god_ray_samples_value">%1$d campioni</string>
     <string name="fx_god_ray_quality_desc">Campioni per pixel: fasci più nitidi al costo di un maggior carico sulla GPU.</string>
     <string name="fx_motion_blur">Sfocatura di movimento</string>
