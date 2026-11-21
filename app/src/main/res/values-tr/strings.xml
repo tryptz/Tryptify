@@ -892,6 +892,8 @@
     <string name="settings_active_stream">Etkin akış</string>
     <string name="settings_bypass_failed">Atlatma başarısız</string>
     <string name="settings_supported_rates">Desteklenen hızlar</string>
+    <string name="settings_dac_channels">Kanallar</string>
+    <string name="settings_dac_channels_value">%1$s kanal. Daha azı olan şarkı ilk kanallarda çalar.</string>
     <string name="settings_auto_download_liked_songs">Beğenilen şarkıları otomatik indir</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">Bundan sonra beğendiğiniz her şarkının bir kopyasını saklar. Daha önce beğendikleriniz olduğu gibi kalır. Bunu açmak asla toplu indirme başlatmaz.</string>
     <string name="settings_quality">Kalite</string>
@@ -3566,6 +3568,8 @@
     <string name="whats_new_196_share_file_body">TIDAL, Qobuz ya da Deezer\'dan gelen bir dosyada Bağlantıyı paylaş, o şarkıyı katalogda bulup paylaşır.</string>
     <string name="whats_new_196_share_start_title">Paylaşılan önizleme bulunduğun yerden başlar</string>
     <string name="whats_new_196_share_start_body">Çalan şarkıda Bağlantıyı paylaş, bulunduğun anı gönderir ve Discord\'un çaldığı önizleme oradan başlar.</string>
+    <string name="whats_new_196_dac_surround_title">Özel USB DAC üzerinden surround</string>
+    <string name="whats_new_196_dac_surround_body">Özel modda 5.1, 7.1 ya da Atmos hoparlör miksi çok kanallı USB arabiriminde veya AV alıcısında surround kalır. Cihazdan dar miks ilk kanallarda çalar. Ayarlar › Ses bulunan kanalları listeler.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

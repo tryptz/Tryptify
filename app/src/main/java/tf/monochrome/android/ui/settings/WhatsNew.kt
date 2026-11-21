@@ -269,6 +269,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = USB_DAC,
+                    title = "Surround through the exclusive USB DAC",
+                    body = "A 5.1, 7.1 or Atmos speaker mix now stays surround on a multichannel USB interface or AVR in exclusive mode. A mix narrower than the device plays in its first channels. Settings › Audio lists the channels found.",
+                    titleRes = R.string.whats_new_196_dac_surround_title,
+                    bodyRes = R.string.whats_new_196_dac_surround_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "System-wide AutoEQ from Quick Settings",
                     body = "A new tile turns System-wide AutoEQ on and off over any app, and shows the headphones it corrects for. Add it in Settings › Equalizer, under System-wide AutoEQ.",

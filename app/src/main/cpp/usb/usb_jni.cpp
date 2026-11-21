@@ -176,6 +176,19 @@ Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeLastErrorDetail(
 // dependency-free (no FindClass / NewObject for a packed struct) and
 // makes the marshalling unambiguous — the Kotlin side rebuilds typed
 // objects in one pass over groups of 4.
+// The channel widths of the open DAC's playback formats, lowest first
+// (LibusbUacDriver::playbackChannelCounts); empty when none is open.
+JNIEXPORT jintArray JNICALL
+Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeChannelCounts(
+    JNIEnv* env, jobject) {
+    const std::vector<int> widths = driver().playbackChannelCounts();
+    jintArray arr = env->NewIntArray(static_cast<jsize>(widths.size()));
+    if (!arr || widths.empty()) return arr;
+    std::vector<jint> packed(widths.begin(), widths.end());
+    env->SetIntArrayRegion(arr, 0, static_cast<jsize>(packed.size()), packed.data());
+    return arr;
+}
+
 JNIEXPORT jintArray JNICALL
 Java_tf_monochrome_android_audio_usb_LibusbUacDriver_nativeSupportedRates(
     JNIEnv* env, jobject) {

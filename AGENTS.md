@@ -275,6 +275,19 @@ that would keep Android busy. Paused, it waits as long as it takes;
 playing, 8 s, then it plays through Android until the next pause.
 `DacHandOffTest` holds the timing.
 
+A DAC wider than stereo (a 7.1 interface, an AVR's USB input) plays wide
+streams at their width. The driver starts only at a width one of the DAC's
+formats carries, and a refused start stops the stream that is running, so
+`LibusbAudioSink.engageForChain` never asks for one the DAC lacks: it reads
+the widths (`LibusbUacDriver.channelCounts`, from the descriptors at open)
+and fits a narrower stream into the first channels of the narrowest format
+that holds it (`DacChannelFit`, the chain's last stage, a copy and no more).
+Those widths also count as the output's for the speaker layout
+(`PlaybackService`, `outputChannelCount`): Android stops listing a DAC the
+app drives. No multichannel device has been tried; `uac_driver_test`'s stub
+7.1 interface and `DacChannelFitTest` hold it. DSD is decoded to PCM; there
+is no DoP and no native DSD.
+
 `DacClaimNote` puts a synced note in `noBackupFilesDir` before each such
 claim and removes it 15 s later. A note found at the next start is logged
 by `UsbExclusiveCtl`: an error if the phone restarted in between, a

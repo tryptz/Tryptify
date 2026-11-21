@@ -109,6 +109,9 @@ class SettingsViewModel @Inject constructor(
     val usbBypassFailure: StateFlow<tf.monochrome.android.audio.usb.StartFailure?> =
         usbExclusiveController.lastStartError
 
+    /** The channel widths of the DAC's playback formats, lowest first. */
+    val usbDacChannelCounts: StateFlow<List<Int>> = usbExclusiveController.channelCounts
+
     /** What rates the DAC actually supports, per its GET_RANGE table. */
     val usbBypassSupportedRates: StateFlow<List<tf.monochrome.android.audio.usb.ClockRateRange>> =
         usbExclusiveController.supportedRates

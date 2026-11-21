@@ -270,6 +270,15 @@ public:
     // bit-perfect or quietly being downsampled to 48k.
     std::vector<ClockRateRange> supportedRates() const;
 
+    // How many channels each of the DAC's playback formats carries, lowest
+    // first, each width once: {2} for a headphone DAC, {2, 8} for a 7.1
+    // interface. Read from the descriptors of the open device, with no
+    // transfer, so it is known before any stream; empty when nothing is
+    // open or nothing could be read. A stream wider or narrower than every
+    // one of them cannot start as it is (start() wants the width exactly):
+    // the sink fits it to one of these first.
+    std::vector<int> playbackChannelCounts() const;
+
 private:
     // Walks the active config, finds an Audio Streaming alt-setting
     // whose AS_GENERAL/AS_FORMAT_TYPE descriptors match the request,

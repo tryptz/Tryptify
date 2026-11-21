@@ -893,6 +893,8 @@
     <string name="settings_active_stream">Active stream</string>
     <string name="settings_bypass_failed">Bypass failed</string>
     <string name="settings_supported_rates">Supported rates</string>
+    <string name="settings_dac_channels">Channels</string>
+    <string name="settings_dac_channels_value">%1$s channels. A song with fewer plays in the first ones.</string>
     <string name="settings_auto_download_liked_songs">Auto-Download Liked Songs</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">Keep a copy of every song you like from now on. Songs you liked earlier are left alone. Turning this on never starts a bulk download.</string>
     <string name="settings_quality">Quality</string>
@@ -3569,6 +3571,8 @@
     <string name="whats_new_196_share_file_body">Share link on a file that came from TIDAL, Qobuz or Deezer finds that song in the catalogue and shares it.</string>
     <string name="whats_new_196_share_start_title">A shared preview starts where you are</string>
     <string name="whats_new_196_share_start_body">Share link on the song that is playing sends the moment you are at, and the preview Discord plays starts there.</string>
+    <string name="whats_new_196_dac_surround_title">Surround through the exclusive USB DAC</string>
+    <string name="whats_new_196_dac_surround_body">A 5.1, 7.1 or Atmos speaker mix now stays surround on a multichannel USB interface or AVR in exclusive mode. A mix narrower than the device plays in its first channels. Settings › Audio lists the channels found.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

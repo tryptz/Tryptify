@@ -930,6 +930,8 @@
     <string name="settings_active_stream">Flujo activo</string>
     <string name="settings_bypass_failed">Error al omitir</string>
     <string name="settings_supported_rates">Frecuencias compatibles</string>
+    <string name="settings_dac_channels">Canales</string>
+    <string name="settings_dac_channels_value">%1$s canales. Una canción con menos suena en los primeros.</string>
     <string name="settings_auto_download_liked_songs">Descargar automáticamente las canciones que te gustan</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">Guarda una copia de cada canción que te guste a partir de ahora. Las que ya te gustaban no se tocan. Activarlo nunca inicia una descarga masiva.</string>
     <string name="settings_quality">Calidad</string>
@@ -3644,6 +3646,8 @@
     <string name="whats_new_196_share_file_body">Compartir enlace en un archivo que vino de TIDAL, Qobuz o Deezer encuentra esa canción en el catálogo y la comparte.</string>
     <string name="whats_new_196_share_start_title">Una vista previa compartida empieza donde estás</string>
     <string name="whats_new_196_share_start_body">Compartir enlace en la canción que suena envía el momento en que estás, y la vista previa que reproduce Discord empieza ahí.</string>
+    <string name="whats_new_196_dac_surround_title">Sonido envolvente por el DAC USB exclusivo</string>
+    <string name="whats_new_196_dac_surround_body">En modo exclusivo, una mezcla 5.1, 7.1 o Atmos para altavoces sigue en envolvente en una interfaz USB multicanal o un receptor AV. Una mezcla más estrecha que el equipo suena en sus primeros canales. Ajustes › Audio muestra los canales encontrados.</string>
     <string name="atmos_room_builtin">Sala integrada</string>
     <string name="atmos_room_custom">Mi sala</string>
     <string name="atmos_rooms">Salas</string>

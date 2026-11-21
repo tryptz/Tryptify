@@ -854,6 +854,8 @@
     <string name="settings_active_stream">当前音频流</string>
     <string name="settings_bypass_failed">绕过失败</string>
     <string name="settings_supported_rates">支持的采样率</string>
+    <string name="settings_dac_channels">声道</string>
+    <string name="settings_dac_channels_value">%1$s 声道。声道更少的歌曲在前几个声道播放。</string>
     <string name="settings_auto_download_liked_songs">自动下载喜欢的歌曲</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">从现在起为你喜欢的每首歌保存一份副本。之前喜欢的歌曲不受影响。开启此项不会触发批量下载。</string>
     <string name="settings_quality">音质</string>
@@ -3488,6 +3490,8 @@
     <string name="whats_new_196_share_file_body">对来自 TIDAL、Qobuz 或 Deezer 的文件使用“分享链接”，会在曲库中找到这首歌并分享它。</string>
     <string name="whats_new_196_share_start_title">分享的试听从你所在的位置开始</string>
     <string name="whats_new_196_share_start_body">对正在播放的歌曲使用“分享链接”会附上你当前所在的时间点，Discord 播放的试听就从那里开始。</string>
+    <string name="whats_new_196_dac_surround_title">通过独占 USB DAC 播放环绕声</string>
+    <string name="whats_new_196_dac_surround_body">在独占模式下，5.1、7.1 或 Atmos 扬声器混音现在可在多声道 USB 接口或功放上保持环绕声。声道少于设备的混音会在其前几个声道播放。设置 › 音频会列出检测到的声道。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

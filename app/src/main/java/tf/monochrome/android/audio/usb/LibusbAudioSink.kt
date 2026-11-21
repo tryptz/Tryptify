@@ -85,7 +85,9 @@ class LibusbAudioSink(
 
     // Last, after the speed stages: off unless the DAC refused the song's rate.
     private val rateConverter = DacRateConverter()
-    private val chain = AudioProcessorChain(processors + rateConverter)
+    // After it: off unless the DAC has no format of the song's width.
+    private val channelFit = DacChannelFit()
+    private val chain = AudioProcessorChain(processors + rateConverter + channelFit)
 
     /**
      * Song rates the claimed DAC refused, and the rate it was run at instead
@@ -507,6 +509,7 @@ class LibusbAudioSink(
         }
 
         val input = AudioProcessor.AudioFormat(rate, channels, inputFormat.pcmEncoding)
+        channelFit.targetChannels = 0
         val chainOut = configureChain(input)
         val out = if (chainOut != AudioProcessor.AudioFormat.NOT_SET) chainOut else input
 
@@ -578,6 +581,39 @@ class LibusbAudioSink(
      * advertised, and the chain, configured again for [input], converts to it.
      */
     private fun engageForChain(
+        input: AudioProcessor.AudioFormat,
+        out: AudioProcessor.AudioFormat,
+    ): AudioProcessor.AudioFormat? {
+        // A width the DAC has no format of is never asked for: start() would
+        // refuse it, and a refused start stops the stream that is running (a
+        // gap at every track). It goes out at the narrowest width that holds
+        // it, the rest silence ([DacChannelFit]); with none that wide, it is
+        // the delegate's.
+        val widths = driver.channelCounts.value
+        if (widths.isEmpty() || out.channelCount in widths) return engageAtWidth(input, out)
+        val width = DacChannelFit.pickWidth(out.channelCount, widths)
+        if (width == null) {
+            Log.i(TAG, "DAC has no format of ${out.channelCount} channels or more (it has $widths)")
+            return null
+        }
+        channelFit.targetChannels = width
+        val fitted = runCatching { configureChain(input) }.getOrNull()
+        if (fitted == null || fitted.channelCount != width) {
+            channelFit.targetChannels = 0
+            configureChain(input)
+            return null
+        }
+        engageAtWidth(input, fitted)?.let {
+            Log.i(TAG, "DAC has no ${out.channelCount}-channel format: playing in the first ${out.channelCount} of $width")
+            return it
+        }
+        channelFit.targetChannels = 0
+        configureChain(input)
+        return null
+    }
+
+    /** [engageForChain] for a chain output whose width the DAC has a format of. */
+    private fun engageAtWidth(
         input: AudioProcessor.AudioFormat,
         out: AudioProcessor.AudioFormat,
     ): AudioProcessor.AudioFormat? {

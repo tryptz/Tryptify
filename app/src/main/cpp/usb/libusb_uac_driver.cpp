@@ -216,6 +216,81 @@ std::string LibusbUacDriver::lastErrorDetail() const {
     return lastErrorDetail_;
 }
 
+std::vector<int> LibusbUacDriver::playbackChannelCounts() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<int> widths;
+    if (device_ == nullptr) return widths;
+    libusb_device* dev = libusb_get_device(device_);
+    libusb_config_descriptor* config = nullptr;
+    int rc = libusb_get_active_config_descriptor(dev, &config);
+    if (rc != LIBUSB_SUCCESS) rc = libusb_get_config_descriptor(dev, 0, &config);
+    if (rc != LIBUSB_SUCCESS || !config) return widths;
+
+    // The version decides where a format's channel count is written, as in
+    // selectAltSetting: UAC1 in FORMAT_TYPE_I, UAC2 in AS_GENERAL, and a
+    // UAC3 BADD configuration nowhere but its endpoint's packet size.
+    uint16_t uacVersion = 0x0200;
+    uint8_t controlProtocol = 0;
+    bool foundControl = false;
+    for (uint8_t i = 0; i < config->bNumInterfaces && !foundControl; ++i) {
+        const libusb_interface& iface = config->interface[i];
+        for (int a = 0; a < iface.num_altsetting; ++a) {
+            const libusb_interface_descriptor& alt = iface.altsetting[a];
+            if (alt.bInterfaceClass != USB_CLASS_AUDIO ||
+                alt.bInterfaceSubClass != SUBCLASS_AUDIOCONTROL) continue;
+            controlProtocol = alt.bInterfaceProtocol;
+            walkExtra(alt.extra, alt.extra_length, [&](const uint8_t* p, int len) {
+                if (isClassDescriptor(p, len, CS_INTERFACE, AC_HEADER) && len >= 5) {
+                    uacVersion = static_cast<uint16_t>(p[3]) | (static_cast<uint16_t>(p[4]) << 8);
+                }
+                return false;
+            });
+            foundControl = true;
+            break;
+        }
+    }
+    const bool uac3 = controlProtocol == IP_VERSION_03_00;
+    if (foundControl) {
+        for (uint8_t i = 0; i < config->bNumInterfaces; ++i) {
+            const libusb_interface& iface = config->interface[i];
+            for (int a = 0; a < iface.num_altsetting; ++a) {
+                const libusb_interface_descriptor& alt = iface.altsetting[a];
+                if (alt.bInterfaceClass != USB_CLASS_AUDIO ||
+                    alt.bInterfaceSubClass != SUBCLASS_AUDIOSTREAM) continue;
+                if (alt.bAlternateSetting == 0) continue;   // alt 0 = idle
+                // Playback only: an isochronous endpoint going out.
+                const libusb_endpoint_descriptor* out = nullptr;
+                for (int e = 0; e < alt.bNumEndpoints; ++e) {
+                    const libusb_endpoint_descriptor& ep = alt.endpoint[e];
+                    if ((ep.bmAttributes & 0x03) == LIBUSB_TRANSFER_TYPE_ISOCHRONOUS &&
+                        (ep.bEndpointAddress & 0x80) == 0) { out = &ep; break; }
+                }
+                if (out == nullptr) continue;
+                int channels = 0;
+                if (uac3) {
+                    int subslot = 0;
+                    if (!baddFormatFromMaxPacket(out->wMaxPacketSize, &channels, &subslot)) channels = 0;
+                } else {
+                    walkExtra(alt.extra, alt.extra_length, [&](const uint8_t* p, int len) {
+                        if (uacVersion >= 0x0200) {
+                            if (isClassDescriptor(p, len, CS_INTERFACE, AS_GENERAL) && len >= 16) channels = p[10];
+                        } else if (isClassDescriptor(p, len, CS_INTERFACE, AS_FORMAT_TYPE) &&
+                                   len >= 7 && p[3] == FORMAT_TYPE_I) {
+                            channels = p[4];
+                        }
+                        return false;
+                    });
+                }
+                if (channels <= 0) continue;
+                if (std::find(widths.begin(), widths.end(), channels) == widths.end()) widths.push_back(channels);
+            }
+        }
+    }
+    libusb_free_config_descriptor(config);
+    std::sort(widths.begin(), widths.end());
+    return widths;
+}
+
 std::vector<ClockRateRange> LibusbUacDriver::supportedRates() const {
     std::lock_guard<std::mutex> lock(errorMutex_);
     return supportedRates_;

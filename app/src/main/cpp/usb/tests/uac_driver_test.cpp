@@ -292,8 +292,8 @@ Bytes uac2Control() {
     };
 }
 
-Bytes uac2Stream(uint8_t subslot, uint8_t bits) {
-    Bytes general = {16, 0x24, 0x01, 1, 0, 1, 1, 0, 0, 0, 2, 3, 0, 0, 0, 0};
+Bytes uac2Stream(uint8_t subslot, uint8_t bits, uint8_t channels = 2) {
+    Bytes general = {16, 0x24, 0x01, 1, 0, 1, 1, 0, 0, 0, channels, 3, 0, 0, 0, 0};
     return cat(general, {6, 0x24, 0x02, 1, subslot, bits});
 }
 
@@ -351,6 +351,23 @@ libusb_config_descriptor* asyncHs(uint16_t dataMps, uint8_t dataInterval = 1,
     });
 }
 
+// A 7.1 interface (or an AVR's USB input): a high-speed async UAC2 device
+// with a stereo format and an eight-channel one, both 24-bit in 3-byte
+// subslots, and a microphone that is no playback width. At 48 kHz eight
+// channels are 144 bytes a microframe, 168 with the frame of headroom.
+libusb_config_descriptor* surroundHs() {
+    return config(iad(0x00, 0x20), {
+        {alt(0, 0, 1, 1, 0x20, uac2Control(), {})},
+        {alt(1, 0, 1, 2, 0x20, {}, {}),
+         alt(1, 1, 1, 2, 0x20, uac2Stream(3, 24),
+             {ep(0x01, kIsoAsyncOut, 42, 1), ep(0x81, kIsoFeedbackIn, 4, 4)}),
+         alt(1, 2, 1, 2, 0x20, uac2Stream(3, 24, 8),
+             {ep(0x01, kIsoAsyncOut, 168, 1), ep(0x81, kIsoFeedbackIn, 4, 4)})},
+        {alt(2, 0, 1, 2, 0x20, {}, {}),
+         alt(2, 1, 1, 2, 0x20, uac2Stream(2, 16, 1), {ep(0x82, 0x05, 0x0060, 1)})},
+    });
+}
+
 // --- driving the pump -------------------------------------------------------
 
 struct Pumped {
@@ -403,14 +420,14 @@ struct Session {
     bool started = false;
 
     // Writes [prefill] frames once started; -1 is 200 ms.
-    Session(libusb_config_descriptor* cfg, int speed, int rate, int bits, int prefill = -1) {
+    Session(libusb_config_descriptor* cfg, int speed, int rate, int bits, int prefill = -1, int channels = 2) {
         gConfig = cfg;
         gSpeed = speed;
         gPending.clear();
         gClockSetCount = 0;
         gLastAlt = -1;
         driver.open(3);
-        started = driver.start(rate, bits, 2);
+        started = driver.start(rate, bits, channels);
         if (started) write(prefill < 0 ? rate / 5 : prefill);
     }
     ~Session() { driver.close(); }
@@ -850,6 +867,54 @@ int main() {
         done.store(true);
         writer.join();
         check(allStarted, "start and stop under a writer on another thread");
+    }
+
+    std::printf("-- a 7.1 interface: the widths it offers, and eight channels played\n");
+    {
+        resetUnits({{2, 0}});
+        LibusbUacDriver closed;
+        check(closed.playbackChannelCounts().empty(), "with no DAC open there are no widths");
+
+        Session stereo(surroundHs(), LIBUSB_SPEED_HIGH, 48000, 24);
+        const std::vector<int> widths = stereo.driver.playbackChannelCounts();
+        check(widths == std::vector<int>({2, 8}), "its playback widths are 2 and 8: the microphone's one channel is not one");
+        check(stereo.started && stereo.driver.currentFormat().channels == 2 && gLastAlt == 1,
+              "a stereo song takes the stereo format");
+    }
+    {
+        resetUnits({{2, 0}});
+        Session wide(surroundHs(), LIBUSB_SPEED_HIGH, 48000, 24, -1, 8);
+        const auto& f = wide.driver.currentFormat();
+        check(wide.started && f.channels == 8 && f.bytesPerSample == 3 && gLastAlt == 2,
+              "a 7.1 stream takes the eight-channel format");
+        check(wide.stride() == 24, "a frame is eight 3-byte samples");
+        // 48 kHz on a high-speed bus is 6 frames a microframe: 144 bytes,
+        // under the endpoint's 168.
+        size_t largest = 0;
+        for (libusb_transfer* t : gPending) {
+            if (t->endpoint & 0x80) continue;
+            for (int k = 0; k < t->num_iso_packets; ++k) {
+                largest = std::max<size_t>(largest, t->iso_packet_desc[k].length);
+            }
+        }
+        check(largest > 0 && largest <= 168 && largest % 24 == 0,
+              "its packets are whole eight-channel frames within the endpoint's size");
+        check(wide.write(480) == 480, "and it takes eight-channel audio");
+    }
+    {
+        resetUnits({{2, 0}});
+        Session six(surroundHs(), LIBUSB_SPEED_HIGH, 48000, 24, -1, 6);
+        check(!six.started, "a width it has no format for (5.1) does not start: the sink fits it to eight first");
+        check(six.driver.playbackChannelCounts() == std::vector<int>({2, 8}), "and the widths are still told");
+    }
+    {
+        resetUnits({{2, 0}});
+        Session apple(appleBadd(), LIBUSB_SPEED_FULL, 48000, 24);
+        const std::vector<int> w = apple.driver.playbackChannelCounts();
+        check(!w.empty() && w.back() == 2, "Apple's adapter (BADD) is stereo at most");
+        resetUnits({{2, 0}});
+        Session old(uac1Dac(), LIBUSB_SPEED_FULL, 48000, 16);
+        check(old.driver.playbackChannelCounts() == std::vector<int>({2}), "a UAC1 DAC's width is read from its format");
     }
 
     if (failures) {

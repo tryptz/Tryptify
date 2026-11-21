@@ -83,6 +83,9 @@ class UsbExclusiveController @Inject constructor(
      *  Null when bypass is succeeding or hasn't been attempted. */
     val lastStartError: StateFlow<StartFailure?> = driver.lastStartError
 
+    /** The channel widths of the DAC's playback formats, lowest first. */
+    val channelCounts: StateFlow<List<Int>> = driver.channelCounts
+
     /** GET_RANGE inventory — what rates the DAC actually supports. */
     val supportedRates: StateFlow<List<ClockRateRange>> = driver.supportedRates
 

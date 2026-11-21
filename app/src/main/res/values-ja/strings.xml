@@ -854,6 +854,8 @@
     <string name="settings_active_stream">アクティブなストリーム</string>
     <string name="settings_bypass_failed">バイパスに失敗しました</string>
     <string name="settings_supported_rates">対応サンプルレート</string>
+    <string name="settings_dac_channels">チャンネル</string>
+    <string name="settings_dac_channels_value">%1$s チャンネル。これより少ない曲は先頭のチャンネルで再生されます。</string>
     <string name="settings_auto_download_liked_songs">お気に入りの曲を自動ダウンロード</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">これからお気に入りにした曲をすべて保存します。以前お気に入りにした曲はそのままです。オンにしても一括ダウンロードは始まりません。</string>
     <string name="settings_quality">音質</string>
@@ -3488,6 +3490,8 @@
     <string name="whats_new_196_share_file_body">TIDAL、Qobuz、Deezer から入手したファイルで「リンクを共有」を使うと、カタログからその曲を見つけて共有します。</string>
     <string name="whats_new_196_share_start_title">共有プレビューが今の位置から始まる</string>
     <string name="whats_new_196_share_start_body">再生中の曲で「リンクを共有」を使うと今の位置が送られ、Discord で流れるプレビューがそこから始まります。</string>
+    <string name="whats_new_196_dac_surround_title">排他 USB DAC でサラウンド再生</string>
+    <string name="whats_new_196_dac_surround_body">排他モードで、5.1・7.1・Atmos のスピーカーミックスがマルチチャンネル USB インターフェースや AV アンプでもサラウンドのまま再生されます。機器より狭いミックスは先頭のチャンネルで鳴ります。設定 › オーディオに検出したチャンネルが表示されます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

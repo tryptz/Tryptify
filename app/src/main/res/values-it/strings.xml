@@ -930,6 +930,8 @@
     <string name="settings_active_stream">Flusso attivo</string>
     <string name="settings_bypass_failed">Bypass non riuscito</string>
     <string name="settings_supported_rates">Frequenze supportate</string>
+    <string name="settings_dac_channels">Canali</string>
+    <string name="settings_dac_channels_value">%1$s canali. Un brano che ne ha di meno suona sui primi.</string>
     <string name="settings_auto_download_liked_songs">Scarica automaticamente i brani con Mi piace</string>
     <string name="settings_keep_a_copy_of_every_song_you_like_from_now_on">Conserva una copia di ogni brano a cui metti Mi piace d\'ora in poi. I brani piaciuti in precedenza non vengono modificati. L\'attivazione non avvia mai un download di massa.</string>
     <string name="settings_quality">Qualità</string>
@@ -3644,6 +3646,8 @@
     <string name="whats_new_196_share_file_body">Condividi link su un file arrivato da TIDAL, Qobuz o Deezer trova quel brano nel catalogo e lo condivide.</string>
     <string name="whats_new_196_share_start_title">Un’anteprima condivisa parte da dove sei</string>
     <string name="whats_new_196_share_start_body">Condividi link sul brano in riproduzione invia il momento in cui sei, e l’anteprima riprodotta da Discord parte da lì.</string>
+    <string name="whats_new_196_dac_surround_title">Surround dal DAC USB esclusivo</string>
+    <string name="whats_new_196_dac_surround_body">In modalità esclusiva, un mix 5.1, 7.1 o Atmos per altoparlanti resta surround su un’interfaccia USB multicanale o un sintoamplificatore AV. Un mix più stretto del dispositivo suona sui primi canali. Impostazioni › Audio elenca i canali trovati.</string>
     <string name="atmos_room_builtin">Stanza integrata</string>
     <string name="atmos_room_custom">La mia stanza</string>
     <string name="atmos_rooms">Stanze</string>

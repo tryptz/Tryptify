@@ -2235,6 +2235,7 @@ private fun OutputToggles(viewModel: SettingsViewModel) {
     val diagnostics by viewModel.usbBypassDiagnostics.collectAsStateWithLifecycle()
     val failure by viewModel.usbBypassFailure.collectAsStateWithLifecycle()
     val supportedRates by viewModel.usbBypassSupportedRates.collectAsStateWithLifecycle()
+    val dacChannelCounts by viewModel.usbDacChannelCounts.collectAsStateWithLifecycle()
     val dacInfo by viewModel.usbDacInfo.collectAsStateWithLifecycle()
     SettingSwitchItem(
         title = stringResource(R.string.settings_exclusive_usb_dac_bypass_android_audio),
@@ -2251,11 +2252,13 @@ private fun OutputToggles(viewModel: SettingsViewModel) {
     // actually name. Hidden the rest of the time so the toggle row
     // stays clean.
     if (exclusiveEnabled &&
-        (diagnostics != null || failure != null || supportedRates.isNotEmpty() || dacInfo != null)) {
+        (diagnostics != null || failure != null || supportedRates.isNotEmpty() || dacInfo != null ||
+            (dacChannelCounts.maxOrNull() ?: 0) > 2)) {
         BypassDiagnosticsCard(
             diagnostics = diagnostics,
             failure = failure,
             supportedRates = supportedRates,
+            channelCounts = dacChannelCounts,
             dacInfo = dacInfo,
         )
     }
@@ -2344,6 +2347,7 @@ private fun BypassDiagnosticsCard(
     diagnostics: tf.monochrome.android.audio.usb.BypassDiagnostics?,
     failure: tf.monochrome.android.audio.usb.StartFailure?,
     supportedRates: List<tf.monochrome.android.audio.usb.ClockRateRange>,
+    channelCounts: List<Int> = emptyList(),
     dacInfo: tf.monochrome.android.audio.usb.DacInfo? = null,
 ) {
     Card(
@@ -2496,6 +2500,28 @@ private fun BypassDiagnosticsCard(
                         .map { it.label() }
                         .distinct()
                         .joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            // Only for a DAC wider than stereo: a headphone DAC's "2" tells
+            // nobody anything, and a 7.1 interface's owner wants to see that
+            // its eight channels were found.
+            if ((channelCounts.maxOrNull() ?: 0) > 2) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.settings_dac_channels),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(
+                        R.string.settings_dac_channels_value,
+                        channelCounts.joinToString(" · "),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -103,6 +103,15 @@ class LibusbUacDriver @Inject constructor(
     private val _supportedRates = MutableStateFlow<List<ClockRateRange>>(emptyList())
     val supportedRates: StateFlow<List<ClockRateRange>> = _supportedRates.asStateFlow()
 
+    /**
+     * How many channels each of the open DAC's playback formats carries,
+     * lowest first: [2] for a headphone DAC, [2, 8] for a 7.1 interface.
+     * Read from its descriptors when it is opened, before any stream; empty
+     * with no DAC open or when nothing could be read.
+     */
+    private val _channelCounts = MutableStateFlow<List<Int>>(emptyList())
+    val channelCounts: StateFlow<List<Int>> = _channelCounts.asStateFlow()
+
     /** Device the driver currently owns, or null. */
     private val _device = MutableStateFlow<UsbDevice?>(null)
     val device: StateFlow<UsbDevice?> = _device.asStateFlow()
@@ -214,6 +223,7 @@ class LibusbUacDriver @Inject constructor(
         connection = conn
         _device.value = device
         _dacInfo.value = DacInfo.fromDevice(device)
+        _channelCounts.value = runCatching { nativeChannelCounts()?.toList() }.getOrNull().orEmpty()
         _isOpen.value = true
         return true
     }
@@ -226,6 +236,7 @@ class LibusbUacDriver @Inject constructor(
         lease.clear()
         _device.value = null
         _dacInfo.value = null
+        _channelCounts.value = emptyList()
         _isOpen.value = false
         // Without this, after a USB DAC unplug isStreaming stayed at
         // its last value (often true). MainActivity's volume-key
@@ -469,6 +480,7 @@ class LibusbUacDriver @Inject constructor(
     /** Flat (clockId, minHz, maxHz, resHz) quads from the device's GET_RANGE,
      *  or null/empty when no clock-entity rate inventory is available. */
     private external fun nativeSupportedRates(): IntArray?
+    private external fun nativeChannelCounts(): IntArray?
     /** Packed long[] of negotiated stream parameters; null when not streaming.
      *  See [BypassDiagnostics.fromLongArray] for the field layout. */
     private external fun nativeActiveStream(): LongArray?

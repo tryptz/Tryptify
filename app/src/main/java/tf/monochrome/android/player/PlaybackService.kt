@@ -1409,10 +1409,15 @@ class PlaybackService : MediaSessionService() {
         val audioManager = getSystemService(android.media.AudioManager::class.java) ?: return
         fun refresh() {
             val outputs = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS)
-            val channels = outputs
-                .filter { it.type in EXTERNAL_OUTPUT_TYPES }
-                .mapNotNull { it.channelCounts.maxOrNull() }
-                .maxOrNull()
+            // A DAC held in exclusive mode counts by its own formats: Android
+            // stops listing it while the app drives it (its driver is taken
+            // off the device), and a 7.1 stream would be folded to stereo
+            // the moment it started.
+            val exclusive = libusbDriver.channelCounts.value.maxOrNull()
+            val channels = (
+                outputs.filter { it.type in EXTERNAL_OUTPUT_TYPES }.mapNotNull { it.channelCounts.maxOrNull() } +
+                    listOfNotNull(exclusive)
+                ).maxOrNull()
             outputChannelCount.value = channels
             atmosAudioProcessor.deviceChannelCount = channels
             // Headphones, for the binaural render's automatic setting: a
@@ -1421,7 +1426,7 @@ class PlaybackService : MediaSessionService() {
             val headphones = outputs.any {
                 it.type in HEADPHONE_TYPES ||
                     (it.type == android.media.AudioDeviceInfo.TYPE_USB_DEVICE && (it.channelCounts.maxOrNull() ?: 2) <= 2)
-            }
+            } || (exclusive != null && exclusive <= 2)
             if (headphonesConnected.value != headphones || !outputsLogged) {
                 outputsLogged = true
                 android.util.Log.i(
@@ -1442,6 +1447,8 @@ class PlaybackService : MediaSessionService() {
         // Called back on the main looper; fires once immediately with the current set.
         audioManager.registerAudioDeviceCallback(callback, android.os.Handler(android.os.Looper.getMainLooper()))
         refresh()
+        // And again when the exclusive DAC is opened or let go.
+        serviceScope.launch { libusbDriver.channelCounts.collect { refresh() } }
     }
 
     override fun onDestroy() {
