@@ -379,6 +379,42 @@ class FxVisualMathTest {
     }
 
     @Test
+    fun `My room's knobs are the renderer's room, and its decay the render's reckoning`() {
+        val defs = tf.monochrome.android.ui.mixer.getParamDefs(tf.monochrome.android.audio.dsp.SnapinType.BINAURAL_ROOM)
+        assertEquals(listOf("Room", "Binaural", "Angle", "Output", "My room", "Width", "Depth", "Height", "Damping"), defs.map { it.name })
+        val room = tf.monochrome.android.domain.model.CustomRoom
+        val shipped = tf.monochrome.android.domain.model.CustomRoom()
+        // The same limits and the same room to start from as My room's page.
+        for (i in 5..6) {
+            assertEquals(room.MIN_SIDE, defs[i].min, 0f)
+            assertEquals(room.MAX_SIDE, defs[i].max, 0f)
+        }
+        assertEquals(room.MIN_HEIGHT, defs[7].min, 0f)
+        assertEquals(room.MAX_HEIGHT, defs[7].max, 0f)
+        assertEquals(room.MIN_DAMPING * 100f, defs[8].min, 1e-4f)
+        assertEquals(room.MAX_DAMPING * 100f, defs[8].max, 1e-4f)
+        assertEquals(listOf(shipped.width, shipped.depth, shipped.height, shipped.damping * 100f), (5..8).map { defs[it].default })
+        // Off as shipped, and a switch: it cannot be linked to the music.
+        assertEquals(0f, defs[4].default, 0f)
+        assertEquals(1, defs[4].steps)
+        // box_room.h's own number for that room (measured_room_test: 0.38 s).
+        assertEquals(0.38f, M.roomDecaySeconds(5f, 6f, 2.7f, 0.25f), 0.02f)
+        // Bigger rings longer, damped rings shorter.
+        assertTrue(M.roomDecaySeconds(20f, 28f, 9f, 0.25f) > 2f * M.roomDecaySeconds(5f, 6f, 2.7f, 0.25f))
+        assertTrue(M.roomDecaySeconds(5f, 6f, 2.7f, 0.7f) < 0.5f * M.roomDecaySeconds(5f, 6f, 2.7f, 0.25f))
+        // Every preset that turns My room on gives it a whole room, in range.
+        tf.monochrome.android.ui.mixer.fxchain.FxPresets.forType(tf.monochrome.android.audio.dsp.SnapinType.BINAURAL_ROOM)
+            .filter { (it.values[4] ?: 0f) >= 0.5f }
+            .also { assertTrue(it.size >= 2) }
+            .forEach { preset ->
+                for (i in 5..8) {
+                    val v = preset.values[i]
+                    assertTrue("${preset.name} sets knob $i", v != null && v in defs[i].min..defs[i].max)
+                }
+            }
+    }
+
+    @Test
     fun `a silent bus lights no speaker`() {
         assertEquals(0f, dbToLevel(-60f), 0f)
         assertEquals(1f, dbToLevel(0f), 1e-6f)

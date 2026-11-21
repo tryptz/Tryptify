@@ -393,6 +393,19 @@ internal object FxVisualMath {
     }
 
     /**
+     * How long a box of this size (metres) whose walls take up [absorption]
+     * of the sound (0..1) takes to fall 60 dB, in seconds: Eyring's formula,
+     * mirroring `box_decay_seconds` in the renderer's `box_room.h`, which is
+     * what the Binaural Room's My room is worked out by.
+     */
+    fun roomDecaySeconds(width: Float, depth: Float, height: Float, absorption: Float): Float {
+        val a = absorption.coerceIn(0.03f, 0.9f)
+        val volume = width.toDouble() * depth * height
+        val surface = 2.0 * (width.toDouble() * depth + width.toDouble() * height + depth.toDouble() * height)
+        return (0.161 * volume / (-surface * kotlin.math.ln(1.0 - a))).toFloat()
+    }
+
+    /**
      * Misstortion transfer curve, mirroring `snapins/misstortion.h`:
      * hard clip → atan soft clip into the asymmetric window [-1+sym, sym] →
      * symmetry multiply (negative half × (1−sym), positive half × sym).

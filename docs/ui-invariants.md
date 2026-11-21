@@ -3620,10 +3620,33 @@ into the mixer.
   `binaural_room_test` holds where each channel stands, the room against the
   renderer's sample for sample, every rate, the silent lanes, the mix knob,
   bypass and the block with a change in flight.
-- **What it does not have yet:** the listener's own HRTF and a room from
-  "Size and shape" or a measurement. Both reach the renderer as a prepared
-  table, and the mixer has no way to be handed one; the effect plays the
-  built-in set in the built-in room.
+- **My room: a size and a damping** (the owner asked, 2026-11-21). The knob
+  My room (a switch, off as shipped) plays a box of the Width, Depth and
+  Height set, with walls that take up the Damping set, in place of the
+  built-in room: the renderer page's My room, by the same code
+  (`box_room.h`, the room's own convolver), with its limits and its room to
+  start from (`CustomRoom`). Room is then that room's level.
+  - **A room is never worked out where a knob is set.** `setParameter` runs
+    under the engine's lock with the music waiting, and a large bare room
+    takes about a second on a phone. One thread for every instance
+    (`binaural_room_detail::Builder`) works it out and hands it over; until
+    then the room before is heard. It follows only the latest setting, keeps
+    the last three rooms (a wide stream's lanes all ask for the same one),
+    and an effect deleted or re-prepared meanwhile is let go of
+    (`Target::install`). Never call `set_room_response` or `box_response`
+    from `setParameter`, `prepare` or `process`.
+  - The response is 48 kHz and the convolver plays it a sample a sample at
+    the room's rate, so it is resampled to last as long at 44.1 kHz.
+  - The picture is that room: its shape (`RoomShape.of`) and its decay
+    (`FxVisualMath.roomDecaySeconds`, Eyring as `box_decay_seconds`). It has
+    no rounded corners and no saved rooms here; two of the five presets
+    (Control Room, Concert Hall) are rooms.
+  - Width, Depth, Height and Damping can be linked to the music like any
+    knob; a link moves the room about once a second at best, which is the
+    builder's pace, not a fault.
+- **What it does not have yet:** the listener's own HRTF and a measured
+  room. Both reach the renderer as a prepared table, and the mixer has no
+  way to be handed one.
 
 None of it had been heard on a phone when it was written.
 

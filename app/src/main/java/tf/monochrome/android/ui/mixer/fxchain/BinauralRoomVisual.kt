@@ -11,6 +11,7 @@ import tf.monochrome.android.audio.dsp.BinauralRoomNative
 import tf.monochrome.android.audio.dsp.ChannelLayout
 import tf.monochrome.android.audio.dsp.model.FxTapFrame
 import tf.monochrome.android.audio.dsp.model.PluginInstance
+import tf.monochrome.android.domain.model.CustomRoom
 import tf.monochrome.android.domain.model.RoomShape
 import tf.monochrome.android.ui.mixer.getParamDefs
 import tf.monochrome.android.ui.settings.AtmosRoom3d
@@ -36,6 +37,10 @@ import kotlin.math.pow
  * ([BinauralRoomNative.roleSpeakers]). They all light as bright as the
  * master's level, the one reading there is at that slot, not each as loud as
  * its own channel.
+ *
+ * With My room on, the room drawn is that one: its width, depth and height,
+ * and the time it takes to die away ([FxVisualMath.roomDecaySeconds], the
+ * render's own reckoning).
  */
 @Composable
 internal fun BinauralRoomVisual(
@@ -75,13 +80,21 @@ internal fun BinauralRoomVisual(
             for (i in out.indices) out[i] = out[i].coerceAtMost(1f)
         }
     }
+    val myRoom = value(MY_ROOM) >= 0.5f
+    val width = value(WIDTH)
+    val depth = value(DEPTH)
+    val height = value(HEIGHT)
+    val damping = value(DAMPING)
+    val shape = remember(myRoom, width, depth, height) {
+        if (myRoom) RoomShape.of(CustomRoom(width = width, depth = depth, height = height)) else RoomShape.BUILT_IN
+    }
     AtmosRoom3d(
         layout = layout,
         speakers = speakers,
         objects = null,
-        shape = RoomShape.BUILT_IN,
+        shape = shape,
         roomAmount = (value(ROOM) / 100f).coerceIn(0f, 1f),
-        decaySeconds = BUILT_IN_ROOM_DECAY,
+        decaySeconds = if (myRoom) FxVisualMath.roomDecaySeconds(width, depth, height, damping / 100f) else BUILT_IN_ROOM_DECAY,
         modifier = modifier.fillMaxWidth().height(ROOM_HEIGHT),
         sound = speakers != null,
         // The bus meter is not the renderer's thirty readings a second: the
@@ -98,6 +111,11 @@ internal val LocalRoomBedChannels = androidx.compose.runtime.compositionLocalOf 
 
 private const val ROOM = 0
 private const val ANGLE = 2
+private const val MY_ROOM = 4
+private const val WIDTH = 5
+private const val DEPTH = 6
+private const val HEIGHT = 7
+private const val DAMPING = 8
 private val ROOM_HEIGHT = 220.dp
 
 /** The meter's floor: at or under it nothing is playing. */

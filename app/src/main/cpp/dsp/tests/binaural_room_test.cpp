@@ -7,6 +7,7 @@
 // Built with -ffast-math, as the phone builds it: nothing here leans on NaN,
 // and finiteness is asked of dspAllFinite (util/finite.h).
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <thread>
@@ -649,6 +650,179 @@ void onTheMasterOfASurroundMix() {
     }
 }
 
+// ── My room ─────────────────────────────────────────────────────────────
+
+bool waitForRoom(const BinauralRoomProcessor& p) {
+    for (int i = 0; i < 6000 && !p.roomSettled(); i++) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    return p.roomSettled();
+}
+
+/** An impulse through [p], [n] samples of the left ear's answer. */
+std::vector<float> answer(BinauralRoomProcessor& p, int n) {
+    std::vector<float> l(static_cast<size_t>(n), 0.0f), r(static_cast<size_t>(n), 0.0f);
+    l[0] = r[0] = 1.0f;
+    run(p, l, r, 1024);
+    return l;
+}
+
+/** The energy of [x] from [from] seconds on, at [rate]. */
+double energyAfter(const std::vector<float>& x, double from, double rate) {
+    double e = 0.0;
+    for (size_t i = static_cast<size_t>(from * rate); i < x.size(); i++) e += static_cast<double>(x[i]) * x[i];
+    return e;
+}
+
+void myRoom() {
+    std::printf("-- My room: a size and a damping\n");
+    using P = BinauralRoomProcessor;
+    const int rate = 48000, n = 96000;
+
+    P builtIn;
+    builtIn.prepare(rate, 1024);
+    builtIn.setParameter(P::ROOM, 60.0f);
+    builtIn.reset();
+    check(builtIn.roomSettled(), "off, nothing is worked out");
+    const std::vector<float> small = answer(builtIn, n);
+
+    // The sizes alone change nothing while it is off.
+    P off;
+    off.prepare(rate, 1024);
+    off.setParameter(P::ROOM, 60.0f);
+    off.setParameter(P::WIDTH, 20.0f);
+    off.setParameter(P::DEPTH, 28.0f);
+    off.setParameter(P::HEIGHT, 9.0f);
+    off.setParameter(P::DAMPING, 10.0f);
+    off.reset();
+    check(waitForRoom(off) && answer(off, n) == small, "its knobs do nothing until it is on");
+
+    // A hall: it rings long after the built-in room has gone quiet.
+    P hall;
+    hall.prepare(rate, 1024);
+    hall.setParameter(P::ROOM, 60.0f);
+    hall.setParameter(P::WIDTH, 20.0f);
+    hall.setParameter(P::DEPTH, 28.0f);
+    hall.setParameter(P::HEIGHT, 9.0f);
+    hall.setParameter(P::DAMPING, 10.0f);
+    hall.setParameter(P::MY_ROOM, 1.0f);
+    hall.reset();
+    check(waitForRoom(hall), "on, the room is worked out off the audio thread and handed over");
+    const std::vector<float> big = answer(hall, n);
+    const double late = energyAfter(big, 0.8, rate), lateSmall = energyAfter(small, 0.8, rate);
+    std::printf("      after 0.8 s: the hall %.3g, the built-in room %.3g\n", late, lateSmall);
+    check(dspAllFinite(big.data(), n) && late > 1e-6 && late > 1000.0 * (lateSmall + 1e-12),
+          "a large bare room rings long after the built-in one is silent");
+
+    // The same hall, damped: it dies sooner.
+    P damped;
+    damped.prepare(rate, 1024);
+    damped.setParameter(P::ROOM, 60.0f);
+    damped.setParameter(P::WIDTH, 20.0f);
+    damped.setParameter(P::DEPTH, 28.0f);
+    damped.setParameter(P::HEIGHT, 9.0f);
+    damped.setParameter(P::DAMPING, 70.0f);
+    damped.setParameter(P::MY_ROOM, 1.0f);
+    damped.reset();
+    waitForRoom(damped);
+    const std::vector<float> dead = answer(damped, n);
+    check(energyAfter(dead, 0.8, rate) < 0.01 * late, "Damping turned up, the same room dies away sooner");
+
+    // A booth: nothing left after a quarter of a second.
+    P booth;
+    booth.prepare(rate, 1024);
+    booth.setParameter(P::ROOM, 60.0f);
+    booth.setParameter(P::WIDTH, 2.0f);
+    booth.setParameter(P::DEPTH, 2.4f);
+    booth.setParameter(P::HEIGHT, 2.3f);
+    booth.setParameter(P::DAMPING, 55.0f);
+    booth.setParameter(P::MY_ROOM, 1.0f);
+    booth.reset();
+    waitForRoom(booth);
+    const std::vector<float> tight = answer(booth, n);
+    check(energyAfter(tight, 0.05, rate) > 0.0 && energyAfter(tight, 0.4, rate) < 1e-4 * energyAfter(tight, 0.0, rate),
+          "a small damped room is a short one");
+
+    // Room at 0 is no room, whichever it is; and the direct sound is the same.
+    P none;
+    none.prepare(rate, 1024);
+    none.setParameter(P::ROOM, 0.0f);
+    none.setParameter(P::WIDTH, 20.0f);
+    none.setParameter(P::MY_ROOM, 1.0f);
+    none.reset();
+    waitForRoom(none);
+    P plain;
+    plain.prepare(rate, 1024);
+    plain.setParameter(P::ROOM, 0.0f);
+    plain.reset();
+    check(answer(none, 24000) == answer(plain, 24000), "with Room at 0 there is none of it, as with the built-in room");
+
+    // Off again is the built-in room again, exactly.
+    hall.setParameter(P::MY_ROOM, 0.0f);
+    check(waitForRoom(hall), "switched off, the built-in room is handed back");
+    hall.reset();
+    check(answer(hall, n) == small, "and it is the built-in room, sample for sample");
+
+    // The same room at 44.1 kHz lasts as long, not 9% longer.
+    {
+        P cd;
+        cd.prepare(44100.0, 1024);
+        cd.setParameter(P::ROOM, 60.0f);
+        cd.setParameter(P::WIDTH, 20.0f);
+        cd.setParameter(P::DEPTH, 28.0f);
+        cd.setParameter(P::HEIGHT, 9.0f);
+        cd.setParameter(P::DAMPING, 10.0f);
+        cd.setParameter(P::MY_ROOM, 1.0f);
+        cd.reset();
+        waitForRoom(cd);
+        const std::vector<float> at441 = answer(cd, 88200);
+        // Where the tail's energy is centred, in seconds.
+        auto centre = [](const std::vector<float>& x, double r) {
+            double e = 0.0, m = 0.0;
+            for (size_t i = static_cast<size_t>(0.1 * r); i < x.size(); i++) {
+                const double v = static_cast<double>(x[i]) * x[i];
+                e += v;
+                m += v * static_cast<double>(i) / r;
+            }
+            return e > 0.0 ? m / e : 0.0;
+        };
+        const double a = centre(big, 48000.0), b = centre(at441, 44100.0);
+        std::printf("      the tail's centre: %.3f s at 48 kHz, %.3f s at 44.1 kHz\n", a, b);
+        check(a > 0.2 && std::fabs(a - b) < 0.03 * a, "at 44.1 kHz the room lasts as long as at 48");
+    }
+
+    // A rate change builds a new room: My room is put into it too.
+    hall.setParameter(P::MY_ROOM, 1.0f);
+    waitForRoom(hall);
+    hall.prepare(96000.0, 1024);
+    check(waitForRoom(hall), "after a rate change the room is worked out again");
+    std::vector<float> hi = answer(hall, 192000);
+    check(energyAfter(hi, 0.8, 96000.0) > 1e-6, "and it is My room that plays, not the built-in one");
+
+    // Knobs turned fast, and an effect deleted with its room still being
+    // worked out: nothing waits, nothing is used after it is gone.
+    for (int round = 0; round < 3; round++) {
+        auto gone = std::make_unique<P>();
+        gone->prepare(rate, 1024);
+        gone->setParameter(P::MY_ROOM, 1.0f);
+        for (int i = 0; i < 40; i++) gone->setParameter(P::WIDTH, 2.0f + 0.7f * static_cast<float>(i));
+        std::vector<float> l(512, 0.1f), r(512, 0.1f);
+        gone->process(l.data(), r.data(), 512);
+    }
+    P after;
+    after.prepare(rate, 1024);
+    after.setParameter(P::MY_ROOM, 1.0f);
+    check(waitForRoom(after), "an effect removed mid-work leaves the builder working for the others");
+
+    check(P::kMinSide == 2.0f && P::kMaxSide == 30.0f && P::kMinHeight == 2.0f && P::kMaxHeight == 12.0f &&
+          P::kMinDamping == 5.0f && P::kMaxDamping == 70.0f, "its limits are My room's on the renderer's page");
+    P held;
+    held.prepare(rate, 1024);
+    held.setParameter(P::WIDTH, 500.0f);
+    held.setParameter(P::HEIGHT, 0.0f);
+    held.setParameter(P::DAMPING, 100.0f);
+    check(held.getParameter(P::WIDTH) == 30.0f && held.getParameter(P::HEIGHT) == 2.0f && held.getParameter(P::DAMPING) == 70.0f,
+          "a size past its range is held to it");
+}
+
 }  // namespace
 
 int main() {
@@ -660,6 +834,7 @@ int main() {
     theBedInTheRoom();
     theBedAtEveryRate();
     onTheMasterOfASurroundMix();
+    myRoom();
     std::puts(failures == 0 ? "all passed" : "FAILED");
     return failures == 0 ? 0 : 1;
 }

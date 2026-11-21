@@ -2,11 +2,17 @@
 #include "snapin_processor.h"
 #include "oversampler.h"
 #include "../../atmos/render/virtual_room.h"
+#include "../../atmos/render/box_room.h"
 #include "../../atmos/speaker_renderer.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <vector>
 
 // The spatial renderer's headphone room, for any stereo signal.
@@ -45,6 +51,17 @@
 // rate change adds its filters' delay. ownLatency() says how much, and the
 // engine holds the dry signal and the other buses back by it.
 //
+// My room. Off, the room is the renderer's built-in one. On, it is the room
+// its page calls My room: a box of the Width, Depth and Height set, in
+// metres, whose walls take up the Damping set of the sound that meets them
+// (render/box_room.h, the same working out, and the same convolver plays it).
+// Room is then that room's level. Working a room out takes a moment (a large
+// bare one, a second on a phone), so it is never done where a knob is set,
+// which is under the engine's lock with the music waiting: one thread for
+// every instance (binaural_room_detail::Builder) works the room out and
+// hands it over, and until then the room before is heard. roomSettled() says
+// when it has.
+//
 // A surround mix. On the master of a stream wider than stereo each channel
 // group runs its own copy of the chain, so this effect there used to be one
 // room a pair, every pair stood at the front, and the fold added them: seven
@@ -57,9 +74,154 @@
 //
 // Memory and time. One instance is about 1.2 MB and takes a few ms to
 // prepare (it builds 56 ear filters); both in prepare(), never in process().
+namespace binaural_room_detail {
+
+// Which room: a box in tenths of a metre and its walls' share in hundredths,
+// at the rate the room runs at; all zero for the built-in one.
+struct RoomKey {
+    int width = 0, depth = 0, height = 0, damping = 0, rate = 0;
+    bool operator==(const RoomKey& o) const {
+        return width == o.width && depth == o.depth && height == o.height && damping == o.damping && rate == o.rate;
+    }
+    bool builtIn() const { return width == 0; }
+};
+
+// What the builder and one effect share. The effect may be deleted, or build
+// a new room, while a room for it is being worked out: [room] is then null,
+// and only ever read or written under [install].
+struct Target {
+    std::mutex install;
+    tf::atmos::render::VirtualRoom* room = nullptr;
+    RoomKey have;       // under [install]: the room that is in
+    std::mutex ask;     // held for a moment only, the engine's lock above it
+    RoomKey want;       // under [ask]
+    bool queued = false;  // under [ask]
+    std::atomic<bool> settled{true};
+};
+
+// The one thread that works rooms out, for every Binaural Room there is.
+class Builder {
+public:
+    static Builder& get() {
+        // Never destroyed: its thread may be waiting when the process ends.
+        static Builder* b = new Builder();
+        return *b;
+    }
+
+    // [target]'s want has changed.
+    void request(const std::shared_ptr<Target>& target) {
+        {
+            std::lock_guard<std::mutex> a(target->ask);
+            if (target->queued) return;
+            target->queued = true;
+        }
+        {
+            std::lock_guard<std::mutex> q(queueMutex_);
+            queue_.push_back(target);
+        }
+        wake_.notify_one();
+    }
+
+    // The room [key] names, as the convolver takes it; null for the built-in
+    // one and for a box with no room in it. Allocates; a second or so.
+    static std::shared_ptr<tf::atmos::render::RoomResponse> build(const RoomKey& key) {
+        using namespace tf::atmos::render;
+        if (key.builtIn() || key.rate <= 0) return nullptr;
+        BoxRoom box;
+        box.width = key.width * 0.1f;
+        box.depth = key.depth * 0.1f;
+        box.height = key.height * 0.1f;
+        box.absorption = key.damping * 0.01f;
+        std::vector<float> left, right;
+        box_response(box, left, right);
+        // The response is 48 kHz and the convolver plays it a sample a
+        // sample at the room's rate. Called a little faster or slower than
+        // it is, the resampling makes it last as long there as it should.
+        const double called = 48000.0 * 48000.0 / static_cast<double>(key.rate);
+        auto room = std::make_shared<RoomResponse>();
+        if (!prepare_room_response(left.data(), right.data(), static_cast<int>(left.size()), called, *room)) {
+            return nullptr;
+        }
+        return room;
+    }
+
+private:
+    Builder() { std::thread([this] { run(); }).detach(); }
+
+    void run() {
+        for (;;) {
+            std::shared_ptr<Target> target;
+            {
+                std::unique_lock<std::mutex> q(queueMutex_);
+                wake_.wait(q, [this] { return !queue_.empty(); });
+                target = queue_.front().lock();
+                queue_.pop_front();
+            }
+            if (target) serve(*target);
+        }
+    }
+
+    void serve(Target& t) {
+        for (;;) {
+            RoomKey key;
+            {
+                std::lock_guard<std::mutex> a(t.ask);
+                key = t.want;
+            }
+            {
+                std::lock_guard<std::mutex> in(t.install);
+                if (t.room == nullptr || t.have == key) {
+                    std::lock_guard<std::mutex> a(t.ask);
+                    // Asked for another since: round again.
+                    if (t.room != nullptr && !(t.want == key)) continue;
+                    t.queued = false;
+                    t.settled.store(true, std::memory_order_release);
+                    return;
+                }
+            }
+            const std::shared_ptr<tf::atmos::render::RoomResponse> room = cached(key);
+            std::lock_guard<std::mutex> in(t.install);
+            if (t.room == nullptr) continue;  // gone meanwhile: the top of the loop ends it
+            t.room->set_room_response(room.get());
+            t.have = key;
+        }
+    }
+
+    std::shared_ptr<tf::atmos::render::RoomResponse> cached(const RoomKey& key) {
+        for (const auto& c : cache_) if (c.first == key) return c.second;
+        auto room = build(key);
+        if (!key.builtIn()) {
+            if (cache_.size() >= kCache) cache_.pop_front();
+            cache_.emplace_back(key, room);
+        }
+        return room;
+    }
+
+    // A wide stream has a room a lane, all asking for the same one.
+    static constexpr size_t kCache = 3;
+    std::mutex queueMutex_;
+    std::condition_variable wake_;
+    std::deque<std::weak_ptr<Target>> queue_;
+    std::deque<std::pair<RoomKey, std::shared_ptr<tf::atmos::render::RoomResponse>>> cache_;  // the thread's own
+};
+
+}  // namespace binaural_room_detail
+
 class BinauralRoomProcessor : public SnapinProcessor {
 public:
-    enum Params { ROOM = 0, BINAURAL, ANGLE, OUTPUT, NUM_PARAMS };
+    enum Params { ROOM = 0, BINAURAL, ANGLE, OUTPUT, MY_ROOM, WIDTH, DEPTH, HEIGHT, DAMPING, NUM_PARAMS };
+
+    // My room's limits, as the renderer's page has them (CustomRoom).
+    static constexpr float kMinSide = 2.0f, kMaxSide = 30.0f;
+    static constexpr float kMinHeight = 2.0f, kMaxHeight = 12.0f;
+    static constexpr float kMinDamping = 5.0f, kMaxDamping = 70.0f;  // percent
+
+    BinauralRoomProcessor() : target_(std::make_shared<binaural_room_detail::Target>()) {}
+    ~BinauralRoomProcessor() override { detach(); }
+
+    // Whether the room heard is the one the knobs describe: false while My
+    // room is being worked out after a change.
+    bool roomSettled() const { return target_->settled.load(std::memory_order_acquire); }
 
     // The ear-level speakers a side the pair can stand at, degrees from
     // straight ahead, as OutputLayout::k15_1_12 has them.
@@ -193,9 +355,12 @@ public:
             if (low >= kMinRoomRate && low <= kMaxRoomRate) factor_ = f;
         }
         ownLatency_ = 0;
+        detach();
         room_.reset();
+        roomRate_ = 0;
         if (factor_ == 0) return;
         const double roomRate = sampleRate / factor_;
+        roomRate_ = static_cast<int>(roomRate + 0.5);
 
         using tf::atmos::render::VirtualRoom;
         room_ = std::make_unique<VirtualRoom>();
@@ -270,6 +435,13 @@ public:
             ownLatency_ = VirtualRoom::kLatency;
         }
         reset();
+        {
+            // A new room is the built-in one until My room is put in it.
+            std::lock_guard<std::mutex> in(target_->install);
+            target_->room = room_.get();
+            target_->have = binaural_room_detail::RoomKey{};
+        }
+        askForRoom(/* again = */ true);
     }
 
     int ownLatency() const override { return ownLatency_; }
@@ -356,6 +528,26 @@ public:
                 outputDb_ = std::max(-12.0f, std::min(12.0f, value));
                 gainTarget_ = std::pow(10.0f, outputDb_ / 20.0f);
                 break;
+            case MY_ROOM:
+                myRoom_ = value >= 0.5f;
+                askForRoom();
+                break;
+            case WIDTH:
+                width_ = std::max(kMinSide, std::min(kMaxSide, value));
+                askForRoom();
+                break;
+            case DEPTH:
+                depth_ = std::max(kMinSide, std::min(kMaxSide, value));
+                askForRoom();
+                break;
+            case HEIGHT:
+                height_ = std::max(kMinHeight, std::min(kMaxHeight, value));
+                askForRoom();
+                break;
+            case DAMPING:
+                damping_ = std::max(kMinDamping, std::min(kMaxDamping, value));
+                askForRoom();
+                break;
         }
     }
 
@@ -365,6 +557,11 @@ public:
             case BINAURAL: return strengthPercent_;
             case ANGLE: return angle_;
             case OUTPUT: return outputDb_;
+            case MY_ROOM: return myRoom_ ? 1.0f : 0.0f;
+            case WIDTH: return width_;
+            case DEPTH: return depth_;
+            case HEIGHT: return height_;
+            case DAMPING: return damping_;
             default: return 0.0f;
         }
     }
@@ -391,6 +588,42 @@ private:
         int speaker;
         float gain;
     };
+
+    // The builder is told nothing of this effect's room any more: it waits
+    // out a room being handed over, and what it is working out is dropped.
+    void detach() {
+        std::lock_guard<std::mutex> in(target_->install);
+        target_->room = nullptr;
+    }
+
+    // The room the knobs describe, asked of the builder. A moment's work:
+    // it is called with the engine's lock held.
+    // [again]: the room is a new one, so what was wanted before is wanted of it.
+    void askForRoom(bool again = false) {
+        binaural_room_detail::RoomKey key;
+        if (myRoom_ && room_) {
+            key.width = static_cast<int>(width_ * 10.0f + 0.5f);
+            key.depth = static_cast<int>(depth_ * 10.0f + 0.5f);
+            key.height = static_cast<int>(height_ * 10.0f + 0.5f);
+            key.damping = static_cast<int>(damping_ + 0.5f);
+            key.rate = roomRate_;
+        }
+        if (!room_) return;
+        {
+            std::lock_guard<std::mutex> a(target_->ask);
+            if (target_->want == key && !again) return;
+            if (again && key.builtIn()) {
+                // A new room is the built-in one already: nothing to work
+                // out. A builder still at work for the old one ends there.
+                target_->want = key;
+                if (!target_->queued) target_->settled.store(true, std::memory_order_release);
+                return;
+            }
+            target_->want = key;
+            target_->settled.store(false, std::memory_order_release);
+        }
+        binaural_room_detail::Builder::get().request(target_);
+    }
 
     // One piece of the room's own samples, [len] of them: the settings are
     // read and the speakers emptied (beginPiece), the pair and the bed are
@@ -550,6 +783,10 @@ private:
     }
 
     std::unique_ptr<tf::atmos::render::VirtualRoom> room_;
+    std::shared_ptr<binaural_room_detail::Target> target_;
+    int roomRate_ = 0;
+    bool myRoom_ = false;
+    float width_ = 5.0f, depth_ = 6.0f, height_ = 2.7f, damping_ = 25.0f;
     int factor_ = 0;       // 0: no room at this rate
     int count_ = 0;
     int ownLatency_ = 0;

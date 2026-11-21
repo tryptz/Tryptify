@@ -371,10 +371,13 @@ object FxPresets {
         // so the wider and livelier ones give some back.
         SnapinType.BINAURAL_ROOM -> listOf(
             m("Studio Monitors", 0 to 12f),
-            m("Dry Speakers", 0 to 0f),
             m("Gentle Crossfeed", 0 to 8f, 1 to 45f),
+            // My room (4 on), at sizes the renderer's page starts its own
+            // room presets from (RoomPreset): width, depth, height in
+            // metres, then damping in percent.
+            m("Control Room", 0 to 25f, 4 to 1f, 5 to 5.5f, 6 to 7f, 7 to 3.2f, 8 to 45f),
             c("Wide Stage", 0 to 30f, 2 to 60f, 3 to 1.5f),
-            c("Surrounded", 0 to 45f, 2 to 110f, 3 to 3f),
+            c("Concert Hall", 0 to 40f, 4 to 1f, 5 to 22f, 6 to 30f, 7 to 12f, 8 to 18f),
         )
     }
 }

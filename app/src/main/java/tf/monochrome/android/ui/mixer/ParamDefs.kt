@@ -327,7 +327,14 @@ internal fun getParamDefs(type: SnapinType?): List<ParamDef> = when (type) {
         ParamDef("Room", 0f, 100f, 25f, "%"),
         ParamDef("Binaural", 0f, 100f, 100f, "%"),
         ParamDef("Angle", 0f, 110f, 30f, "°"),
-        ParamDef("Output", -12f, 12f, 0f, "dB")
+        ParamDef("Output", -12f, 12f, 0f, "dB"),
+        // My room, as on the spatial renderer's page (CustomRoom's limits):
+        // 1 plays a room of this size and damping in place of the built-in.
+        ParamDef("My room", 0f, 1f, 0f, "", steps = 1),
+        ParamDef("Width", 2f, 30f, 5f, "m"),
+        ParamDef("Depth", 2f, 30f, 6f, "m"),
+        ParamDef("Height", 2f, 12f, 2.7f, "m"),
+        ParamDef("Damping", 5f, 70f, 25f, "%")
     )
     null -> emptyList()
 }
