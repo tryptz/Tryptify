@@ -3559,6 +3559,8 @@
     <string name="whats_new_196_binaural_room_body">The Atmos headphone room for any song: add it from the FX Chain, under Space. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker.</string>
     <string name="whats_new_196_low_bands_title">Low bands sit where their knob says</string>
     <string name="whats_new_196_low_bands_body">In the mixer\'s EQs, Filter and the low cuts of reverb, delay and distortion, a band below a thousandth of the sample rate was moved up. A mix with a band that low now sounds as it was set.</string>
+    <string name="whats_new_196_upmix_title">A cleaner 9.1.6 upmix</string>
+    <string name="whats_new_196_upmix_body">The mixer\'s upmix now reads the song in eight bands, so a voice stays in the centre while wide highs go around you. Folded back to stereo it is the song exactly, with no added colour.</string>
     <string name="whats_new_196_render_quality_title">Rendering quality</string>
     <string name="whats_new_196_render_quality_body">Settings › System › Performance: Balanced and Fast draw the glass and the lyrics\' light smaller and scale them up, for more frames a second and less heat. High is as before.</string>
     <string name="whats_new_196_download_covers_title">Downloads show their covers again</string>

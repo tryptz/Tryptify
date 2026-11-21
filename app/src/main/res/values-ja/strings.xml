@@ -3478,6 +3478,8 @@
     <string name="whats_new_196_binaural_room_body">Atmos のヘッドホン用ルームをどの曲にも：エフェクトチェーンの「空間」から追加します。サラウンドミックスや 9.1.6 アップミックスのマスターでは、ミックス全体で一つのルームになり、各チャンネルがそれぞれのスピーカーから鳴ります。</string>
     <string name="whats_new_196_low_bands_title">低い帯域がノブどおりの位置に</string>
     <string name="whats_new_196_low_bands_body">ミキサーの EQ、フィルター、リバーブ・ディレイ・ディストーションのローカットで、サンプルレートの千分の一より低い帯域が上にずれていました。そこまで低い帯域も設定どおりに鳴ります。</string>
+    <string name="whats_new_196_upmix_title">よりクリーンな 9.1.6 アップミックス</string>
+    <string name="whats_new_196_upmix_body">ミキサーのアップミックスが曲を 8 つの帯域で読むようになり、ボーカルはセンターに残り、広がりのある高域は周囲に回ります。ステレオに戻すと元の曲そのままで、色付けはありません。</string>
     <string name="whats_new_196_render_quality_title">描画品質</string>
     <string name="whats_new_196_render_quality_body">設定 › システム › パフォーマンス：「バランス」と「高速」はガラスと歌詞の光を小さく描いて拡大し、フレームレートを上げて発熱を抑えます。「高」は従来どおりです。</string>
     <string name="whats_new_196_download_covers_title">ダウンロードにカバーが再び表示</string>

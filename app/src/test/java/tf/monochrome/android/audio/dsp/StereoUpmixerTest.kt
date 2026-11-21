@@ -17,9 +17,8 @@ import kotlin.random.Random
 /**
  * The Atmos upmix, run the way the app runs it: [UpmixProcessor] into the
  * real [DownmixProcessor] fold. Most listeners hear that fold, so the upmix
- * is held to giving the song back through it — exactly for what it steers
- * (bass, centre, hard pans) and at the same power for what it decorrelates
- * (ambience).
+ * is held to giving the song back through it, sample for sample, ambience
+ * included.
  */
 class StereoUpmixerTest {
 
@@ -150,6 +149,158 @@ class StereoUpmixerTest {
         for (c in listOf(StereoUpmixer.SL, StereoUpmixer.BL, StereoUpmixer.TFL, StereoUpmixer.TSL)) {
             val level = db(rms(channel(up, c, ch, settle))) - db(inPower)
             assertTrue("channel $c is only $level dB", level > -18f)
+        }
+    }
+
+    /** A song: a centred voice, a hard-panned part, bass, and a wide decorrelated top. */
+    private fun song(n: Int): Pair<FloatArray, FloatArray> {
+        val random = Random(11)
+        val left = FloatArray(n)
+        val right = FloatArray(n)
+        var hl = 0f
+        var hr = 0f
+        for (i in 0 until n) {
+            val t = i.toDouble() / rate
+            val voice = 0.2f * sin(2.0 * PI * 440.0 * t).toFloat()
+            val kick = 0.2f * sin(2.0 * PI * 55.0 * t).toFloat()
+            val guitar = 0.15f * sin(2.0 * PI * 1300.0 * t).toFloat()
+            val nl = random.nextFloat() - 0.5f
+            val nr = random.nextFloat() - 0.5f
+            // A crude high-pass: the noise less its own slow average.
+            hl += 0.5f * (nl - hl)
+            hr += 0.5f * (nr - hr)
+            left[i] = voice + kick + guitar + 0.3f * (nl - hl)
+            right[i] = voice + kick + 0.3f * (nr - hr)
+        }
+        return left to right
+    }
+
+    @Test
+    fun `a whole song folds back sample for sample, ambience and all`() {
+        val n = rate * 2
+        val (left, right) = song(n)
+        val up = upmix(left, right)
+        val back = fold(up)
+        val errL = maxError(channel(back, 0, 2), left)
+        val errR = maxError(channel(back, 1, 2), right)
+        assertTrue("left error $errL", errL < 2e-5f)
+        assertTrue("right error $errR", errR < 2e-5f)
+        // And it is an upmix all the same: the room is in the six pairs.
+        val settle = n / 2
+        for (c in listOf(StereoUpmixer.FLC, StereoUpmixer.SL, StereoUpmixer.BL, StereoUpmixer.TFL, StereoUpmixer.TSL, StereoUpmixer.TBL)) {
+            assertTrue("channel $c", rms(channel(up, c, ch, settle)) > 0.005f)
+        }
+        // A side's decorrelated copies add up to what the front handed over
+        // and nothing else: left and right surrounds are each other's mirror
+        // in the sum, as the side signal is.
+        val sumL = FloatArray(n - settle)
+        val sumR = FloatArray(n - settle)
+        for (c in listOf(StereoUpmixer.FLC, StereoUpmixer.SL, StereoUpmixer.BL, StereoUpmixer.TFL, StereoUpmixer.TSL, StereoUpmixer.TBL)) {
+            val l = channel(up, c, ch, settle)
+            val r = channel(up, c + 1, ch, settle)
+            for (i in sumL.indices) { sumL[i] += l[i]; sumR[i] += r[i] }
+        }
+        assertTrue(maxError(sumL, FloatArray(sumL.size) { -sumR[it] }) < 2e-5f)
+    }
+
+    @Test
+    fun `the sixteen channels carry the power the stereo had`() {
+        val n = rate * 2
+        val random = Random(7)
+        val left = FloatArray(n) { (random.nextFloat() - 0.5f) * 0.5f }
+        val right = FloatArray(n) { (random.nextFloat() - 0.5f) * 0.5f }
+        val up = upmix(left, right)
+        val settle = n / 2
+        fun power(x: FloatArray) = x.fold(0.0) { a, v -> a + v * v } / x.size
+        val input = power(left.copyOfRange(settle, n)) + power(right.copyOfRange(settle, n))
+        // Each channel at the weight the fold gives its power.
+        var output = 0.0
+        for (c in 0 until ch) {
+            val w = when (c) {
+                StereoUpmixer.FC -> 2.0 * DownmixProcessor.CENTER_COEF * DownmixProcessor.CENTER_COEF
+                StereoUpmixer.LFE -> 2.0 * DownmixProcessor.LFE_COEF * DownmixProcessor.LFE_COEF
+                else -> 1.0
+            }
+            output += w * power(channel(up, c, ch, settle))
+        }
+        assertEquals("the upmix's power against the stereo's, dB", 0.0, 10.0 * log10(output / input), 0.5)
+    }
+
+    /** The amplitude of [hz] in [x]. */
+    private fun toneIn(x: FloatArray, hz: Float): Float {
+        var s = 0.0
+        var c = 0.0
+        for (i in x.indices) {
+            val w = 2.0 * PI * hz * i / rate
+            s += x[i] * sin(w)
+            c += x[i] * kotlin.math.cos(w)
+        }
+        return (2.0 * sqrt(s * s + c * c) / x.size).toFloat()
+    }
+
+    @Test
+    fun `a voice in the middle and a wide top are steered apart, band by band`() {
+        val n = rate * 2
+        val settle = n / 2
+        val voice = sine(440f, n, amp = 0.4f)
+        val random = Random(5)
+        val airL = FloatArray(n)
+        val airR = FloatArray(n)
+        var hl = 0f
+        var hr = 0f
+        for (i in 0 until n) {
+            val nl = random.nextFloat() - 0.5f
+            val nr = random.nextFloat() - 0.5f
+            hl += 0.5f * (nl - hl)
+            hr += 0.5f * (nr - hr)
+            airL[i] = 0.8f * (nl - hl)
+            airR[i] = 0.8f * (nr - hr)
+        }
+        val alone = upmix(voice, voice)
+        val air = upmix(airL, airR)
+        val both = upmix(FloatArray(n) { voice[it] + airL[it] }, FloatArray(n) { voice[it] + airR[it] })
+
+        // The voice is as much in the centre speaker with the air over it as
+        // without. One reading of the whole spectrum saw a mix that was
+        // partly decorrelated and took a third of it back out.
+        val centreAlone = toneIn(channel(alone, StereoUpmixer.FC, ch, settle), 440f)
+        val centreBoth = toneIn(channel(both, StereoUpmixer.FC, ch, settle), 440f)
+        assertTrue("the voice in the centre: $centreBoth with the air, $centreAlone alone", centreBoth > 0.9f * centreAlone)
+        // And the air is as much in the room with the voice under it.
+        val roomAir = rms(channel(air, StereoUpmixer.SL, ch, settle))
+        val roomBoth = rms(channel(both, StereoUpmixer.SL, ch, settle))
+        assertTrue("the air at the sides: $roomBoth with the voice, $roomAir alone", roomBoth > 0.9f * roomAir)
+        // None of the voice is out there with it.
+        assertTrue(toneIn(channel(both, StereoUpmixer.SL, ch, settle), 440f) < 0.01f * 0.4f)
+    }
+
+    @Test
+    fun `at every rate the fold is the song, the top bands of a low rate included`() {
+        for (r in listOf(8000, 22050, 44100, 96000, 192000)) {
+            val up = StereoUpmixer(r)
+            val n = r
+            val random = Random(r)
+            val left = FloatArray(n) { 0.3f * sin(2.0 * PI * 300.0 * it / r).toFloat() + 0.2f * (random.nextFloat() - 0.5f) }
+            val right = FloatArray(n) { 0.3f * sin(2.0 * PI * 300.0 * it / r).toFloat() + 0.2f * (random.nextFloat() - 0.5f) }
+            val out = FloatArray(n * ch)
+            up.process(left, right, n, out)
+            var worst = 0f
+            for (i in 0 until n) {
+                var l = 0f
+                var rr = 0f
+                for (c in 0 until ch) {
+                    val v = out[i * ch + c]
+                    assertTrue("rate $r", v.isFinite())
+                    when {
+                        c == StereoUpmixer.FC -> { l += DownmixProcessor.CENTER_COEF * v; rr += DownmixProcessor.CENTER_COEF * v }
+                        c == StereoUpmixer.LFE -> { l += DownmixProcessor.LFE_COEF * v; rr += DownmixProcessor.LFE_COEF * v }
+                        c % 2 == 0 -> l += v
+                        else -> rr += v
+                    }
+                }
+                worst = maxOf(worst, kotlin.math.abs(l - left[i]), kotlin.math.abs(rr - right[i]))
+            }
+            assertTrue("rate $r: fold error $worst", worst < 2e-5f)
         }
     }
 

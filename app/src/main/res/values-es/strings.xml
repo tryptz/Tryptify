@@ -3634,6 +3634,8 @@
     <string name="whats_new_196_binaural_room_body">La sala Atmos para auriculares en cualquier canción: añádela desde la cadena de efectos, en Espacio. En el máster de una mezcla envolvente o del upmix 9.1.6 es una sola sala para toda la mezcla, cada canal en su altavoz.</string>
     <string name="whats_new_196_low_bands_title">Las bandas graves están donde indica su mando</string>
     <string name="whats_new_196_low_bands_body">En los ecualizadores del mezclador, el filtro y los cortes de graves de reverb, delay y distorsión, una banda por debajo de la milésima de la frecuencia de muestreo se subía. Ahora suena como se ajustó.</string>
+    <string name="whats_new_196_upmix_title">Un upmix 9.1.6 más limpio</string>
+    <string name="whats_new_196_upmix_body">El upmix del mezclador ahora lee la canción en ocho bandas: una voz se queda en el centro mientras los agudos amplios te rodean. Plegado a estéreo es la canción exacta, sin coloración.</string>
     <string name="whats_new_196_render_quality_title">Calidad de renderizado</string>
     <string name="whats_new_196_render_quality_body">Ajustes › Sistema › Rendimiento: Equilibrado y Rápido dibujan el cristal y la luz de la letra más pequeños y los amplían, para más fotogramas por segundo y menos calor. Alto queda como antes.</string>
     <string name="whats_new_196_download_covers_title">Las descargas vuelven a mostrar su portada</string>

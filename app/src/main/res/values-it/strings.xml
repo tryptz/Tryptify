@@ -3634,6 +3634,8 @@
     <string name="whats_new_196_binaural_room_body">La stanza Atmos per cuffie su qualsiasi brano: aggiungila dalla catena FX, in Spazio. Sul master di un mix surround o dell’upmix 9.1.6 è una sola stanza per tutto il mix, ogni canale al suo altoparlante.</string>
     <string name="whats_new_196_low_bands_title">Le bande basse sono dove indica la manopola</string>
     <string name="whats_new_196_low_bands_body">Negli EQ del mixer, nel filtro e nei taglia-bassi di riverbero, delay e distorsione, una banda sotto un millesimo della frequenza di campionamento veniva spostata in alto. Ora suona come impostata.</string>
+    <string name="whats_new_196_upmix_title">Un upmix 9.1.6 più pulito</string>
+    <string name="whats_new_196_upmix_body">L’upmix del mixer ora legge il brano in otto bande: una voce resta al centro mentre gli acuti ampi ti circondano. Ripiegato in stereo è esattamente il brano, senza colorazione.</string>
     <string name="whats_new_196_render_quality_title">Qualità di rendering</string>
     <string name="whats_new_196_render_quality_body">Impostazioni › Sistema › Prestazioni: Bilanciata e Veloce disegnano il vetro e la luce del testo più piccoli e li ingrandiscono, per più fotogrammi al secondo e meno calore. Alta resta come prima.</string>
     <string name="whats_new_196_download_covers_title">I download mostrano di nuovo le copertine</string>

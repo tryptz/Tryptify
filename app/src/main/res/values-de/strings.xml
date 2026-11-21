@@ -3556,6 +3556,8 @@
     <string name="whats_new_196_binaural_room_body">Der Atmos-Kopfhörerraum für jeden Song: über die FX-Kette unter Raum hinzufügen. Auf dem Master eines Surround-Mixes oder des 9.1.6-Upmix ist es ein Raum für den ganzen Mix, jeder Kanal an seinem Lautsprecher.</string>
     <string name="whats_new_196_low_bands_title">Tiefe Bänder liegen, wo ihr Regler steht</string>
     <string name="whats_new_196_low_bands_body">In den EQs des Mixers, im Filter und in den Low-Cuts von Hall, Delay und Verzerrung wurde ein Band unter einem Tausendstel der Abtastrate nach oben verschoben. Jetzt klingt es wie eingestellt.</string>
+    <string name="whats_new_196_upmix_title">Ein saubererer 9.1.6-Upmix</string>
+    <string name="whats_new_196_upmix_body">Der Upmix des Mixers liest den Song jetzt in acht Bändern: Eine Stimme bleibt in der Mitte, während breite Höhen um dich herum liegen. Auf Stereo gefaltet ist es exakt der Song, ohne Färbung.</string>
     <string name="whats_new_196_render_quality_title">Renderqualität</string>
     <string name="whats_new_196_render_quality_body">Einstellungen › System › Leistung: Ausgewogen und Schnell zeichnen Glas und das Licht des Songtexts kleiner und skalieren es hoch, für mehr Bilder pro Sekunde und weniger Wärme. Hoch bleibt wie bisher.</string>
     <string name="whats_new_196_download_covers_title">Downloads zeigen wieder ihre Cover</string>

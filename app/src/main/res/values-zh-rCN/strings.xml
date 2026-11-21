@@ -3478,6 +3478,8 @@
     <string name="whats_new_196_binaural_room_body">把 Atmos 耳机房间用于任何歌曲：在效果链的“空间”类别中添加。放在环绕声混音或 9.1.6 升混的主输出上时，整个混音共用一个房间，每个声道都在自己的扬声器位置。</string>
     <string name="whats_new_196_low_bands_title">低频段位于旋钮所示的位置</string>
     <string name="whats_new_196_low_bands_body">在混音器的均衡器、滤波器以及混响、延迟和失真的低切中，低于采样率千分之一的频段曾被上移。现在这类低频段会按设定发声。</string>
+    <string name="whats_new_196_upmix_title">更干净的 9.1.6 升混</string>
+    <string name="whats_new_196_upmix_body">混音器的升混现在按八个频段分析歌曲，人声留在中置，宽广的高频环绕在你周围。折叠回立体声时与原曲完全一致，不会带来音染。</string>
     <string name="whats_new_196_render_quality_title">渲染质量</string>
     <string name="whats_new_196_render_quality_body">设置 › 系统 › 性能：“均衡”和“快速”会以更小的尺寸绘制玻璃和歌词光效再放大，帧率更高、发热更少。“高”与以前相同。</string>
     <string name="whats_new_196_download_covers_title">下载项重新显示封面</string>

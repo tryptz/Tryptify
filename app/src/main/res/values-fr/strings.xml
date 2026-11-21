@@ -3634,6 +3634,8 @@
     <string name="whats_new_196_binaural_room_body">La pièce Atmos pour casque, sur n’importe quel morceau : ajoutez-la depuis la chaîne d’effets, dans Espace. Sur le master d’un mix surround ou de l’upmix 9.1.6, c’est une seule pièce pour tout le mix, chaque canal sur son enceinte.</string>
     <string name="whats_new_196_low_bands_title">Les bandes graves sont là où l’indique leur bouton</string>
     <string name="whats_new_196_low_bands_body">Dans les égaliseurs du mixeur, le filtre et les coupe-bas de la réverb, du délai et de la distorsion, une bande sous le millième de la fréquence d’échantillonnage était remontée. Elle sonne maintenant comme réglée.</string>
+    <string name="whats_new_196_upmix_title">Un upmix 9.1.6 plus propre</string>
+    <string name="whats_new_196_upmix_body">L’upmix du mixeur lit maintenant le morceau en huit bandes : une voix reste au centre pendant que les aigus larges vous entourent. Replié en stéréo, c’est exactement le morceau, sans coloration.</string>
     <string name="whats_new_196_render_quality_title">Qualité de rendu</string>
     <string name="whats_new_196_render_quality_body">Paramètres › Système › Performances : Équilibré et Rapide dessinent le verre et la lumière des paroles plus petits puis les agrandissent, pour plus d’images par seconde et moins de chaleur. Élevé reste comme avant.</string>
     <string name="whats_new_196_download_covers_title">Les téléchargements retrouvent leurs pochettes</string>

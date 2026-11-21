@@ -3556,6 +3556,8 @@
     <string name="whats_new_196_binaural_room_body">Her şarkı için Atmos kulaklık odası: efekt zincirinde Alan altından ekle. Bir surround miksin ya da 9.1.6 upmix\'in master\'ında tüm miks için tek oda olur, her kanal kendi hoparlöründe.</string>
     <string name="whats_new_196_low_bands_title">Düşük bantlar düğmenin gösterdiği yerde</string>
     <string name="whats_new_196_low_bands_body">Mikserin EQ\'larında, filtrede ve reverb, delay ve distorsiyonun alçak kesimlerinde örnekleme hızının binde birinin altındaki bir bant yukarı kayıyordu. Artık ayarlandığı gibi duyulur.</string>
+    <string name="whats_new_196_upmix_title">Daha temiz bir 9.1.6 upmix</string>
+    <string name="whats_new_196_upmix_body">Mikserin upmix\'i artık şarkıyı sekiz bantta okuyor: vokal ortada kalırken geniş tizler çevrene yayılıyor. Stereoya katlandığında şarkının tam kendisi olur, renklenme olmaz.</string>
     <string name="whats_new_196_render_quality_title">Görüntü oluşturma kalitesi</string>
     <string name="whats_new_196_render_quality_body">Ayarlar › Sistem › Performans: Dengeli ve Hızlı, camı ve sözlerin ışığını daha küçük çizip büyütür; saniyede daha çok kare, daha az ısınma. Yüksek eskisi gibidir.</string>
     <string name="whats_new_196_download_covers_title">İndirilenler kapaklarını yeniden gösteriyor</string>

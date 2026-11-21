@@ -381,6 +381,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
+                    section = MIXER,
+                    title = "A cleaner 9.1.6 upmix",
+                    body = "The mixer's upmix now reads the song in eight bands, so a voice stays in the centre while wide highs go around you. Folded back to stereo it is the song exactly, with no added colour.",
+                    titleRes = R.string.whats_new_196_upmix_title,
+                    bodyRes = R.string.whats_new_196_upmix_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
                     section = LIBRARY,
                     title = "Downloads show their covers again",
                     body = "Songs on the Downloads screen had gone without a cover for a long time. They show their album's cover again.",
