@@ -99,6 +99,9 @@
 -keep class tf.monochrome.android.audio.eq.shizuku.SystemPeqUserService$* { *; }
 -keep class tf.monochrome.android.audio.eq.shizuku.ISystemPeqService { *; }
 -keep class tf.monochrome.android.audio.eq.shizuku.ISystemPeqService$** { *; }
+# The helper that outlives Shizuku is started by name too, by a shell
+# command, and entered at its main.
+-keep class tf.monochrome.android.audio.eq.shizuku.SystemPeqDaemon { *; }
 -keep class rikka.shizuku.** { *; }
 -keep class moe.shizuku.** { *; }
 -dontwarn android.app.ActivityThread

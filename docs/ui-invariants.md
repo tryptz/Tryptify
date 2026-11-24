@@ -2618,6 +2618,25 @@ rules:
   Shizuku's binder dies or returns. It was kept once, when the service's
   disconnect was heard before Shizuku's death, and the row then read "would
   not start" with Shizuku running again.
+- **The equalizer runs in a helper that is no part of Shizuku, where one
+  can be had** (`SystemPeqDaemon`, the owner's ask of 2026-11-24: "it needs
+  to work offline too"). The service starts it (`launchDetached`:
+  `app_process` on the app's APK, in a session of its own) and the app
+  talks to it over a loopback socket, behind a token (`SystemPeqWire`). While
+  it answers, the mode is on whatever has become of Shizuku. Its rules:
+  - **Never two engines.** A service that began playing while the helper
+    was coming up gives the audio back before the helper starts; two
+    policies would take each other's output.
+  - **It leaves by itself**: told to, or 30 s after the app's connection
+    closed with none since. The switch turned off looks for one by its token
+    and tells it to go, a helper from before the app was restarted included.
+  - **Nothing is done for a caller who has not said the token**: any app
+    can open a loopback port. What goes into the command that starts it is
+    held to an APK's path and 32 hex digits (`SystemPeqWireTest`).
+  - Lost or refused twice, it is not asked for again until a setting
+    changes or the screen is opened: the service plays, as before.
+  Whether a phone that stops Shizuku lets the helper live is the phone's to
+  say. Not yet tried.
 - **A policy is never left registered with nothing reading it**: that is
   silence in every other app. Every way out of `SystemPeqUserService`, an
   error hours in included, ends in `releaseLocked`; the app's death ends it

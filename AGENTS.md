@@ -608,9 +608,16 @@ and made by reflection.
   renamed "Disable system optimization", and hidden while the phone's
   language is not English. Reports from other users, not checked here.
 - The mode itself uses no network. Shizuku does, to start (wireless
-  debugging is Wi-Fi only), and some phones stop it when the Wi-Fi changes.
-  The app cannot keep Shizuku alive; it falls back to the standard effect
-  and comes back when Shizuku does.
+  debugging is Wi-Fi only), and some phones stop it when wireless debugging
+  stops (the owner's does). The app cannot keep Shizuku alive. So the
+  engine (`SystemPeqEngine`) runs where it can in a helper Shizuku's service
+  starts and Shizuku does not own (`SystemPeqDaemon`, reached over a
+  loopback socket with a token, `SystemPeqWire` and
+  `SystemPeqDaemonClient`), and in the service itself where no helper can
+  be had. With neither, the standard effect plays and the mode comes back
+  when Shizuku does. Whether the helper survives wireless debugging going
+  is untried: ask what the Shizuku line said after Wi-Fi was turned off,
+  and for `adb logcat -s SystemPeqDaemon SystemPeqEngine`.
 - The rules it must keep are in `docs/ui-invariants.md`, "The Shizuku mode
   is the standard effect's stand-in". The first: the standard effect stands
   down only while the service says it is running.

@@ -18,6 +18,10 @@ interface ISystemPeqService {
     String status() = 3;
     // The app's token: when the app dies, the service stops and leaves.
     void attach(IBinder clientToken) = 4;
+    // Starts the helper that outlives Shizuku (SystemPeqDaemon) from the
+    // app's APK at apkPath; it answers on a loopback port from basePort to
+    // whoever knows token. True when the command was run.
+    boolean launchDetached(String apkPath, String token, int basePort) = 5;
     // Shizuku's own number for "leave".
     void destroy() = 16777114;
 }

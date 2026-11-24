@@ -55,8 +55,20 @@ import javax.inject.Singleton
  * standard system-wide effect goes on playing ([tf.monochrome.android.audio.eq.SystemAudioEqController]
  * stands down only for ACTIVE). It never falls silent for want of Shizuku.
  *
- * The service dies with the app (its token, [SystemPeqUserService.attach]);
- * [tf.monochrome.android.audio.eq.SystemEqService] is what keeps the app.
+ * Shizuku's service goes when Shizuku goes, and Shizuku goes with wireless
+ * debugging on some phones. So the service is asked first to start a helper
+ * that is no part of Shizuku ([SystemPeqDaemon]), and the equalizer runs
+ * there, reached over a loopback socket ([SystemPeqDaemonClient]). While
+ * the helper answers, the mode is on whatever has become of Shizuku. Where
+ * a helper cannot be started or reached, or dies twice, the equalizer runs
+ * in the service as it did before there was one. A helper found still
+ * running (the app was restarted, Shizuku has gone) is taken up again by
+ * its token.
+ *
+ * Both die with the app: the service by its token
+ * ([SystemPeqUserService.attach]), the helper a while after the app's
+ * connection closes. [tf.monochrome.android.audio.eq.SystemEqService] is
+ * what keeps the app.
  *
  * Nothing here runs unless the option is on: Shizuku is not asked whether
  * it is there, and no listener is registered.
@@ -91,6 +103,13 @@ class ShizukuPeqController @Inject constructor(
     private var sentCurve: SystemEqCurve.Parametric? = null
     private var watch: Job? = null
     private val clientToken = Binder()
+
+    // The helper that outlives Shizuku, while it answers; and how often one
+    // has been lost or would not play, after which the service is used.
+    private var daemon: SystemPeqDaemonClient? = null
+    private var daemonFailures = 0
+    private var looked = false
+    private val daemonToken: String by lazy { loadToken() }
 
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(context.packageName, SystemPeqUserService::class.java.name))
@@ -163,6 +182,7 @@ class ShizukuPeqController @Inject constructor(
                     curve = it.curve
                     // A change of settings is the listener trying again.
                     failed = false
+                    daemonFailures = 0
                     sync()
                 }
         }
@@ -185,6 +205,7 @@ class ShizukuPeqController @Inject constructor(
     fun refresh() {
         scope.launch {
             failed = false
+            daemonFailures = 0
             sync()
         }
     }
@@ -193,7 +214,10 @@ class ShizukuPeqController @Inject constructor(
 
     private fun sync() {
         if (!optionOn) {
-            // Not asked for: nothing of Shizuku is touched, and what was is let go.
+            // Not asked for: nothing of Shizuku is touched, and what was is
+            // let go. A helper too, one from before the app was restarted
+            // included: it must not go on correcting with the switch off.
+            if (looked || daemon != null) leaveDaemon()
             stopService()
             stopListening()
             _state.value = ShizukuPeqState.OFF
@@ -203,12 +227,19 @@ class ShizukuPeqController @Inject constructor(
             _state.value = ShizukuPeqState.UNSUPPORTED
             return
         }
+        val wanted = curve
+        // A helper answers whatever has become of Shizuku: first.
+        if (playThroughDaemon(wanted)) {
+            // With it playing, Shizuku's service has nothing left to do.
+            releaseBoundService()
+            _state.value = if (wanted == null) ShizukuPeqState.OFF else ShizukuPeqState.ACTIVE
+            return
+        }
         listen()
         val alive = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
         val permitted = alive && runCatching {
             Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
         }.getOrDefault(false)
-        val wanted = curve
         if (!alive || !permitted) {
             dropService()
         } else if (wanted == null) {
@@ -223,6 +254,101 @@ class ShizukuPeqController @Inject constructor(
             }
         }
         publish(alive, permitted)
+    }
+
+    /**
+     * Plays [wanted] through the helper, if there is one: the one in hand,
+     * or one found running by its token. True when the helper has it (or,
+     * with nothing wanted, has been told to leave); false when there is no
+     * helper, and Shizuku's service is the way.
+     */
+    private fun playThroughDaemon(wanted: SystemEqCurve.Parametric?): Boolean {
+        if (daemon == null && (wanted != null || !looked)) {
+            // Looked for once a start of the app at least: it may be there
+            // from before, with Shizuku gone since.
+            daemon = SystemPeqDaemonClient.connect(daemonToken)
+            looked = true
+        }
+        val helper = daemon ?: return false
+        if (wanted == null) {
+            // Nothing to play: other apps are left alone, and it leaves.
+            helper.exit()
+            daemon = null
+            sentCurve = null
+            return true
+        }
+        val playing = helper.status() == SystemPeqUserService.STATUS_RUNNING
+        val ok = when {
+            // Found playing (the app was restarted): the curve, not a new start.
+            playing && wanted == sentCurve -> true
+            playing -> helper.setCurve(wanted.left, wanted.right, wanted.preampDb)
+            else -> {
+                // Never two at once: a service that began playing while the
+                // helper was still coming up gives the audio back first.
+                runCatching { service?.stop() }
+                helper.start(android.os.Process.myUid(), wanted.left, wanted.right, wanted.preampDb)
+            }
+        }
+        if (ok == true) {
+            sentCurve = wanted
+            failed = false
+            watchService()
+            return true
+        }
+        // Gone, or it would not play: said, counted, and the service is the way.
+        Log.w(TAG, "the helper ${if (ok == null) "is gone" else "would not play: ${helper.status()}"}")
+        if (ok == false) helper.exit() else helper.close()
+        daemon = null
+        sentCurve = null
+        daemonFailures++
+        return false
+    }
+
+    /** Tells a helper, in hand or found by its token, to stop and leave. */
+    private fun leaveDaemon() {
+        val helper = daemon ?: SystemPeqDaemonClient.connect(daemonToken)
+        looked = false
+        daemon = null
+        helper?.exit()
+    }
+
+    /**
+     * Has [bound] start a helper and waits for it to answer. True when one
+     * is in hand. Not tried again once one has been lost or refused twice:
+     * a phone that will not keep a helper is not asked for one in a loop.
+     */
+    private suspend fun startDaemon(bound: ISystemPeqService): Boolean {
+        if (daemonFailures >= MAX_DAEMON_FAILURES) return false
+        val apk = runCatching { context.applicationInfo.sourceDir }.getOrNull() ?: return false
+        val launched = runCatching { bound.launchDetached(apk, daemonToken, SystemPeqWire.BASE_PORT) }
+            .onFailure { Log.w(TAG, "could not ask for a helper: ${it.message}") }
+            .getOrDefault(false)
+        if (!launched) {
+            daemonFailures++
+            return false
+        }
+        // A new process, a runtime to start: a few tries.
+        repeat(DAEMON_TRIES) {
+            delay(DAEMON_TRY_MS)
+            SystemPeqDaemonClient.connect(daemonToken)?.let {
+                daemon = it
+                looked = true
+                return true
+            }
+        }
+        Log.w(TAG, "the helper did not answer")
+        daemonFailures++
+        return false
+    }
+
+    /** The helper's secret, made once and kept in the app's own storage. */
+    private fun loadToken(): String {
+        val file = java.io.File(context.noBackupFilesDir, TOKEN_FILE)
+        runCatching { file.readText().trim() }.getOrNull()?.takeIf { SystemPeqWire.isToken(it) }?.let { return it }
+        val bytes = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val token = bytes.joinToString("") { "%02x".format(it) }
+        runCatching { file.writeText(token) }
+        return token
     }
 
     private fun publish(alive: Boolean, permitted: Boolean) {
@@ -261,7 +387,11 @@ class ShizukuPeqController @Inject constructor(
                     } else {
                         service = stub
                         runCatching { stub.attach(clientToken) }
-                        curve?.let { send(stub, it, starting = true) }
+                        val wanted = curve
+                        // The helper first, which Shizuku stopping does not
+                        // stop; sync() plays through it and lets this
+                        // service go. Without one, the service plays.
+                        if (wanted != null && !startDaemon(stub)) send(stub, wanted, starting = true)
                     }
                     sync()
                 }
@@ -315,22 +445,35 @@ class ShizukuPeqController @Inject constructor(
         }
     }
 
-    /** The service's own word, every few seconds while it plays: it may stop by itself. */
+    /** The engine's own word, every few seconds while it plays: it may stop by itself. */
     private fun watchService() {
         if (watch?.isActive == true) return
         watch = scope.launch {
             while (true) {
                 delay(WATCH_MS)
-                val bound = service ?: return@launch
                 if (sentCurve == null) return@launch
-                val status = runCatching { bound.status() }.getOrNull()
-                if (status != SystemPeqUserService.STATUS_RUNNING) {
-                    Log.w(TAG, "the service stopped: $status")
+                val helper = daemon
+                val bound = service
+                val status = when {
+                    helper != null -> helper.status()
+                    bound != null -> runCatching { bound.status() }.getOrNull()
+                    else -> return@launch
+                }
+                if (status == SystemPeqUserService.STATUS_RUNNING) continue
+                Log.w(TAG, "the equalizer stopped: $status")
+                if (helper != null) {
+                    // The helper is gone or has stopped: counted, and
+                    // Shizuku is asked again if it is there.
+                    if (status == null) helper.close() else helper.exit()
+                    daemon = null
+                    sentCurve = null
+                    daemonFailures++
+                } else {
                     failed = true
                     stopService(keepFailed = true)
-                    sync()
-                    return@launch
                 }
+                sync()
+                return@launch
             }
         }
     }
@@ -344,6 +487,22 @@ class ShizukuPeqController @Inject constructor(
         sentCurve = null
         binding = false
         if (!keepFailed) failed = false
+        runCatching { bound?.stop() }
+        if (conn != null) runCatching { Shizuku.unbindUserService(args, conn, true) }
+    }
+
+    /**
+     * Lets Shizuku's service go while the helper plays: its engine stopped
+     * (it may have begun before the helper answered) and its process ended.
+     * What the helper was sent is kept.
+     */
+    private fun releaseBoundService() {
+        val bound = service
+        val conn = connection
+        if (bound == null && conn == null) return
+        service = null
+        connection = null
+        binding = false
         runCatching { bound?.stop() }
         if (conn != null) runCatching { Shizuku.unbindUserService(args, conn, true) }
     }
@@ -385,7 +544,12 @@ class ShizukuPeqController @Inject constructor(
         const val PERMISSION_REQUEST = 4201
 
         /** Raised when [ISystemPeqService] changes, so a service of the old one is replaced. */
-        const val SERVICE_PROTOCOL = 1
+        const val SERVICE_PROTOCOL = 2
         const val WATCH_MS = 4000L
+
+        const val TOKEN_FILE = "system_peq_token"
+        const val MAX_DAEMON_FAILURES = 2
+        const val DAEMON_TRIES = 8
+        const val DAEMON_TRY_MS = 400L
     }
 }
