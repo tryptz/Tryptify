@@ -596,10 +596,17 @@ media. The method is Quve's (github.com/nanbeimerco/Quve, GPL-3.0) and the
 service file is under GPL-3.0 with it. Every Android call in it is hidden
 and made by reflection.
 
-- It has not been run on a phone. Compiling and its unit tests are all that
-  hold it; say so until someone has tried it, and ask for a sent log (tags
+- It has run on one phone: the owner's OnePlus (Android 17), where the
+  service started and the settings row read "On" on 2026-11-24. Whether the
+  sound is right there, and every other phone, is untried: compiling and
+  its unit tests are all that hold the rest. Say so, and ask for a log (tags
   `ShizukuPeq` in the app's, `SystemPeqService` in Shizuku's process, which
   a sent log does not contain: `adb logcat -s SystemPeqService`).
+- OnePlus and OPPO phones limit what the shell may do, and Shizuku shows a
+  red card saying so. Its guide says to turn off "Permission monitoring" in
+  Developer options; on version 16 and later that switch is reported
+  renamed "Disable system optimization", and hidden while the phone's
+  language is not English. Reports from other users, not checked here.
 - The rules it must keep are in `docs/ui-invariants.md`, "The Shizuku mode
   is the standard effect's stand-in". The first: the standard effect stands
   down only while the service says it is running.

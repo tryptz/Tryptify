@@ -551,12 +551,16 @@ private fun EqualizerTab(
                     badge = stringResource(R.string.settings_beta),
                     caution = stringResource(R.string.settings_swaps_the_app_s_exact_correction_for_a_coarser),
                 )
-                SystemEqTileSetting()
                 // The Shizuku mode is a way of doing system-wide, so it is
-                // asked under it and shown only while system-wide is on.
+                // asked straight under it and shown only while system-wide
+                // is on. The tile row comes after both: it is a shortcut to
+                // the switch, not a part of how the correction is made, and
+                // between the two it read as belonging to neither (the
+                // owner, 2026-11-24).
                 AnimatedVisibility(visible = systemWideAutoEq) {
                     ShizukuPeqSetting(viewModel)
                 }
+                SystemEqTileSetting()
             }
         }
 

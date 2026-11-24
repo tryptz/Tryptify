@@ -2624,7 +2624,14 @@ rules:
   `SystemPeqDsp` is pure Kotlin for that reason.
 - Its Android calls are hidden ones, by reflection. A new one goes inside
   the same `try` that releases everything, and its numbers are written with
-  where they come from. None of it has run on a phone.
+  where they come from. On the owner's OnePlus (Android 17) the service
+  started and the row read "On" (2026-11-24); what it sounds like, and any
+  other phone, has not been reported.
+- **The rows' order under System-wide AutoEQ: the Shizuku switch, its
+  status line, then the Quick Settings tile row.** The tile is a shortcut
+  to the switch above, not a part of how the correction is made; between
+  the system-wide switch and the Shizuku one it read as belonging to
+  neither.
 
 **System-wide AutoEQ has a Quick Settings tile too**
 (`SystemEqQuickTileService`), for the switch under AutoEQ. System-wide is a
