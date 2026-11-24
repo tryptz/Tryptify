@@ -2611,6 +2611,13 @@ rules:
   would not start: each is a line under the switch, and the standard
   system-wide effect goes on playing. The option is never the reason other
   apps go uncorrected, and never a reason they are corrected twice.
+- **Shizuku stopping is not the service failing.** It is started over
+  wireless debugging, and on some phones leaving that Wi-Fi stops it, the
+  service with it. The standard effect takes over at once, and the mode
+  comes back by itself when Shizuku runs again: `failed` is cleared when
+  Shizuku's binder dies or returns. It was kept once, when the service's
+  disconnect was heard before Shizuku's death, and the row then read "would
+  not start" with Shizuku running again.
 - **A policy is never left registered with nothing reading it**: that is
   silence in every other app. Every way out of `SystemPeqUserService`, an
   error hours in included, ends in `releaseLocked`; the app's death ends it

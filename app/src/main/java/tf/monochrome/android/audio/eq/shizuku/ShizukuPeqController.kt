@@ -48,7 +48,11 @@ import javax.inject.Singleton
  * being a separate app the listener has to install, start after every
  * restart of the phone, and allow: [state] says which of those is in the
  * way, and until it reads [ShizukuPeqState.ACTIVE] the standard system-wide
- * effect goes on playing ([tf.monochrome.android.audio.eq.SystemAudioEqController]
+ * effect goes on playing. That holds for Shizuku stopping mid-song as well
+ * (leaving the Wi-Fi it was started on stops it on some phones): the
+ * standard effect takes over at once, and this mode comes back by itself
+ * when Shizuku is running again. So does it for the first start: the
+ * standard system-wide effect goes on playing ([tf.monochrome.android.audio.eq.SystemAudioEqController]
  * stands down only for ACTIVE). It never falls silent for want of Shizuku.
  *
  * The service dies with the app (its token, [SystemPeqUserService.attach]);
@@ -98,10 +102,24 @@ class ShizukuPeqController @Inject constructor(
             .version(BuildConfig.VERSION_CODE * 100 + SERVICE_PROTOCOL)
     }
 
-    private val binderReceived = Shizuku.OnBinderReceivedListener { scope.launch { sync() } }
+    // Shizuku coming and going is not the service failing. It is stopped by
+    // the phone on some when the network changes (it is started over
+    // wireless debugging, which Android ties to the Wi-Fi it was started
+    // on), and the service goes with it. Which of "Shizuku died" and "the
+    // service disconnected" is heard first is not fixed: taken in the other
+    // order, the disconnect was kept as a failure, and with Shizuku running
+    // again the mode stayed at "would not start" until a setting was changed.
+    // So both clear it: Shizuku back means try again, by itself.
+    private val binderReceived = Shizuku.OnBinderReceivedListener {
+        scope.launch {
+            failed = false
+            sync()
+        }
+    }
     private val binderDead = Shizuku.OnBinderDeadListener {
         scope.launch {
             dropService()
+            failed = false
             sync()
         }
     }
@@ -255,8 +273,10 @@ class ShizukuPeqController @Inject constructor(
                     service = null
                     sentCurve = null
                     binding = false
-                    // It went by itself: said once, not started again in a loop.
-                    failed = true
+                    // It went by itself: said once, not started again in a
+                    // loop. Unless Shizuku went with it, which is Shizuku
+                    // stopping and not the service failing.
+                    failed = runCatching { Shizuku.pingBinder() }.getOrDefault(false)
                     sync()
                 }
             }

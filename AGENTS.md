@@ -607,6 +607,10 @@ and made by reflection.
   Developer options; on version 16 and later that switch is reported
   renamed "Disable system optimization", and hidden while the phone's
   language is not English. Reports from other users, not checked here.
+- The mode itself uses no network. Shizuku does, to start (wireless
+  debugging is Wi-Fi only), and some phones stop it when the Wi-Fi changes.
+  The app cannot keep Shizuku alive; it falls back to the standard effect
+  and comes back when Shizuku does.
 - The rules it must keep are in `docs/ui-invariants.md`, "The Shizuku mode
   is the standard effect's stand-in". The first: the standard effect stands
   down only while the service says it is running.
