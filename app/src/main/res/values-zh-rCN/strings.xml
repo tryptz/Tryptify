@@ -770,6 +770,16 @@
     <string name="settings_shizuku_status_starting">正在启动…</string>
     <string name="settings_shizuku_status_active">已开启：其他应用正通过你的参量均衡播放。</string>
     <string name="settings_shizuku_status_failed">无法在这台手机上启动。当前使用标准的全局均衡器。更改任意均衡设置即可重试。</string>
+    <string name="settings_shizuku_tutorial_title">设置 Shizuku</string>
+    <string name="settings_shizuku_tutorial_intro">此选项通过 Shizuku 工作。它是一款独立的免费应用，让 Tryptify 能校正其他应用的声音。只需设置一次：</string>
+    <string name="settings_shizuku_tutorial_step_install">安装 Shizuku 并打开它。</string>
+    <string name="settings_shizuku_tutorial_step_start">通过无线调试启动它：在 Shizuku 中点按“配对”，在手机的“开发者选项”中打开“无线调试”，把配对码输入 Shizuku 的通知，然后点按“启动”。此步骤需要 Wi-Fi。</string>
+    <string name="settings_shizuku_tutorial_step_allow">回到这里，点按此开关下方的 Shizuku 一行，以允许 Tryptify。</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">在 OnePlus、OPPO 和 realme 手机上，还需在“开发者选项”中打开“禁止权限监控”（Disable permission monitoring）。较新的版本可能将其称为“Disable system optimization”，并且只在手机语言为英语时显示。</string>
+    <string name="settings_shizuku_tutorial_note">每次重启手机后都需要重新启动 Shizuku，有些手机在 Wi-Fi 断开时也会停止它。在它恢复之前，改用标准的全局均衡器。点按 Shizuku 一行可再次查看本说明。</string>
+    <string name="settings_shizuku_tutorial_turn_on">开启</string>
+    <string name="settings_shizuku_tutorial_open">打开 Shizuku</string>
+    <string name="settings_shizuku_tutorial_get">获取 Shizuku</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">将你的 AutoEQ 和音调应用到设备上的所有音频（视设备支持情况）</string>
     <string name="settings_beta">测试版</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">会把应用内的精确校正换成较粗略的全局校正，而且有些设备会完全忽略它。开启后可校正其他应用的声音。</string>

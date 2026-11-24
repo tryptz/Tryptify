@@ -474,6 +474,9 @@ class PreferencesManager @Inject constructor(
         // SETTINGS_SYNC_KEYS: it rests on an app installed and allowed on
         // this phone, and means nothing on another.
         private val SYSTEM_WIDE_PEQ_SHIZUKU = booleanPreferencesKey("system_wide_peq_shizuku")
+        // Its setup steps were read to the end on this phone. Not synced
+        // either: the steps are about this phone's Shizuku.
+        private val SHIZUKU_PEQ_STEPS_SEEN = booleanPreferencesKey("shizuku_peq_steps_seen")
         // Bass/treble tone shelves layered after the AutoEQ in that same effect.
         private val SYSTEM_TONE_CONTROLS_JSON = stringPreferencesKey("system_tone_controls_json")
 
@@ -1955,6 +1958,14 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSystemWidePeqShizuku(enabled: Boolean) {
         dataStore.edit { it[SYSTEM_WIDE_PEQ_SHIZUKU] = enabled }
+    }
+
+    /** Whether the Shizuku option's setup steps were read to the end on this phone. */
+    val shizukuPeqStepsSeen: Flow<Boolean> =
+        dataStore.data.map { it[SHIZUKU_PEQ_STEPS_SEEN] ?: false }
+
+    suspend fun setShizukuPeqStepsSeen() {
+        dataStore.edit { it[SHIZUKU_PEQ_STEPS_SEEN] = true }
     }
 
     /** Bass/treble tone shelves for the system-wide effect (after AutoEQ). */

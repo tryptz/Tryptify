@@ -846,6 +846,16 @@
     <string name="settings_shizuku_status_starting">Avvio…</string>
     <string name="settings_shizuku_status_active">Attivo: le altre app passano dal tuo EQ parametrico.</string>
     <string name="settings_shizuku_status_failed">Non è stato possibile avviarlo su questo telefono. Viene usato l’EQ di sistema standard. Cambia un’impostazione dell’EQ per riprovare.</string>
+    <string name="settings_shizuku_tutorial_title">Configura Shizuku</string>
+    <string name="settings_shizuku_tutorial_intro">Questa opzione funziona tramite Shizuku, un’app gratuita a parte che permette a Tryptify di correggere il suono delle altre app. Si configura una volta sola:</string>
+    <string name="settings_shizuku_tutorial_step_install">Installa Shizuku e aprilo.</string>
+    <string name="settings_shizuku_tutorial_step_start">Avvialo con il debug wireless: in Shizuku tocca «Associazione», attiva «Debug wireless» nelle Opzioni sviluppatore del telefono, scrivi il codice di associazione nella notifica di Shizuku, poi tocca «Avvia». Questo passaggio richiede il Wi-Fi.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Torna qui e tocca la riga Shizuku sotto questo interruttore per autorizzare Tryptify.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">Sui telefoni OnePlus, OPPO e realme attiva anche «Disable permission monitoring» nelle Opzioni sviluppatore. Le versioni più recenti possono chiamarlo «Disable system optimization» e mostrarlo solo con il telefono in inglese.</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku va riavviato dopo ogni riavvio del telefono, e alcuni telefoni lo fermano quando il Wi-Fi viene meno. Finché non torna, suona l’EQ di sistema standard. Tocca la riga Shizuku per rileggere queste istruzioni.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Attiva</string>
+    <string name="settings_shizuku_tutorial_open">Apri Shizuku</string>
+    <string name="settings_shizuku_tutorial_get">Scarica Shizuku</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Applica AutoEQ + tono a tutto l’audio del dispositivo (se consentito dal dispositivo)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Sostituisce la correzione precisa dell’app con una globale più approssimativa, e alcuni dispositivi la ignorano del tutto. Attivala per correggere l’audio di altre app.</string>

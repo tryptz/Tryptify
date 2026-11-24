@@ -770,6 +770,16 @@
     <string name="settings_shizuku_status_starting">起動中…</string>
     <string name="settings_shizuku_status_active">オン：他のアプリがパラメトリック EQ を通して再生されています。</string>
     <string name="settings_shizuku_status_failed">この端末では起動できませんでした。標準のシステム全体の EQ を使用します。EQ の設定を変更すると再試行します。</string>
+    <string name="settings_shizuku_tutorial_title">Shizuku の設定</string>
+    <string name="settings_shizuku_tutorial_intro">このオプションは Shizuku を通して動作します。Shizuku は別の無料アプリで、Tryptify が他のアプリの音を補正できるようにします。設定は一度だけです。</string>
+    <string name="settings_shizuku_tutorial_step_install">Shizuku をインストールして開きます。</string>
+    <string name="settings_shizuku_tutorial_step_start">ワイヤレス デバッグで起動します。Shizuku で「ペアリング」をタップし、端末の「開発者向けオプション」で「ワイヤレス デバッグ」をオンにして、ペア設定コードを Shizuku の通知に入力し、「起動」をタップします。この手順には Wi-Fi が必要です。</string>
+    <string name="settings_shizuku_tutorial_step_allow">ここに戻り、このスイッチの下の Shizuku の行をタップして Tryptify を許可します。</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">OnePlus、OPPO、realme の端末では、「開発者向けオプション」で「Disable permission monitoring」もオンにします。新しいバージョンでは「Disable system optimization」という名前の場合があり、端末の言語が英語のときだけ表示されることがあります。</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku は端末を再起動するたびに起動し直す必要があり、Wi-Fi が切れると停止する端末もあります。戻るまでは標準のシステム全体の EQ が使われます。Shizuku の行をタップすると、この説明をもう一度読めます。</string>
+    <string name="settings_shizuku_tutorial_turn_on">オンにする</string>
+    <string name="settings_shizuku_tutorial_open">Shizuku を開く</string>
+    <string name="settings_shizuku_tutorial_get">Shizuku を入手</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">AutoEQ とトーンを端末のすべての音声に適用（端末が対応している場合）</string>
     <string name="settings_beta">ベータ</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">アプリ内の精密な補正を大まかなシステム全体の補正に切り替えます。端末によっては完全に無視されます。他のアプリの音を補正したいときにオンにしてください。</string>

@@ -808,6 +808,16 @@
     <string name="settings_shizuku_status_starting">Başlatılıyor…</string>
     <string name="settings_shizuku_status_active">Açık: diğer uygulamalar parametrik EQ\'ndan geçiyor.</string>
     <string name="settings_shizuku_status_failed">Bu telefonda başlatılamadı. Standart sistem geneli EQ kullanılıyor. Yeniden denemek için herhangi bir EQ ayarını değiştir.</string>
+    <string name="settings_shizuku_tutorial_title">Shizuku’yu ayarla</string>
+    <string name="settings_shizuku_tutorial_intro">Bu seçenek, Tryptify’ın diğer uygulamaların sesini düzeltmesini sağlayan ayrı ve ücretsiz bir uygulama olan Shizuku üzerinden çalışır. Bir kez ayarlanır:</string>
+    <string name="settings_shizuku_tutorial_step_install">Shizuku’yu yükleyin ve açın.</string>
+    <string name="settings_shizuku_tutorial_step_start">Kablosuz hata ayıklama ile başlatın: Shizuku’da Eşleştirme’ye dokunun, telefonun Geliştirici seçenekleri’nde “Kablosuz hata ayıklama”yı açın, eşleştirme kodunu Shizuku’nun bildirimine yazın, ardından Başlat’a dokunun. Bu adım Wi-Fi gerektirir.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Buraya dönün ve Tryptify’a izin vermek için bu anahtarın altındaki Shizuku satırına dokunun.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">OnePlus, OPPO ve realme telefonlarda Geliştirici seçenekleri’nde “Disable permission monitoring” seçeneğini de açın. Yeni sürümlerde adı “Disable system optimization” olabilir ve yalnızca telefon dili İngilizce iken görünebilir.</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku’nun telefon her yeniden başladığında tekrar başlatılması gerekir; bazı telefonlar Wi-Fi kesilince onu durdurur. Geri gelene kadar standart sistem geneli EQ çalar. Bunu yeniden okumak için Shizuku satırına dokunun.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Aç</string>
+    <string name="settings_shizuku_tutorial_open">Shizuku’yu aç</string>
+    <string name="settings_shizuku_tutorial_get">Shizuku’yu edin</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">AutoEQ ve ton ayarınızı cihazdaki tüm seslere uygulayın (cihaz izin veriyorsa)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Uygulamanın hassas düzeltmesini daha kaba, genel bir düzeltmeyle değiştirir; bazı cihazlar bunu tamamen yok sayar. Diğer uygulamaları düzeltmek için açın.</string>

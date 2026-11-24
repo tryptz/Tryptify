@@ -846,6 +846,16 @@
     <string name="settings_shizuku_status_starting">Iniciando…</string>
     <string name="settings_shizuku_status_active">Activado: las demás apps suenan a través de tu EQ paramétrico.</string>
     <string name="settings_shizuku_status_failed">No se pudo iniciar en este teléfono. Se usa el EQ de todo el sistema estándar. Cambia cualquier ajuste del EQ para reintentar.</string>
+    <string name="settings_shizuku_tutorial_title">Configurar Shizuku</string>
+    <string name="settings_shizuku_tutorial_intro">Esta opción funciona a través de Shizuku, una app gratuita aparte que permite a Tryptify corregir el sonido de las demás apps. Se configura una sola vez:</string>
+    <string name="settings_shizuku_tutorial_step_install">Instala Shizuku y ábrelo.</string>
+    <string name="settings_shizuku_tutorial_step_start">Inícialo con la depuración inalámbrica: en Shizuku toca Vincular, activa «Depuración inalámbrica» en las Opciones para desarrolladores del teléfono, escribe el código de vinculación en la notificación de Shizuku y toca Iniciar. Este paso necesita Wi-Fi.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Vuelve aquí y toca la línea Shizuku bajo este interruptor para permitir Tryptify.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">En teléfonos OnePlus, OPPO y realme, activa también «Disable permission monitoring» en las Opciones para desarrolladores. Las versiones nuevas pueden llamarlo «Disable system optimization» y mostrarlo solo con el teléfono en inglés.</string>
+    <string name="settings_shizuku_tutorial_note">Hay que iniciar Shizuku de nuevo tras cada reinicio del teléfono, y algunos teléfonos lo detienen cuando se corta el Wi-Fi. Hasta que vuelva, suena el EQ de todo el sistema estándar. Toca la línea Shizuku para volver a leer esto.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Activar</string>
+    <string name="settings_shizuku_tutorial_open">Abrir Shizuku</string>
+    <string name="settings_shizuku_tutorial_get">Obtener Shizuku</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Aplicar tu AutoEQ y tono a todo el audio del dispositivo (si el dispositivo lo permite)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Cambia la corrección exacta de la app por una global menos precisa, y algunos dispositivos la ignoran por completo. Actívala para corregir otras apps.</string>

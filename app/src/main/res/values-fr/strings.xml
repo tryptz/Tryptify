@@ -846,6 +846,16 @@
     <string name="settings_shizuku_status_starting">Démarrage…</string>
     <string name="settings_shizuku_status_active">Activé : les autres apps passent par votre égaliseur paramétrique.</string>
     <string name="settings_shizuku_status_failed">Impossible de le démarrer sur ce téléphone. L’égaliseur système standard est utilisé. Modifiez un réglage de l’égaliseur pour réessayer.</string>
+    <string name="settings_shizuku_tutorial_title">Configurer Shizuku</string>
+    <string name="settings_shizuku_tutorial_intro">Cette option passe par Shizuku, une app gratuite distincte qui permet à Tryptify de corriger le son des autres apps. La configuration se fait une seule fois :</string>
+    <string name="settings_shizuku_tutorial_step_install">Installez Shizuku et ouvrez-le.</string>
+    <string name="settings_shizuku_tutorial_step_start">Démarrez-le par le débogage sans fil : dans Shizuku, touchez Association, activez « Débogage sans fil » dans les Options pour les développeurs du téléphone, saisissez le code d’association dans la notification de Shizuku, puis touchez Démarrer. Cette étape nécessite le Wi-Fi.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Revenez ici et touchez la ligne Shizuku sous cet interrupteur pour autoriser Tryptify.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">Sur les téléphones OnePlus, OPPO et realme, activez aussi « Disable permission monitoring » dans les Options pour les développeurs. Les versions récentes peuvent l’appeler « Disable system optimization » et ne l’afficher que si le téléphone est en anglais.</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku doit être relancé après chaque redémarrage du téléphone, et certains téléphones l’arrêtent quand le Wi-Fi est coupé. En attendant, l’égaliseur système standard prend le relais. Touchez la ligne Shizuku pour relire ceci.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Activer</string>
+    <string name="settings_shizuku_tutorial_open">Ouvrir Shizuku</string>
+    <string name="settings_shizuku_tutorial_get">Obtenir Shizuku</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Appliquer votre AutoEQ et votre tonalité à tout le son de l’appareil (si l’appareil le permet)</string>
     <string name="settings_beta">Bêta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Remplace la correction précise de l’app par une correction globale plus approximative, et certains appareils l’ignorent complètement. Activez-la pour corriger les autres apps.</string>

@@ -618,6 +618,16 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val shizukuPeqState: StateFlow<tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState> = shizukuPeq.state
     fun setSystemWidePeqShizuku(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWidePeqShizuku(enabled) } }
+
+    /**
+     * Whether the Shizuku option's setup steps were read on this phone.
+     * Null until the answer is read: a tap before then moves the switch
+     * without them, which is better than showing them a second time.
+     */
+    val shizukuPeqStepsSeen: StateFlow<Boolean?> = preferences.shizukuPeqStepsSeen
+        .map<Boolean, Boolean?> { it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    fun setShizukuPeqStepsSeen() { viewModelScope.launch { preferences.setShizukuPeqStepsSeen() } }
     fun requestShizukuPermission() = shizukuPeq.requestPermission()
     fun refreshShizukuPeq() = shizukuPeq.refresh()
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }

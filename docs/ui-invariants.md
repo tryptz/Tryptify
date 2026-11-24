@@ -2658,6 +2658,24 @@ rules:
   to the switch above, not a part of how the correction is made; between
   the system-wide switch and the Shizuku one it read as belonging to
   neither.
+- **The first time the switch is turned on, the setup steps come first**
+  (`ShizukuStepsDialog`, the owner's ask of 2026-11-24). Everything in the
+  option's way is outside the app, and a switch that moves and then says
+  "Shizuku is not installed" explains nothing. So that tap opens an opaque
+  dialog with the steps (install, start over wireless debugging, allow
+  Tryptify, the OnePlus and OPPO switch) and what to expect (started again
+  after each restart; the standard EQ meanwhile), and its button is what
+  turns the option on. Its rules:
+  - Cancelled, the switch stays off and the steps come again next time;
+    read to the end, never again by themselves (`shizuku_peq_steps_seen`,
+    kept on this phone, not synced). Turning the option off is never held
+    up (`ShizukuSetupTest`).
+  - The status line opens them again, with Close alone, in every state but
+    "not allowed", where its tap still asks Shizuku.
+  - Its one button besides opens the Shizuku app, or its releases page
+    where it is not installed. Nothing is installed or started by the app.
+  - What it says of OnePlus and OPPO is other users' reports, worded as
+    "may": the switch's name there has changed once already.
 
 **System-wide AutoEQ has a Quick Settings tile too**
 (`SystemEqQuickTileService`), for the switch under AutoEQ. System-wide is a

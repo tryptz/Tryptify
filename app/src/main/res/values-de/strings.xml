@@ -808,6 +808,16 @@
     <string name="settings_shizuku_status_starting">Wird gestartet…</string>
     <string name="settings_shizuku_status_active">An: Andere Apps laufen durch deinen parametrischen EQ.</string>
     <string name="settings_shizuku_status_failed">Auf diesem Telefon ließ es sich nicht starten. Der normale systemweite EQ wird verwendet. Ändere eine EQ-Einstellung, um es erneut zu versuchen.</string>
+    <string name="settings_shizuku_tutorial_title">Shizuku einrichten</string>
+    <string name="settings_shizuku_tutorial_intro">Diese Option läuft über Shizuku, eine eigene kostenlose App, mit der Tryptify den Klang anderer Apps korrigieren kann. Die Einrichtung ist nur einmal nötig:</string>
+    <string name="settings_shizuku_tutorial_step_install">Installiere Shizuku und öffne es.</string>
+    <string name="settings_shizuku_tutorial_step_start">Starte es über das WLAN-Debugging: Tippe in Shizuku auf „Kopplung“, aktiviere in den Entwickleroptionen des Telefons „Debugging über WLAN“, gib den Kopplungscode in der Shizuku-Benachrichtigung ein und tippe dann auf „Starten“. Dieser Schritt braucht WLAN.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Komm hierher zurück und tippe unter diesem Schalter auf die Shizuku-Zeile, um Tryptify zu erlauben.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">Auf OnePlus-, OPPO- und realme-Telefonen aktiviere außerdem „Disable permission monitoring“ in den Entwickleroptionen. Neuere Versionen nennen es womöglich „Disable system optimization“ und zeigen es nur, solange das Telefon auf Englisch eingestellt ist.</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku muss nach jedem Neustart des Telefons erneut gestartet werden, und manche Telefone beenden es, wenn das WLAN wegfällt. Bis es wieder läuft, spielt der normale systemweite EQ. Tippe auf die Shizuku-Zeile, um dies noch einmal zu lesen.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Einschalten</string>
+    <string name="settings_shizuku_tutorial_open">Shizuku öffnen</string>
+    <string name="settings_shizuku_tutorial_get">Shizuku holen</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">AutoEQ und Klang auf den gesamten Gerätesound anwenden (sofern das Gerät es erlaubt)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Ersetzt die exakte Korrektur der App durch eine gröbere globale, und manche Geräte ignorieren sie ganz. Schalte sie ein, um andere Apps zu korrigieren.</string>

@@ -370,7 +370,7 @@ class ShizukuPeqController @Inject constructor(
     }
 
     private fun installed(): Boolean =
-        runCatching { context.packageManager.getPackageInfo(SHIZUKU_PACKAGE, 0) }.isSuccess
+        runCatching { context.packageManager.getPackageInfo(ShizukuSetup.PACKAGE, 0) }.isSuccess
 
     private fun bind() {
         if (binding || failed) return
@@ -540,7 +540,6 @@ class ShizukuPeqController @Inject constructor(
 
     private companion object {
         const val TAG = "ShizukuPeq"
-        const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
         const val PERMISSION_REQUEST = 4201
 
         /** Raised when [ISystemPeqService] changes, so a service of the old one is replaced. */

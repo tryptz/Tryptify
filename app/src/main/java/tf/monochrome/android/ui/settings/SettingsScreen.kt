@@ -2339,12 +2339,20 @@ private fun ShizukuPeqSetting(viewModel: SettingsViewModel) {
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
+    val stepsSeen by viewModel.shizukuPeqStepsSeen.collectAsStateWithLifecycle()
+    var showSteps by rememberSaveable { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingSwitchItem(
             title = stringResource(R.string.settings_shizuku_peq),
             subtitle = stringResource(R.string.settings_shizuku_peq_desc),
             checked = on,
-            onCheckedChange = viewModel::setSystemWidePeqShizuku,
+            onCheckedChange = { wanted ->
+                if (tf.monochrome.android.audio.eq.shizuku.ShizukuSetup.showsStepsFirst(wanted, stepsSeen)) {
+                    showSteps = true
+                } else {
+                    viewModel.setSystemWidePeqShizuku(wanted)
+                }
+            },
             badge = stringResource(R.string.settings_beta),
         )
         if (on) {
@@ -2353,10 +2361,101 @@ private fun ShizukuPeqSetting(viewModel: SettingsViewModel) {
                 // The other app's name, the same in every language.
                 title = "Shizuku",
                 subtitle = stringResource(shizukuStatusText(state)),
-                onClick = if (needsPermission) ({ viewModel.requestShizukuPermission() }) else null,
+                // Asks where asking is all that is left; anywhere else the steps again.
+                onClick = { if (needsPermission) viewModel.requestShizukuPermission() else showSteps = true },
             )
         }
     }
+    if (showSteps) {
+        ShizukuStepsDialog(
+            turnsOn = !on,
+            onConfirm = {
+                showSteps = false
+                viewModel.setShizukuPeqStepsSeen()
+                if (!on) viewModel.setSystemWidePeqShizuku(true)
+            },
+            onDismiss = { showSteps = false },
+        )
+    }
+}
+
+/**
+ * The Shizuku option's setup steps: shown before the switch first moves
+ * ([turnsOn], and then its button is what turns the option on), and again
+ * from the line under the switch. An opaque dialog, like every other.
+ */
+@Composable
+private fun ShizukuStepsDialog(turnsOn: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val shizuku = tf.monochrome.android.audio.eq.shizuku.ShizukuSetup
+    val launch = remember { context.packageManager.getLaunchIntentForPackage(shizuku.PACKAGE) }
+    val steps = listOf(
+        R.string.settings_shizuku_tutorial_step_install,
+        R.string.settings_shizuku_tutorial_step_start,
+        R.string.settings_shizuku_tutorial_step_allow,
+        R.string.settings_shizuku_tutorial_step_oneplus,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_shizuku_tutorial_title)) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    stringResource(R.string.settings_shizuku_tutorial_intro),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                steps.forEachIndexed { index, step ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "${index + 1}.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.width(24.dp),
+                        )
+                        Text(
+                            stringResource(step),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                TextButton(onClick = {
+                    val intent = launch ?: Intent(Intent.ACTION_VIEW, shizuku.DOWNLOAD_URL.toUri())
+                    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                }) {
+                    Text(
+                        stringResource(
+                            if (launch != null) R.string.settings_shizuku_tutorial_open
+                            else R.string.settings_shizuku_tutorial_get
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    stringResource(R.string.settings_shizuku_tutorial_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    stringResource(
+                        if (turnsOn) R.string.settings_shizuku_tutorial_turn_on else R.string.action_close
+                    )
+                )
+            }
+        },
+        dismissButton = if (turnsOn) ({
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }) else null,
+    )
 }
 
 @androidx.annotation.StringRes

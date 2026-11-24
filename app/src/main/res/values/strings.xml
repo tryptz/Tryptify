@@ -809,6 +809,16 @@
     <string name="settings_shizuku_status_starting">Starting…</string>
     <string name="settings_shizuku_status_active">On: other apps play through your parametric EQ.</string>
     <string name="settings_shizuku_status_failed">It would not start on this phone. The standard system-wide EQ is used. Change any EQ setting to try again.</string>
+    <string name="settings_shizuku_tutorial_title">Set up Shizuku</string>
+    <string name="settings_shizuku_tutorial_intro">This option works through Shizuku, a separate free app that lets Tryptify correct the sound of other apps. Set it up once:</string>
+    <string name="settings_shizuku_tutorial_step_install">Install Shizuku and open it.</string>
+    <string name="settings_shizuku_tutorial_step_start">Start it with wireless debugging: in Shizuku tap Pairing, turn on Wireless debugging in the phone’s Developer options, type the pairing code into Shizuku’s notification, then tap Start. This step needs Wi-Fi.</string>
+    <string name="settings_shizuku_tutorial_step_allow">Come back here and tap the Shizuku line under this switch to allow Tryptify.</string>
+    <string name="settings_shizuku_tutorial_step_oneplus">On OnePlus, OPPO and realme phones, also turn on “Disable permission monitoring” in Developer options. Newer versions may call it “Disable system optimization” and show it only while the phone is set to English.</string>
+    <string name="settings_shizuku_tutorial_note">Shizuku has to be started again after each restart of the phone, and some phones stop it when Wi-Fi goes. Until it is back, the standard system-wide EQ plays instead. Tap the Shizuku line to read this again.</string>
+    <string name="settings_shizuku_tutorial_turn_on">Turn on</string>
+    <string name="settings_shizuku_tutorial_open">Open Shizuku</string>
+    <string name="settings_shizuku_tutorial_get">Get Shizuku</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Apply your AutoEQ + tone to all device audio (device-permitting)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Swaps the app\'s exact correction for a coarser global one, and some devices ignore it entirely. Turn it on to correct other apps.</string>
