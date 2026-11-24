@@ -3648,6 +3648,8 @@
     <string name="whats_new_196_share_start_body">Partager le lien sur le morceau en cours envoie l’instant où vous êtes, et l’extrait lu par Discord démarre là.</string>
     <string name="whats_new_196_dac_surround_title">Le surround par le DAC USB exclusif</string>
     <string name="whats_new_196_dac_surround_body">En mode exclusif, un mix 5.1, 7.1 ou Atmos pour enceintes reste en surround sur une interface USB multicanal ou un ampli AV. Un mix plus étroit que l’appareil joue sur ses premiers canaux. Paramètres › Audio liste les canaux trouvés.</string>
+    <string name="whats_new_196_system_eq_title">AutoEQ système : chaque oreille, et il reste actif</string>
+    <string name="whats_new_196_system_eq_body">En mode 2 canaux, l’oreille droite a maintenant sa propre courbe dans les autres apps aussi. La correction continue quand Tryptify est fermé, un limiteur intervient si un gain ferait saturer, et la musique par le DAC USB exclusif est de nouveau corrigée.</string>
     <string name="atmos_room_builtin">Salle intégrée</string>
     <string name="atmos_room_custom">Ma salle</string>
     <string name="atmos_rooms">Salles</string>

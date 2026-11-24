@@ -292,6 +292,14 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_196_player_menu_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = PLAYBACK,
+                    title = "System-wide AutoEQ: each ear, and it stays on",
+                    body = "In 2-channel mode the right ear now gets its own curve in other apps too. The correction keeps running with Tryptify closed, a limiter steps in if a boost would clip, and music through the exclusive USB DAC is corrected again.",
+                    titleRes = R.string.whats_new_196_system_eq_title,
+                    bodyRes = R.string.whats_new_196_system_eq_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = PLAYBACK,
                     title = "Atmos on headphones: a 15.1.12 virtual room",

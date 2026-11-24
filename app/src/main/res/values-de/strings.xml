@@ -3570,6 +3570,8 @@
     <string name="whats_new_196_share_start_body">Link teilen beim laufenden Song sendet die Stelle, an der du bist, und die Vorschau, die Discord abspielt, startet dort.</string>
     <string name="whats_new_196_dac_surround_title">Surround über den exklusiven USB-DAC</string>
     <string name="whats_new_196_dac_surround_body">Im exklusiven Modus bleibt ein 5.1-, 7.1- oder Atmos-Lautsprechermix auf einem Mehrkanal-USB-Interface oder AV-Receiver Surround. Ein schmalerer Mix spielt auf den ersten Kanälen. Einstellungen › Audio zeigt die gefundenen Kanäle.</string>
+    <string name="whats_new_196_system_eq_title">Systemweites AutoEQ: jedes Ohr, und es bleibt an</string>
+    <string name="whats_new_196_system_eq_body">Im 2-Kanal-Modus bekommt das rechte Ohr jetzt auch in anderen Apps seine eigene Kurve. Die Korrektur läuft weiter, wenn Tryptify geschlossen ist, ein Limiter greift ein, falls eine Anhebung übersteuern würde, und Musik über den exklusiven USB-DAC wird wieder korrigiert.</string>
     <string name="atmos_room_builtin">Eingebauter Raum</string>
     <string name="atmos_room_custom">Mein Raum</string>
     <string name="atmos_rooms">Räume</string>

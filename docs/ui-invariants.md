@@ -2577,6 +2577,30 @@ music left paused.
   tap asks the system to add the tile; before that the system has no such
   request, so the row is not a button and says where the tile is.
 
+**System-wide AutoEQ is one curve an ear, kept alive, and never the only
+correction that is not there.** `SystemAudioEqController` hands Android
+what `SystemEqCurve.plan` works out, and three things in it were bugs once:
+
+- The right ear has its own curve in 2-channel mode with a right-ear
+  correction saved, as in the app's own player. Both channels of the effect
+  were given the left's.
+- `SystemEqService` stands in the foreground while the switch is on. The
+  effect is the process's; without the service it stopped when Android took
+  the process, the notification still saying it was on. Android refuses a
+  foreground service started from the background: that is not an error (the
+  effect plays on as before), and the start is asked again when the app is
+  opened. Never start it at boot, or anywhere the listener did not turn the
+  switch on.
+- With system-wide on, the app's own equalizer stands down, except while
+  the exclusive USB DAC stream is up (`SystemEqCurve.coversOwnPlayback`):
+  that stream goes round Android's mixer and had no correction at all. A new
+  output that bypasses Android's mixer asks the same question.
+
+The limiter is in only while the curve rises above full scale; with the
+automatic preamp it never is, and with nothing to play the effect is off
+altogether (bit-perfect), a band switched on at 0 dB included.
+`SystemEqCurveTest` holds all of it. None of it has been heard on a phone.
+
 **System-wide AutoEQ has a Quick Settings tile too**
 (`SystemEqQuickTileService`), for the switch under AutoEQ. System-wide is a
 part of the equalizer, so the tile follows the switch's rule: on only while

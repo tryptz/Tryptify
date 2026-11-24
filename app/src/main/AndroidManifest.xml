@@ -218,6 +218,11 @@
         <!-- System-wide AutoEQ's Quick Settings tile: the switch under AutoEQ,
              over any app. Bound by the system only, as the DAC tile is. -->
         <service
+            android:name=".audio.eq.SystemEqService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <service
             android:name=".audio.eq.SystemEqQuickTileService"
             android:exported="true"
             android:icon="@drawable/ic_qs_system_eq"

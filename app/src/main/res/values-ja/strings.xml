@@ -3492,6 +3492,8 @@
     <string name="whats_new_196_share_start_body">再生中の曲で「リンクを共有」を使うと今の位置が送られ、Discord で流れるプレビューがそこから始まります。</string>
     <string name="whats_new_196_dac_surround_title">排他 USB DAC でサラウンド再生</string>
     <string name="whats_new_196_dac_surround_body">排他モードで、5.1・7.1・Atmos のスピーカーミックスがマルチチャンネル USB インターフェースや AV アンプでもサラウンドのまま再生されます。機器より狭いミックスは先頭のチャンネルで鳴ります。設定 › オーディオに検出したチャンネルが表示されます。</string>
+    <string name="whats_new_196_system_eq_title">システム全体の AutoEQ：左右別々に、そして止まらない</string>
+    <string name="whats_new_196_system_eq_body">2 チャンネルモードでは、他のアプリでも右耳に専用のカーブが適用されます。Tryptify を閉じても補正は続き、ブーストでクリップしそうなときはリミッターが働き、排他 USB DAC で再生する音楽も再び補正されます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

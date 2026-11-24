@@ -3648,6 +3648,8 @@
     <string name="whats_new_196_share_start_body">Compartir enlace en la canción que suena envía el momento en que estás, y la vista previa que reproduce Discord empieza ahí.</string>
     <string name="whats_new_196_dac_surround_title">Sonido envolvente por el DAC USB exclusivo</string>
     <string name="whats_new_196_dac_surround_body">En modo exclusivo, una mezcla 5.1, 7.1 o Atmos para altavoces sigue en envolvente en una interfaz USB multicanal o un receptor AV. Una mezcla más estrecha que el equipo suena en sus primeros canales. Ajustes › Audio muestra los canales encontrados.</string>
+    <string name="whats_new_196_system_eq_title">AutoEQ de todo el sistema: cada oído, y sigue activo</string>
+    <string name="whats_new_196_system_eq_body">En el modo de 2 canales, el oído derecho tiene ahora su propia curva también en otras apps. La corrección sigue con Tryptify cerrado, un limitador actúa si un realce fuera a saturar, y la música por el DAC USB exclusivo vuelve a corregirse.</string>
     <string name="atmos_room_builtin">Sala integrada</string>
     <string name="atmos_room_custom">Mi sala</string>
     <string name="atmos_rooms">Salas</string>

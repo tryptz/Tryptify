@@ -86,8 +86,9 @@ declare
         'RadioQueueManager', 'RarNative', 'RoomClient', 'SafeClipboard', 'ScanCoordinator', 'Scrobbling',
         'SearchViewModel', 'SettingsSync', 'ShareLinks', 'ShareShrinker', 'SofaHrtfApi', 'SongPreview',
         'SourceDepthCodec', 'SquiglinkApi', 'StepManiaConversion', 'StreamResolver', 'SupabaseAuth',
-        'SupabaseSync', 'SystemAudioEq', 'TagReader', 'TimedLyrics', 'TrackDownloader', 'TrackShareHelper',
-        'TryptifyConnect', 'TryptifyGlyph', 'TryptifyMotion', 'UsbExclusiveCtl', 'UsbJni', 'YoutubeOnDevice'
+        'SupabaseSync', 'SystemAudioEq', 'SystemEqService', 'TagReader', 'TimedLyrics', 'TrackDownloader',
+        'TrackShareHelper', 'TryptifyConnect', 'TryptifyGlyph', 'TryptifyMotion', 'UsbExclusiveCtl', 'UsbJni',
+        'YoutubeOnDevice'
     ];
     -- app-tags:end
     agg       jsonb;

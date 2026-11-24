@@ -3570,6 +3570,8 @@
     <string name="whats_new_196_share_start_body">Çalan şarkıda Bağlantıyı paylaş, bulunduğun anı gönderir ve Discord\'un çaldığı önizleme oradan başlar.</string>
     <string name="whats_new_196_dac_surround_title">Özel USB DAC üzerinden surround</string>
     <string name="whats_new_196_dac_surround_body">Özel modda 5.1, 7.1 ya da Atmos hoparlör miksi çok kanallı USB arabiriminde veya AV alıcısında surround kalır. Cihazdan dar miks ilk kanallarda çalar. Ayarlar › Ses bulunan kanalları listeler.</string>
+    <string name="whats_new_196_system_eq_title">Sistem genelinde AutoEQ: her kulak ayrı ve açık kalır</string>
+    <string name="whats_new_196_system_eq_body">2 kanallı modda sağ kulak artık diğer uygulamalarda da kendi eğrisini alır. Tryptify kapalıyken düzeltme sürer, bir yükseltme kırpacaksa sınırlayıcı devreye girer ve özel USB DAC üzerinden çalan müzik yeniden düzeltilir.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

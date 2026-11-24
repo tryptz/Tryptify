@@ -3492,6 +3492,8 @@
     <string name="whats_new_196_share_start_body">对正在播放的歌曲使用“分享链接”会附上你当前所在的时间点，Discord 播放的试听就从那里开始。</string>
     <string name="whats_new_196_dac_surround_title">通过独占 USB DAC 播放环绕声</string>
     <string name="whats_new_196_dac_surround_body">在独占模式下，5.1、7.1 或 Atmos 扬声器混音现在可在多声道 USB 接口或功放上保持环绕声。声道少于设备的混音会在其前几个声道播放。设置 › 音频会列出检测到的声道。</string>
+    <string name="whats_new_196_system_eq_title">全局 AutoEQ：左右耳各自校正，并保持开启</string>
+    <string name="whats_new_196_system_eq_body">在双声道模式下，右耳在其他应用中也会使用自己的曲线。关闭 Tryptify 后校正仍会继续，提升可能削波时限制器会介入，通过独占 USB DAC 播放的音乐也重新得到校正。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

@@ -1,15 +1,15 @@
 package tf.monochrome.android.audio.eq
 
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
-import androidx.core.app.NotificationCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,8 +23,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import tf.monochrome.android.R
 import tf.monochrome.android.data.preferences.PreferencesManager
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.ToneControls
@@ -42,9 +42,17 @@ import javax.inject.Singleton
  * selected headphone profile. Because a global effect can only be a graphic EQ,
  * this is a many-band approximation of the exact parametric curve.
  *
- * Quality: uses DynamicsProcessing's float pre-EQ only (no MBC, no limiter, no
- * makeup/output gain) with VARIANT_FAVOR_FREQUENCY_RESOLUTION for the most
- * accurate EQ shape. When the combined curve is completely flat (no active AutoEQ
+ * Each ear has its own curve where the listener has one (2-channel mode with a
+ * right-ear correction saved): DynamicsProcessing's pre-EQ is per channel, and
+ * the right one used to be given the left ear's curve. The legacy Equalizer
+ * has one curve for both and plays the left.
+ *
+ * Quality: uses DynamicsProcessing's float pre-EQ (no MBC, no makeup/output
+ * gain) with VARIANT_FAVOR_FREQUENCY_RESOLUTION for the most accurate EQ
+ * shape. Its limiter is in the path only while the curve rises above full
+ * scale ([SystemEqCurve.Plan.limiter]: a manual preamp left too high over a
+ * boost), both ears linked so the image does not move; otherwise that would
+ * clip in whatever app is playing. When the combined curve is completely flat (no active AutoEQ
  * band and a 0 preamp), the effect is fully released so audio passes through
  * BIT-PERFECT — untouched, no filter bank in the path — and re-attaches the
  * instant any correction or tone knob is non-zero.
@@ -60,9 +68,11 @@ import javax.inject.Singleton
  * audio HAL; on some OEM ROMs it silently does nothing. Every native call is
  * guarded — DynamicsProcessing (API 28+) is tried first, the legacy Equalizer is
  * the fallback, and any failure just leaves the effect inactive instead of
- * crashing. Note: the effect lives for as long as this app's process does; a
- * fully always-on effect (persisting after the process is reclaimed) would need a
- * dedicated foreground service.
+ * crashing. The effect lives for as long as this app's process does, so while
+ * the switch is on [SystemEqService] stands in the foreground to keep the
+ * process: closed, with another app playing, the correction used to stop
+ * whenever Android wanted the memory. A start Android refuses (the app is in
+ * the background) is asked again when the app is next opened.
  */
 @Singleton
 class SystemAudioEqController @Inject constructor(
@@ -72,7 +82,15 @@ class SystemAudioEqController @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Any()
     private val json = Json { ignoreUnknownKeys = true }
-    private var channelReady = false
+
+    // Whether the limiter could be put in this device's effect. Some refuse a
+    // config with one; the equalizer still plays there, without it.
+    private var limiterAvailable = true
+
+    // The switch as last seen, and whether the keep-alive service is as it
+    // should be for it. Main thread.
+    private var wantService = false
+    private var serviceSynced = true
 
     private var dynamics: DynamicsProcessing? = null
     private var equalizer: Equalizer? = null
@@ -94,13 +112,26 @@ class SystemAudioEqController @Inject constructor(
             started = true
         }
         scope.launch {
+            // Seven sources: past combine's typed overloads, so by position.
             combine(
                 preferences.systemWideAutoEqEnabled,
                 preferences.eqBandsJson,
                 preferences.eqPreamp,
                 preferences.systemToneControls,
                 preferences.eqAutoPreamp,
-            ) { enabled, bandsJson, preamp, tone, auto -> Cfg(enabled, bandsJson, preamp, tone, auto) }
+                preferences.eqBandsRJson,
+                preferences.eqStereoMode,
+            ) { v ->
+                Cfg(
+                    enabled = v[0] as Boolean,
+                    bandsJson = v[1] as String?,
+                    preamp = v[2] as Double,
+                    tone = v[3] as ToneControls,
+                    autoPreamp = v[4] as Boolean,
+                    bandsRJson = v[5] as String?,
+                    stereo = v[6] as Boolean,
+                )
+            }
                 // DataStore re-emits its whole Preferences on EVERY write to ANY
                 // key, so without this dedup, changing an unrelated setting would
                 // re-run applyGlobal and re-attach the session-0 effect — an
@@ -112,12 +143,28 @@ class SystemAudioEqController @Inject constructor(
                 // re-tuned dozens of times a second.
                 .debounce(70L)
                 .collectLatest { cfg ->
-                    if (cfg.enabled) applyGlobal(cfg.bandsJson, cfg.preamp, cfg.tone, cfg.autoPreamp) else release()
+                    if (cfg.enabled) applyGlobal(cfg) else release()
                     // Live notification mirrors the master toggle so the user can
                     // see at a glance that system-wide EQ is engaged.
                     updateNotification(cfg.enabled)
+                    withContext(Dispatchers.Main) { keepAlive(cfg.enabled) }
                 }
         }
+        // A service start refused in the background is asked again when the
+        // app comes to the front.
+        scope.launch(Dispatchers.Main) {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) {
+                    if (!serviceSynced) keepAlive(wantService)
+                }
+            })
+        }
+    }
+
+    /** Starts or stops [SystemEqService] with the switch. Main thread. */
+    private fun keepAlive(on: Boolean) {
+        wantService = on
+        serviceSynced = SystemEqService.sync(context, on)
     }
 
     private data class Cfg(
@@ -126,46 +173,43 @@ class SystemAudioEqController @Inject constructor(
         val preamp: Double,
         val tone: ToneControls,
         val autoPreamp: Boolean,
+        val bandsRJson: String?,
+        val stereo: Boolean,
     )
 
-    private fun applyGlobal(bandsJson: String?, manualPreamp: Double, tone: ToneControls, autoPreamp: Boolean) {
-        // AutoEQ correction bands + the bass/treble tone shelves, layered after it.
-        val correction = decodeBands(bandsJson)
-        val bands = correction + tone.toBands()
-        // In front of both, so it sets the tone's level too; automatic, it is
-        // worked out from what is applied, a knob turned anywhere included.
-        val preamp = AutoPreamp.applied(
-            correctionOn = true,
-            automatic = autoPreamp,
-            manualDb = manualPreamp.toFloat(),
-            correctionL = correction,
-            correctionR = correction,
-            tone = tone,
-        ).toDouble()
-        // Bit-perfect passthrough when there is genuinely nothing to apply: if no
-        // band actually changes the signal and the preamp is 0, DON'T attach the
-        // effect at all, so the audio is left completely untouched (no filter bank,
-        // no float round-trip). The effect re-attaches the instant any AutoEQ band
-        // or tone knob becomes non-zero.
-        val hasEffect = preamp != 0.0 || bands.any { it.enabled && it.gain != 0f }
+    private fun applyGlobal(cfg: Cfg) {
+        // The saved correction for each ear and the tone shelves, as gains at
+        // the effect's bands; null when nothing would change the sound.
+        val plan = SystemEqCurve.plan(
+            correctionL = decodeBands(cfg.bandsJson),
+            correctionR = decodeBands(cfg.bandsRJson),
+            stereo = cfg.stereo,
+            tone = cfg.tone,
+            manualPreampDb = cfg.preamp.toFloat(),
+            autoPreamp = cfg.autoPreamp,
+        )
         synchronized(lock) {
-            if (!hasEffect) {
+            // Bit-perfect passthrough when there is genuinely nothing to apply:
+            // the effect is not attached at all, so the audio is left untouched
+            // (no filter bank, no float round-trip). It re-attaches the instant
+            // any AutoEQ band or tone knob becomes non-zero.
+            if (plan == null) {
                 releaseLocked()
                 _active.value = false
                 return
             }
             val primary = runCatching {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    applyDynamicsLocked(bands, preamp.toFloat())
+                    applyDynamicsLocked(plan)
                 } else {
-                    applyEqualizerLocked(bands, preamp.toFloat())
+                    applyEqualizerLocked(plan)
                 }
             }.onFailure { Log.w(TAG, "system-wide EQ primary attach failed: ${it.message}") }
                 .getOrDefault(false)
 
             // If DynamicsProcessing wouldn't attach, try the legacy Equalizer.
             val attached = if (!primary && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                runCatching { applyEqualizerLocked(bands, preamp.toFloat()) }
+                runCatching { applyEqualizerLocked(plan) }
                     .onFailure { Log.w(TAG, "system-wide EQ fallback attach failed: ${it.message}") }
                     .getOrDefault(false)
             } else {
@@ -177,8 +221,8 @@ class SystemAudioEqController @Inject constructor(
 
     /** API 28+: a multi-band DynamicsProcessing pre-EQ on the global output mix. */
     @RequiresApi(Build.VERSION_CODES.P)
-    private fun applyDynamicsLocked(bands: List<EqBand>, preamp: Float): Boolean {
-        val n = BAND_FREQS.size
+    private fun applyDynamicsLocked(plan: SystemEqCurve.Plan): Boolean {
+        val n = SystemEqCurve.BAND_FREQS.size
         val channels = 2
         // Reuse the already-attached effect and only re-write its band gains.
         // Releasing and re-creating a session-0 effect on every knob move makes
@@ -186,35 +230,71 @@ class SystemAudioEqController @Inject constructor(
         // audio. Live parameter updates on the existing instance are seamless.
         val dp = dynamics ?: run {
             releaseLocked()
-            val config = DynamicsProcessing.Config.Builder(
-                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
-                channels,
-                /* preEqInUse = */ true, /* preEqBandCount = */ n,
-                /* mbcInUse = */ false, /* mbcBandCount = */ 0,
-                /* postEqInUse = */ false, /* postEqBandCount = */ 0,
-                /* limiterInUse = */ false,
-            ).build()
-            DynamicsProcessing(GLOBAL_PRIORITY, GLOBAL_SESSION, config)
+            fun build(limiter: Boolean) = DynamicsProcessing(
+                GLOBAL_PRIORITY,
+                GLOBAL_SESSION,
+                DynamicsProcessing.Config.Builder(
+                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                    channels,
+                    /* preEqInUse = */ true, /* preEqBandCount = */ n,
+                    /* mbcInUse = */ false, /* mbcBandCount = */ 0,
+                    /* postEqInUse = */ false, /* postEqBandCount = */ 0,
+                    /* limiterInUse = */ limiter,
+                ).build(),
+            )
+            // In the config from the start, so it can be switched in later
+            // without building the effect again; a device that refuses it
+            // gets the equalizer alone.
+            if (limiterAvailable) {
+                runCatching { build(limiter = true) }.getOrElse {
+                    Log.w(TAG, "no limiter on this device's effect: ${it.message}")
+                    limiterAvailable = false
+                    build(limiter = false)
+                }
+            } else {
+                build(limiter = false)
+            }
         }
         for (ch in 0 until channels) {
+            val gains = if (ch == 0) plan.left else plan.right
             val eq = dp.getPreEqByChannelIndex(ch)
             eq.isEnabled = true
             for (b in 0 until n) {
                 val band = eq.getBand(b)
                 band.isEnabled = true
-                band.cutoffFrequency = BAND_FREQS[b]
-                band.gain = gainAt(BAND_FREQS[b], bands, preamp)
+                band.cutoffFrequency = SystemEqCurve.BAND_FREQS[b]
+                band.gain = gains[b]
                 eq.setBand(b, band)
             }
             dp.setPreEqByChannelIndex(ch, eq)
+            if (limiterAvailable) {
+                runCatching {
+                    val limiter = dp.getLimiterByChannelIndex(ch)
+                    limiter.isEnabled = plan.limiter
+                    // One group: both ears are turned down together.
+                    limiter.linkGroup = LIMITER_LINK_GROUP
+                    limiter.attackTime = LIMITER_ATTACK_MS
+                    limiter.releaseTime = LIMITER_RELEASE_MS
+                    limiter.ratio = LIMITER_RATIO
+                    limiter.threshold = LIMITER_THRESHOLD_DB
+                    limiter.postGain = 0f
+                    dp.setLimiterByChannelIndex(ch, limiter)
+                }.onFailure {
+                    Log.w(TAG, "limiter refused on channel $ch: ${it.message}")
+                    limiterAvailable = false
+                }
+            }
         }
         dp.setEnabled(true)
         dynamics = dp
         return dp.enabled
     }
 
-    /** API 26–27 (or DynamicsProcessing unavailable): legacy N-band Equalizer. */
-    private fun applyEqualizerLocked(bands: List<EqBand>, preamp: Float): Boolean {
+    /**
+     * API 26–27 (or DynamicsProcessing unavailable): legacy N-band Equalizer.
+     * One curve for both ears, at its own centres: the left ear's is played.
+     */
+    private fun applyEqualizerLocked(plan: SystemEqCurve.Plan): Boolean {
         // Same rationale as the DynamicsProcessing path: reuse the attached
         // Equalizer and only re-set its band levels so a settings change doesn't
         // tear down and re-attach the session-0 effect (which skips the audio).
@@ -226,7 +306,7 @@ class SystemAudioEqController @Inject constructor(
         for (b in 0 until count) {
             // getCenterFreq is in milliHertz.
             val fc = eq.getCenterFreq(b.toShort()) / 1000f
-            val millibels = (gainAt(fc, bands, preamp) * 100f).toInt().coerceIn(minLevel, maxLevel)
+            val millibels = (gainNear(fc, plan.left) * 100f).toInt().coerceIn(minLevel, maxLevel)
             eq.setBandLevel(b.toShort(), millibels.toShort())
         }
         eq.setEnabled(true)
@@ -234,11 +314,15 @@ class SystemAudioEqController @Inject constructor(
         return eq.enabled
     }
 
-    /** Total AutoEQ correction (dB) at [freqHz]: preamp + every saved band's response. */
-    private fun gainAt(freqHz: Float, bands: List<EqBand>, preamp: Float): Float {
-        var g = preamp
-        for (band in bands) g += AutoEqEngine.calculateBiquadResponse(freqHz, band)
-        return g.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
+    /** The plan's gain at the band nearest [freqHz], an octave being the same step anywhere. */
+    private fun gainNear(freqHz: Float, gains: FloatArray): Float {
+        var best = 0
+        var bestDistance = Float.MAX_VALUE
+        for (i in SystemEqCurve.BAND_FREQS.indices) {
+            val d = kotlin.math.abs(kotlin.math.ln(SystemEqCurve.BAND_FREQS[i] / freqHz.coerceAtLeast(1f)))
+            if (d < bestDistance) { bestDistance = d; best = i }
+        }
+        return gains[best]
     }
 
     private fun decodeBands(bandsJson: String?): List<EqBand> =
@@ -274,68 +358,23 @@ class SystemAudioEqController @Inject constructor(
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
         if (!enabled) {
-            runCatching { manager.cancel(NOTIFICATION_ID) }
+            runCatching { manager.cancel(SystemEqNotice.NOTIFICATION_ID) }
             return
         }
-        ensureChannel(manager)
-        val tapIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
-            PendingIntent.getActivity(
-                context, 0, it,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
-        }
-        val text = tf.monochrome.android.locale.AppLanguage.wrap(context)
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(text.getString(R.string.notif_system_eq_title))
-            .setContentText(text.getString(R.string.notif_system_eq_text))
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setContentIntent(tapIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-        runCatching { manager.notify(NOTIFICATION_ID, notification) }
-    }
-
-    private fun ensureChannel(manager: NotificationManager) {
-        if (channelReady) return
-        manager.createNotificationChannel(
-            NotificationChannel(
-                CHANNEL_ID,
-                tf.monochrome.android.locale.AppLanguage.wrap(context).getString(R.string.notif_system_eq_channel),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = tf.monochrome.android.locale.AppLanguage.wrap(context)
-                    .getString(R.string.notif_system_eq_channel_desc)
-                setShowBadge(false)
-                enableVibration(false)
-                setSound(null, null)
-            },
-        )
-        channelReady = true
+        runCatching { manager.notify(SystemEqNotice.NOTIFICATION_ID, SystemEqNotice.build(context)) }
     }
 
     private companion object {
-        const val CHANNEL_ID = "system_wide_eq"
-        const val NOTIFICATION_ID = 42010
         const val TAG = "SystemAudioEq"
         const val GLOBAL_SESSION = 0 // 0 = global output mix (affects all apps)
         const val GLOBAL_PRIORITY = 0
-        const val MIN_GAIN_DB = -24f
-        const val MAX_GAIN_DB = 24f
-        // 31-band ⅓-octave grid (ISO R40 centres) across the audible range. Finer
-        // resolution than a 10/15-band graphic EQ so the sampled curve tracks the
-        // parametric AutoEQ's sharper peaking/shelf filters much more closely — the
-        // coarser the grid, the more a narrow AutoEQ band gets smeared or missed
-        // between sample points. A graphic EQ still can't reproduce a parametric
-        // curve exactly (fixed centres + the HAL's own crossover shaping), so the
-        // in-app AutoEQ path stays the reference; this just narrows the gap.
-        val BAND_FREQS = floatArrayOf(
-            20f, 25f, 31.5f, 40f, 50f, 63f, 80f, 100f, 125f, 160f,
-            200f, 250f, 315f, 400f, 500f, 630f, 800f, 1000f, 1250f, 1600f,
-            2000f, 2500f, 3150f, 4000f, 5000f, 6300f, 8000f, 10000f, 12500f, 16000f,
-            20000f,
-        )
+
+        // The limiter, when the curve calls for one: Android's own defaults
+        // for attack, release and ratio, a dB under full scale.
+        const val LIMITER_LINK_GROUP = 0
+        const val LIMITER_ATTACK_MS = 1f
+        const val LIMITER_RELEASE_MS = 60f
+        const val LIMITER_RATIO = 10f
+        const val LIMITER_THRESHOLD_DB = -1f
     }
 }

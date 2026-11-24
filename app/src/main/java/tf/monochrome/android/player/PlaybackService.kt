@@ -869,6 +869,7 @@ class PlaybackService : MediaSessionService() {
                 preferences.systemToneControls,
                 preferences.systemWideAutoEqEnabled,
                 preferences.eqAutoPreamp,
+                libusbDriver.isStreaming,
             ) { v ->
                 EqApply(
                     enabled = v[0] as Boolean,
@@ -879,6 +880,7 @@ class PlaybackService : MediaSessionService() {
                     tone = v[5] as tf.monochrome.android.domain.model.ToneControls,
                     systemWide = v[6] as Boolean,
                     autoPreamp = v[7] as Boolean,
+                    exclusiveDac = v[8] as Boolean,
                 )
             }
                 // DataStore re-emits its whole Preferences on EVERY write to
@@ -2538,6 +2540,9 @@ class PlaybackService : MediaSessionService() {
         val tone: tf.monochrome.android.domain.model.ToneControls,
         val systemWide: Boolean,
         val autoPreamp: Boolean,
+        // The music is leaving through the exclusive USB DAC, round Android's
+        // mixer and the system-wide effect on it.
+        val exclusiveDac: Boolean,
     )
 
     /**
@@ -2595,6 +2600,7 @@ class PlaybackService : MediaSessionService() {
                         tone = preferences.systemToneControls.first(),
                         systemWide = preferences.systemWideAutoEqEnabled.first(),
                         autoPreamp = preferences.eqAutoPreamp.first(),
+                        exclusiveDac = libusbDriver.isStreaming.value,
                     ),
                 )
             } catch (e: Exception) {
@@ -2607,7 +2613,10 @@ class PlaybackService : MediaSessionService() {
      * Apply EQ + tone settings to the standalone AutoEQ processor (independent of
      * mixer DSP). When system-wide is ON, the global output-mix effect already
      * corrects THIS app's audio too, so the in-app AutoEQ and tone are fully
-     * bypassed here to avoid a double correction. When it's OFF, the AutoEQ (when
+     * bypassed here to avoid a double correction. Not through the exclusive
+     * USB DAC, though: that stream goes round Android's mixer, the effect
+     * never touches it, and bypassed here as well it had no correction at all
+     * ([SystemEqCurve.coversOwnPlayback]). When it's OFF, the AutoEQ (when
      * enabled) and the bass/treble tone shelves are applied in-app — so tone works
      * whether or not system-wide is on, and neither is ever applied twice.
      *
@@ -2624,7 +2633,7 @@ class PlaybackService : MediaSessionService() {
         // Main thread only, like both callers, so a plain field.
         if (cfg == lastEqInput) return
         try {
-            if (cfg.systemWide) {
+            if (tf.monochrome.android.audio.eq.SystemEqCurve.coversOwnPlayback(cfg.systemWide, cfg.exclusiveDac)) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
                 publishGameSeed()
