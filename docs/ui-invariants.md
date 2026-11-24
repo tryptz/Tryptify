@@ -2601,6 +2601,31 @@ automatic preamp it never is, and with nothing to play the effect is off
 altogether (bit-perfect), a band switched on at 0 dB included.
 `SystemEqCurveTest` holds all of it. None of it has been heard on a phone.
 
+**The Shizuku mode is the standard effect's stand-in, never its
+replacement.** Under System-wide AutoEQ, "Exact parametric EQ (Shizuku)"
+plays other apps through the real correction (`audio/eq/shizuku/`). Its
+rules:
+
+- **The standard effect stands down only for `ShizukuPeqState.ACTIVE`.**
+  Shizuku missing, stopped, not allowed, an old Android, a service that
+  would not start: each is a line under the switch, and the standard
+  system-wide effect goes on playing. The option is never the reason other
+  apps go uncorrected, and never a reason they are corrected twice.
+- **A policy is never left registered with nothing reading it**: that is
+  silence in every other app. Every way out of `SystemPeqUserService`, an
+  error hours in included, ends in `releaseLocked`; the app's death ends it
+  through its token.
+- The app's own playback is left out of what is taken, and its own
+  equalizer plays (`coversOwnPlayback`): exact, at the song's rate and depth.
+- Nothing of Shizuku is touched while the option is off: no listener, no
+  question whether it is installed.
+- The service runs in Shizuku's process. It may use only what loads there:
+  no Hilt, no `Context` of the app's, nothing that needs an `Application`.
+  `SystemPeqDsp` is pure Kotlin for that reason.
+- Its Android calls are hidden ones, by reflection. A new one goes inside
+  the same `try` that releases everything, and its numbers are written with
+  where they come from. None of it has run on a phone.
+
 **System-wide AutoEQ has a Quick Settings tile too**
 (`SystemEqQuickTileService`), for the switch under AutoEQ. System-wide is a
 part of the equalizer, so the tile follows the switch's rule: on only while

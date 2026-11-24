@@ -224,6 +224,9 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        // The Shizuku system-wide equalizer's service is another process:
+        // ISystemPeqService.aidl is how the app talks to it.
+        aidl = true
     }
 
     externalNativeBuild {
@@ -478,6 +481,12 @@ dependencies {
     // listener's own network. Brings jsoup, Rhino, protobuf-lite and
     // nanojson, none of which the app had already.
     implementation(libs.newpipe.extractor)
+    // Shizuku (Apache-2.0), for the opt-in system-wide parametric equalizer
+    // (audio/eq/shizuku): it starts that equalizer's service with the
+    // shell's identity. Unused, and never loaded, unless the listener turns
+    // the option on with the Shizuku app installed and running.
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
     // Where the generated profile comes from. profileinstaller above is the
     // runtime half — it installs a profile at first launch — and until this

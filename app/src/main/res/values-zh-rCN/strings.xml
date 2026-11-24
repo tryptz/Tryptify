@@ -760,6 +760,16 @@
     <string name="settings_enable_autoeq_equalizer">启用 AutoEQ/均衡器</string>
     <string name="settings_apply_eq_processing_to_playback">对播放应用均衡处理</string>
     <string name="settings_system_wide_autoeq">全局 AutoEQ</string>
+    <string name="settings_shizuku_peq">精确参量均衡（Shizuku）</string>
+    <string name="settings_shizuku_peq_desc">其他应用将通过你真正的参量校正播放，左右耳各自独立，而不是它的 31 段近似。需要安装并运行 Shizuku 应用。</string>
+    <string name="settings_shizuku_status_idle">已开启，但没有需要校正的内容。其他应用保持原样。</string>
+    <string name="settings_shizuku_status_unsupported">需要 Android 13 或更高版本。当前使用标准的全局均衡器。</string>
+    <string name="settings_shizuku_status_not_installed">未安装 Shizuku 应用。当前使用标准的全局均衡器。</string>
+    <string name="settings_shizuku_status_not_running">Shizuku 未在运行。请在 Shizuku 应用中启动它；每次重启手机后都需要重新启动。</string>
+    <string name="settings_shizuku_status_permission">Shizuku 尚未授权 Tryptify。点按以请求。</string>
+    <string name="settings_shizuku_status_starting">正在启动…</string>
+    <string name="settings_shizuku_status_active">已开启：其他应用正通过你的参量均衡播放。</string>
+    <string name="settings_shizuku_status_failed">无法在这台手机上启动。当前使用标准的全局均衡器。更改任意均衡设置即可重试。</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">将你的 AutoEQ 和音调应用到设备上的所有音频（视设备支持情况）</string>
     <string name="settings_beta">测试版</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">会把应用内的精确校正换成较粗略的全局校正，而且有些设备会完全忽略它。开启后可校正其他应用的声音。</string>
@@ -3494,6 +3504,8 @@
     <string name="whats_new_196_dac_surround_body">在独占模式下，5.1、7.1 或 Atmos 扬声器混音现在可在多声道 USB 接口或功放上保持环绕声。声道少于设备的混音会在其前几个声道播放。设置 › 音频会列出检测到的声道。</string>
     <string name="whats_new_196_system_eq_title">全局 AutoEQ：左右耳各自校正，并保持开启</string>
     <string name="whats_new_196_system_eq_body">在双声道模式下，右耳在其他应用中也会使用自己的曲线。关闭 Tryptify 后校正仍会继续，提升可能削波时限制器会介入，通过独占 USB DAC 播放的音乐也重新得到校正。</string>
+    <string name="whats_new_196_shizuku_peq_title">借助 Shizuku 实现精确的全局均衡</string>
+    <string name="whats_new_196_shizuku_peq_body">全局 AutoEQ 下的新选项可让其他应用通过你真正的参量校正播放，左右耳各自独立。需要运行 Shizuku 应用并使用 Android 13 或更高版本；否则继续使用标准的全局均衡器。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

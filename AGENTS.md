@@ -578,6 +578,36 @@ stream to that server's origin only: the API client's network interceptor
 (`NetworkModule`, per redirect hop) and the players' data sources
 (`PlaybackService`, `SongPreview`). `ApiServerTest` holds the origin match.
 
+## System-wide AutoEQ has two ways, and one is Shizuku
+
+Settings › Equalizer › System-wide AutoEQ corrects other apps' audio. The
+standard way (`audio/eq/SystemAudioEqController`) is Android's own global
+effect: a graphic copy of the correction at 31 bands, an ear each, kept alive
+by `SystemEqService`. The option under it, "Exact parametric EQ (Shizuku)"
+(`audio/eq/shizuku/`), plays the real filters instead. It needs the
+[Shizuku](https://github.com/RikkaApps/Shizuku) app installed, running and
+allowing the app, and Android 13 or newer.
+
+How it works: `ShizukuPeqController` binds `SystemPeqUserService`, which
+Shizuku starts **in its own process with the shell's identity**. That
+process registers an audio policy that loops other apps' media playback
+back to a recorder, runs it through `SystemPeqDsp` and plays it out as
+media. The method is Quve's (github.com/nanbeimerco/Quve, GPL-3.0) and the
+service file is under GPL-3.0 with it. Every Android call in it is hidden
+and made by reflection.
+
+- It has not been run on a phone. Compiling and its unit tests are all that
+  hold it; say so until someone has tried it, and ask for a sent log (tags
+  `ShizukuPeq` in the app's, `SystemPeqService` in Shizuku's process, which
+  a sent log does not contain: `adb logcat -s SystemPeqService`).
+- The rules it must keep are in `docs/ui-invariants.md`, "The Shizuku mode
+  is the standard effect's stand-in". The first: the standard effect stands
+  down only while the service says it is running.
+- `ISystemPeqService.aidl` is both ends of a wire between two builds: never
+  renumber a method, and raise `SERVICE_PROTOCOL` when it changes.
+- R8: the service is made by name in another process. Its keep rules are at
+  the end of `proguard-rules.pro`.
+
 ## There is no assistant in the app
 
 An in-app assistant and an "ask for an EQ" sheet on the AutoEQ screen, both

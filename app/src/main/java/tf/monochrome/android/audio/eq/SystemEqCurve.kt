@@ -100,6 +100,46 @@ internal object SystemEqCurve {
         )
     }
 
+    /**
+     * The same settings as real filters, for the Shizuku mode
+     * ([tf.monochrome.android.audio.eq.shizuku.SystemPeqDsp]): each ear's
+     * bands packed as it takes them, and the preamp. No sampling at fixed
+     * bands, so it is the curve the app's own player runs.
+     */
+    class Parametric(val left: FloatArray, val right: FloatArray, val preampDb: Float) {
+        override fun equals(other: Any?): Boolean =
+            other is Parametric && preampDb == other.preampDb &&
+                left.contentEquals(other.left) && right.contentEquals(other.right)
+
+        override fun hashCode(): Int = 31 * (31 * left.contentHashCode() + right.contentHashCode()) + preampDb.hashCode()
+    }
+
+    /** [plan]'s rules for the Shizuku mode; null when nothing would change the sound. */
+    fun parametric(
+        correctionL: List<EqBand>,
+        correctionR: List<EqBand>,
+        stereo: Boolean,
+        tone: ToneControls,
+        manualPreampDb: Float,
+        autoPreamp: Boolean,
+    ): Parametric? {
+        val rightOwn = stereo && correctionR.isNotEmpty() && correctionR != correctionL
+        val right = if (rightOwn) correctionR else correctionL
+        val toneBands = tone.toBands()
+        val preamp = AutoPreamp.applied(
+            correctionOn = true,
+            automatic = autoPreamp,
+            manualDb = manualPreampDb,
+            correctionL = correctionL,
+            correctionR = right,
+            tone = tone,
+        )
+        val packedL = tf.monochrome.android.audio.eq.shizuku.SystemPeqDsp.packBands(correctionL + toneBands)
+        val packedR = tf.monochrome.android.audio.eq.shizuku.SystemPeqDsp.packBands(right + toneBands)
+        if (packedL.isEmpty() && packedR.isEmpty() && kotlin.math.abs(preamp) < NO_PREAMP_DB) return null
+        return Parametric(packedL, packedR, if (kotlin.math.abs(preamp) < NO_PREAMP_DB) 0f else preamp)
+    }
+
     /** The gain at each of [BAND_FREQS] for [bands] behind [preampDb]. */
     fun gains(bands: List<EqBand>, preampDb: Float): FloatArray =
         FloatArray(BAND_FREQS.size) { gainAt(BAND_FREQS[it], bands, preampDb) }
@@ -117,8 +157,13 @@ internal object SystemEqCurve {
      * It does when it is on, unless the music leaves through the exclusive
      * USB DAC: that path goes round Android's mixer, where the effect sits,
      * and with the app's equalizer standing down too the song had no
-     * correction at all.
+     * correction at all. Nor in the Shizuku mode, which leaves the app's own
+     * playback out of what it takes: the app's equalizer is the exact one,
+     * at the song's own rate and depth.
      */
-    fun coversOwnPlayback(systemWide: Boolean, exclusiveDacStreaming: Boolean): Boolean =
-        systemWide && !exclusiveDacStreaming
+    fun coversOwnPlayback(
+        systemWide: Boolean,
+        exclusiveDacStreaming: Boolean,
+        shizukuActive: Boolean = false,
+    ): Boolean = systemWide && !exclusiveDacStreaming && !shizukuActive
 }

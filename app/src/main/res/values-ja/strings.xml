@@ -760,6 +760,16 @@
     <string name="settings_enable_autoeq_equalizer">AutoEQ/イコライザを有効にする</string>
     <string name="settings_apply_eq_processing_to_playback">再生に EQ 処理を適用</string>
     <string name="settings_system_wide_autoeq">システム全体の AutoEQ</string>
+    <string name="settings_shizuku_peq">正確なパラメトリック EQ（Shizuku）</string>
+    <string name="settings_shizuku_peq_desc">他のアプリが、31 バンドの近似ではなく本来のパラメトリック補正を通して再生されます（左右の耳それぞれ）。Shizuku アプリのインストールと起動が必要です。</string>
+    <string name="settings_shizuku_status_idle">オンですが、補正するものがありません。他のアプリはそのままです。</string>
+    <string name="settings_shizuku_status_unsupported">Android 13 以降が必要です。標準のシステム全体の EQ を使用します。</string>
+    <string name="settings_shizuku_status_not_installed">Shizuku アプリがインストールされていません。標準のシステム全体の EQ を使用します。</string>
+    <string name="settings_shizuku_status_not_running">Shizuku が起動していません。Shizuku アプリで起動してください。端末を再起動するたびに起動し直す必要があります。</string>
+    <string name="settings_shizuku_status_permission">Shizuku で Tryptify がまだ許可されていません。タップして許可を求めます。</string>
+    <string name="settings_shizuku_status_starting">起動中…</string>
+    <string name="settings_shizuku_status_active">オン：他のアプリがパラメトリック EQ を通して再生されています。</string>
+    <string name="settings_shizuku_status_failed">この端末では起動できませんでした。標準のシステム全体の EQ を使用します。EQ の設定を変更すると再試行します。</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">AutoEQ とトーンを端末のすべての音声に適用（端末が対応している場合）</string>
     <string name="settings_beta">ベータ</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">アプリ内の精密な補正を大まかなシステム全体の補正に切り替えます。端末によっては完全に無視されます。他のアプリの音を補正したいときにオンにしてください。</string>
@@ -3494,6 +3504,8 @@
     <string name="whats_new_196_dac_surround_body">排他モードで、5.1・7.1・Atmos のスピーカーミックスがマルチチャンネル USB インターフェースや AV アンプでもサラウンドのまま再生されます。機器より狭いミックスは先頭のチャンネルで鳴ります。設定 › オーディオに検出したチャンネルが表示されます。</string>
     <string name="whats_new_196_system_eq_title">システム全体の AutoEQ：左右別々に、そして止まらない</string>
     <string name="whats_new_196_system_eq_body">2 チャンネルモードでは、他のアプリでも右耳に専用のカーブが適用されます。Tryptify を閉じても補正は続き、ブーストでクリップしそうなときはリミッターが働き、排他 USB DAC で再生する音楽も再び補正されます。</string>
+    <string name="whats_new_196_shizuku_peq_title">Shizuku による正確なシステム全体の EQ</string>
+    <string name="whats_new_196_shizuku_peq_body">システム全体の AutoEQ に新しいオプションが追加され、他のアプリが本来のパラメトリック補正（左右の耳それぞれ）を通して再生されます。Shizuku アプリの起動と Android 13 以降が必要で、ない場合は標準のシステム全体の EQ が使われます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

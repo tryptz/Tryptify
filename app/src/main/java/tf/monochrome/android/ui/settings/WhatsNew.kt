@@ -284,6 +284,14 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_196_system_eq_tile_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Exact system-wide EQ with Shizuku",
+                    body = "A new option under System-wide AutoEQ plays other apps through your real parametric correction, each ear its own. It needs the Shizuku app running and Android 13 or newer; without it the standard system-wide EQ carries on.",
+                    titleRes = R.string.whats_new_196_shizuku_peq_title,
+                    bodyRes = R.string.whats_new_196_shizuku_peq_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "The player's menu is the song menu",

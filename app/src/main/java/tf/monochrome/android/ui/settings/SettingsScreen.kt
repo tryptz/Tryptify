@@ -552,6 +552,11 @@ private fun EqualizerTab(
                     caution = stringResource(R.string.settings_swaps_the_app_s_exact_correction_for_a_coarser),
                 )
                 SystemEqTileSetting()
+                // The Shizuku mode is a way of doing system-wide, so it is
+                // asked under it and shown only while system-wide is on.
+                AnimatedVisibility(visible = systemWideAutoEq) {
+                    ShizukuPeqSetting(viewModel)
+                }
             }
         }
 
@@ -2307,6 +2312,59 @@ private fun SystemEqTileSetting() {
             )
         }) else null,
     )
+}
+
+/**
+ * System-wide through Shizuku: the option, and under it where it stands,
+ * since nearly everything that can be in its way is outside the app (the
+ * Shizuku app not installed, not started since the phone restarted, not yet
+ * told to allow this one). The row that says so is the way past it where
+ * there is one: a tap asks Shizuku for its permission. Looked at again each
+ * time the screen comes back, which is when the listener returns from the
+ * Shizuku app.
+ */
+@Composable
+private fun ShizukuPeqSetting(viewModel: SettingsViewModel) {
+    val on by viewModel.systemWidePeqShizuku.collectAsStateWithLifecycle()
+    val state by viewModel.shizukuPeqState.collectAsStateWithLifecycle()
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) viewModel.refreshShizukuPeq()
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingSwitchItem(
+            title = stringResource(R.string.settings_shizuku_peq),
+            subtitle = stringResource(R.string.settings_shizuku_peq_desc),
+            checked = on,
+            onCheckedChange = viewModel::setSystemWidePeqShizuku,
+            badge = stringResource(R.string.settings_beta),
+        )
+        if (on) {
+            val needsPermission = state == tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.NEEDS_PERMISSION
+            SettingItem(
+                // The other app's name, the same in every language.
+                title = "Shizuku",
+                subtitle = stringResource(shizukuStatusText(state)),
+                onClick = if (needsPermission) ({ viewModel.requestShizukuPermission() }) else null,
+            )
+        }
+    }
+}
+
+@androidx.annotation.StringRes
+private fun shizukuStatusText(state: tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState): Int = when (state) {
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.OFF -> R.string.settings_shizuku_status_idle
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.UNSUPPORTED -> R.string.settings_shizuku_status_unsupported
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.NOT_INSTALLED -> R.string.settings_shizuku_status_not_installed
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.NOT_RUNNING -> R.string.settings_shizuku_status_not_running
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.NEEDS_PERMISSION -> R.string.settings_shizuku_status_permission
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.STARTING -> R.string.settings_shizuku_status_starting
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.ACTIVE -> R.string.settings_shizuku_status_active
+    tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState.FAILED -> R.string.settings_shizuku_status_failed
 }
 
 @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.TIRAMISU)

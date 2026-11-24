@@ -134,6 +134,10 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
 
 - **The app, and everything else in this repository unless said otherwise:**
   [GPL-3.0-or-later](LICENSE).
+- **The Shizuku system-wide equalizer's service**
+  (`app/src/main/java/tf/monochrome/android/audio/eq/shizuku/SystemPeqUserService.kt`)
+  is written after [Quve](https://github.com/nanbeimerco/Quve)'s and is under
+  GPL-3.0 with it. The Shizuku library it is started through is Apache-2.0.
 - **Third-party parts keep their own licences:** projectM (LGPL-2.1), libusb
   (LGPL-2.1), the Cavern port (its own terms, `app/src/main/cpp/atmos/cavern/NOTICE.md`),
   StepMania art (MIT, next to the art), fonts (OFL-1.1,

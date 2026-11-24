@@ -89,3 +89,17 @@
 -keepclassmembers class tf.monochrome.android.data.youtube.potoken.PoTokenWebView {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# The Shizuku system-wide equalizer (audio/eq/shizuku). Shizuku starts the
+# service in its own process and makes it by name, with the constructor that
+# takes nothing; the AIDL classes are both ends of the wire; and Shizuku's
+# own classes find each other by name. The service's hidden Android classes
+# are reached by reflection and are not in the SDK the app is built against.
+-keep class tf.monochrome.android.audio.eq.shizuku.SystemPeqUserService { *; }
+-keep class tf.monochrome.android.audio.eq.shizuku.SystemPeqUserService$* { *; }
+-keep class tf.monochrome.android.audio.eq.shizuku.ISystemPeqService { *; }
+-keep class tf.monochrome.android.audio.eq.shizuku.ISystemPeqService$** { *; }
+-keep class rikka.shizuku.** { *; }
+-keep class moe.shizuku.** { *; }
+-dontwarn android.app.ActivityThread
+-dontwarn android.media.audiopolicy.**

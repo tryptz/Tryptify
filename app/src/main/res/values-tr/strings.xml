@@ -798,6 +798,16 @@
     <string name="settings_enable_autoeq_equalizer">AutoEQ/Ekolayzer’ı etkinleştir</string>
     <string name="settings_apply_eq_processing_to_playback">EQ işlemesini çalmaya uygula</string>
     <string name="settings_system_wide_autoeq">Sistem genelinde AutoEQ</string>
+    <string name="settings_shizuku_peq">Tam parametrik EQ (Shizuku)</string>
+    <string name="settings_shizuku_peq_desc">Diğer uygulamalar, 31 bantlık kopyası yerine gerçek parametrik düzeltmenden geçer; her kulak ayrı. Shizuku uygulamasının kurulu ve çalışıyor olması gerekir.</string>
+    <string name="settings_shizuku_status_idle">Açık, ancak düzeltilecek bir şey yok. Diğer uygulamalar olduğu gibi kalır.</string>
+    <string name="settings_shizuku_status_unsupported">Android 13 veya üstü gerekir. Standart sistem geneli EQ kullanılıyor.</string>
+    <string name="settings_shizuku_status_not_installed">Shizuku uygulaması kurulu değil. Standart sistem geneli EQ kullanılıyor.</string>
+    <string name="settings_shizuku_status_not_running">Shizuku çalışmıyor. Shizuku uygulamasından başlat; telefon her yeniden başladığında tekrar başlatılması gerekir.</string>
+    <string name="settings_shizuku_status_permission">Shizuku henüz Tryptify\'a izin vermedi. İstemek için dokun.</string>
+    <string name="settings_shizuku_status_starting">Başlatılıyor…</string>
+    <string name="settings_shizuku_status_active">Açık: diğer uygulamalar parametrik EQ\'ndan geçiyor.</string>
+    <string name="settings_shizuku_status_failed">Bu telefonda başlatılamadı. Standart sistem geneli EQ kullanılıyor. Yeniden denemek için herhangi bir EQ ayarını değiştir.</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">AutoEQ ve ton ayarınızı cihazdaki tüm seslere uygulayın (cihaz izin veriyorsa)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Uygulamanın hassas düzeltmesini daha kaba, genel bir düzeltmeyle değiştirir; bazı cihazlar bunu tamamen yok sayar. Diğer uygulamaları düzeltmek için açın.</string>
@@ -3572,6 +3582,8 @@
     <string name="whats_new_196_dac_surround_body">Özel modda 5.1, 7.1 ya da Atmos hoparlör miksi çok kanallı USB arabiriminde veya AV alıcısında surround kalır. Cihazdan dar miks ilk kanallarda çalar. Ayarlar › Ses bulunan kanalları listeler.</string>
     <string name="whats_new_196_system_eq_title">Sistem genelinde AutoEQ: her kulak ayrı ve açık kalır</string>
     <string name="whats_new_196_system_eq_body">2 kanallı modda sağ kulak artık diğer uygulamalarda da kendi eğrisini alır. Tryptify kapalıyken düzeltme sürer, bir yükseltme kırpacaksa sınırlayıcı devreye girer ve özel USB DAC üzerinden çalan müzik yeniden düzeltilir.</string>
+    <string name="whats_new_196_shizuku_peq_title">Shizuku ile tam sistem geneli EQ</string>
+    <string name="whats_new_196_shizuku_peq_body">Sistem geneli AutoEQ altındaki yeni seçenek, diğer uygulamaları gerçek parametrik düzeltmenden geçirir; her kulak ayrı. Shizuku uygulamasının çalışması ve Android 13 veya üstü gerekir; yoksa standart sistem geneli EQ sürer.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

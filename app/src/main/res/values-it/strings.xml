@@ -836,6 +836,16 @@
     <string name="settings_enable_autoeq_equalizer">Abilita AutoEQ/Equalizzatore</string>
     <string name="settings_apply_eq_processing_to_playback">Applica l’elaborazione EQ alla riproduzione</string>
     <string name="settings_system_wide_autoeq">AutoEQ di sistema</string>
+    <string name="settings_shizuku_peq">EQ parametrico esatto (Shizuku)</string>
+    <string name="settings_shizuku_peq_desc">Le altre app passano dalla tua vera correzione parametrica, una per orecchio, invece che dalla sua copia a 31 bande. Richiede l’app Shizuku installata e in esecuzione.</string>
+    <string name="settings_shizuku_status_idle">Attivo, senza nulla da correggere. Le altre app restano come sono.</string>
+    <string name="settings_shizuku_status_unsupported">Richiede Android 13 o successivo. Viene usato l’EQ di sistema standard.</string>
+    <string name="settings_shizuku_status_not_installed">L’app Shizuku non è installata. Viene usato l’EQ di sistema standard.</string>
+    <string name="settings_shizuku_status_not_running">Shizuku non è in esecuzione. Avvialo nell’app Shizuku; va riavviato dopo ogni riavvio del telefono.</string>
+    <string name="settings_shizuku_status_permission">Shizuku non ha ancora autorizzato Tryptify. Tocca per chiedere.</string>
+    <string name="settings_shizuku_status_starting">Avvio…</string>
+    <string name="settings_shizuku_status_active">Attivo: le altre app passano dal tuo EQ parametrico.</string>
+    <string name="settings_shizuku_status_failed">Non è stato possibile avviarlo su questo telefono. Viene usato l’EQ di sistema standard. Cambia un’impostazione dell’EQ per riprovare.</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Applica AutoEQ + tono a tutto l’audio del dispositivo (se consentito dal dispositivo)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Sostituisce la correzione precisa dell’app con una globale più approssimativa, e alcuni dispositivi la ignorano del tutto. Attivala per correggere l’audio di altre app.</string>
@@ -3650,6 +3660,8 @@
     <string name="whats_new_196_dac_surround_body">In modalità esclusiva, un mix 5.1, 7.1 o Atmos per altoparlanti resta surround su un’interfaccia USB multicanale o un sintoamplificatore AV. Un mix più stretto del dispositivo suona sui primi canali. Impostazioni › Audio elenca i canali trovati.</string>
     <string name="whats_new_196_system_eq_title">AutoEQ di sistema: ogni orecchio, e resta attivo</string>
     <string name="whats_new_196_system_eq_body">In modalità a 2 canali l’orecchio destro ha ora la sua curva anche nelle altre app. La correzione continua con Tryptify chiuso, un limitatore interviene se un’enfasi saturerebbe, e la musica dal DAC USB esclusivo viene di nuovo corretta.</string>
+    <string name="whats_new_196_shizuku_peq_title">EQ di sistema esatto con Shizuku</string>
+    <string name="whats_new_196_shizuku_peq_body">Una nuova opzione sotto AutoEQ di sistema fa passare le altre app dalla tua vera correzione parametrica, una per orecchio. Richiede l’app Shizuku in esecuzione e Android 13 o successivo; altrimenti resta l’EQ di sistema standard.</string>
     <string name="atmos_room_builtin">Stanza integrata</string>
     <string name="atmos_room_custom">La mia stanza</string>
     <string name="atmos_rooms">Stanze</string>

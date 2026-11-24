@@ -470,6 +470,10 @@ class PreferencesManager @Inject constructor(
         // System-wide AutoEQ: apply the correction to ALL device audio via a
         // global output-mix effect (Wavelet-style), not just this app's playback.
         private val SYSTEM_WIDE_AUTOEQ_ENABLED = booleanPreferencesKey("system_wide_autoeq_enabled")
+        // The Shizuku mode of system-wide. Deliberately NOT in
+        // SETTINGS_SYNC_KEYS: it rests on an app installed and allowed on
+        // this phone, and means nothing on another.
+        private val SYSTEM_WIDE_PEQ_SHIZUKU = booleanPreferencesKey("system_wide_peq_shizuku")
         // Bass/treble tone shelves layered after the AutoEQ in that same effect.
         private val SYSTEM_TONE_CONTROLS_JSON = stringPreferencesKey("system_tone_controls_json")
 
@@ -1939,6 +1943,18 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSystemWideAutoEqEnabled(enabled: Boolean) {
         dataStore.edit { it[SYSTEM_WIDE_AUTOEQ_ENABLED] = enabled }
+    }
+
+    /**
+     * System-wide through Shizuku: other apps play through the real
+     * parametric correction where the standard effect samples it. Off by
+     * default; means nothing with system-wide off.
+     */
+    val systemWidePeqShizuku: Flow<Boolean> =
+        dataStore.data.map { it[SYSTEM_WIDE_PEQ_SHIZUKU] ?: false }
+
+    suspend fun setSystemWidePeqShizuku(enabled: Boolean) {
+        dataStore.edit { it[SYSTEM_WIDE_PEQ_SHIZUKU] = enabled }
     }
 
     /** Bass/treble tone shelves for the system-wide effect (after AutoEQ). */

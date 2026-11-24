@@ -799,6 +799,16 @@
     <string name="settings_enable_autoeq_equalizer">Enable AutoEQ/Equalizer</string>
     <string name="settings_apply_eq_processing_to_playback">Apply EQ processing to playback</string>
     <string name="settings_system_wide_autoeq">System-wide AutoEQ</string>
+    <string name="settings_shizuku_peq">Exact parametric EQ (Shizuku)</string>
+    <string name="settings_shizuku_peq_desc">Other apps play through your real parametric correction, each ear its own, instead of a 31-band copy of it. Needs the Shizuku app installed and running.</string>
+    <string name="settings_shizuku_status_idle">On, with nothing to correct. Other apps are left as they are.</string>
+    <string name="settings_shizuku_status_unsupported">Needs Android 13 or newer. The standard system-wide EQ is used.</string>
+    <string name="settings_shizuku_status_not_installed">The Shizuku app is not installed. The standard system-wide EQ is used.</string>
+    <string name="settings_shizuku_status_not_running">Shizuku is not running. Start it in the Shizuku app; it has to be started again after each restart of the phone.</string>
+    <string name="settings_shizuku_status_permission">Shizuku has not been told to allow Tryptify. Tap to ask.</string>
+    <string name="settings_shizuku_status_starting">Starting…</string>
+    <string name="settings_shizuku_status_active">On: other apps play through your parametric EQ.</string>
+    <string name="settings_shizuku_status_failed">It would not start on this phone. The standard system-wide EQ is used. Change any EQ setting to try again.</string>
     <string name="settings_apply_your_autoeq_tone_to_all_device_audio">Apply your AutoEQ + tone to all device audio (device-permitting)</string>
     <string name="settings_beta">Beta</string>
     <string name="settings_swaps_the_app_s_exact_correction_for_a_coarser">Swaps the app\'s exact correction for a coarser global one, and some devices ignore it entirely. Turn it on to correct other apps.</string>
@@ -3575,6 +3585,8 @@
     <string name="whats_new_196_dac_surround_body">A 5.1, 7.1 or Atmos speaker mix now stays surround on a multichannel USB interface or AVR in exclusive mode. A mix narrower than the device plays in its first channels. Settings › Audio lists the channels found.</string>
     <string name="whats_new_196_system_eq_title">System-wide AutoEQ: each ear, and it stays on</string>
     <string name="whats_new_196_system_eq_body">In 2-channel mode the right ear now gets its own curve in other apps too. The correction keeps running with Tryptify closed, a limiter steps in if a boost would clip, and music through the exclusive USB DAC is corrected again.</string>
+    <string name="whats_new_196_shizuku_peq_title">Exact system-wide EQ with Shizuku</string>
+    <string name="whats_new_196_shizuku_peq_body">A new option under System-wide AutoEQ plays other apps through your real parametric correction, each ear its own. It needs the Shizuku app running and Android 13 or newer; without it the standard system-wide EQ carries on.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

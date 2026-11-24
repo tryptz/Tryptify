@@ -78,6 +78,7 @@ import javax.inject.Singleton
 class SystemAudioEqController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val preferences: PreferencesManager,
+    private val shizukuPeq: tf.monochrome.android.audio.eq.shizuku.ShizukuPeqController,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Any()
@@ -111,8 +112,10 @@ class SystemAudioEqController @Inject constructor(
             if (started) return
             started = true
         }
+        // The Shizuku mode, if the listener has turned it on.
+        shizukuPeq.start()
         scope.launch {
-            // Seven sources: past combine's typed overloads, so by position.
+            // Eight sources: past combine's typed overloads, so by position.
             combine(
                 preferences.systemWideAutoEqEnabled,
                 preferences.eqBandsJson,
@@ -121,6 +124,7 @@ class SystemAudioEqController @Inject constructor(
                 preferences.eqAutoPreamp,
                 preferences.eqBandsRJson,
                 preferences.eqStereoMode,
+                shizukuPeq.active,
             ) { v ->
                 Cfg(
                     enabled = v[0] as Boolean,
@@ -130,6 +134,7 @@ class SystemAudioEqController @Inject constructor(
                     autoPreamp = v[4] as Boolean,
                     bandsRJson = v[5] as String?,
                     stereo = v[6] as Boolean,
+                    shizuku = v[7] as Boolean,
                 )
             }
                 // DataStore re-emits its whole Preferences on EVERY write to ANY
@@ -143,7 +148,10 @@ class SystemAudioEqController @Inject constructor(
                 // re-tuned dozens of times a second.
                 .debounce(70L)
                 .collectLatest { cfg ->
-                    if (cfg.enabled) applyGlobal(cfg) else release()
+                    // While the Shizuku mode has other apps' audio, this
+                    // effect would correct it a second time: off, until
+                    // that mode is anything but playing.
+                    if (cfg.enabled && !cfg.shizuku) applyGlobal(cfg) else release()
                     // Live notification mirrors the master toggle so the user can
                     // see at a glance that system-wide EQ is engaged.
                     updateNotification(cfg.enabled)
@@ -175,6 +183,7 @@ class SystemAudioEqController @Inject constructor(
         val autoPreamp: Boolean,
         val bandsRJson: String?,
         val stereo: Boolean,
+        val shizuku: Boolean,
     )
 
     private fun applyGlobal(cfg: Cfg) {

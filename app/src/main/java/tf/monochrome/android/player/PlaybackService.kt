@@ -118,6 +118,7 @@ class PlaybackService : MediaSessionService() {
     @Inject lateinit var qobuzCache: tf.monochrome.android.data.cache.QobuzStreamCacheManager
     @Inject lateinit var deezerCache: tf.monochrome.android.data.cache.DeezerStreamCacheManager
     @Inject lateinit var libusbDriver: tf.monochrome.android.audio.usb.LibusbUacDriver
+    @Inject lateinit var shizukuPeq: tf.monochrome.android.audio.eq.shizuku.ShizukuPeqController
     @Inject lateinit var bypassVolumeController: tf.monochrome.android.audio.usb.BypassVolumeController
     // Atmos: the sample tap preserves raw E-AC-3 frames (which carry the JOC/OAMD
     // the FFmpeg decoder discards) into atmosFrameBuffer; atmosAudioProcessor
@@ -870,6 +871,7 @@ class PlaybackService : MediaSessionService() {
                 preferences.systemWideAutoEqEnabled,
                 preferences.eqAutoPreamp,
                 libusbDriver.isStreaming,
+                shizukuPeq.active,
             ) { v ->
                 EqApply(
                     enabled = v[0] as Boolean,
@@ -881,6 +883,7 @@ class PlaybackService : MediaSessionService() {
                     systemWide = v[6] as Boolean,
                     autoPreamp = v[7] as Boolean,
                     exclusiveDac = v[8] as Boolean,
+                    shizukuPeq = v[9] as Boolean,
                 )
             }
                 // DataStore re-emits its whole Preferences on EVERY write to
@@ -2543,6 +2546,9 @@ class PlaybackService : MediaSessionService() {
         // The music is leaving through the exclusive USB DAC, round Android's
         // mixer and the system-wide effect on it.
         val exclusiveDac: Boolean,
+        // The Shizuku system-wide mode is playing other apps' audio, and
+        // leaves this app's out of what it takes.
+        val shizukuPeq: Boolean,
     )
 
     /**
@@ -2601,6 +2607,7 @@ class PlaybackService : MediaSessionService() {
                         systemWide = preferences.systemWideAutoEqEnabled.first(),
                         autoPreamp = preferences.eqAutoPreamp.first(),
                         exclusiveDac = libusbDriver.isStreaming.value,
+                        shizukuPeq = shizukuPeq.active.value,
                     ),
                 )
             } catch (e: Exception) {
@@ -2633,7 +2640,7 @@ class PlaybackService : MediaSessionService() {
         // Main thread only, like both callers, so a plain field.
         if (cfg == lastEqInput) return
         try {
-            if (tf.monochrome.android.audio.eq.SystemEqCurve.coversOwnPlayback(cfg.systemWide, cfg.exclusiveDac)) {
+            if (tf.monochrome.android.audio.eq.SystemEqCurve.coversOwnPlayback(cfg.systemWide, cfg.exclusiveDac, cfg.shizukuPeq)) {
                 autoEqProcessor.applyBands(emptyList(), 0f, false)
                 lastAutoEq = AppliedEq(emptyList(), emptyList(), 0f, false)
                 publishGameSeed()

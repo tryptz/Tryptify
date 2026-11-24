@@ -62,6 +62,7 @@ class SettingsViewModel @Inject constructor(
     private val spectrumAnalyzerTap: SpectrumAnalyzerTap,
     private val channelDetectorProcessor: tf.monochrome.android.audio.dsp.ChannelDetectorProcessor,
     private val usbExclusiveController: tf.monochrome.android.audio.usb.UsbExclusiveController,
+    private val shizukuPeq: tf.monochrome.android.audio.eq.shizuku.ShizukuPeqController,
     private val scanCoordinator: tf.monochrome.android.data.local.scanner.ScanCoordinator,
     private val downloadDao: tf.monochrome.android.data.db.dao.DownloadDao,
     private val updateChecker: tf.monochrome.android.data.update.UpdateChecker,
@@ -611,6 +612,14 @@ class SettingsViewModel @Inject constructor(
     }
     fun setNormalizationEnabled(enabled: Boolean) { viewModelScope.launch { preferences.setNormalizationEnabled(enabled) } }
     fun setSystemWideAutoEq(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWideAutoEqEnabled(enabled) } }
+
+    /** System-wide through Shizuku: the option, where it stands, and its two actions. */
+    val systemWidePeqShizuku: StateFlow<Boolean> = preferences.systemWidePeqShizuku
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val shizukuPeqState: StateFlow<tf.monochrome.android.audio.eq.shizuku.ShizukuPeqState> = shizukuPeq.state
+    fun setSystemWidePeqShizuku(enabled: Boolean) { viewModelScope.launch { preferences.setSystemWidePeqShizuku(enabled) } }
+    fun requestShizukuPermission() = shizukuPeq.requestPermission()
+    fun refreshShizukuPeq() = shizukuPeq.refresh()
     fun setDspBlockSize(value: Int) { viewModelScope.launch { preferences.setDspBlockSize(value) } }
     fun setUsbExclusiveBitPerfectEnabled(enabled: Boolean) { viewModelScope.launch {
         preferences.setUsbExclusiveBitPerfectEnabled(enabled)
