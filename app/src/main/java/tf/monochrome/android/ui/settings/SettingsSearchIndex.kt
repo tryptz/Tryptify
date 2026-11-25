@@ -228,7 +228,14 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("parametric_eq")),
     entry("AutoEQ headphone profile", R.string.search_autoeq_headphone_profile, "Equalizer", listOf("headphone", "harman", "target", "correction")),
     entry("Spectrum analyzer", R.string.settings_spectrum_analyzer, "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
-    entry("System-wide AutoEQ", R.string.settings_system_wide_autoeq, "Equalizer", listOf("global", "device", "all audio", "correction", "beta")),
+    entry("System-wide AutoEQ", R.string.settings_system_wide_autoeq, "Equalizer", listOf("global", "device", "all audio", "correction", "beta", "other apps", "tile", "quick settings")),
+    // Under System-wide AutoEQ, shown while it is on. Shizuku is the other
+    // app's name, which is what someone who read about this option types.
+    entry(
+        "Exact parametric EQ (Shizuku)", R.string.settings_shizuku_peq,
+        "Equalizer",
+        listOf("shizuku", "parametric", "peq", "exact", "system-wide", "global", "other apps", "all audio", "adb", "wireless debugging"),
+    ),
 
     entry("Wave Candy", null, "Equalizer", listOf("waveform", "oscilloscope", "scope", "kick", "punch", "stereo", "mono")),
 

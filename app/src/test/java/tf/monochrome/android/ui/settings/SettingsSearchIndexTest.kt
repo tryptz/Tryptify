@@ -95,6 +95,17 @@ class SettingsSearchIndexTest {
         }
     }
 
+    /**
+     * The Shizuku option is found by the other app's name: nothing in "Exact
+     * parametric EQ" says Shizuku to someone who read about it elsewhere, and
+     * the row only shows while System-wide AutoEQ is on.
+     */
+    @Test
+    fun `the Shizuku option is found by its app's name`() {
+        val hits = searchSettings("shizuku").map { it.title }
+        assertTrue("\"shizuku\" found $hits", hits.firstOrNull() == "Exact parametric EQ (Shizuku)")
+    }
+
     private val settingsSources by lazy {
         File("src/main/java/tf/monochrome/android/ui/settings")
             .walkTopDown()
