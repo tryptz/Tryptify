@@ -86,9 +86,10 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 | **Every source in one player** | Local FLAC, ALAC, WAV, MP3, AAC and Opus, plus TIDAL, Qobuz and Deezer from servers you add, your own Navidrome or other Subsonic server, Tryptify Cloud, YouTube with no sign-in, and SoundCloud with your Tryptify account. |
 | **Tryptify Cloud** | Your music stored for you, lossless files kept as uploaded, played like your own server. From $1.29 a month for 10 GB up to 10 TB, with a 7-day free trial. |
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
-| **DSP mixing console** | A C++17 engine with up to 48 buses, 36 processors and EBU R128 meters. |
-| **Headphone AutoEQ** | Correction from 4,000+ measurements against 10 targets, with target pills and a filter editor under the graph. |
-| **Bit-perfect USB DAC** | Its own UAC1/UAC2 driver writes straight to the DAC, Apple's USB-C adapter included. |
+| **DSP mixing console** | A C++17 engine with up to 48 buses, 37 processors and EBU R128 meters, a 9.1.6 upmix and a Binaural Room among them. |
+| **Headphone AutoEQ** | Correction from 4,000+ measurements against 10 targets, with target pills and a filter editor under the graph. System-wide for other apps too, an ear each, with an exact parametric mode through Shizuku. |
+| **Dolby Atmos on headphones** | Atmos objects play from a 15.1.12 room of virtual speakers you can see in 3D, through measured ear filters, in the built-in room, a measured one or one you shape yourself. |
+| **Bit-perfect USB DAC** | Its own UAC1/UAC2 driver writes straight to the DAC, Apple's USB-C adapter included, in stereo or in surround on a multichannel interface. |
 | **Speed, pitch, tempo** | 0.25× to 3.0×, by multiplier, semitones or BPM, with two pitch engines. |
 | **MilkDrop visualizer** | projectM with 9,795 presets, each tested before it ships. |
 | **Trypt Mania** | A StepMania-style rhythm game on your own songs, charted for you, with packs, rooms and a live scoreboard. |

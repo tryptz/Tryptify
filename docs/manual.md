@@ -61,7 +61,14 @@ Playlists come in through `Settings › Library › Playlist import`.
 | Play at each file's own sample rate | `Settings › Audio › Never Resample Between Tracks` |
 | Speakers-in-front sound on headphones | `Settings › Audio › Crossfeed` |
 
-A USB DAC is driven bit-perfect by the app's own driver when one is plugged in.
+A USB DAC is driven bit-perfect by the app's own driver when one is plugged in
+(`Settings › Audio › Exclusive USB DAC (bypass Android audio)`). Under that
+switch:
+
+| To do this | Use |
+| --- | --- |
+| See how many channels the DAC has | Channels. A 5.1, 7.1 or Atmos speaker mix stays surround on a multichannel interface or an AVR; a song with fewer channels plays in the first ones, untouched. DSD files play as PCM |
+| Hand the DAC to other apps and take it back | Quick Settings tile: a tap adds an Exclusive USB DAC tile to Quick Settings |
 
 ## 5. Sound shaping
 
@@ -70,8 +77,12 @@ A USB DAC is driven bit-perfect by the app's own driver when one is plugged in.
 | AutoEQ | `Settings › Equalizer › AutoEQ headphone profile` | Corrects your headphones from 4,000+ measurements against 10 targets |
 | Equalizer | `Settings › Equalizer › Equalizer` | Bands by hand |
 | Parametric EQ | `Settings › Equalizer › Parametric EQ` | Filters by frequency, gain and width |
-| System-wide AutoEQ | `Settings › Equalizer › System-wide AutoEQ` | The correction for other apps too |
+| System-wide AutoEQ | `Settings › Equalizer › System-wide AutoEQ` | The correction for other apps too: an ear each in 2-channel mode, kept running with Tryptify closed, with a limiter that acts only when a boost would clip |
+| Exact system-wide EQ | `Settings › Equalizer › Exact parametric EQ (Shizuku)`, under System-wide AutoEQ | Other apps play through the real parametric filters instead of a 31-band copy of them. Needs the Shizuku app (someone else's, free) running and allowed, and Android 13 or newer. The first time it is turned on the setup steps are shown; the Shizuku line under the switch says what is in the way, and a tap on it shows the steps again. Shizuku is started again after each restart of the phone; without it the standard system-wide EQ plays. Experimental |
+| System-wide AutoEQ from anywhere | `Settings › Equalizer › Quick Settings tile`, under those two | A tile that turns System-wide AutoEQ on and off over any app |
 | Mixer | `Settings › Audio › Mixer`, or Mixer in the player | A console of buses and processors with loudness meters |
+| Binaural Room | Mixer › FX Chain › Add Effect › Space | The Atmos page's headphone room for any song: stereo from two speakers standing in that room. Room, Binaural, Angle and Output knobs; My room swaps the built-in room for one of your own Width, Depth, Height and Damping. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker |
+| 9.1.6 upmix | In the mixer | Spreads a stereo song around you. Folded back to stereo it is the song exactly |
 | Music links | On sliders and mixer knobs | Makes a control move with the kick, vocals, snare or hi-hats |
 
 ## 6. Dolby Atmos
@@ -159,6 +170,8 @@ headphones' delay once and the game, lyrics and visuals all wait for it.
 | Make a slow phone smoother | `Settings › System › Performance`, `Frame rate limit` |
 | See the frame rate | `Settings › System › FPS counter` |
 | Read or export the app's log | `Settings › System › Debug log` |
+| Send the log once, with a note | `Settings › System › Send logs` (sign-in needed; the dialog says what leaves the phone) |
+| Draw less for a cooler, smoother phone | `Settings › System › Performance › Rendering quality`: High, Balanced or Fast |
 | Send the log live to someone helping you | Debug log › Live log (30 minutes, sign-in needed, off at every start) |
 | Keep crash reports | `Settings › System › Save crash reports` |
 | Move to a new phone | `Settings › System › Backup and restore` |
