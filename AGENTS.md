@@ -81,7 +81,10 @@ that code hold there too; on the master of a stream wider than stereo it is
 one room with every channel at its own speaker, not a room a channel pair,
 which summed to a comb), the Crossfeed page's Room (`headphone_room_test`:
 `dsp/headphone_room.h` is that room on its own with a listener's HRTF and an
-LFE whose linear-phase split adds back to the song at every crossover), the finite guards
+LFE whose linear-phase split adds back to the song at every crossover), the
+Binaural Room's ten presets (`binaural_room_presets_test`, on the table
+`FxPresetsTest` holds to Kotlin's list: level with each other on a song, each
+real room ringing as long as the room it is named for), the finite guards
 (`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music

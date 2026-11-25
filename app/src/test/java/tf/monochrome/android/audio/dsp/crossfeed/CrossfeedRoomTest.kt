@@ -197,6 +197,34 @@ class CrossfeedRoomTest {
         assertNull(s.room.hrtfPath)
     }
 
+    /**
+     * The page's Room takes the mixer effect's presets as they are: the same
+     * nine settings in the same order and within the same limits, so a
+     * preset reads back as itself and lights its chip, and the page's own
+     * LFE and HRTF are left as the listener set them.
+     */
+    @Test
+    fun `every Binaural Room preset fits the page's room and leaves the LFE and HRTF alone`() {
+        val defs = tf.monochrome.android.ui.mixer.getParamDefs(tf.monochrome.android.audio.dsp.SnapinType.BINAURAL_ROOM)
+        val presets = tf.monochrome.android.ui.mixer.fxchain.FxPresets.forType(tf.monochrome.android.audio.dsp.SnapinType.BINAURAL_ROOM)
+        assertEquals(RoomSettings.ROOM_PARAM_COUNT, defs.size)
+        assertArrayEquals("the page's room starts as the effect does", FloatArray(defs.size) { defs[it].default }, RoomSettings().roomParams(), 0f)
+        val mine = RoomSettings(lfe = true, lfeHz = 120f, lfeDb = -3f, hrtfPath = "/x/a.sofa")
+        for (preset in presets) {
+            val values = preset.resolved(defs)
+            val room = mine.withRoom(values)
+            assertArrayEquals(preset.name, values, room.roomParams(), 0f)
+            val current = room.roomParams().withIndex().associate { it.index to it.value }
+            assertTrue("${preset.name} lights its own chip", preset.matches(defs, current, 1f))
+            assertEquals("${preset.name}: one chip lit", 1, presets.count { it.matches(defs, current, 1f) })
+            assertTrue(preset.name, room.lfe && room.lfeHz == 120f && room.lfeDb == -3f && room.hrtfPath == "/x/a.sofa")
+        }
+        // A slider moved: no chip is lit.
+        val moved = mine.withRoom(presets[0].resolved(defs)).copy(roomPercent = 13f)
+        val current = moved.roomParams().withIndex().associate { it.index to it.value }
+        assertTrue(presets.none { it.matches(defs, current, 1f) })
+    }
+
     @Test
     fun `the room's parameters are in the native room's order`() {
         val p = RoomSettings(

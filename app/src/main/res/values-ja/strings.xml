@@ -743,6 +743,16 @@
     <string name="crossfeed_lfe_desc">クロスオーバーより下の低音を部屋から外し、1 つのチャンネルとして両耳へ直接、独自のレベルで鳴らします。分割はリニアフェーズなので、それ自体で位相をずらさず、約 21 ミリ秒の遅延が加わります。</string>
     <string name="crossfeed_lfe_crossover">クロスオーバー</string>
     <string name="crossfeed_lfe_level">LFE レベル</string>
+    <string name="room_preset_studio_monitors">スタジオモニター</string>
+    <string name="room_preset_control_room">コントロールルーム</string>
+    <string name="room_preset_living_room">リビングルーム</string>
+    <string name="room_preset_cinema">映画館</string>
+    <string name="room_preset_club">クラブ</string>
+    <string name="room_preset_concert_hall">コンサートホール</string>
+    <string name="room_preset_gentle_crossfeed">やさしいクロスフィード</string>
+    <string name="room_preset_wide_stage">ワイドステージ</string>
+    <string name="room_preset_wrap_around">ラップアラウンド</string>
+    <string name="room_preset_deep_stage">ディープステージ</string>
     <string name="algorithm">アルゴリズム</string>
     <string name="speaker_angle">スピーカーの角度</string>
     <string name="speaker_angle_note">角度が狭いほどクロスフィードは強くなります。180° ではスピーカーが耳の位置にあり、クロスフィードはかかりません。</string>
@@ -3558,6 +3568,8 @@
     <string name="whats_new_196_album_share_body">アルバムを共有すると準備中であることを表示し、Discord がプレビューを表示できるようになってから共有シートを開きます。最長 50 秒です。</string>
     <string name="whats_new_196_crossfeed_room_title">クロスフィードのページに「部屋」</string>
     <string name="whats_new_196_crossfeed_room_body">クロスフィードは「オフ」「クロスフィード」「部屋」から選べるようになりました。ミキサーの Binaural Room を単体で使い、独自の HRTF、低音を部屋の外に出す LFE、2D または 3D の表示があります。プレーヤーのオーディオツールで「クロスフィード」を長押しします。アプリを再起動しても設定は残ります。</string>
+    <string name="whats_new_196_room_presets_title">Binaural Room に 10 個のプリセット</string>
+    <string name="whats_new_196_room_presets_body">Binaural Room に 10 個のプリセットが加わり、ミキサーとクロスフィードのページで使えます。スタジオモニターからコンサートホールまで、実際の部屋と同じ長さで響く 6 つの環境と、空間を広げる 4 つです。すべて同じ音量で再生されます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

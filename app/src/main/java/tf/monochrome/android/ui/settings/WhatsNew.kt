@@ -237,6 +237,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = MIXER,
+                    title = "Ten Binaural Room presets",
+                    body = "Ten presets for the Binaural Room, in the mixer and on the Crossfeed page: six real set-ups, from Studio Monitors to a Concert Hall, each ringing as such a room does, and four that enlarge the space. All play at the same loudness.",
+                    titleRes = R.string.whats_new_196_room_presets_title,
+                    bodyRes = R.string.whats_new_196_room_presets_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYER,
                     title = "Swipe the cover to see the next song",
                     body = "As you swipe, the next or previous song's cover slides in beside the playing one.",

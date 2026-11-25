@@ -1,5 +1,6 @@
 package tf.monochrome.android.ui.mixer.fxchain
 
+import tf.monochrome.android.R
 import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.ui.mixer.ParamDef
 
@@ -16,6 +17,12 @@ data class FxPreset(
     val values: Map<Int, Float>,
     val dryWet: Float = 1f,
     val mastering: Boolean = true,
+    /**
+     * [name] in the listener's language, where it has a row in strings.tsv.
+     * Most presets are named in studio English and have none; the Binaural
+     * Room's are also on the Crossfeed page, which is all translated.
+     */
+    @androidx.annotation.StringRes val nameRes: Int? = null,
 ) {
     /**
      * Every parameter, not just the ones this preset names: applying it resets
@@ -37,7 +44,8 @@ data class FxPreset(
 }
 
 /**
- * Five presets for every effect, mastering first.
+ * Five presets for every effect, mastering first; ten for the Binaural Room,
+ * real listening set-ups first and space enhancers after ([COUNTS]).
  *
  * Values come from published practice, mapped onto these effects' own
  * parameters (indices follow ParamDefs.kt): the Kilohearts snapins manual
@@ -56,11 +64,17 @@ data class FxPreset(
  */
 object FxPresets {
 
-    private fun m(name: String, vararg v: Pair<Int, Float>, dw: Float = 1f) =
-        FxPreset(name, mapOf(*v), dw, mastering = true)
+    /** How many presets an effect has when it is not five. */
+    val COUNTS: Map<SnapinType, Int> = mapOf(SnapinType.BINAURAL_ROOM to 10)
 
-    private fun c(name: String, vararg v: Pair<Int, Float>, dw: Float = 1f) =
-        FxPreset(name, mapOf(*v), dw, mastering = false)
+    /** How many presets [type] has. */
+    fun countFor(type: SnapinType): Int = COUNTS[type] ?: 5
+
+    private fun m(name: String, vararg v: Pair<Int, Float>, dw: Float = 1f, res: Int? = null) =
+        FxPreset(name, mapOf(*v), dw, mastering = true, nameRes = res)
+
+    private fun c(name: String, vararg v: Pair<Int, Float>, dw: Float = 1f, res: Int? = null) =
+        FxPreset(name, mapOf(*v), dw, mastering = false, nameRes = res)
 
     fun forType(type: SnapinType): List<FxPreset> = when (type) {
         // ── Utility ─────────────────────────────────────────────────────
@@ -365,19 +379,69 @@ object FxPresets {
             c("Reverse Stutter", 0 to 125f, 2 to 5f, 3 to 60f),
             c("Reverse Solo", 2 to 15f, 3 to 100f),
         )
-        // The renderer's room with a stereo pair in it. On a finished song:
-        // speakers at the usual 30 degrees, little or no room, or only part
-        // of the ear filters, which is a crossfeed. The room takes 3 dB off,
-        // so the wider and livelier ones give some back.
+        // The renderer's room with a stereo pair in it: ten, where every
+        // other effect has five (the owner's ask of 2026-11-25), and the same
+        // ten on the Crossfeed page's Room. Indices: 0 Room %, 1 Binaural %,
+        // 2 Angle (degrees each side), 3 Output dB, 4 My room, then its
+        // 5 Width, 6 Depth, 7 Height in metres and 8 Damping %.
+        //
+        // Every number here was set by measuring the effect itself, and
+        // binaural_room_presets_test holds them (through
+        // binaural_room_presets.csv, which FxPresetsTest holds to this list):
+        //
+        // - Angles are the room's own speakers (15, 30, 60, 90 degrees). An
+        //   angle between two of them is shared by an equal-power pan, and
+        //   two speakers playing one signal add up at the ear: 22 degrees
+        //   measured 2.8 dB louder than 30.
+        // - They are level with each other: within 0.35 LU of Studio
+        //   Monitors on a song (EBU R128), so stepping through them compares
+        //   rooms, not volume. The wide ones measured 0.7 LU louder, hence
+        //   their -0.5 dB. None raises the level: the room has no limiter and
+        //   already peaks above its input.
+        // - Room is the room's level against the direct sound: 6 dB for each
+        //   doubling (12 % is 26 dB under it, 25 % 20 dB, 50 % 14 dB).
+        // - A room's Damping is set for how long the effect's own room rings
+        //   (T30 of what it plays), not for Eyring's formula, which the
+        //   image-source room outlasts by about a fifth.
+        //
+        // First six, real set-ups, speakers 30 degrees each side as EBU Tech
+        // 3276 has a stereo pair (a base angle of 60 degrees):
+        //   Studio Monitors  nearfield, the built-in room barely heard.
+        //   Control Room     123 m3, rings 0.25 s. EBU Tech 3276 asks
+        //                    0.25 (V/100)^(1/3) of a listening room, 0.27 s
+        //                    here, and between 0.2 and 0.4 s.
+        //   Living Room      a furnished room of 27 m2, 0.45 s: livelier than
+        //                    a studio. Typical, not from a standard.
+        //   Cinema           930 m3, 0.45 s: the Dolby and THX guideline for
+        //                    a room of 920 m3 at 500 Hz (Naqvi, IOA), with
+        //                    the screen's pair as the back rows see it,
+        //                    15 degrees each side.
+        //   Club             1440 m3, 0.64 s: the best-rated rock and pop
+        //                    halls ring 0.6 to 1.2 s from 1000 to 6000 m3
+        //                    (Adelman-Larsen, Thompson and Gade, JASA 2010).
+        //   Concert Hall     2.0 s, a full hall (Beranek: 1.8 to 2.2 s; the
+        //                    Musikverein 2.0), in the largest box the knobs
+        //                    allow. Real halls are longer and higher.
+        // Then four that enlarge the space, each by another means:
+        //   Gentle Crossfeed part of the ear filters and hardly any room: the
+        //                    smallest step out of the head.
+        //   Wide Stage       the pair at 60 degrees: a sound on one side
+        //                    measures 20 dB louder in that ear above 1.5 kHz
+        //                    (13 dB at 30) and 0.75 ms earlier (0.27).
+        //   Wrap Around      the pair at your sides, 90 degrees, more room.
+        //   Deep Stage       a live room of 0.87 s at 10 dB under the direct
+        //                    sound, the most room of the ten: further away.
         SnapinType.BINAURAL_ROOM -> listOf(
-            m("Studio Monitors", 0 to 12f),
-            m("Gentle Crossfeed", 0 to 8f, 1 to 45f),
-            // My room (4 on), at sizes the renderer's page starts its own
-            // room presets from (RoomPreset): width, depth, height in
-            // metres, then damping in percent.
-            m("Control Room", 0 to 25f, 4 to 1f, 5 to 5.5f, 6 to 7f, 7 to 3.2f, 8 to 45f),
-            c("Wide Stage", 0 to 30f, 2 to 60f, 3 to 1.5f),
-            c("Concert Hall", 0 to 40f, 4 to 1f, 5 to 22f, 6 to 30f, 7 to 12f, 8 to 18f),
+            m("Studio Monitors", 0 to 12f, res = R.string.room_preset_studio_monitors),
+            m("Control Room", 0 to 25f, 4 to 1f, 5 to 5.5f, 6 to 7f, 7 to 3.2f, 8 to 45f, res = R.string.room_preset_control_room),
+            m("Living Room", 0 to 35f, 4 to 1f, 5 to 4.5f, 6 to 6f, 7 to 2.5f, 8 to 24f, res = R.string.room_preset_living_room),
+            m("Cinema", 0 to 35f, 2 to 15f, 4 to 1f, 5 to 10f, 6 to 15.5f, 7 to 6f, 8 to 49f, res = R.string.room_preset_cinema),
+            m("Club", 0 to 40f, 4 to 1f, 5 to 12f, 6 to 20f, 7 to 6f, 8 to 44f, res = R.string.room_preset_club),
+            m("Concert Hall", 0 to 45f, 4 to 1f, 5 to 22f, 6 to 30f, 7 to 12f, 8 to 26f, res = R.string.room_preset_concert_hall),
+            c("Gentle Crossfeed", 0 to 8f, 1 to 45f, res = R.string.room_preset_gentle_crossfeed),
+            c("Wide Stage", 0 to 30f, 2 to 60f, 3 to -0.5f, res = R.string.room_preset_wide_stage),
+            c("Wrap Around", 0 to 40f, 2 to 90f, 3 to -0.5f, res = R.string.room_preset_wrap_around),
+            c("Deep Stage", 0 to 60f, 3 to -0.5f, 4 to 1f, 5 to 9f, 6 to 12f, 7 to 5.5f, 8 to 25f, res = R.string.room_preset_deep_stage),
         )
     }
 }

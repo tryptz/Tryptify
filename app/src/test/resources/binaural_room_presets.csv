@@ -1,0 +1,11 @@
+# name,room,binaural,angle,output,my_room,width,depth,height,damping — FxPresets' Binaural Room, checked by FxPresetsTest
+Studio Monitors,12.0,100.0,30.0,0.0,0.0,5.0,6.0,2.7,25.0
+Control Room,25.0,100.0,30.0,0.0,1.0,5.5,7.0,3.2,45.0
+Living Room,35.0,100.0,30.0,0.0,1.0,4.5,6.0,2.5,24.0
+Cinema,35.0,100.0,15.0,0.0,1.0,10.0,15.5,6.0,49.0
+Club,40.0,100.0,30.0,0.0,1.0,12.0,20.0,6.0,44.0
+Concert Hall,45.0,100.0,30.0,0.0,1.0,22.0,30.0,12.0,26.0
+Gentle Crossfeed,8.0,45.0,30.0,0.0,0.0,5.0,6.0,2.7,25.0
+Wide Stage,30.0,100.0,60.0,-0.5,0.0,5.0,6.0,2.7,25.0
+Wrap Around,40.0,100.0,90.0,-0.5,0.0,5.0,6.0,2.7,25.0
+Deep Stage,60.0,100.0,30.0,-0.5,1.0,9.0,12.0,5.5,25.0

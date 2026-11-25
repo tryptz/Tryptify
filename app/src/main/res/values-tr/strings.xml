@@ -775,6 +775,16 @@
     <string name="crossfeed_lfe_desc">Geçiş frekansının altındaki bas odadan çıkarılır ve tek kanal olarak, kendi seviyesinde doğrudan iki kulağa gider. Bölme doğrusal fazlıdır; kendiliğinden faz kaydırmaz ve yaklaşık 21 ms gecikme ekler.</string>
     <string name="crossfeed_lfe_crossover">Geçiş frekansı</string>
     <string name="crossfeed_lfe_level">LFE seviyesi</string>
+    <string name="room_preset_studio_monitors">Stüdyo monitörleri</string>
+    <string name="room_preset_control_room">Kontrol odası</string>
+    <string name="room_preset_living_room">Oturma odası</string>
+    <string name="room_preset_cinema">Sinema</string>
+    <string name="room_preset_club">Kulüp</string>
+    <string name="room_preset_concert_hall">Konser salonu</string>
+    <string name="room_preset_gentle_crossfeed">Hafif crossfeed</string>
+    <string name="room_preset_wide_stage">Geniş sahne</string>
+    <string name="room_preset_wrap_around">Çepeçevre</string>
+    <string name="room_preset_deep_stage">Derin sahne</string>
     <string name="algorithm">Algoritma</string>
     <string name="speaker_angle">Hoparlör açısı</string>
     <string name="speaker_angle_note">Dar açılar en güçlü crossfeed’i verir. 180°’de hoparlörler kulaklarınızın yanındadır ve crossfeed uygulanmaz.</string>
@@ -3636,6 +3646,8 @@
     <string name="whats_new_196_album_share_body">Bir albüm paylaşılırken hazırlandığı belirtilir ve Discord önizlemesini gösterebildiğinde paylaşım sayfası açılır; en fazla 50 saniye.</string>
     <string name="whats_new_196_crossfeed_room_title">Crossfeed sayfasında oda</string>
     <string name="whats_new_196_crossfeed_room_body">Crossfeed artık Kapalı, Crossfeed ya da Oda: mikserin Binaural Room efekti tek başına; kendi HRTF’si, bası odanın dışında tutan bir LFE ve 2D ya da 3D görünümle. Oynatıcının Ses araçları bölümünde Crossfeed’e basılı tut. Uygulama yeniden başladığında korunur.</string>
+    <string name="whats_new_196_room_presets_title">Binaural Room için on ön ayar</string>
+    <string name="whats_new_196_room_presets_body">Binaural Room için on ön ayar, mikserde ve Crossfeed sayfasında: stüdyo monitörlerinden konser salonuna, o tür odalar kadar çınlayan altı gerçek düzen ve alanı genişleten dört ön ayar. Hepsi aynı ses yüksekliğinde çalar.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

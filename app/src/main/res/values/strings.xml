@@ -776,6 +776,16 @@
     <string name="crossfeed_lfe_desc">The bass below the crossover is taken out of the room and played straight to both ears as one channel, at its own level. The split is linear phase, so it shifts no phase of its own, and adds about 21 ms of delay.</string>
     <string name="crossfeed_lfe_crossover">Crossover</string>
     <string name="crossfeed_lfe_level">LFE level</string>
+    <string name="room_preset_studio_monitors">Studio Monitors</string>
+    <string name="room_preset_control_room">Control Room</string>
+    <string name="room_preset_living_room">Living Room</string>
+    <string name="room_preset_cinema">Cinema</string>
+    <string name="room_preset_club">Club</string>
+    <string name="room_preset_concert_hall">Concert Hall</string>
+    <string name="room_preset_gentle_crossfeed">Gentle Crossfeed</string>
+    <string name="room_preset_wide_stage">Wide Stage</string>
+    <string name="room_preset_wrap_around">Wrap Around</string>
+    <string name="room_preset_deep_stage">Deep Stage</string>
     <string name="algorithm">Algorithm</string>
     <string name="speaker_angle">Speaker angle</string>
     <string name="speaker_angle_note">Narrow angles give the strongest crossfeed. At 180° the speakers sit at your ears and no crossfeed is applied.</string>
@@ -3639,6 +3649,8 @@
     <string name="whats_new_196_album_share_body">Sharing an album now says it is getting the album ready, and opens the share sheet once Discord can show its preview, 50 seconds at most.</string>
     <string name="whats_new_196_crossfeed_room_title">Room on the Crossfeed page</string>
     <string name="whats_new_196_crossfeed_room_body">Crossfeed is now Off, Crossfeed or Room: the mixer\'s Binaural Room on its own, with an HRTF of its own, an LFE that keeps the bass out of the room, and a 2D or 3D view. Hold Crossfeed in the player\'s Audio tools. It is kept when the app restarts.</string>
+    <string name="whats_new_196_room_presets_title">Ten Binaural Room presets</string>
+    <string name="whats_new_196_room_presets_body">Ten presets for the Binaural Room, in the mixer and on the Crossfeed page: six real set-ups, from Studio Monitors to a Concert Hall, each ringing as such a room does, and four that enlarge the space. All play at the same loudness.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

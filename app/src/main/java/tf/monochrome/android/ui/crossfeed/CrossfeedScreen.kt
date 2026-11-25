@@ -10,7 +10,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tf.monochrome.android.audio.atmos.AtmosNative
 import tf.monochrome.android.audio.dsp.BinauralRoomNative
+import tf.monochrome.android.audio.dsp.SnapinType
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedAlgorithm
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedKeeper
 import tf.monochrome.android.audio.dsp.crossfeed.CrossfeedMode
@@ -66,7 +71,9 @@ import tf.monochrome.android.audio.dsp.crossfeed.RoomSettings
 import tf.monochrome.android.domain.model.CustomRoom
 import tf.monochrome.android.domain.model.RoomShape
 import tf.monochrome.android.ui.mixer.GlassChoiceChip
+import tf.monochrome.android.ui.mixer.fxchain.FxPresets
 import tf.monochrome.android.ui.mixer.fxchain.FxVisualMath
+import tf.monochrome.android.ui.mixer.getParamDefs
 import tf.monochrome.android.ui.mixer.fxchain.roomLayout
 import tf.monochrome.android.ui.settings.AtmosRoom3d
 import tf.monochrome.android.ui.settings.BUILT_IN_ROOM_DECAY
@@ -209,6 +216,7 @@ fun CrossfeedScreen(
                 if (state.mode == CrossfeedMode.CROSSFEED) {
                     CrossfeedControls(state = state, effect = effect)
                 } else {
+                    RoomPresets(room = room, onApply = { values -> effect.updateRoom { it.withRoom(values) } })
                     RoomControls(room = room, enabled = state.enabled, onChange = effect::updateRoom)
                 }
             }
@@ -356,6 +364,50 @@ private fun CrossfeedControls(state: CrossfeedState, effect: tf.monochrome.andro
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * The Binaural Room's presets, the same ten its card in the mixer has
+ * ([FxPresets]): the real set-ups first, then, past a divider, the ones
+ * that enlarge the space. A preset sets the room's nine settings and leaves
+ * the LFE and the HRTF, which are this page's own. The one that matches the
+ * room as it stands is lit; move a slider and it goes out.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RoomPresets(room: RoomSettings, onApply: (FloatArray) -> Unit) {
+    val presets = remember { FxPresets.forType(SnapinType.BINAURAL_ROOM) }
+    val defs = remember { getParamDefs(SnapinType.BINAURAL_ROOM) }
+    val current = remember(room) { room.roomParams().withIndex().associate { it.index to it.value } }
+    val accent = MaterialTheme.colorScheme.primary
+    val outline = MaterialTheme.colorScheme.outline
+    Spacer(Modifier.height(12.dp))
+    Text(text = stringResource(R.string.visualizer_presets), style = MaterialTheme.typography.labelLarge)
+    Spacer(Modifier.height(8.dp))
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        presets.forEachIndexed { i, preset ->
+            if (i > 0 && presets[i - 1].mastering && !preset.mastering) {
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 2.dp)
+                        .align(Alignment.CenterVertically)
+                        .width(1.dp)
+                        .height(18.dp)
+                        .background(outline.copy(alpha = 0.35f)),
+                )
+            }
+            GlassChoiceChip(
+                label = preset.nameRes?.let { stringResource(it) } ?: preset.name,
+                selected = preset.matches(defs, current, 1f),
+                accent = accent,
+                onClick = { onApply(preset.resolved(defs)) },
+            )
+        }
     }
 }
 

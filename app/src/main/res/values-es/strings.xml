@@ -807,6 +807,16 @@
     <string name="crossfeed_lfe_desc">Los graves por debajo del cruce salen de la sala y van directos a ambos oídos como un solo canal, a su propio nivel. La división es de fase lineal, así que no desplaza ninguna fase por sí misma, y añade unos 21 ms de retardo.</string>
     <string name="crossfeed_lfe_crossover">Cruce</string>
     <string name="crossfeed_lfe_level">Nivel de LFE</string>
+    <string name="room_preset_studio_monitors">Monitores de estudio</string>
+    <string name="room_preset_control_room">Sala de control</string>
+    <string name="room_preset_living_room">Sala de estar</string>
+    <string name="room_preset_cinema">Cine</string>
+    <string name="room_preset_club">Club</string>
+    <string name="room_preset_concert_hall">Sala de conciertos</string>
+    <string name="room_preset_gentle_crossfeed">Crossfeed suave</string>
+    <string name="room_preset_wide_stage">Escenario amplio</string>
+    <string name="room_preset_wrap_around">Envolvente</string>
+    <string name="room_preset_deep_stage">Escenario profundo</string>
     <string name="algorithm">Algoritmo</string>
     <string name="speaker_angle">Ángulo de los altavoces</string>
     <string name="speaker_angle_note">Cuanto más estrecho el ángulo, más fuerte el crossfeed. A 180°, los altavoces están en tus oídos y no se aplica crossfeed.</string>
@@ -3714,6 +3724,8 @@
     <string name="whats_new_196_album_share_body">Al compartir un álbum se indica que se está preparando, y la hoja de compartir se abre cuando Discord ya puede mostrar su vista previa, 50 segundos como mucho.</string>
     <string name="whats_new_196_crossfeed_room_title">Sala en la página de Crossfeed</string>
     <string name="whats_new_196_crossfeed_room_body">Crossfeed ahora es Desactivado, Crossfeed o Sala: la Binaural Room del mezclador por sí sola, con su propia HRTF, un LFE que deja los graves fuera de la sala y una vista 2D o 3D. Mantén pulsado Crossfeed en Herramientas de audio del reproductor. Se conserva al reiniciar la app.</string>
+    <string name="whats_new_196_room_presets_title">Diez presets para la Binaural Room</string>
+    <string name="whats_new_196_room_presets_body">Diez presets para la Binaural Room, en el mezclador y en la página de Crossfeed: seis configuraciones reales, de los monitores de estudio a la sala de conciertos, que resuenan como esas salas, y cuatro que amplían el espacio. Todos suenan al mismo volumen.</string>
     <string name="atmos_room_builtin">Sala integrada</string>
     <string name="atmos_room_custom">Mi sala</string>
     <string name="atmos_rooms">Salas</string>

@@ -3739,8 +3739,9 @@ into the mixer.
     the room's rate, so it is resampled to last as long at 44.1 kHz.
   - The picture is that room: its shape (`RoomShape.of`) and its decay
     (`FxVisualMath.roomDecaySeconds`, Eyring as `box_decay_seconds`). It has
-    no rounded corners and no saved rooms here; two of the five presets
-    (Control Room, Concert Hall) are rooms.
+    no rounded corners and no saved rooms here; six of the ten presets
+    (Control Room, Living Room, Cinema, Club, Concert Hall, Deep Stage) are
+    rooms.
   - Width, Depth, Height and Damping can be linked to the music like any
     knob; a link moves the room about once a second at best, which is the
     builder's pace, not a fault.
@@ -3790,6 +3791,46 @@ three-way choice rather than a switch and a choice).
   no angle and no picture.
 - **Kept on the phone** (`crossfeed_json`, not synced: the HRTF is a file
   here). Until 1.9.6 crossfeed was off again at every start of the app.
+- **Its presets are the mixer effect's ten**, read from the same list
+  (`FxPresets`, see "The Binaural Room's ten presets" below), so the two
+  cannot drift. Here a preset sets the room's nine settings and leaves the
+  LFE and the HRTF, which are the page's own (`RoomSettings.withRoom`,
+  `CrossfeedRoomTest`). The chips wrap; the one that matches the room is lit.
+
+### The Binaural Room's ten presets
+
+Every other effect has five presets; the Binaural Room has ten (the owner's
+ask of 2026-11-25: "10 presets from genuine configs and space enhancer, on
+every binaural room in the app"), on its card in the mixer and on the
+Crossfeed page's Room. Six real set-ups come first, then four that enlarge
+the space, past the divider (`mastering` is that split here).
+
+- **They were set by measuring the effect, and a test holds them.**
+  `binaural_room_presets_test` plays each one through the effect
+  (`binaural_room_presets.csv`, which `FxPresetsTest` holds to the Kotlin
+  list). Change a preset and that table must be written again and the host
+  tests run; do not tune one by ear alone.
+- **Every pair stands on one of the room's speakers**: 15, 30, 60 or 90
+  degrees. An angle between two is shared by an equal-power pan and the two
+  add up at the ear: 22 degrees measured 2.8 LU louder than 30, with its
+  own colour. The knob still goes anywhere; a preset does not.
+- **They are level with each other**, within 0.35 LU of Studio Monitors on
+  a song (EBU R128), so stepping through them compares rooms and not
+  volume. The old Wide Stage was +1.5 dB and measured 2 LU louder than the
+  rest, which reads as "better". **None raises the level**: the room has no
+  limiter and its output already peaks above its input (about 2 dB on an
+  unclipped full-scale signal, more on a hard-limited master).
+- **A real room's Damping is set for what the effect plays**, T30 of the
+  room's own response, not for the formula the picture uses
+  (`roomDecaySeconds`, Eyring), which the image-source room outlasts by
+  about a fifth: Control Room 0.25 s (EBU Tech 3276: 0.2 to 0.4 s), Living
+  Room 0.45 s (typical, no standard), Cinema 0.45 s at 930 m³ (the Dolby
+  and THX guideline), Club 0.64 s at 1440 m³ (rock and pop halls, 0.6 to
+  1.2 s from 1000 m³), Concert Hall 2.0 s (Beranek, a full hall).
+- **No named venue.** The rule for the renderer's room presets holds here:
+  a real room's name needs numbers at least as good as Stereo Montréal's.
+- The names are in strings.tsv (`room_preset_*`, `FxPreset.nameRes`): the
+  Crossfeed page is translated, unlike the mixer's other preset names.
 
 ### The spatial renderer's room map
 

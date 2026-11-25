@@ -59,7 +59,7 @@ Playlists come in through `Settings › Library › Playlist import`.
 | Keep pitch when the speed changes | `Settings › Audio › Preserve Pitch` |
 | Streaming quality | `Settings › Audio › Streaming quality` |
 | Play at each file's own sample rate | `Settings › Audio › Never Resample Between Tracks` |
-| Speakers-in-front sound on headphones | Crossfeed, held in the player's Audio tools (or found by Settings search): Off, Crossfeed, or Room (the Binaural Room on its own, with its own HRTF, an LFE that keeps the bass out of the room, and a 2D or 3D view) |
+| Speakers-in-front sound on headphones | Crossfeed, held in the player's Audio tools (or found by Settings search): Off, Crossfeed, or Room (the Binaural Room on its own, with its ten presets, its own HRTF, an LFE that keeps the bass out of the room, and a 2D or 3D view) |
 
 A USB DAC is driven bit-perfect by the app's own driver when one is plugged in
 (`Settings › Audio › Exclusive USB DAC (bypass Android audio)`). Under that
@@ -82,7 +82,7 @@ switch:
 | Exact system-wide EQ | `Settings › Equalizer › Exact parametric EQ (Shizuku)`, under System-wide AutoEQ | Other apps play through the real parametric filters instead of a 31-band copy of them. Needs the Shizuku app (someone else's, free) running and allowed, and Android 13 or newer. The first time it is turned on the setup steps are shown; the Shizuku line under the switch says what is in the way, and a tap on it shows the steps again. Shizuku is started again after each restart of the phone; without it the standard system-wide EQ plays. Beta |
 | System-wide AutoEQ from anywhere | `Settings › Equalizer › Quick Settings tile`, under those two | A tile that turns System-wide AutoEQ on and off over any app |
 | Mixer | `Settings › Audio › Mixer`, or Mixer in the player | A console of buses and processors with loudness meters |
-| Binaural Room | Mixer › FX Chain › Add Effect › Space | The Atmos page's headphone room for any song: stereo from two speakers standing in that room. Room, Binaural, Angle and Output knobs; My room swaps the built-in room for one of your own Width, Depth, Height and Damping. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker |
+| Binaural Room | Mixer › FX Chain › Add Effect › Space | The Atmos page's headphone room for any song: stereo from two speakers standing in that room. Room, Binaural, Angle and Output knobs; My room swaps the built-in room for one of your own Width, Depth, Height and Damping. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker. Ten presets: six real set-ups (Studio Monitors, Control Room, Living Room, Cinema, Club, Concert Hall) and four that enlarge the space (Gentle Crossfeed, Wide Stage, Wrap Around, Deep Stage), all at the same loudness |
 | 9.1.6 upmix | The mixer's preset bar: the folder icon (Load Preset) › Atmos Upmix 9.1.6 | Spreads a stereo song around you, a bus for each group of speakers |
 | Music links | On sliders and mixer knobs | Makes a control move with the kick, vocals, snare or hi-hats |
 

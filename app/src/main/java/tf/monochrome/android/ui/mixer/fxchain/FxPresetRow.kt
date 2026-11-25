@@ -24,8 +24,9 @@ import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
 
 /**
- * The effect's five presets as a row of chips: the ones safe on a finished
- * master first, then — past a thin divider — its creative settings.
+ * The effect's presets (five; the Binaural Room's ten) as a row of chips: the
+ * ones safe on a finished master first, then — past a thin divider — its
+ * creative settings.
  *
  * Every chip is the same glass pill ([GlassChoiceChip]): one height, centred
  * single-line label. The chip that matches the effect's current settings is lit. Nothing is
@@ -52,6 +53,8 @@ internal fun FxPresetRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         presets.forEachIndexed { i, preset ->
+            // In the listener's language where the preset has a name there.
+            val label = preset.nameRes?.let { stringResource(it) } ?: preset.name
             if (i > 0 && presets[i - 1].mastering && !preset.mastering) {
                 Box(
                     modifier = Modifier
@@ -62,11 +65,11 @@ internal fun FxPresetRow(
                 )
             }
             GlassChoiceChip(
-                label = preset.name,
+                label = label,
                 selected = preset.matches(defs, plugin.parameters, plugin.dryWet),
                 accent = accent,
                 onClick = { onApply(preset) },
-                description = if (preset.mastering) stringResource(R.string.mixer_preset_desc, preset.name) else stringResource(R.string.mixer_preset_desc_creative, preset.name),
+                description = if (preset.mastering) stringResource(R.string.mixer_preset_desc, label) else stringResource(R.string.mixer_preset_desc_creative, label),
             )
         }
     }

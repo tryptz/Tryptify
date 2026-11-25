@@ -105,6 +105,33 @@ data class RoomSettings(
         hrtfPath = hrtfPath?.takeIf { it.isNotBlank() },
     )
 
+    /**
+     * The room's own nine settings, as the mixer's Binaural Room has them
+     * (ParamDefs' order: Room, Binaural, Angle, Output, My room, Width,
+     * Depth, Height, Damping).
+     */
+    fun roomParams(): FloatArray = params().copyOf(ROOM_PARAM_COUNT)
+
+    /**
+     * These settings with the room's nine replaced by [values], in that
+     * order: a preset of the Binaural Room's. The LFE and the HRTF are the
+     * listener's own choices here and are left as they are.
+     */
+    fun withRoom(values: FloatArray): RoomSettings {
+        if (values.size < ROOM_PARAM_COUNT) return this
+        return copy(
+            roomPercent = values[0],
+            binauralPercent = values[1],
+            angleDeg = values[2],
+            outputDb = values[3],
+            myRoom = values[4] >= 0.5f,
+            widthM = values[5],
+            depthM = values[6],
+            heightM = values[7],
+            dampingPercent = values[8],
+        ).clamped()
+    }
+
     /** The native room's parameters, in `HeadphoneRoom::Params` order. */
     fun params(): FloatArray = floatArrayOf(
         roomPercent, binauralPercent, angleDeg, outputDb,
@@ -114,6 +141,8 @@ data class RoomSettings(
 
     companion object {
         const val PARAM_COUNT = 12
+        /** How many of them are the room's own, the mixer effect's. */
+        const val ROOM_PARAM_COUNT = 9
         const val MAX_ANGLE_DEG = 110f
         const val MIN_SIDE_M = 2f
         const val MAX_SIDE_M = 30f

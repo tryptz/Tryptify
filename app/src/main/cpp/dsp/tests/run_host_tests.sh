@@ -51,6 +51,14 @@ echo "== headphone_room_test"
 $cxx $flags -ffast-math "$here/headphone_room_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/headphone_room_test" -lpthread
 "$out/headphone_room_test"
 
+# The Binaural Room's ten presets, read from the table FxPresetsTest holds to
+# Kotlin's list and played through the effect: level with each other on a
+# song, the real rooms ringing as long as the rooms they are named for, the
+# wide ones wider, and an angle between two speakers louder than one on them.
+echo "== binaural_room_presets_test"
+$cxx $flags -ffast-math "$here/binaural_room_presets_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/binaural_room_presets_test" -lpthread
+"$out/binaural_room_presets_test" "$here/../../../../test/resources/binaural_room_presets.csv"
+
 # The effects' delay lines and rings: read as they did before their % went,
 # never past their ends at any knob setting (DSP_CHECK_DELAY_RANGE counts
 # that), silent after a rate change; the limiter past its old 2^31-sample
