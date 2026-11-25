@@ -75,15 +75,15 @@ switch:
 | Tool | Where | What it does |
 | --- | --- | --- |
 | AutoEQ | `Settings › Equalizer › AutoEQ headphone profile` | Corrects your headphones from 4,000+ measurements against 10 targets |
-| AutoEQ with no connection | The headphone list › Save all measurements for offline use | Keeps every measurement on the phone (about 12,000, some 75 MB). A saved preset also brings its own headphone and curves back with no network |
+| AutoEQ with no connection | The download icon in the headphone list (Offline measurements) | Keeps every measurement on the phone; its dialog gives the count and the size first. A saved preset also brings its own headphone and curves back with no network |
 | Equalizer | `Settings › Equalizer › Equalizer` | Bands by hand |
 | Parametric EQ | `Settings › Equalizer › Parametric EQ` | Filters by frequency, gain and width |
 | System-wide AutoEQ | `Settings › Equalizer › System-wide AutoEQ` | The correction for other apps too: an ear each in 2-channel mode, kept running with Tryptify closed, with a limiter that acts only when a boost would clip |
-| Exact system-wide EQ | `Settings › Equalizer › Exact parametric EQ (Shizuku)`, under System-wide AutoEQ | Other apps play through the real parametric filters instead of a 31-band copy of them. Needs the Shizuku app (someone else's, free) running and allowed, and Android 13 or newer. The first time it is turned on the setup steps are shown; the Shizuku line under the switch says what is in the way, and a tap on it shows the steps again. Shizuku is started again after each restart of the phone; without it the standard system-wide EQ plays. Experimental |
+| Exact system-wide EQ | `Settings › Equalizer › Exact parametric EQ (Shizuku)`, under System-wide AutoEQ | Other apps play through the real parametric filters instead of a 31-band copy of them. Needs the Shizuku app (someone else's, free) running and allowed, and Android 13 or newer. The first time it is turned on the setup steps are shown; the Shizuku line under the switch says what is in the way, and a tap on it shows the steps again. Shizuku is started again after each restart of the phone; without it the standard system-wide EQ plays. Beta |
 | System-wide AutoEQ from anywhere | `Settings › Equalizer › Quick Settings tile`, under those two | A tile that turns System-wide AutoEQ on and off over any app |
 | Mixer | `Settings › Audio › Mixer`, or Mixer in the player | A console of buses and processors with loudness meters |
 | Binaural Room | Mixer › FX Chain › Add Effect › Space | The Atmos page's headphone room for any song: stereo from two speakers standing in that room. Room, Binaural, Angle and Output knobs; My room swaps the built-in room for one of your own Width, Depth, Height and Damping. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker |
-| 9.1.6 upmix | In the mixer | Spreads a stereo song around you. Folded back to stereo it is the song exactly |
+| 9.1.6 upmix | Mixer › Load Preset › Atmos Upmix 9.1.6 | Spreads a stereo song around you, a bus for each group of speakers |
 | Music links | On sliders and mixer knobs | Makes a control move with the kick, vocals, snare or hi-hats |
 
 ## 6. Dolby Atmos
