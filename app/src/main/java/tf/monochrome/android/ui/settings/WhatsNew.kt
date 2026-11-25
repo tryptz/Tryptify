@@ -364,6 +364,14 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_196_atmos_help_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "Room on the Crossfeed page",
+                    body = "Crossfeed is now Off, Crossfeed or Room: the mixer's Binaural Room on its own, with an HRTF of its own, an LFE that keeps the bass out of the room, and a 2D or 3D view. Hold Crossfeed in the player's Audio tools. It is kept when the app restarts.",
+                    titleRes = R.string.whats_new_196_crossfeed_room_title,
+                    bodyRes = R.string.whats_new_196_crossfeed_room_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "A tidier Atmos page",

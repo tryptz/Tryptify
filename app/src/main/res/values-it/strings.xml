@@ -176,7 +176,7 @@
     <string name="compressor_detail">Dinamica Oxford. Tieni premuto per configurare</string>
     <string name="inflator_detail">Loudness Oxford. Tieni premuto per configurare</string>
     <string name="crossfeed">Crossfeed</string>
-    <string name="crossfeed_detail">Simulazione altoparlanti. Tieni premuto per configurare</string>
+    <string name="crossfeed_detail">Crossfeed o stanza. Tieni premuto per configurare</string>
     <string name="no_track_playing">Nessun brano in riproduzione</string>
     <string name="unknown">Sconosciuto</string>
     <string name="output_default">Predefinito</string>
@@ -797,6 +797,16 @@
     <string name="failed_tap_retry">Non riuscito — tocca per riprovare</string>
     <string name="speaker_simulation">Simulazione altoparlanti</string>
     <string name="crossfeed_explainer">Invia una piccola quantità di ciascun canale all’orecchio opposto, leggermente ritardata e con filtro passa-basso, così le cuffie suonano più simili a una coppia di altoparlanti.</string>
+    <string name="crossfeed_room_explainer">La Binaural Room del mixer da sola: la tua musica esce da una coppia di altoparlanti in una stanza, ascoltata attraverso un\'HRTF. Un brano Atmos riprodotto dal rendering binaurale mantiene la stanza di quel rendering.</string>
+    <string name="crossfeed_room_binaural">Binaurale</string>
+    <string name="crossfeed_room_output">Livello di uscita</string>
+    <string name="crossfeed_hrtf_built_in">Integrato (Neumann KU100)</string>
+    <string name="crossfeed_hrtf_loading">Lettura dell\'HRTF…</string>
+    <string name="crossfeed_hrtf_failed">Quel file non è un set HRTF utilizzabile dalla stanza: suona quello integrato.</string>
+    <string name="crossfeed_lfe">LFE: bassi fuori dalla stanza</string>
+    <string name="crossfeed_lfe_desc">I bassi sotto la frequenza di incrocio escono dalla stanza e vanno dritti a entrambe le orecchie come un solo canale, al loro livello. La divisione è a fase lineare, quindi non sposta la fase da sé, e aggiunge circa 21 ms di ritardo.</string>
+    <string name="crossfeed_lfe_crossover">Frequenza di incrocio</string>
+    <string name="crossfeed_lfe_level">Livello LFE</string>
     <string name="algorithm">Algoritmo</string>
     <string name="speaker_angle">Angolo degli altoparlanti</string>
     <string name="speaker_angle_note">Angoli più stretti offrono il crossfeed maggiore. A 180° gli altoparlanti si trovano all’altezza delle orecchie e non viene applicato alcun crossfeed.</string>
@@ -3702,6 +3712,8 @@
     <string name="whats_new_196_dac_wait_body">Il DAC esclusivo non viene più preso mentre Android ci sta ancora riproducendo, quindi un brano può attendere qualche secondo prima di partire. Se suona già, dopo 8 secondi passa da Android fino alla pausa successiva.</string>
     <string name="whats_new_196_album_share_title">Condividere un album aspetta l\'anteprima</string>
     <string name="whats_new_196_album_share_body">Condividendo un album l\'app avvisa che lo sta preparando e apre il foglio di condivisione appena Discord può mostrarne l\'anteprima, al massimo dopo 50 secondi.</string>
+    <string name="whats_new_196_crossfeed_room_title">Stanza nella pagina Crossfeed</string>
+    <string name="whats_new_196_crossfeed_room_body">Crossfeed ora è Disattivato, Crossfeed o Stanza: la Binaural Room del mixer da sola, con un\'HRTF tutta sua, un LFE che tiene i bassi fuori dalla stanza e una vista 2D o 3D. Tieni premuto Crossfeed negli Strumenti audio del player. Resta salvato al riavvio dell\'app.</string>
     <string name="atmos_room_builtin">Stanza integrata</string>
     <string name="atmos_room_custom">La mia stanza</string>
     <string name="atmos_rooms">Stanze</string>

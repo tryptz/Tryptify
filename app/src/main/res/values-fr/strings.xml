@@ -176,7 +176,7 @@
     <string name="compressor_detail">Dynamique Oxford. Maintenez pour configurer</string>
     <string name="inflator_detail">Sonie Oxford. Maintenez pour configurer</string>
     <string name="crossfeed">Crossfeed</string>
-    <string name="crossfeed_detail">Simulation d’enceintes. Maintenez pour configurer</string>
+    <string name="crossfeed_detail">Crossfeed ou salle. Maintenez pour configurer</string>
     <string name="no_track_playing">Aucune lecture en cours</string>
     <string name="unknown">Inconnu</string>
     <string name="output_default">Par défaut</string>
@@ -797,6 +797,16 @@
     <string name="failed_tap_retry">Échec — touchez pour réessayer</string>
     <string name="speaker_simulation">Simulation d’enceintes</string>
     <string name="crossfeed_explainer">Envoie un peu de chaque canal vers l’oreille opposée, légèrement retardé et filtré passe-bas, pour que le casque sonne davantage comme une paire d’enceintes.</string>
+    <string name="crossfeed_room_explainer">La Binaural Room du mixeur, seule : votre musique sort d’une paire d’enceintes dans une salle, entendue à travers une HRTF. Un titre Atmos joué par le rendu binaural garde la salle de ce rendu.</string>
+    <string name="crossfeed_room_binaural">Binaural</string>
+    <string name="crossfeed_room_output">Niveau de sortie</string>
+    <string name="crossfeed_hrtf_built_in">Intégrée (Neumann KU100)</string>
+    <string name="crossfeed_hrtf_loading">Lecture de la HRTF…</string>
+    <string name="crossfeed_hrtf_failed">Ce fichier n’est pas une HRTF utilisable par la salle : la HRTF intégrée est utilisée.</string>
+    <string name="crossfeed_lfe">LFE : basses hors de la salle</string>
+    <string name="crossfeed_lfe_desc">Les basses sous la fréquence de coupure sortent de la salle et vont directement aux deux oreilles en un seul canal, à leur propre niveau. Le partage est à phase linéaire : il ne décale aucune phase de lui-même, et ajoute environ 21 ms de retard.</string>
+    <string name="crossfeed_lfe_crossover">Fréquence de coupure</string>
+    <string name="crossfeed_lfe_level">Niveau LFE</string>
     <string name="algorithm">Algorithme</string>
     <string name="speaker_angle">Angle des enceintes</string>
     <string name="speaker_angle_note">Plus l’angle est étroit, plus le crossfeed est fort. À 180°, les enceintes sont à vos oreilles et aucun crossfeed n’est appliqué.</string>
@@ -3702,6 +3712,8 @@
     <string name="whats_new_196_dac_wait_body">Le DAC exclusif n’est plus pris tant qu’Android joue encore dessus : un morceau peut attendre quelques secondes avant de démarrer. S’il joue déjà, au bout de 8 secondes il passe par Android jusqu’à la prochaine pause.</string>
     <string name="whats_new_196_album_share_title">Partager un album attend son aperçu</string>
     <string name="whats_new_196_album_share_body">Partager un album indique qu’il est en préparation, puis ouvre la feuille de partage dès que Discord peut afficher son aperçu, 50 secondes au plus.</string>
+    <string name="whats_new_196_crossfeed_room_title">Une salle sur la page Crossfeed</string>
+    <string name="whats_new_196_crossfeed_room_body">Crossfeed propose maintenant Désactivé, Crossfeed ou Salle : la Binaural Room du mixeur seule, avec sa propre HRTF, un LFE qui garde les basses hors de la salle et une vue 2D ou 3D. Maintenez Crossfeed dans les Outils audio du lecteur. Le réglage est conservé au redémarrage de l’app.</string>
     <string name="atmos_room_builtin">Salle intégrée</string>
     <string name="atmos_room_custom">Ma salle</string>
     <string name="atmos_rooms">Salles</string>

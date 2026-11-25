@@ -172,7 +172,7 @@
     <string name="compressor_detail">Oxford 动态处理。长按可设置</string>
     <string name="inflator_detail">Oxford 响度。长按可设置</string>
     <string name="crossfeed">交叉馈送</string>
-    <string name="crossfeed_detail">扬声器模拟。长按可设置</string>
+    <string name="crossfeed_detail">交叉馈送或房间。长按可设置</string>
     <string name="no_track_playing">当前没有播放</string>
     <string name="unknown">未知</string>
     <string name="output_default">默认</string>
@@ -733,6 +733,16 @@
     <string name="failed_tap_retry">失败——点按重试</string>
     <string name="speaker_simulation">扬声器模拟</string>
     <string name="crossfeed_explainer">把每个声道的少量信号经轻微延迟和低通滤波后送入另一侧耳朵，让耳机听起来更像一对音箱。</string>
+    <string name="crossfeed_room_explainer">混音器的 Binaural Room 单独使用：音乐来自房间中的一对扬声器，通过 HRTF 聆听。由双耳渲染播放的 Atmos 歌曲保留该渲染自己的房间。</string>
+    <string name="crossfeed_room_binaural">双耳</string>
+    <string name="crossfeed_room_output">输出电平</string>
+    <string name="crossfeed_hrtf_built_in">内置（Neumann KU100）</string>
+    <string name="crossfeed_hrtf_loading">正在读取 HRTF…</string>
+    <string name="crossfeed_hrtf_failed">该文件不是房间可用的 HRTF 数据集：将使用内置 HRTF。</string>
+    <string name="crossfeed_lfe">LFE：低音不进入房间</string>
+    <string name="crossfeed_lfe_desc">低于分频点的低音不经过房间，作为单一声道直接送到双耳，并有自己的电平。分频是线性相位的，本身不会带来相移，并会增加约 21 毫秒延迟。</string>
+    <string name="crossfeed_lfe_crossover">分频点</string>
+    <string name="crossfeed_lfe_level">LFE 电平</string>
     <string name="algorithm">算法</string>
     <string name="speaker_angle">扬声器角度</string>
     <string name="speaker_angle_note">角度越窄，交叉馈送越强。为 180° 时扬声器位于双耳处，不施加交叉馈送。</string>
@@ -3546,6 +3556,8 @@
     <string name="whats_new_196_dac_wait_body">Android 仍在向 DAC 播放时，不再占用独占 DAC，因此歌曲可能要等几秒才开始。若已在播放，8 秒后会改经 Android 播放，直到下次暂停。</string>
     <string name="whats_new_196_album_share_title">分享专辑会等待预览</string>
     <string name="whats_new_196_album_share_body">分享专辑时会提示正在准备，等 Discord 能显示预览后再打开分享面板，最多 50 秒。</string>
+    <string name="whats_new_196_crossfeed_room_title">交叉馈送页面上的房间</string>
+    <string name="whats_new_196_crossfeed_room_body">交叉馈送现在可选“关”“交叉馈送”或“房间”：混音器的 Binaural Room 单独使用，有自己的 HRTF、让低音不进入房间的 LFE，以及 2D 或 3D 视图。在播放器的音频工具中长按“交叉馈送”。重启应用后设置仍会保留。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

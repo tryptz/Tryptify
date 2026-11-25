@@ -4,6 +4,7 @@
 #include "../../atmos/render/virtual_room.h"
 #include "../../atmos/render/box_room.h"
 #include "../../atmos/speaker_renderer.h"
+#include "../../atmos/render/sofa_set.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -438,10 +439,58 @@ public:
         {
             // A new room is the built-in one until My room is put in it.
             std::lock_guard<std::mutex> in(target_->install);
+            // and plays the HRTF set it was given, if it was given one.
+            if (hrir_) applyHrir(*room_, *hrir_);
             target_->room = room_.get();
             target_->have = binaural_room_detail::RoomKey{};
         }
         askForRoom(/* again = */ true);
+    }
+
+    // The ears the room is heard through: a set AtmosNative.nativePrepareSofa
+    // packed from a listener's .sofa (atmos/render/sofa_set.h), in place of
+    // the built-in KU100. Kept, and played by every room prepare() builds
+    // from now on. False, with the set in use left as it is, when [packed]
+    // is not a set. Builds the room's filters again: never from process().
+    // The mixer's effect never calls it; the Crossfeed page's room does
+    // (headphone_room.h).
+    bool setSofaSet(const float* packed, size_t size) {
+        tf::atmos::render::SofaSet set;
+        if (!tf::atmos::render::SofaSet::unpack(packed, size, set)) return false;
+        auto hrir = std::make_shared<Hrir>();
+        using tf::atmos::render::kHrirTaps;
+        hrir->taps.assign(set.taps, set.taps + tf::atmos::render::SofaSet::kPoints * kHrirTaps);
+        hrir->delays.assign(set.delays, set.delays + tf::atmos::render::SofaSet::kPoints);
+        // The set's own measurement for each of the room's speakers it has
+        // one for, as the renderer's pipeline hands it over (set_sofa_set).
+        const std::vector<tf::atmos::SpeakerDef> layout =
+            tf::atmos::layout_speakers(tf::atmos::OutputLayout::k15_1_12);
+        const size_t n = layout.size();
+        hrir->exactTaps.assign(n * 2 * kHrirTaps, 0.0f);
+        hrir->exactDelays.assign(n * 2, 0.0f);
+        hrir->has.assign(n, 0);
+        for (size_t s = 0; s < n; ++s) {
+            if (tf::atmos::is_lfe(layout[s])) continue;
+            const int at = set.speaker_at(layout[s].azimuth, layout[s].elevation);
+            if (at < 0) continue;
+            hrir->has[s] = 1;
+            const float* from = set.speaker_taps + static_cast<size_t>(at) * 2 * kHrirTaps;
+            std::copy(from, from + 2 * kHrirTaps, hrir->exactTaps.begin() + static_cast<long>(s * 2 * kHrirTaps));
+            hrir->exactDelays[s * 2] = set.speaker_delays[static_cast<size_t>(at) * 2];
+            hrir->exactDelays[s * 2 + 1] = set.speaker_delays[static_cast<size_t>(at) * 2 + 1];
+        }
+        std::lock_guard<std::mutex> in(target_->install);
+        hrir_ = hrir;
+        if (target_->room != nullptr) applyHrir(*target_->room, *hrir_);
+        return true;
+    }
+
+    // Back to the built-in KU100.
+    void clearSofaSet() {
+        std::lock_guard<std::mutex> in(target_->install);
+        if (!hrir_) return;
+        hrir_.reset();
+        if (target_->room != nullptr) target_->room->set_hrir_baked();
     }
 
     int ownLatency() const override { return ownLatency_; }
@@ -790,6 +839,17 @@ private:
     int factor_ = 0;       // 0: no room at this rate
     int count_ = 0;
     int ownLatency_ = 0;
+
+    // A listener's HRTF set, made ready for the room (setSofaSet), or null
+    // for the built-in one. Under target_->install, as the room it goes in.
+    struct Hrir {
+        std::vector<float> taps, delays, exactTaps, exactDelays;
+        std::vector<char> has;
+    };
+    std::shared_ptr<const Hrir> hrir_;
+    static void applyHrir(tf::atmos::render::VirtualRoom& room, const Hrir& h) {
+        room.set_hrir(h.taps, h.delays, h.exactTaps, h.exactDelays, h.has);
+    }
     int left_[kRing] = {}, right_[kRing] = {};
     std::vector<float> feeds_, stereo_;
 

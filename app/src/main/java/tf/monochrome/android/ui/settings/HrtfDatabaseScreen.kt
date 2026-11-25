@@ -172,10 +172,7 @@ class HrtfDatabaseViewModel @Inject constructor(
     private val preferences: PreferencesManager,
 ) : SofaBrowseViewModel(rootFolders = null, unreachable = R.string.hrtf_unreachable) {
 
-    private fun destination(file: HrtfNode): File {
-        val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
-        return File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
-    }
+    private fun destination(file: HrtfNode): File = hrtfFile(context, file)
 
     /**
      * An HRTF set goes straight to its file, whatever its size: the finest
@@ -193,6 +190,30 @@ class HrtfDatabaseViewModel @Inject constructor(
                 UiText.Res(R.string.hrtf_applied, listOf(file.display, (size / 1024).toInt()))
             }.getOrElse { UiText.Res(R.string.hrtf_save_failed) }
         }
+    }
+}
+
+/** Where a downloaded HRTF set is kept: with every other .sofa the app has. */
+internal fun hrtfFile(context: Context, file: HrtfNode): File {
+    val dir = File(context.filesDir, "hrtf").apply { mkdirs() }
+    return File(dir, "${file.display}.sofa".replace(Regex("[^A-Za-z0-9._-]"), "_"))
+}
+
+/**
+ * The same database, opened from the Crossfeed page's Room: a set downloaded
+ * here is the Room's HRTF, and the Atmos renderer's is left as it is.
+ */
+@HiltViewModel
+class RoomHrtfDatabaseViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val crossfeed: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedEffect,
+) : SofaBrowseViewModel(rootFolders = null, unreachable = R.string.hrtf_unreachable) {
+    override suspend fun take(path: String, file: HrtfNode): UiText {
+        val dest = hrtfFile(context, file)
+        val result = fetch(path, file, dest)
+        val size = result.getOrNull() ?: return failed(result.exceptionOrNull())
+        crossfeed.updateRoom { it.copy(hrtfPath = dest.absolutePath) }
+        return UiText.Res(R.string.hrtf_applied, listOf(file.display, (size / 1024).toInt()))
     }
 }
 
@@ -249,7 +270,7 @@ class RoomDatabaseViewModel @Inject constructor(
 @Composable
 fun HrtfDatabaseScreen(
     navController: NavController,
-    viewModel: HrtfDatabaseViewModel = hiltViewModel(),
+    viewModel: SofaBrowseViewModel = hiltViewModel<HrtfDatabaseViewModel>(),
 ) = SofaBrowser(
     navController, viewModel,
     title = R.string.hrtf_hrtf_database, root = R.string.hrtf_databases, tapToUse = R.string.hrtf_tap_to_use,

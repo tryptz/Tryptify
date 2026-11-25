@@ -79,7 +79,9 @@ renderer's own `atmos/render/virtual_room.h` with a stereo pair in it, so the
 mixer library now compiles headers from `cpp/atmos/` and the rules below for
 that code hold there too; on the master of a stream wider than stereo it is
 one room with every channel at its own speaker, not a room a channel pair,
-which summed to a comb), the finite guards
+which summed to a comb), the Crossfeed page's Room (`headphone_room_test`:
+`dsp/headphone_room.h` is that room on its own with a listener's HRTF and an
+LFE whose linear-phase split adds back to the song at every crossover), the finite guards
 (`finite_guard_test`, see below), the WSOLA shifter, the EBU R128 loudness meter (against EBU Tech
 3341/3342's reference signals), the dynamic range meter (against signals whose
 DR is known by hand), the spectrum waterfall's geometry and the knobs' music

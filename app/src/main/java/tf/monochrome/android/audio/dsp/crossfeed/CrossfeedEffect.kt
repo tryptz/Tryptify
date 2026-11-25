@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Headphone crossfeed — simulates a stereo speaker pair in front of the
 // listener by feeding each channel into the opposite ear, delayed (interaural
-// time difference) and low-pass filtered (head shadow).
+// time difference) and low-pass filtered (head shadow). Or, in its Room mode,
+// the mixer's Binaural Room on its own (HeadphoneRoomNative): a pair of
+// speakers in a room, through a chosen HRTF, with the bass as an LFE if
+// asked. One page, one switch: Off, Crossfeed or Room.
 //
 // Integration points:
 //   - MixBusProcessor calls prepare() on format change and
@@ -12,6 +15,9 @@
 
 package tf.monochrome.android.audio.dsp.crossfeed
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +34,7 @@ import kotlin.math.sin
  * the user's speaker angle; the rest are fixed classic networks whose feed
  * level / cutoff / delay triplets follow the published bs2b tunings.
  */
+@Serializable
 enum class CrossfeedAlgorithm(
     val label: String,
     val blurb: String,
@@ -57,8 +64,75 @@ enum class CrossfeedAlgorithm(
     );
 }
 
+/** What the page plays while it is on: crossfeed, or the Binaural Room. */
+@Serializable
+enum class CrossfeedMode { CROSSFEED, ROOM }
+
+/**
+ * The Room's settings: the mixer's Binaural Room's own nine, in its units
+ * and with its limits (ParamDefs, `snapins/binaural_room.h`), then the LFE's
+ * (`dsp/headphone_room.h`) and the HRTF, a .sofa's path or null for the
+ * built-in KU100.
+ */
+@Serializable
+data class RoomSettings(
+    val roomPercent: Float = 25f,
+    val binauralPercent: Float = 100f,
+    val angleDeg: Float = 30f,
+    val outputDb: Float = 0f,
+    val myRoom: Boolean = false,
+    val widthM: Float = 5f,
+    val depthM: Float = 6f,
+    val heightM: Float = 2.7f,
+    val dampingPercent: Float = 25f,
+    /** The bass below [lfeHz] taken out of the room, as one channel at [lfeDb]. */
+    val lfe: Boolean = false,
+    val lfeHz: Float = 80f,
+    val lfeDb: Float = 0f,
+    val hrtfPath: String? = null,
+) {
+    fun clamped() = copy(
+        roomPercent = roomPercent.coerceIn(0f, 100f),
+        binauralPercent = binauralPercent.coerceIn(0f, 100f),
+        angleDeg = angleDeg.coerceIn(0f, MAX_ANGLE_DEG),
+        outputDb = outputDb.coerceIn(-12f, 12f),
+        widthM = widthM.coerceIn(MIN_SIDE_M, MAX_SIDE_M),
+        depthM = depthM.coerceIn(MIN_SIDE_M, MAX_SIDE_M),
+        heightM = heightM.coerceIn(MIN_HEIGHT_M, MAX_HEIGHT_M),
+        dampingPercent = dampingPercent.coerceIn(MIN_DAMPING, MAX_DAMPING),
+        lfeHz = lfeHz.coerceIn(MIN_LFE_HZ, MAX_LFE_HZ),
+        lfeDb = lfeDb.coerceIn(MIN_LFE_DB, MAX_LFE_DB),
+        hrtfPath = hrtfPath?.takeIf { it.isNotBlank() },
+    )
+
+    /** The native room's parameters, in `HeadphoneRoom::Params` order. */
+    fun params(): FloatArray = floatArrayOf(
+        roomPercent, binauralPercent, angleDeg, outputDb,
+        if (myRoom) 1f else 0f, widthM, depthM, heightM, dampingPercent,
+        if (lfe) 1f else 0f, lfeHz, lfeDb,
+    )
+
+    companion object {
+        const val PARAM_COUNT = 12
+        const val MAX_ANGLE_DEG = 110f
+        const val MIN_SIDE_M = 2f
+        const val MAX_SIDE_M = 30f
+        const val MIN_HEIGHT_M = 2f
+        const val MAX_HEIGHT_M = 12f
+        const val MIN_DAMPING = 5f
+        const val MAX_DAMPING = 70f
+        const val MIN_LFE_HZ = 40f
+        const val MAX_LFE_HZ = 200f
+        const val MIN_LFE_DB = -12f
+        const val MAX_LFE_DB = 6f
+    }
+}
+
+@Serializable
 data class CrossfeedState(
+    /** Off is false; on, [mode] says which. */
     val enabled: Boolean = false,
+    val mode: CrossfeedMode = CrossfeedMode.CROSSFEED,
     val algorithm: CrossfeedAlgorithm = CrossfeedAlgorithm.SPEAKER,
     /**
      * Total angle between the two virtual speakers as seen from the listener,
@@ -67,16 +141,42 @@ data class CrossfeedState(
      * Only meaningful for [CrossfeedAlgorithm.SPEAKER].
      */
     val speakerAngleDeg: Float = DEFAULT_ANGLE_DEG,
+    val room: RoomSettings = RoomSettings(),
+    /** The page's picture: in 3D, or flat from above. Kept with the rest. */
+    val view3d: Boolean = false,
 ) {
+    val crossfeedOn: Boolean get() = enabled && mode == CrossfeedMode.CROSSFEED
+    val roomOn: Boolean get() = enabled && mode == CrossfeedMode.ROOM
+
+    fun clamped() = copy(
+        speakerAngleDeg = speakerAngleDeg.coerceIn(MIN_ANGLE_DEG, MAX_ANGLE_DEG),
+        room = room.clamped(),
+    )
+
     companion object {
         const val MIN_ANGLE_DEG = 30f
         const val MAX_ANGLE_DEG = 180f
         const val DEFAULT_ANGLE_DEG = 60f
+
+        private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /** As it is kept on the phone. */
+        fun encode(state: CrossfeedState): String = json.encodeToString(state.clamped())
+
+        /** What [encode] wrote, or null for nothing or something unreadable. */
+        fun decode(text: String?): CrossfeedState? =
+            text?.takeIf { it.isNotBlank() }?.let {
+                runCatching { json.decodeFromString(serializer(), it).clamped() }.getOrNull()
+            }
     }
 }
 
 @Singleton
-class CrossfeedEffect @Inject constructor() {
+class CrossfeedEffect internal constructor(
+    /** A room for the Room mode; null where there can be none (no native library). */
+    private val roomFactory: () -> RoomEngine?,
+) {
+    @Inject constructor() : this({ NativeRoomEngine.createOrNull() })
 
     private val _state = MutableStateFlow(CrossfeedState())
     val state: StateFlow<CrossfeedState> = _state.asStateFlow()
@@ -105,10 +205,29 @@ class CrossfeedEffect @Inject constructor() {
     private var lpL = 0f
     private var lpR = 0f
 
+    // ---- The Room ----------------------------------------------------------
+    // Its settings as the audio thread reads them: a fresh array each change.
+    @Volatile private var roomOn = false
+    @Volatile private var roomParams = RoomSettings().params()
+    private var room: RoomEngine? = null          // made once, when first wanted
+    private val roomLock = Any()
+    private var roomRate = 0                      // what it was prepared for; audio thread
+    private var roomPlaying = false               // audio thread
+    private val roomApplied = FloatArray(RoomSettings.PARAM_COUNT)
+    private var roomAppliedValid = false
+
+    /** The HRTF set the room plays, or null for the built-in one. */
+    @Volatile var roomHrtf: FloatArray? = null
+        private set
+
     init { recompute() }
 
     fun prepare(sampleRate: Double) {
         this.sampleRate = sampleRate
+        // The room is built for the new rate now if it plays, else when it
+        // is first wanted.
+        roomRate = 0
+        if (roomOn) roomEngine()?.let { prepareRoom(it) }
         recompute()
         // Fresh format — stale ring/filter contents belong to the old stream.
         java.util.Arrays.fill(ringL, 0f)
@@ -131,7 +250,91 @@ class CrossfeedEffect @Inject constructor() {
         it.copy(speakerAngleDeg = deg.coerceIn(CrossfeedState.MIN_ANGLE_DEG, CrossfeedState.MAX_ANGLE_DEG))
     }
 
+    /** Off, Crossfeed or Room: null is Off. */
+    fun setMode(mode: CrossfeedMode?) = update {
+        if (mode == null) it.copy(enabled = false) else it.copy(enabled = true, mode = mode)
+    }
+
+    fun setView3d(on: Boolean) = update { it.copy(view3d = on) }
+
+    fun updateRoom(transform: (RoomSettings) -> RoomSettings) = update { it.copy(room = transform(it.room).clamped()) }
+
+    /**
+     * The HRTF set the Room plays ([tf.monochrome.android.audio.atmos.AtmosSofaStore.prepared]),
+     * or null for the built-in KU100. Builds the room's filters: call it off
+     * the audio thread. False when the room would not take it (then it plays
+     * the built-in set) or there is no room here at all.
+     */
+    fun setRoomHrtf(set: FloatArray?): Boolean {
+        if (set === roomHrtf && set != null) return true
+        // Nothing to take back to the built-in set from a room never made.
+        if (set == null && synchronized(roomLock) { room } == null) {
+            roomHrtf = null
+            return true
+        }
+        val engine = roomEngine() ?: return false
+        val ok = engine.setSofa(set)
+        roomHrtf = if (ok) set else null
+        if (!ok && set != null) engine.setSofa(null)
+        return ok
+    }
+
+    /** Frees the room. The effect is not used after this. */
+    fun release() {
+        synchronized(roomLock) {
+            room?.release()
+            room = null
+        }
+    }
+
+    private fun roomEngine(): RoomEngine? = synchronized(roomLock) {
+        // A room made again after release() plays the HRTF the last one did.
+        room ?: roomFactory()?.also { made ->
+            room = made
+            roomHrtf?.let { made.setSofa(it) }
+        }
+    }
+
+    private fun prepareRoom(engine: RoomEngine) {
+        val rate = sampleRate.toInt()
+        engine.prepare(rate)
+        roomRate = rate
+        roomAppliedValid = false
+    }
+
+    /** The Room on the two channels. Audio thread. */
+    private fun processRoom(l: FloatArray, r: FloatArray, frames: Int) {
+        val engine = roomEngine() ?: return
+        if (roomRate != sampleRate.toInt()) prepareRoom(engine)
+        if (!roomPlaying) {
+            // Back after a while away: nothing of what it last heard.
+            engine.reset()
+            roomPlaying = true
+        }
+        val p = roomParams
+        for (i in 0 until RoomSettings.PARAM_COUNT) {
+            if (!roomAppliedValid || p[i] != roomApplied[i]) {
+                engine.setParameter(i, p[i])
+                roomApplied[i] = p[i]
+            }
+        }
+        roomAppliedValid = true
+        engine.process(l, r, frames)
+    }
+
     fun processArrays(l: FloatArray, r: FloatArray, frames: Int) {
+        if (roomOn) {
+            processRoom(l, r, frames)
+            // Crossfeed starts again from nothing when it is chosen again.
+            if (crossGain != 0f) {
+                crossGain = 0f
+                java.util.Arrays.fill(ringL, 0f)
+                java.util.Arrays.fill(ringR, 0f)
+                lpL = 0f; lpR = 0f
+            }
+            return
+        }
+        roomPlaying = false
         val gT = targetCrossGain
         // Fast path: bypassed and fully faded out — skip the whole loop (same
         // rationale as the Oxford effects' JNI skip). Reset the delay/filter
@@ -196,6 +399,8 @@ class CrossfeedEffect @Inject constructor() {
     /** Map the selected algorithm (and, for SPEAKER, the angle) onto coefficients. */
     private fun recompute() {
         val s = _state.value
+        roomParams = s.room.params()
+        roomOn = s.roomOn
         if (s.algorithm == CrossfeedAlgorithm.SPEAKER) {
             val halfAngleRad = Math.toRadians(s.speakerAngleDeg / 2.0)
 
@@ -207,14 +412,14 @@ class CrossfeedEffect @Inject constructor() {
             // narrows toward the front, zero when the speakers sit at the ears
             // (180°), which is exactly "plain headphones". MAX_CROSS ≈ -4 dB at
             // 30°, in bs2b/Meier territory.
-            targetCrossGain = if (!s.enabled) 0f
+            targetCrossGain = if (!s.crossfeedOn) 0f
                 else MAX_CROSS_GAIN * cos(halfAngleRad).toFloat().coerceAtLeast(0f)
 
             lowpassCoeff = onePoleCoeff(HEAD_SHADOW_CUTOFF_HZ)
         } else {
             targetDelaySamples = (s.algorithm.delayUs * 1e-6 * sampleRate)
                 .toFloat().coerceIn(0f, RING_SIZE - 2f)
-            targetCrossGain = if (!s.enabled) 0f
+            targetCrossGain = if (!s.crossfeedOn) 0f
                 else 10f.pow(s.algorithm.feedDb / 20f)
             lowpassCoeff = onePoleCoeff(s.algorithm.cutoffHz)
         }

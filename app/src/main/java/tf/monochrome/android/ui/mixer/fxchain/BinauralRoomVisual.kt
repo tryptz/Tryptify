@@ -126,7 +126,7 @@ internal fun dbToLevel(db: Float): Float =
     if (db <= SILENT_DB) 0f else 10f.pow(db / 20f).coerceIn(0f, 1f)
 
 /** The renderer's room layout, or an empty one where its library is missing. */
-private fun roomLayout(): FloatArray = runCatching {
+internal fun roomLayout(): FloatArray = runCatching {
     val buf = FloatArray(AtmosNative.ROOM_MAX_SPEAKERS * AtmosNative.ROOM_FIELDS)
     val n = AtmosNative.nativeRoomLayout(buf)
     buf.copyOf(n.coerceAtLeast(0) * AtmosNative.ROOM_FIELDS)

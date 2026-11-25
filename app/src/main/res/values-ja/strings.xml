@@ -172,7 +172,7 @@
     <string name="compressor_detail">Oxford ダイナミクス。長押しで設定</string>
     <string name="inflator_detail">Oxford ラウドネス。長押しで設定</string>
     <string name="crossfeed">クロスフィード</string>
-    <string name="crossfeed_detail">スピーカーシミュレーション。長押しで設定</string>
+    <string name="crossfeed_detail">クロスフィードまたは部屋。長押しで設定</string>
     <string name="no_track_playing">再生中の曲はありません</string>
     <string name="unknown">不明</string>
     <string name="output_default">デフォルト</string>
@@ -733,6 +733,16 @@
     <string name="failed_tap_retry">失敗しました — タップで再試行</string>
     <string name="speaker_simulation">スピーカーシミュレーション</string>
     <string name="crossfeed_explainer">各チャンネルの音を少しだけ反対側の耳へ、わずかに遅らせてローパスをかけて送ることで、ヘッドホンをスピーカーのように鳴らします。</string>
+    <string name="crossfeed_room_explainer">ミキサーの Binaural Room を単体で使います。部屋に置いた 1 組のスピーカーから鳴る音楽を、HRTF を通して聴きます。バイノーラルレンダリングで再生される Atmos の曲は、そのレンダリング自身の部屋のままです。</string>
+    <string name="crossfeed_room_binaural">バイノーラル</string>
+    <string name="crossfeed_room_output">出力レベル</string>
+    <string name="crossfeed_hrtf_built_in">内蔵（Neumann KU100）</string>
+    <string name="crossfeed_hrtf_loading">HRTF を読み込み中…</string>
+    <string name="crossfeed_hrtf_failed">このファイルは部屋で使える HRTF セットではありません。内蔵の HRTF が使われます。</string>
+    <string name="crossfeed_lfe">LFE：低音を部屋の外に</string>
+    <string name="crossfeed_lfe_desc">クロスオーバーより下の低音を部屋から外し、1 つのチャンネルとして両耳へ直接、独自のレベルで鳴らします。分割はリニアフェーズなので、それ自体で位相をずらさず、約 21 ミリ秒の遅延が加わります。</string>
+    <string name="crossfeed_lfe_crossover">クロスオーバー</string>
+    <string name="crossfeed_lfe_level">LFE レベル</string>
     <string name="algorithm">アルゴリズム</string>
     <string name="speaker_angle">スピーカーの角度</string>
     <string name="speaker_angle_note">角度が狭いほどクロスフィードは強くなります。180° ではスピーカーが耳の位置にあり、クロスフィードはかかりません。</string>
@@ -3546,6 +3556,8 @@
     <string name="whats_new_196_dac_wait_body">Android がまだ DAC で再生している間は、排他使用の DAC を確保しなくなりました。そのため曲の開始まで数秒待つことがあります。すでに再生中なら、8 秒後から次に一時停止するまで Android 経由で再生します。</string>
     <string name="whats_new_196_album_share_title">アルバムの共有はプレビューを待ちます</string>
     <string name="whats_new_196_album_share_body">アルバムを共有すると準備中であることを表示し、Discord がプレビューを表示できるようになってから共有シートを開きます。最長 50 秒です。</string>
+    <string name="whats_new_196_crossfeed_room_title">クロスフィードのページに「部屋」</string>
+    <string name="whats_new_196_crossfeed_room_body">クロスフィードは「オフ」「クロスフィード」「部屋」から選べるようになりました。ミキサーの Binaural Room を単体で使い、独自の HRTF、低音を部屋の外に出す LFE、2D または 3D の表示があります。プレーヤーのオーディオツールで「クロスフィード」を長押しします。アプリを再起動しても設定は残ります。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

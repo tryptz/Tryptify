@@ -44,6 +44,13 @@ echo "== binaural_room_test"
 $cxx $flags -ffast-math "$here/binaural_room_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/binaural_room_test" -lpthread
 "$out/binaural_room_test"
 
+# The Crossfeed page's Room: its LFE split adds back to the song at every
+# crossover (linear phase), the LFE is one channel at its level, it says how
+# late it is, and a listener's HRTF set is heard and cleared.
+echo "== headphone_room_test"
+$cxx $flags -ffast-math "$here/headphone_room_test.cpp" "$dsp/dsp_engine.cpp" -o "$out/headphone_room_test" -lpthread
+"$out/headphone_room_test"
+
 # The effects' delay lines and rings: read as they did before their % went,
 # never past their ends at any knob setting (DSP_CHECK_DELAY_RANGE counts
 # that), silent after a rate change; the limiter past its old 2^31-sample

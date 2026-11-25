@@ -174,7 +174,7 @@
     <string name="compressor_detail">Oxford-Dynamik. Gedrückt halten zum Einrichten</string>
     <string name="inflator_detail">Oxford-Lautheit. Gedrückt halten zum Einrichten</string>
     <string name="crossfeed">Crossfeed</string>
-    <string name="crossfeed_detail">Lautsprechersimulation. Gedrückt halten zum Einrichten</string>
+    <string name="crossfeed_detail">Crossfeed oder Raum. Gedrückt halten zum Einrichten</string>
     <string name="no_track_playing">Es wird nichts abgespielt</string>
     <string name="unknown">Unbekannt</string>
     <string name="output_default">Standard</string>
@@ -765,6 +765,16 @@
     <string name="failed_tap_retry">Fehlgeschlagen – zum Wiederholen tippen</string>
     <string name="speaker_simulation">Lautsprechersimulation</string>
     <string name="crossfeed_explainer">Leitet einen kleinen Teil jedes Kanals leicht verzögert und tiefpassgefiltert ans andere Ohr, damit Kopfhörer eher wie ein Lautsprecherpaar klingen.</string>
+    <string name="crossfeed_room_explainer">Der Binaural Room des Mixers für sich: Deine Musik kommt aus einem Lautsprecherpaar in einem Raum, gehört durch eine HRTF. Ein Atmos-Song, den das binaurale Rendering spielt, behält dessen eigenen Raum.</string>
+    <string name="crossfeed_room_binaural">Binaural</string>
+    <string name="crossfeed_room_output">Ausgangspegel</string>
+    <string name="crossfeed_hrtf_built_in">Eingebaut (Neumann KU100)</string>
+    <string name="crossfeed_hrtf_loading">HRTF wird gelesen…</string>
+    <string name="crossfeed_hrtf_failed">Diese Datei ist kein HRTF-Satz, den der Raum nutzen kann: Die eingebaute HRTF spielt.</string>
+    <string name="crossfeed_lfe">LFE: Bass außerhalb des Raums</string>
+    <string name="crossfeed_lfe_desc">Der Bass unterhalb der Trennfrequenz wird aus dem Raum genommen und als ein Kanal mit eigenem Pegel direkt an beide Ohren gegeben. Die Trennung ist linearphasig, verschiebt also selbst keine Phase, und fügt etwa 21 ms Verzögerung hinzu.</string>
+    <string name="crossfeed_lfe_crossover">Trennfrequenz</string>
+    <string name="crossfeed_lfe_level">LFE-Pegel</string>
     <string name="algorithm">Algorithmus</string>
     <string name="speaker_angle">Lautsprecherwinkel</string>
     <string name="speaker_angle_note">Enge Winkel ergeben das stärkste Crossfeed. Bei 180° sitzen die Lautsprecher an deinen Ohren und es wird kein Crossfeed angewendet.</string>
@@ -3624,6 +3634,8 @@
     <string name="whats_new_196_dac_wait_body">Der exklusive DAC wird nicht mehr übernommen, solange Android noch darauf abspielt, daher kann ein Song ein paar Sekunden bis zum Start brauchen. Läuft er schon, spielt er nach 8 Sekunden bis zur nächsten Pause über Android.</string>
     <string name="whats_new_196_album_share_title">Ein Album teilen wartet auf seine Vorschau</string>
     <string name="whats_new_196_album_share_body">Beim Teilen eines Albums steht da, dass es vorbereitet wird, und das Teilen-Menü öffnet sich, sobald Discord die Vorschau zeigen kann, höchstens nach 50 Sekunden.</string>
+    <string name="whats_new_196_crossfeed_room_title">Raum auf der Crossfeed-Seite</string>
+    <string name="whats_new_196_crossfeed_room_body">Crossfeed ist jetzt Aus, Crossfeed oder Raum: der Binaural Room des Mixers für sich, mit eigener HRTF, einem LFE, der den Bass aus dem Raum hält, und einer 2D- oder 3D-Ansicht. Halte Crossfeed in den Audio-Tools des Players gedrückt. Bleibt nach einem Neustart der App erhalten.</string>
     <string name="atmos_room_builtin">Eingebauter Raum</string>
     <string name="atmos_room_custom">Mein Raum</string>
     <string name="atmos_rooms">Räume</string>

@@ -59,7 +59,7 @@ Playlists come in through `Settings › Library › Playlist import`.
 | Keep pitch when the speed changes | `Settings › Audio › Preserve Pitch` |
 | Streaming quality | `Settings › Audio › Streaming quality` |
 | Play at each file's own sample rate | `Settings › Audio › Never Resample Between Tracks` |
-| Speakers-in-front sound on headphones | `Settings › Audio › Crossfeed` |
+| Speakers-in-front sound on headphones | Crossfeed, held in the player's Audio tools (or found by Settings search): Off, Crossfeed, or Room (the Binaural Room on its own, with its own HRTF, an LFE that keeps the bass out of the room, and a 2D or 3D view) |
 
 A USB DAC is driven bit-perfect by the app's own driver when one is plugged in
 (`Settings › Audio › Exclusive USB DAC (bypass Android audio)`). Under that

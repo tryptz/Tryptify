@@ -3750,6 +3750,47 @@ into the mixer.
 
 None of it had been heard on a phone when it was written.
 
+### The Crossfeed page: Off, Crossfeed or Room
+
+The Crossfeed page (Crossfeed held in the player's Audio tools, or found by
+Settings search) is one choice of three, `Off`, `Crossfeed` and `Room` (the owner's ask of
+2026-11-25: "the crossfeed toggle to now be a crossfeed/room toggle", one
+three-way choice rather than a switch and a choice).
+
+- **Room is the mixer's Binaural Room, not a copy of it.** The page's room is
+  `dsp/headphone_room.h`: a `BinauralRoomProcessor` of its own, run where
+  crossfeed runs (`CrossfeedEffect.processArrays`, after the mixer and on a
+  surround song's fold), with the effect's nine settings in its units and
+  limits. The mixer keeps its effect; the two never share settings.
+- **Never both.** Crossfeed's gain is 0 while Room plays and its delay line
+  starts empty when it comes back; the room starts from silence each time it
+  is chosen again. A song the Atmos renderer plays binaurally gets neither,
+  as crossfeed never did (`DownmixProcessor`).
+- **The player's quick toggle turns on the mode last chosen.** `enabled`
+  is Off; `mode` is kept while it is off.
+- **Its HRTF is its own**, inside the Room: Built-in (the KU100) or any
+  `.sofa` in `files/hrtf`, the same files the Atmos page keeps. Picking one
+  here never changes the Atmos page's, and the database opened from here
+  (`Screen.RoomHrtfDatabase`) gives what it downloads to the Room only. A
+  file is read off every audio thread (`CrossfeedKeeper`, `AtmosSofaStore`);
+  one that is not a set leaves the built-in playing and the page says so.
+- **The LFE is linear phase and complementary.** Bass below the crossover
+  (40 to 200 Hz) is a symmetric FIR low-pass of the song, and the room gets
+  the song delayed to match less that bass, so the two add back to the song
+  whatever the crossover (`headphone_room_test`, to 6e-8). The bass is one
+  channel to both ears at its own level, delayed by the room's latency. It
+  adds about 21 ms at every rate; say so where it is switched on.
+- **2D or 3D, for both modes**, kept with the rest (`view3d`). 3D is
+  `AtmosRoom3d`, as the mixer's room card: the pair lit at the angle
+  (`FxVisualMath.roomPair` on `BinauralRoomNative.ring`), the LFE's speaker
+  lit while the LFE is on, My room at its size. The page has no meter, so a
+  playing speaker is drawn at one level. Crossfeed's 3D is the pair at half
+  its total angle in the built-in room's space with no room in it; its 2D is
+  the old top-down stage. The fixed networks (BS2B, Chu Moy, Jan Meier) have
+  no angle and no picture.
+- **Kept on the phone** (`crossfeed_json`, not synced: the HRTF is a file
+  here). Until 1.9.6 crossfeed was off again at every start of the app.
+
 ### The spatial renderer's room map
 
 Settings › Audio › Atmos Renderer Configuration (`ui/settings/AtmosRendererScreen.kt`).

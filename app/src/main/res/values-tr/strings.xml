@@ -174,7 +174,7 @@
     <string name="compressor_detail">Oxford dinamikleri. Ayarlamak için basılı tutun</string>
     <string name="inflator_detail">Oxford ses yüksekliği. Ayarlamak için basılı tutun</string>
     <string name="crossfeed">Crossfeed</string>
-    <string name="crossfeed_detail">Hoparlör simülasyonu. Ayarlamak için basılı tutun</string>
+    <string name="crossfeed_detail">Crossfeed ya da oda. Ayarlamak için basılı tutun</string>
     <string name="no_track_playing">Çalan parça yok</string>
     <string name="unknown">Bilinmiyor</string>
     <string name="output_default">Varsayılan</string>
@@ -765,6 +765,16 @@
     <string name="failed_tap_retry">Başarısız — tekrar denemek için dokunun</string>
     <string name="speaker_simulation">Hoparlör simülasyonu</string>
     <string name="crossfeed_explainer">Her kanalın küçük bir kısmını hafif gecikmeli ve alçak geçiren filtreden geçirilmiş olarak karşı kulağa verir; böylece kulaklık bir çift hoparlör gibi duyulur.</string>
+    <string name="crossfeed_room_explainer">Mikserin Binaural Room efekti tek başına: müziğin bir odadaki iki hoparlörden gelir ve bir HRTF üzerinden duyulur. Binaural işlemenin çaldığı bir Atmos şarkısı o işlemenin kendi odasını korur.</string>
+    <string name="crossfeed_room_binaural">Binaural</string>
+    <string name="crossfeed_room_output">Çıkış seviyesi</string>
+    <string name="crossfeed_hrtf_built_in">Dahili (Neumann KU100)</string>
+    <string name="crossfeed_hrtf_loading">HRTF okunuyor…</string>
+    <string name="crossfeed_hrtf_failed">Bu dosya odanın kullanabileceği bir HRTF seti değil: dahili HRTF çalıyor.</string>
+    <string name="crossfeed_lfe">LFE: bas odanın dışında</string>
+    <string name="crossfeed_lfe_desc">Geçiş frekansının altındaki bas odadan çıkarılır ve tek kanal olarak, kendi seviyesinde doğrudan iki kulağa gider. Bölme doğrusal fazlıdır; kendiliğinden faz kaydırmaz ve yaklaşık 21 ms gecikme ekler.</string>
+    <string name="crossfeed_lfe_crossover">Geçiş frekansı</string>
+    <string name="crossfeed_lfe_level">LFE seviyesi</string>
     <string name="algorithm">Algoritma</string>
     <string name="speaker_angle">Hoparlör açısı</string>
     <string name="speaker_angle_note">Dar açılar en güçlü crossfeed’i verir. 180°’de hoparlörler kulaklarınızın yanındadır ve crossfeed uygulanmaz.</string>
@@ -3624,6 +3634,8 @@
     <string name="whats_new_196_dac_wait_body">Android hâlâ DAC’e çalarken özel DAC artık alınmıyor; bu yüzden bir şarkının başlaması birkaç saniye sürebilir. Zaten çalıyorsa 8 saniye sonra bir sonraki duraklatmaya kadar Android üzerinden çalar.</string>
     <string name="whats_new_196_album_share_title">Albüm paylaşımı önizlemeyi bekler</string>
     <string name="whats_new_196_album_share_body">Bir albüm paylaşılırken hazırlandığı belirtilir ve Discord önizlemesini gösterebildiğinde paylaşım sayfası açılır; en fazla 50 saniye.</string>
+    <string name="whats_new_196_crossfeed_room_title">Crossfeed sayfasında oda</string>
+    <string name="whats_new_196_crossfeed_room_body">Crossfeed artık Kapalı, Crossfeed ya da Oda: mikserin Binaural Room efekti tek başına; kendi HRTF’si, bası odanın dışında tutan bir LFE ve 2D ya da 3D görünümle. Oynatıcının Ses araçları bölümünde Crossfeed’e basılı tut. Uygulama yeniden başladığında korunur.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>

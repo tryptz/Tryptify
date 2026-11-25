@@ -98,6 +98,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
     lateinit var outputEqSwitcher: tf.monochrome.android.audio.eq.OutputEqSwitcher
 
     @Inject
+    lateinit var crossfeedKeeper: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedKeeper
+
+    @Inject
     lateinit var settingsSyncCoordinator: tf.monochrome.android.data.sync.SettingsSyncCoordinator
 
     @Inject
@@ -247,6 +250,9 @@ class MonochromeApp : Application(), Configuration.Provider, SingletonImageLoade
         // Per-device AutoEQ: switch to the preset assigned to an output when it
         // connects, with the app in the background too.
         outputEqSwitcher.start()
+        // The Crossfeed page (Off, Crossfeed or Room) read back from the phone,
+        // kept as it changes, and the Room's HRTF loaded off the audio thread.
+        crossfeedKeeper.start(appScope)
         // Restore auth on app start, then register this device against whichever
         // user is signed in. The collector re-fires on sign-in / sign-out.
         appScope.launch {

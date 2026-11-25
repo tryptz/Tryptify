@@ -1952,6 +1952,7 @@ class PlaybackService : MediaSessionService() {
             inflator = inflatorEffect.state.value,
             compressor = compressorEffect.state.value,
             crossfeed = crossfeedEffect.state.value,
+            crossfeedRoomHrtf = crossfeedEffect.roomHrtf,
             blockSize = dspBlockSize,
             dspEnabled = dspEnabled,
         )

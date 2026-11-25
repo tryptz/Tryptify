@@ -175,7 +175,7 @@
     <string name="compressor_detail">Oxford dynamics. Hold to configure</string>
     <string name="inflator_detail">Oxford loudness. Hold to configure</string>
     <string name="crossfeed">Crossfeed</string>
-    <string name="crossfeed_detail">Speaker simulation. Hold to configure</string>
+    <string name="crossfeed_detail">Crossfeed or Room. Hold to configure</string>
     <string name="no_track_playing">No track playing</string>
     <string name="unknown">Unknown</string>
     <string name="output_default">Default</string>
@@ -766,6 +766,16 @@
     <string name="failed_tap_retry">Failed — tap retry</string>
     <string name="speaker_simulation">Speaker simulation</string>
     <string name="crossfeed_explainer">Feeds a small amount of each channel into the opposite ear, slightly delayed and low-pass filtered, so headphones sound more like a pair of speakers.</string>
+    <string name="crossfeed_room_explainer">The mixer\'s Binaural Room on its own: your music from a pair of speakers in a room, heard through an HRTF. An Atmos song the binaural render plays keeps that render\'s own room.</string>
+    <string name="crossfeed_room_binaural">Binaural</string>
+    <string name="crossfeed_room_output">Output level</string>
+    <string name="crossfeed_hrtf_built_in">Built-in (Neumann KU100)</string>
+    <string name="crossfeed_hrtf_loading">Reading the HRTF…</string>
+    <string name="crossfeed_hrtf_failed">That file is not an HRTF set the room can use: the built-in one plays.</string>
+    <string name="crossfeed_lfe">LFE: bass outside the room</string>
+    <string name="crossfeed_lfe_desc">The bass below the crossover is taken out of the room and played straight to both ears as one channel, at its own level. The split is linear phase, so it shifts no phase of its own, and adds about 21 ms of delay.</string>
+    <string name="crossfeed_lfe_crossover">Crossover</string>
+    <string name="crossfeed_lfe_level">LFE level</string>
     <string name="algorithm">Algorithm</string>
     <string name="speaker_angle">Speaker angle</string>
     <string name="speaker_angle_note">Narrow angles give the strongest crossfeed. At 180° the speakers sit at your ears and no crossfeed is applied.</string>
@@ -3627,6 +3637,8 @@
     <string name="whats_new_196_dac_wait_body">The exclusive DAC is no longer taken while Android is still playing to it, so a song may wait a few seconds to start. If it is already playing, after 8 seconds it goes through Android until the next pause.</string>
     <string name="whats_new_196_album_share_title">Sharing an album waits for its preview</string>
     <string name="whats_new_196_album_share_body">Sharing an album now says it is getting the album ready, and opens the share sheet once Discord can show its preview, 50 seconds at most.</string>
+    <string name="whats_new_196_crossfeed_room_title">Room on the Crossfeed page</string>
+    <string name="whats_new_196_crossfeed_room_body">Crossfeed is now Off, Crossfeed or Room: the mixer\'s Binaural Room on its own, with an HRTF of its own, an LFE that keeps the bass out of the room, and a 2D or 3D view. Hold Crossfeed in the player\'s Audio tools. It is kept when the app restarts.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

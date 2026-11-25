@@ -212,6 +212,8 @@ sealed class Screen(val route: String) {
     data object AtmosRenderer : Screen("atmos_renderer")
     data object WidgetSettings : Screen("widget_settings")
     data object HrtfDatabase : Screen("hrtf_database")
+    /** The HRTF database for the Crossfeed page's Room: a download is the Room's HRTF. */
+    data object RoomHrtfDatabase : Screen("room_hrtf_database")
     data object RoomDatabase : Screen("room_database")
 
     /** StepMania Glyph: generated charts, gameplay and Training Ground. */
@@ -1094,6 +1096,12 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.HrtfDatabase.route) {
                     tf.monochrome.android.ui.settings.HrtfDatabaseScreen(navController = navController)
                 }
+                composable(Screen.RoomHrtfDatabase.route) {
+                    tf.monochrome.android.ui.settings.HrtfDatabaseScreen(
+                        navController = navController,
+                        viewModel = hiltViewModel<tf.monochrome.android.ui.settings.RoomHrtfDatabaseViewModel>(),
+                    )
+                }
                 composable(Screen.WidgetSettings.route) {
                     tf.monochrome.android.ui.settings.WidgetSettingsScreen(navController = navController)
                 }
@@ -1120,7 +1128,8 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                     val vm: CrossfeedViewModel = hiltViewModel()
                     tf.monochrome.android.devedit.DevEditScreen("crossfeed") {
                         CrossfeedScreen(
-                            effect = vm.crossfeed,
+                            viewModel = vm,
+                            onBrowseHrtf = { navController.navigateTool(Screen.RoomHrtfDatabase) },
                             onBack = { navController.popBackStackSafe() },
                             modifier = Modifier.fillMaxSize().padding(top = statusBarHeight),
                         )

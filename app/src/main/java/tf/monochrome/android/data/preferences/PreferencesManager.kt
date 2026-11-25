@@ -474,6 +474,10 @@ class PreferencesManager @Inject constructor(
         // SETTINGS_SYNC_KEYS: it rests on an app installed and allowed on
         // this phone, and means nothing on another.
         private val SYSTEM_WIDE_PEQ_SHIZUKU = booleanPreferencesKey("system_wide_peq_shizuku")
+        // The Crossfeed page: Off, Crossfeed or Room and their settings
+        // (CrossfeedState.encode). Not synced: the Room's HRTF is a file on
+        // this phone.
+        private val CROSSFEED_JSON = stringPreferencesKey("crossfeed_json")
         // Its setup steps were read to the end on this phone. Not synced
         // either: the steps are about this phone's Shizuku.
         private val SHIZUKU_PEQ_STEPS_SEEN = booleanPreferencesKey("shizuku_peq_steps_seen")
@@ -1958,6 +1962,13 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSystemWidePeqShizuku(enabled: Boolean) {
         dataStore.edit { it[SYSTEM_WIDE_PEQ_SHIZUKU] = enabled }
+    }
+
+    /** The Crossfeed page's settings as CrossfeedState.encode wrote them, or null. */
+    val crossfeedJson: Flow<String?> = dataStore.data.map { it[CROSSFEED_JSON] }
+
+    suspend fun setCrossfeedJson(json: String) {
+        dataStore.edit { it[CROSSFEED_JSON] = json }
     }
 
     /** Whether the Shizuku option's setup steps were read to the end on this phone. */

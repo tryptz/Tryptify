@@ -69,6 +69,8 @@ add_library(monochrome_dsp SHARED
     dsp/meter/dynamic_range_jni.cpp
     # ReplayGain's stage, ahead of the mixer: every song at the target loudness.
     dsp/replaygain/replay_gain_jni.cpp
+    # The Crossfeed page's Room: the Binaural Room with its own HRTF and an LFE.
+    dsp/headphone_room_jni.cpp
 )
 
 target_include_directories(monochrome_dsp PRIVATE

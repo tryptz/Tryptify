@@ -74,6 +74,7 @@ class DspChain private constructor(
         inflatorState: tf.monochrome.android.audio.dsp.oxford.InflatorState,
         compressorState: tf.monochrome.android.audio.dsp.oxford.CompressorState,
         crossfeedState: tf.monochrome.android.audio.dsp.crossfeed.CrossfeedState,
+        crossfeedRoomHrtf: FloatArray? = null,
         blockSize: Int,
         dspEnabled: Boolean,
         autoEqPitchRatio: Float,
@@ -118,6 +119,9 @@ class DspChain private constructor(
         inflator.update { inflatorState }
         compressor.update { compressorState }
         crossfeed.update { crossfeedState }
+        // The Room's HRTF too, where a room is wanted (building it takes a
+        // moment): a copy otherwise plays the built-in set.
+        if (crossfeedState.roomOn || crossfeedRoomHrtf == null) crossfeed.setRoomHrtf(crossfeedRoomHrtf)
     }
 
     private var pendingDspState: String? = null
@@ -170,6 +174,7 @@ class DspChain private constructor(
         runCatching { inflator.release() }
         runCatching { compressor.release() }
         runCatching { replayGain.release() }
+        runCatching { crossfeed.release() }
         pendingDspState = null
         pendingMixBypassed = null
     }

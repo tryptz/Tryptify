@@ -28,6 +28,8 @@ data class DspSeed(
     val inflator: InflatorState,
     val compressor: CompressorState,
     val crossfeed: CrossfeedState,
+    /** The HRTF set the Crossfeed page's Room plays, or null for the built-in one. */
+    val crossfeedRoomHrtf: FloatArray? = null,
     val blockSize: Int,
     val dspEnabled: Boolean,
 )
@@ -46,6 +48,7 @@ fun DspChain.seed(seed: DspSeed, autoEqPitchRatio: Float) = seedFrom(
     inflatorState = seed.inflator,
     compressorState = seed.compressor,
     crossfeedState = seed.crossfeed,
+    crossfeedRoomHrtf = seed.crossfeedRoomHrtf,
     blockSize = seed.blockSize,
     dspEnabled = seed.dspEnabled,
     autoEqPitchRatio = autoEqPitchRatio,

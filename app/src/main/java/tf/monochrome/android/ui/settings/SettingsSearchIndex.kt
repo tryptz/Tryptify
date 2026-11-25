@@ -182,7 +182,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("atmos_renderer")),
     entry("HRTF database", R.string.search_hrtf_database, "Audio", listOf("binaural", "head", "spatial", "sofa"))
         .at(SettingsDestination.Route("hrtf_database")),
-    entry("Crossfeed", R.string.crossfeed, "Audio", listOf("headphone", "stereo", "bauer", "fatigue"))
+    entry("Crossfeed", R.string.crossfeed, "Audio", listOf("headphone", "stereo", "bauer", "fatigue", "room", "binaural", "hrtf", "sofa", "lfe", "speaker"))
         .at(SettingsDestination.Route("crossfeed")),
     entry("Mixer", R.string.status_mixer, "Audio", listOf("dsp", "bus", "plugin", "insert", "channel"))
         .at(SettingsDestination.Route("mixer")),
