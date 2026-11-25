@@ -83,7 +83,7 @@ switch:
 | System-wide AutoEQ from anywhere | `Settings › Equalizer › Quick Settings tile`, under those two | A tile that turns System-wide AutoEQ on and off over any app |
 | Mixer | `Settings › Audio › Mixer`, or Mixer in the player | A console of buses and processors with loudness meters |
 | Binaural Room | Mixer › FX Chain › Add Effect › Space | The Atmos page's headphone room for any song: stereo from two speakers standing in that room. Room, Binaural, Angle and Output knobs; My room swaps the built-in room for one of your own Width, Depth, Height and Damping. On the master of a surround mix or the 9.1.6 upmix it is one room for the whole mix, each channel at its own speaker |
-| 9.1.6 upmix | Mixer › Load Preset › Atmos Upmix 9.1.6 | Spreads a stereo song around you, a bus for each group of speakers |
+| 9.1.6 upmix | The mixer's preset bar: the folder icon (Load Preset) › Atmos Upmix 9.1.6 | Spreads a stereo song around you, a bus for each group of speakers |
 | Music links | On sliders and mixer knobs | Makes a control move with the kick, vocals, snare or hi-hats |
 
 ## 6. Dolby Atmos
