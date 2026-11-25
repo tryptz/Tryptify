@@ -75,6 +75,7 @@ switch:
 | Tool | Where | What it does |
 | --- | --- | --- |
 | AutoEQ | `Settings › Equalizer › AutoEQ headphone profile` | Corrects your headphones from 4,000+ measurements against 10 targets |
+| AutoEQ with no connection | The headphone list › Save all measurements for offline use | Keeps every measurement on the phone (about 12,000, some 75 MB). A saved preset also brings its own headphone and curves back with no network |
 | Equalizer | `Settings › Equalizer › Equalizer` | Bands by hand |
 | Parametric EQ | `Settings › Equalizer › Parametric EQ` | Filters by frequency, gain and width |
 | System-wide AutoEQ | `Settings › Equalizer › System-wide AutoEQ` | The correction for other apps too: an ear each in 2-channel mode, kept running with Tryptify closed, with a limiter that acts only when a boost would clip |
@@ -87,8 +88,7 @@ switch:
 
 ## 6. Dolby Atmos
 
-All of it is on `Settings › Audio › Spatial renderer` (the Atmos Renderer
-Configuration page).
+All of it is on `Settings › Audio › Atmos Renderer Configuration`.
 
 | To do this | Use |
 | --- | --- |
