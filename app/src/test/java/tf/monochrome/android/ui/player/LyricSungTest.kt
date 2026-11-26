@@ -183,6 +183,47 @@ class LyricSungTest {
     }
 
     @Test
+    fun `the light's three settings travel with the look, saved, shared and published`() {
+        // The switch, the time and "When a word ends", all away from the shipped values.
+        val look = LyricsFxSettings.DEFAULT.copy(
+            godRays = true, godRayFade = false, godRayFadeMs = 700f, godRayHold = true,
+        )
+        fun assertCarried(where: String, s: LyricsFxSettings?) {
+            assertTrue(where, s != null)
+            assertFalse(where, s!!.godRayFade)
+            assertEquals(where, 700f, s.godRayFadeMs, 0f)
+            assertTrue(where, s.godRayHold)
+        }
+        // Saved presets (lyrics_fx_custom_presets_json, synced with the
+        // settings), written as the Studio's "Save preset" writes them.
+        val prefs = Json { ignoreUnknownKeys = true }
+        val stored = prefs.encodeToString(listOf(LyricsFxPreset("Held light", look.clamped())))
+        val reread = prefs.decodeFromString<List<LyricsFxPreset>>(stored).single()
+        assertCarried("saved preset", reread.settings)
+        // Loading it puts them back over a look that had none of them, and its chip lights.
+        val mine = LyricsFxSettings.DEFAULT.copy(godRays = true, bluetoothDelayMs = 120f)
+        val loaded = reread.settings.withPersonalFrom(mine).clamped()
+        assertCarried("preset loaded", loaded)
+        assertEquals(120f, loaded.bluetoothDelayMs, 0f)
+        assertTrue(loaded.matchesPreset(reread.settings))
+        // A share code.
+        assertCarried("share code", LyricsFxPreset.decode(LyricsFxPreset.encode(reread))?.settings)
+        // The Theme Store: published as forSharing leaves it, sent as the
+        // codec writes it, installed as ThemePackRepository applies it.
+        val published = ThemePackCodec.encode(ThemePackCodec.forSharing(ThemePack(name = "Held light", lyrics = look)))
+        val installed = ThemePackCodec.decode(published)!!.lyrics!!
+        assertCarried("store pack", installed)
+        assertCarried("store pack installed", installed.withPersonalFrom(mine).clamped())
+        // A theme that keeps the shipped light puts them back too: they are
+        // the look's, not the listener's own.
+        val shipped = ThemePackCodec.decode(ThemePackCodec.encode(ThemePack(name = "Plain", lyrics = mine)))!!.lyrics!!
+        val over = shipped.withPersonalFrom(look).clamped()
+        assertTrue(over.godRayFade)
+        assertEquals(250f, over.godRayFadeMs, 0f)
+        assertFalse(over.godRayHold)
+    }
+
+    @Test
     fun `each word and each line is a place of its own`() {
         val places = listOf(
             LyricSung.NOT_STARTED,

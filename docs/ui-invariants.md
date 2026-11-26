@@ -714,7 +714,11 @@ a sung line, so the light is carried over instead of dipping before the new
 line's first word. A ♪ break hands nothing on, the song's last line goes out
 at its own end, and nothing is lit before the first line: holding is never
 the old resting on the last word through every gap and the intro. Part of
-the look, so a theme applied over it sets it back to Fade out. The Studio's sample is always being sung, so its light is
+the look, so a theme applied over it sets it back to Fade out. It, the
+transition's switch and its time are never personal fields
+(`withPersonalFrom`): a saved preset, a share code and a Theme Store pack,
+published and installed, carry all three, and a test walks each of those
+paths (`LyricSungTest`, "the light's three settings travel with the look"). The Studio's sample is always being sung, so its light is
 never out, and its word hops glide. `LyricSungTest` holds the rule and the
 glide's arithmetic; the fade and the glide themselves were not seen on a
 phone when they were written.
