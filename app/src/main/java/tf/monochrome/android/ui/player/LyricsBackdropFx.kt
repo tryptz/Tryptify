@@ -93,6 +93,21 @@ internal class LyricLetterCapture {
     var lightLevel: () -> Float = { 1f }
 
     /**
+     * Set by the player while the 3D spectrogram is under the lyrics: it is
+     * lit by the word being sung ([aim]), and asks the lyric view to follow
+     * the word for it whatever the god rays follow.
+     */
+    var wantsLamp by mutableStateOf(false)
+
+    /**
+     * The word (or, without timed words, the line) being sung, in root px,
+     * and how much of its light is on: the lyric view's answer to
+     * [wantsLamp]. Null while nobody asked. Read in the draw phase.
+     */
+    var lampInRoot: (() -> Rect?)? = null
+    var lampLevel: (() -> Float)? = null
+
+    /**
      * True while [captureLetters] records [layer]. Anything that would draw
      * the copy then is inside the letters, and drawing it would put the layer
      * inside itself: a loop the render thread walks until its stack runs out.

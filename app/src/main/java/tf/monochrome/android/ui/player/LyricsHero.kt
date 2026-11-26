@@ -433,7 +433,10 @@ internal fun SyncedLyricsView(
     // The curve over the sung line or the sung word alone (Lyrics FX › Curve).
     val curveTarget = if (fx.curved && !appCurved) fx.curvatureTarget else LyricsFxSettings.CURVE_ALL
     // The sung word is tracked for whichever of the two follows it.
-    val trackWord = followWord || curveTarget == LyricsFxSettings.CURVE_WORD
+    // The 3D spectrogram under the lyrics is lit by the word being sung
+    // (LyricLetterCapture.aim), whatever the god rays follow.
+    val lampWanted = LocalLyricBackdrop.current?.capture?.wantsLamp == true
+    val trackWord = followWord || curveTarget == LyricsFxSettings.CURVE_WORD || lampWanted
     val sungWord = remember { SungWordAnchor() }
     val listBox = remember { androidx.compose.runtime.mutableStateOf(Rect.Zero) }
     // What is being sung this moment, for the light: out before the first
@@ -501,6 +504,32 @@ internal fun SyncedLyricsView(
         androidx.compose.runtime.SideEffect {
             backdrop.capture.bandInRoot = bandInRoot
             backdrop.capture.lightLevel = lightLevelOf
+        }
+        if (lampWanted) {
+            // The lamp over the 3D spectrogram: the sung word where the line
+            // has timed words, else the line, on with each word and off when
+            // it is over, with the god rays on or off and whatever they
+            // follow. Its own short fade, so the water's light moves with
+            // the singing and never just stays on.
+            val lampNow = remember(lines, syncDelayMs) {
+                derivedStateOf { LyricSung.at(lines, position - syncDelayMs, byWord = true) }
+            }
+            val lampLevel = rememberLyricLightLevel(lit = remember(lampNow) { { lampNow.value.lit } }, fadeMs = LAMP_FADE_MS)
+            val lampInRoot: () -> Rect? = remember(listState, currentLineState) {
+                {
+                    val line = currentLineState.value
+                    sungWord.rectFor(line) ?: activeLineBand(listState, line)?.translate(listBox.value.topLeft)
+                }
+            }
+            androidx.compose.runtime.SideEffect {
+                backdrop.capture.lampInRoot = lampInRoot
+                backdrop.capture.lampLevel = { lampLevel.value }
+            }
+        } else {
+            androidx.compose.runtime.SideEffect {
+                backdrop.capture.lampInRoot = null
+                backdrop.capture.lampLevel = null
+            }
         }
     }
     // The box the curve's dome covers, in root px, read in the draw phase:
@@ -1046,6 +1075,9 @@ private const val ACTIVE_LINE_ANCHOR = 0.38f
 
 /** The first line's colour through the intro: clear against the dimmer lines below, not yet the accent. */
 private const val READY_LINE_ALPHA = 0.9f
+
+/** How long the lamp over the 3D spectrogram takes to come on with a word and go out after it. */
+private const val LAMP_FADE_MS = 160
 
 /**
  * The line the lyric view is centred on and focuses: the sung one, or through

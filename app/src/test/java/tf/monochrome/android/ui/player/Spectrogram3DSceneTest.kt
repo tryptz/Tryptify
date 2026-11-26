@@ -370,6 +370,37 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
+    fun `sliders saved for the first renderer start again from the look as shipped`() {
+        val json = Json { ignoreUnknownKeys = true }
+        // What the owner's phone had saved when it looked nothing like the demo: no "look" in it.
+        val old = """{"secondsAcross":2.79,"angleDeg":16.4,"peakHeight":1.85,"gloss":0.09,"smoothness":0.99,""" +
+            """"shadows":0.22,"minHz":20.0,"maxHz":19999.992,"quality":4,"preview":false}"""
+        assertTrue(Spectrogram3DSettings.savedForAnOlderLook(old))
+        val now = Spectrogram3DSettings.fromSaved(old, json.decodeFromString<Spectrogram3DSettings>(old)).clamped()
+        assertEquals(Spectrogram3DSettings.DEFAULT.copy(quality = 4, preview = false), now)
+        // Whatever is saved from now on says which look it is for, defaults included, and is kept as it is.
+        val mine = Spectrogram3DSettings(smoothness = 0.9f, gloss = 0.1f)
+        val saved = json.encodeToString(mine)
+        assertTrue(saved, saved.contains("\"look\":${Spectrogram3DSettings.LOOK}"))
+        assertTrue(json.encodeToString(Spectrogram3DSettings.DEFAULT).contains("\"look\""))
+        assertFalse(Spectrogram3DSettings.savedForAnOlderLook(saved))
+        assertEquals(mine, Spectrogram3DSettings.fromSaved(saved, json.decodeFromString<Spectrogram3DSettings>(saved)))
+    }
+
+    @Test
+    fun `the band under the lyrics is drawn across a margin to the screen's edge, never across what stands beside it`() {
+        // Expanded lyrics: 18 px of page margin either side, a navigation bar under it.
+        assertEquals(18, EdgeBleed.gap(18f, 144))
+        assertEquals(96, EdgeBleed.gap(96.4f, 144))
+        // Already at the edge, or past it while the player slides: nothing.
+        assertEquals(0, EdgeBleed.gap(0f, 144))
+        assertEquals(0, EdgeBleed.gap(-30f, 144))
+        // The controls beside it in the side-by-side layout, or under it in the ordinary one: not a margin.
+        assertEquals(0, EdgeBleed.gap(900f, 144))
+        assertEquals(0, EdgeBleed.gap(145f, 144))
+    }
+
+    @Test
     fun `the palette keeps the album's hues and makes them fit to draw with`() {
         // A pale pastel and a near-black: a saturated floor, tops at full strength.
         val pale = SpectrogramPalette.of(0xFFD0BCFF.toInt(), 0xFF140A0A.toInt())

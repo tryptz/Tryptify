@@ -497,16 +497,32 @@ shader with Skia beside the reference's frames:
   pair being written. The shader is the overlay's own, never shared: it is a
   paint's shader.
 - **Under the lyrics, the words being sung are a lamp** (`SpectrogramLamp`,
-  `LyricLetterCapture.aim`, Light from the lyrics): the lyric view's own
-  light (`bandInRoot`, `lightLevel`, the god rays' colour or the accent) is
-  read in the draw phase and stands behind the field (`LAMP_Y`, `LAMP_Z`)
-  where the sung word is across the picture, or mid-surface when the light
-  follows the line. The key light turns toward it and takes its colour, so
-  the shadows swing away from each word, and the water mirrors it as a bar
-  the ripples draw out. The lamp's height is fixed, not the word's on
-  screen: mirrored exactly, a word high over the band would land below its
-  bottom edge. The legacy player has no lyric light to read, and the cover's
-  own view has none either: there the sun alone lights it.
+  `LyricLetterCapture.aim`, Light from the lyrics). It stands behind the
+  field (`LAMP_Y`, `LAMP_Z`) where the sung word is across the picture; the
+  key light turns toward it, so the shadows swing away from each word, and
+  the water mirrors it as a bar the ripples draw out. Three things it must
+  keep, or it stops working "like the demo" (the owner's words for it):
+  - **Its own feed, the sung word, whatever the god rays do.** The player
+    sets `wantsLamp` while the 3D view is under the lyrics, and the lyric
+    view then follows the word (`trackWord`) and hands over `lampInRoot` and
+    `lampLevel`: on with each word and off when it is over (`LAMP_FADE_MS`),
+    by `LyricSung` with words. Fed from the god rays' light alone, it stood
+    still at the middle and never went out with the rays off, and followed
+    the line where the rays followed the line.
+  - **It is light before it is a colour** (half way to white in the shader):
+    a teal word over teal water lit nothing one could see.
+  - **A fixed height, not the word's on screen**: mirrored exactly, a word
+    high over the band would land below its bottom edge.
+  The legacy player has no lyric light to read, and the cover's own view has
+  none either: there the sun alone lights it.
+- **Under the lyrics it runs to the phone's edges**
+  (`Modifier.bleedToScreenEdges`, on the band): expanded lyrics keep a
+  margin for the words and stop above the navigation bar, which left the
+  water short on three sides ("fill the phone edges", the owner). The band
+  is measured larger by the gap and set back, its parent untouched; sideways
+  always, down only while the lyrics are expanded. Only a margin is crossed
+  (`EdgeBleed.MAX_MARGIN_DP`): a wider gap is the controls standing beside
+  it in the side-by-side layout.
 - **Below Android 13, or at Low quality, each mesh point is lit instead**
   (`Lighting`, the body's colours with a key light, gloss and glow, and no
   shadows, ripples, mirrored sky or lyric lamp): the way out if a phone's GPU
@@ -539,8 +555,16 @@ shader with Skia beside the reference's frames:
   `Spectrogram3D`, with the grid, the point count and a refusal's text):
   the two look nothing alike and nothing else told them apart. Reset to
   default puts the look back as shipped and keeps Quality and the preview
-  switch: a slider left at an extreme while trying an earlier build is the
-  other way to a picture unlike the demo.
+  switch.
+- **A saved look says which renderer it is for** (`look`, `LOOK`, always
+  written), and one from before it is read as the look as shipped with the
+  listener's quality and preview switch (`fromSaved`, in the preferences'
+  flow). The owner's phone had kept the first renderer's sliders
+  (Smoothness 99%, Gloss 9%, the whole pitch range, read from their synced
+  settings on 2026-11-26): they had hidden that renderer's blocks, and under
+  this one they flattened the water and put its light out, which is what
+  "it looks nothing like the demo" was. Raise `LOOK` when a renderer changes
+  what the sliders mean; a theme's look is kept as it is.
 
 `Spectrogram3DSceneTest` and `SpectrogramBandsTest` hold the numbers;
 `tools/spectrogram_3d/check.py` compiles the shader with Skia (what Android

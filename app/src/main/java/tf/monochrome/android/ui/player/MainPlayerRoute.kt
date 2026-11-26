@@ -1148,6 +1148,11 @@ fun MainPlayerRoute(
                     )
                 }
             }
+            // The 3D spectrogram under the lyrics is lit by the word being
+            // sung: the lyric view is asked to follow the word for it.
+            val lampWanted = showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum &&
+                coverVisual == CoverVisual.SPECTROGRAM_3D && spectrogram3dSettings.lyricLight > 0f
+            androidx.compose.runtime.SideEffect { lyricLetters.wantsLamp = lampWanted }
             if (showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum) {
                 // Lyrics FX › Visualizer under the lyrics: the cover's
                 // visualizer stays along the bottom as the art goes, and the
@@ -1172,8 +1177,12 @@ fun MainPlayerRoute(
                             )
                         }
                     },
+                    // Out to the phone's edges: expanded lyrics keep a margin
+                    // for the words and stop above the navigation bar, and
+                    // the visualizer is not words.
                     modifier = Modifier
                         .fillMaxSize()
+                        .bleedToScreenEdges(toBottom = lyricsExpanded)
                         .graphicsLayer { alpha = lyricsProgress },
                 )
             }

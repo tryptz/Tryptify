@@ -1,5 +1,7 @@
 package tf.monochrome.android.domain.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
@@ -11,6 +13,7 @@ import kotlinx.serialization.Serializable
  * [quality] and [preview] are the listener's own: a theme neither sets nor
  * shares them ([withPersonalFrom]).
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Spectrogram3DSettings(
     /** Speed: how many seconds of music the front edge spans, right to left. */
@@ -45,6 +48,11 @@ data class Spectrogram3DSettings(
     val quality: Int = 2,
     /** The Settings preview is shown. Personal. */
     val preview: Boolean = true,
+    /**
+     * Which renderer the look was set for ([LOOK]). Always written, so a
+     * saved look without it is known to be from before ([savedForAnOlderLook]).
+     */
+    @EncodeDefault val look: Int = LOOK,
 ) {
     /** Every value in its range; a value that is not a number takes the default. */
     fun clamped(): Spectrogram3DSettings {
@@ -69,6 +77,7 @@ data class Spectrogram3DSettings(
             minHz = low,
             maxHz = high,
             quality = quality.coerceIn(MIN_QUALITY, MAX_QUALITY),
+            look = LOOK,
         )
     }
 
@@ -78,6 +87,27 @@ data class Spectrogram3DSettings(
 
     companion object {
         val DEFAULT = Spectrogram3DSettings()
+
+        /**
+         * The renderer the sliders are tuned for: 2 is the water lit per
+         * pixel, with shadows. Values saved for the first one (each mesh
+         * point lit) do not carry over: there Smoothness near 100% and Gloss
+         * near 0 hid its blocks, and here they flatten the water and put its
+         * light out. That is what the owner's phone showed against the demo
+         * on 2026-11-26 ("it looks nothing like the demo").
+         */
+        const val LOOK = 2
+
+        /** Whether [savedJson] was written before the look's version was: by the first renderer's builds. */
+        fun savedForAnOlderLook(savedJson: String): Boolean = !savedJson.contains("\"look\"")
+
+        /**
+         * What a saved value means now: one from an older look gives the
+         * look as shipped, with the listener's own quality and preview
+         * switch kept.
+         */
+        fun fromSaved(savedJson: String, decoded: Spectrogram3DSettings): Spectrogram3DSettings =
+            if (savedForAnOlderLook(savedJson)) DEFAULT.withPersonalFrom(decoded) else decoded
 
         const val MIN_SECONDS = 0.5f
         const val MAX_SECONDS = 20f

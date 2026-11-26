@@ -506,11 +506,14 @@ half4 main(float2 p) {
     float3 toLamp = float3(clamp(P.x, uLamp.x - uLampCol.a, uLamp.x + uLampCol.a), uLamp.y, uLamp.z) - P;
     float lampDist = max(length(toLamp), 0.001);
     float lampNear = 1.0 / (1.0 + 1.1 * lampDist * lampDist);
-    float3 lampCol = uLampCol.rgb * uLampCol.rgb;
+    // The lamp is light before it is a colour: half way to white, so it
+    // shows on water of its own hue (a teal word over teal water) as it
+    // does on any other.
+    float3 lampCol = mix(uLampCol.rgb * uLampCol.rgb, float3(1.0), 0.45);
     float turn = lampOn;
     float3 Ll = toLamp / lampDist;
     float3 L = normalize(mix(uSun, Ll, turn));
-    float3 keyCol = mix(float3(2.5, 2.36, 2.2), lampCol * (3.6 * lampNear), turn);
+    float3 keyCol = mix(float3(2.5, 2.36, 2.2), lampCol * (4.2 * lampNear), turn);
 
     // Shadows and thickness in one walk toward the light over the heights:
     // how far the ray is under the ground on its way is the shadow, softer

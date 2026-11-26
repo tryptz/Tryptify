@@ -2833,7 +2833,12 @@ class PreferencesManager @Inject constructor(
         .distinctUntilChanged()
         .map { raw ->
             raw
-                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.Spectrogram3DSettings>(s) }.getOrNull() }
+                ?.let { s ->
+                    runCatching { json.decodeFromString<tf.monochrome.android.domain.model.Spectrogram3DSettings>(s) }
+                        .getOrNull()
+                        // Sliders saved for the first renderer start again from the look as shipped.
+                        ?.let { tf.monochrome.android.domain.model.Spectrogram3DSettings.fromSaved(s, it) }
+                }
                 ?.clamped()
                 ?: tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT
         }
