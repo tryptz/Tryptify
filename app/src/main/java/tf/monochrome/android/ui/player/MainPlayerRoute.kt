@@ -327,6 +327,9 @@ fun MainPlayerRoute(
     val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
     val waterfallSettings by playerViewModel.spectrumWaterfall.collectAsStateWithLifecycle()
     val spectrogram3dSettings by playerViewModel.spectrogram3d.collectAsStateWithLifecycle()
+    // The cover's view (Spectrum, Wave Candy, 3D spectrogram), held here so the
+    // Lyrics view can keep it under the lyrics and a trip there and back keeps it.
+    var coverVisual by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoverVisual.SPECTRUM) }
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
@@ -1110,6 +1113,8 @@ fun MainPlayerRoute(
                     spectrumColor = spectrumColor,
                     waterfall = waterfallSettings,
                     spectrogram3d = spectrogram3dSettings,
+                    coverVisual = coverVisual,
+                    onCoverVisual = { coverVisual = it },
                     // The album's other colour lights the 3D spectrogram's ridges from within.
                     spectrumGlow = dominantFade.value,
                     waveSettings = waveCandySettings,
@@ -1136,6 +1141,25 @@ fun MainPlayerRoute(
                         },
                     )
                 }
+            }
+            if (showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum) {
+                // Lyrics FX › Visualizer under the lyrics: the cover's
+                // visualizer stays along the bottom as the art goes, and the
+                // lyrics below are drawn over it.
+                LyricsVisualizerBand(
+                    visual = coverVisual,
+                    bins = { spectrumBins },
+                    color = spectrumColor,
+                    glow = dominantFade.value,
+                    waterfall = waterfallSettings,
+                    waveSettings = waveCandySettings,
+                    spectrogram3d = spectrogram3dSettings,
+                    isPlaying = isPlaying,
+                    resetKey = currentTrack?.id,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = lyricsProgress },
+                )
             }
             if (showLyricsHero) {
                 // Fx/spectrum/beat locals are provided once around the

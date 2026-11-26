@@ -1290,6 +1290,8 @@
     <string name="fx_line_align_start">From the left</string>
     <string name="fx_soft_focus">Soft focus</string>
     <string name="fx_soft_focus_summary">The lines away from the one being sung go out of focus and dim, more the further they are. Seen in the player; Android 12 and later.</string>
+    <string name="fx_visualizer_under_lyrics">Visualizer under the lyrics</string>
+    <string name="fx_visualizer_under_lyrics_desc">With a visualizer on the cover (Spectrum, Wave Candy or 3D spectrogram), the Lyrics view keeps it along the bottom and the lyrics sit on top of it. Off, it goes with the cover.</string>
     <string name="fx_font">Font</string>
     <string name="fx_playback_sync">Playback Sync</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth sync delay</string>
@@ -3645,6 +3647,8 @@
     <string name="whats_new_196_store_lists_body">Two more lists beside Popular, New and Mine: the themes you liked, and the ones you saved with the bookmark on a theme’s page, to come back to later. Both follow your account.</string>
     <string name="whats_new_196_preview_lyrics_title">Previews sing whole lyrics</string>
     <string name="whats_new_196_preview_lyrics_body">Player Visuals Studio and a theme’s page in the Theme Store play made-up lyrics through the real lyric view, word by word, so the highlight, god rays and transitions show as in the player. A playing song’s own lyrics still come first in the Studio.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">The visualizer can stay under the lyrics</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Player Visuals Studio › Lyrics › Visualizer under the lyrics: the Lyrics view keeps the cover’s Spectrum, Wave Candy or 3D spectrogram along the bottom, with the lyrics on top.</string>
     <string name="whats_new_196_rays_sung_title">The god rays follow the singing</string>
     <string name="whats_new_196_rays_sung_body">They stay off until the first word is sung, and with word-timed lyrics they go out when the sung word ends instead of resting on it.</string>
     <string name="whats_new_196_letters_title">Lyric letters are no longer cut off</string>

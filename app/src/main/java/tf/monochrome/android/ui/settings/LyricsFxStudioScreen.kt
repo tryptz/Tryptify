@@ -1094,6 +1094,10 @@ fun LyricsFxStudioScreen(
                     description = stringResource(R.string.fx_soft_focus_summary),
                     defaultValue = LyricsFxSettings.DEFAULT.softFocus,
                 ) { viewModel.update { s -> s.copy(softFocus = it) } }
+                FxToggle(
+                    stringResource(R.string.fx_visualizer_under_lyrics), fx.visualizerUnderLyrics,
+                    description = stringResource(R.string.fx_visualizer_under_lyrics_desc),
+                ) { on -> viewModel.update { s -> s.copy(visualizerUnderLyrics = on) } }
             }
 
             item {

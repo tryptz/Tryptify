@@ -279,6 +279,13 @@ data class LyricsFxSettings(
      * blur). Part of the look, like [lineAlign]: a theme sets it.
      */
     val softFocus: Float = 0f,
+    /**
+     * With a visualizer on the cover (Spectrum, Wave Candy or the 3D
+     * spectrogram), the Lyrics view keeps it along the bottom and the lyrics
+     * sit on top of it. Off as shipped: it goes with the cover, as it always
+     * did. Part of the look: a theme sets it.
+     */
+    val visualizerUnderLyrics: Boolean = false,
 ) {
     /** Spring damping ratio for the bass-pulse spring, derived from [bounce]. */
     val springDampingRatio: Float
@@ -369,6 +376,7 @@ data class LyricsFxSettings(
             motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
             lineAlign = if (lineAlign == ALIGN_START) ALIGN_START else ALIGN_CENTER,
             softFocus = softFocus.c(0f, 1f, d.softFocus),
+            visualizerUnderLyrics = visualizerUnderLyrics,
         )
     }
 

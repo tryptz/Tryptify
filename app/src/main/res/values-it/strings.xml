@@ -1331,6 +1331,8 @@
     <string name="fx_line_align_start">Da sinistra</string>
     <string name="fx_soft_focus">Sfocatura morbida</string>
     <string name="fx_soft_focus_summary">Le righe lontane da quella cantata si sfocano e si attenuano, tanto più quanto sono distanti. Si vede nel lettore; Android 12 e versioni successive.</string>
+    <string name="fx_visualizer_under_lyrics">Visualizzatore sotto il testo</string>
+    <string name="fx_visualizer_under_lyrics_desc">Con un visualizzatore sulla copertina (spettro, Wave Candy o spettrogramma 3D), la vista del testo lo tiene in basso e il testo ci sta sopra. Se disattivato, sparisce con la copertina.</string>
     <string name="fx_font">Font</string>
     <string name="fx_playback_sync">Sincronizzazione riproduzione</string>
     <string name="fx_bluetooth_sync_delay">Ritardo sincronizzazione Bluetooth</string>
@@ -3720,6 +3722,8 @@
     <string name="whats_new_196_store_lists_body">Due elenchi in più accanto a Popolari, Nuovi e Miei: i temi che ti piacciono e quelli che salvi con il segnalibro nella pagina di un tema, per ritrovarli più tardi. Entrambi seguono il tuo account.</string>
     <string name="whats_new_196_preview_lyrics_title">Le anteprime cantano testi interi</string>
     <string name="whats_new_196_preview_lyrics_body">Il Visual Studio del lettore e la pagina di un tema nel Theme Store riproducono testi inventati nella vera vista del testo, parola per parola, così evidenziazione, raggi di luce e transizioni appaiono come nel lettore. Nello Studio il testo del brano in riproduzione ha ancora la precedenza.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">Il visualizzatore può restare sotto il testo</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Visual Studio del lettore › Testo › Visualizzatore sotto il testo: la vista del testo tiene in basso lo spettro, Wave Candy o lo spettrogramma 3D della copertina, con il testo sopra.</string>
     <string name="whats_new_196_rays_sung_title">I raggi di luce seguono il canto</string>
     <string name="whats_new_196_rays_sung_body">Restano spenti finché non viene cantata la prima parola, e con testi sincronizzati parola per parola si spengono quando finisce la parola cantata invece di restarci sopra.</string>
     <string name="whats_new_196_letters_title">Le lettere del testo non vengono più tagliate</string>

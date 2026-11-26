@@ -1247,6 +1247,8 @@
     <string name="fx_line_align_start">左から</string>
     <string name="fx_soft_focus">ソフトフォーカス</string>
     <string name="fx_soft_focus_summary">歌われている行から離れた行ほど、ぼやけて暗くなります。プレーヤーで確認できます。Android 12 以降。</string>
+    <string name="fx_visualizer_under_lyrics">歌詞の下にビジュアライザー</string>
+    <string name="fx_visualizer_under_lyrics_desc">カバーにビジュアライザー（スペクトラム、Wave Candy、3D スペクトログラム）があるとき、歌詞ビューでは下部に残り、その上に歌詞が表示されます。オフにするとカバーと一緒に消えます。</string>
     <string name="fx_font">フォント</string>
     <string name="fx_playback_sync">再生の同期</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth 同期の遅延</string>
@@ -3564,6 +3566,8 @@
     <string name="whats_new_196_store_lists_body">「人気」「新着」「自分の」に加えて、2 つのリストを追加：お気に入りにしたテーマと、テーマのページのブックマークで保存してあとで見返せるテーマ。どちらもアカウントに保存されます。</string>
     <string name="whats_new_196_preview_lyrics_title">プレビューが歌詞を丸ごと歌う</string>
     <string name="whats_new_196_preview_lyrics_body">プレーヤービジュアル スタジオとテーマストアのテーマのページで、架空の歌詞が実際の歌詞ビューで単語ごとに流れ、ハイライト、ゴッドレイ、切り替えがプレーヤーと同じように見えます。スタジオでは再生中の曲の歌詞が引き続き優先されます。</string>
+    <string name="whats_new_196_vis_under_lyrics_title">ビジュアライザーを歌詞の下に残せるように</string>
+    <string name="whats_new_196_vis_under_lyrics_body">プレーヤービジュアル スタジオ › 歌詞 › 歌詞の下にビジュアライザー：歌詞ビューでカバーのスペクトラム、Wave Candy、3D スペクトログラムを下部に残し、その上に歌詞を表示します。</string>
     <string name="whats_new_196_rays_sung_title">ゴッドレイが歌に合わせて光る</string>
     <string name="whats_new_196_rays_sung_body">最初の単語が歌われるまではオフのままで、単語ごとにタイミングのある歌詞では、歌っている単語が終わると、そこに残らずに消えます。</string>
     <string name="whats_new_196_letters_title">歌詞の文字が切れなくなりました</string>

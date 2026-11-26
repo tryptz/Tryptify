@@ -1948,6 +1948,20 @@ The tint goes through `customScheme` rather than swapping slots the way
 are hardcoded white, and falls apart across the menus, where the album accent
 lands on surfaces the base theme derived from a different colour entirely.
 
+### The visualizer under the lyrics
+
+**Lyrics FX › Visualizer under the lyrics** (`visualizerUnderLyrics`, off as
+shipped, part of the look): with a visualizer on the cover, the Lyrics view
+keeps it along the bottom of the lyric area while the art goes, and the
+lyrics are drawn over it (`LyricsVisualizerBand`, composed before
+`LyricsHeroBox` in the hero slot, faded in with it). It is the cover's own
+choice of view, which is why `CoverVisual` is held by the player route and
+handed down to the cover: kept inside the cover, it was gone with the cover
+in the Lyrics view (and reset to Spectrum after every trip there and back).
+Each view takes the share of the height it takes on the cover (Wave Candy a
+quarter, Spectrum 35%, the 3D spectrogram 40%), at the bottom. Off, or with
+the cover's spectrum switched off, the Lyrics view is as it was.
+
 ### Previews sing made-up lyrics
 
 **The Studio's preview and a theme's Lyrics face run the player's own lyric

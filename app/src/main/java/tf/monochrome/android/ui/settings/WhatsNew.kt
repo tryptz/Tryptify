@@ -246,6 +246,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "The visualizer can stay under the lyrics",
+                    body = "Player Visuals Studio › Lyrics › Visualizer under the lyrics: the Lyrics view keeps the cover’s Spectrum, Wave Candy or 3D spectrogram along the bottom, with the lyrics on top.",
+                    titleRes = R.string.whats_new_196_vis_under_lyrics_title,
+                    bodyRes = R.string.whats_new_196_vis_under_lyrics_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = THEME_STORE,
                     title = "Liked and Saved in the Theme Store",
                     body = "Two more lists beside Popular, New and Mine: the themes you liked, and the ones you saved with the bookmark on a theme’s page, to come back to later. Both follow your account.",

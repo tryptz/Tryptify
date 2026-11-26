@@ -224,6 +224,23 @@ class LyricSungTest {
     }
 
     @Test
+    fun `the visualizer under the lyrics is off as shipped and travels with the look`() {
+        assertFalse(LyricsFxSettings.DEFAULT.visualizerUnderLyrics)
+        LyricsFxSettings.PRESETS.forEach { (name, preset) -> assertFalse(name, preset.visualizerUnderLyrics) }
+        val on = LyricsFxSettings.DEFAULT.copy(visualizerUnderLyrics = true)
+        assertTrue(on.clamped().visualizerUnderLyrics)
+        val json = Json { ignoreUnknownKeys = true }
+        assertTrue(json.decodeFromString<LyricsFxSettings>(json.encodeToString(on)).visualizerUnderLyrics)
+        assertFalse(json.decodeFromString<LyricsFxSettings>("{}").visualizerUnderLyrics)
+        // Part of the look: a share code and a published theme carry it, and a
+        // theme applied over it sets it as the theme has it.
+        assertTrue(LyricsFxPreset.decode(LyricsFxPreset.encode(LyricsFxPreset("Under", on)))!!.settings.visualizerUnderLyrics)
+        val pack = ThemePackCodec.decode(ThemePackCodec.encode(ThemePackCodec.forSharing(ThemePack(name = "Under", lyrics = on))))!!
+        assertTrue(pack.lyrics!!.visualizerUnderLyrics)
+        assertFalse(LyricsFxSettings.DEFAULT.withPersonalFrom(on).visualizerUnderLyrics)
+    }
+
+    @Test
     fun `each word and each line is a place of its own`() {
         val places = listOf(
             LyricSung.NOT_STARTED,

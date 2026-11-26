@@ -1247,6 +1247,8 @@
     <string name="fx_line_align_start">靠左</string>
     <string name="fx_soft_focus">柔焦</string>
     <string name="fx_soft_focus_summary">离正在演唱的那一行越远的歌词越模糊、越暗淡。在播放器中可见；需要 Android 12 及以上。</string>
+    <string name="fx_visualizer_under_lyrics">歌词下方的可视化效果</string>
+    <string name="fx_visualizer_under_lyrics_desc">封面上有可视化效果（频谱、Wave Candy 或 3D 频谱图）时，歌词视图会将其保留在底部，歌词显示在其上方。关闭后，它会随封面一起隐藏。</string>
     <string name="fx_font">字体</string>
     <string name="fx_playback_sync">播放同步</string>
     <string name="fx_bluetooth_sync_delay">蓝牙同步延迟</string>
@@ -3564,6 +3566,8 @@
     <string name="whats_new_196_store_lists_body">在“热门”“最新”和“我的”旁边新增两个列表：你喜欢的主题，以及你在主题页面上用书签保存、方便以后再看的主题。两者都随你的账户同步。</string>
     <string name="whats_new_196_preview_lyrics_title">预览会唱完整的歌词</string>
     <string name="whats_new_196_preview_lyrics_body">播放器视觉工作室和主题商店中的主题页面会用真实的歌词视图播放虚构的歌词，逐字，让高亮、体积光和过渡效果与播放器中一样呈现。在工作室中，正在播放的歌曲自身的歌词仍然优先。</string>
+    <string name="whats_new_196_vis_under_lyrics_title">可视化效果可以留在歌词下方</string>
+    <string name="whats_new_196_vis_under_lyrics_body">播放器视觉工作室 › 歌词 › 歌词下方的可视化效果：歌词视图会把封面的频谱、Wave Candy 或 3D 频谱图保留在底部，歌词显示在上方。</string>
     <string name="whats_new_196_rays_sung_title">体积光跟随演唱</string>
     <string name="whats_new_196_rays_sung_body">在第一个字词唱出之前保持关闭；对于逐字计时的歌词，正在演唱的字词结束时随之熄灭，而不是一直停留。</string>
     <string name="whats_new_196_letters_title">歌词字母不再被截断</string>

@@ -1289,6 +1289,8 @@
     <string name="fx_line_align_start">Soldan</string>
     <string name="fx_soft_focus">Yumuşak odak</string>
     <string name="fx_soft_focus_summary">Söylenen satırdan uzaktaki satırlar bulanıklaşır ve soluklaşır; uzaklaştıkça daha çok. Oynatıcıda görülür; Android 12 ve sonrası.</string>
+    <string name="fx_visualizer_under_lyrics">Sözlerin altında görselleştirici</string>
+    <string name="fx_visualizer_under_lyrics_desc">Kapakta bir görselleştirici varken (spektrum, Wave Candy veya 3D spektrogram), söz görünümü onu altta tutar ve sözler üstünde durur. Kapalıyken kapakla birlikte gider.</string>
     <string name="fx_font">Yazı tipi</string>
     <string name="fx_playback_sync">Çalma senkronizasyonu</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth senkronizasyon gecikmesi</string>
@@ -3642,6 +3644,8 @@
     <string name="whats_new_196_store_lists_body">Popüler, Yeni ve Benimkiler’in yanında iki liste daha: beğendiğiniz temalar ve daha sonra dönmek için bir temanın sayfasındaki yer imiyle kaydettikleriniz. İkisi de hesabınıza bağlıdır.</string>
     <string name="whats_new_196_preview_lyrics_title">Önizlemeler sözlerin tamamını söylüyor</string>
     <string name="whats_new_196_preview_lyrics_body">Oynatıcı Görsel Stüdyosu ve Tema Mağazası’ndaki bir temanın sayfası, uydurma sözleri gerçek söz görünümünde kelime kelime oynatır; vurgu, ışık huzmeleri ve geçişler oynatıcıdaki gibi görünür. Stüdyo’da çalan şarkının kendi sözleri hâlâ önceliklidir.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">Görselleştirici sözlerin altında kalabilir</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Sözlerin altında görselleştirici: söz görünümü kapağın spektrumunu, Wave Candy’sini veya 3D spektrogramını altta tutar, sözler üstte.</string>
     <string name="whats_new_196_rays_sung_title">Işık huzmeleri şarkıyı izler</string>
     <string name="whats_new_196_rays_sung_body">İlk kelime söylenene kadar kapalı kalır; kelime zamanlamalı sözlerde söylenen kelime bitince üzerinde kalmak yerine söner.</string>
     <string name="whats_new_196_letters_title">Söz harfleri artık kesilmiyor</string>

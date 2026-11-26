@@ -1331,6 +1331,8 @@
     <string name="fx_line_align_start">Desde la izquierda</string>
     <string name="fx_soft_focus">Enfoque suave</string>
     <string name="fx_soft_focus_summary">Las líneas alejadas de la que se canta se desenfocan y se atenúan, más cuanto más lejos están. Se ve en el reproductor; Android 12 y posteriores.</string>
+    <string name="fx_visualizer_under_lyrics">Visualizador bajo la letra</string>
+    <string name="fx_visualizer_under_lyrics_desc">Con un visualizador en la portada (espectro, Wave Candy o espectrograma 3D), la vista de letra lo mantiene abajo y la letra se muestra encima. Desactivado, se va con la portada.</string>
     <string name="fx_font">Fuente</string>
     <string name="fx_playback_sync">Sincronización de la reproducción</string>
     <string name="fx_bluetooth_sync_delay">Retardo de sincronización Bluetooth</string>
@@ -3720,6 +3722,8 @@
     <string name="whats_new_196_store_lists_body">Dos listas más junto a Populares, Nuevos y Míos: los temas que te gustan y los que guardas con el marcador en la página de un tema, para volver a ellos más tarde. Ambas van con tu cuenta.</string>
     <string name="whats_new_196_preview_lyrics_title">Las vistas previas cantan letras completas</string>
     <string name="whats_new_196_preview_lyrics_body">El Estudio visual del reproductor y la página de un tema en la tienda reproducen letras inventadas en la vista de letras real, palabra a palabra, así que el resaltado, los rayos volumétricos y las transiciones se ven como en el reproductor. En el Estudio, la letra de la canción que suena sigue teniendo prioridad.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">El visualizador puede quedarse bajo la letra</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Estudio visual del reproductor › Letra › Visualizador bajo la letra: la vista de letra mantiene abajo el espectro, Wave Candy o el espectrograma 3D de la portada, con la letra encima.</string>
     <string name="whats_new_196_rays_sung_title">Los rayos volumétricos siguen el canto</string>
     <string name="whats_new_196_rays_sung_body">Permanecen apagados hasta que se canta la primera palabra, y con letras sincronizadas por palabra se apagan cuando termina la palabra cantada en vez de quedarse en ella.</string>
     <string name="whats_new_196_letters_title">Las letras ya no se cortan</string>

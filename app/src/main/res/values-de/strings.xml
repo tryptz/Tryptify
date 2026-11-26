@@ -1289,6 +1289,8 @@
     <string name="fx_line_align_start">Von links</string>
     <string name="fx_soft_focus">Weichzeichner</string>
     <string name="fx_soft_focus_summary">Die Zeilen abseits der gesungenen werden unscharf und blasser, je weiter weg, desto mehr. Im Player zu sehen; ab Android 12.</string>
+    <string name="fx_visualizer_under_lyrics">Visualizer unter dem Songtext</string>
+    <string name="fx_visualizer_under_lyrics_desc">Mit einem Visualizer auf dem Cover (Spektrum, Wave Candy oder 3D-Spektrogramm) behält die Songtextansicht ihn unten, und der Songtext liegt darüber. Aus, verschwindet er mit dem Cover.</string>
     <string name="fx_font">Schrift</string>
     <string name="fx_playback_sync">Wiedergabe-Synchronisierung</string>
     <string name="fx_bluetooth_sync_delay">Bluetooth-Synchronverzögerung</string>
@@ -3642,6 +3644,8 @@
     <string name="whats_new_196_store_lists_body">Zwei weitere Listen neben „Beliebt“, „Neu“ und „Meine“: die Themes, die dir gefallen, und die, die du mit dem Lesezeichen auf der Seite eines Themes speicherst, um später zu ihnen zurückzukehren. Beide gehören zu deinem Konto.</string>
     <string name="whats_new_196_preview_lyrics_title">Vorschauen singen ganze Songtexte</string>
     <string name="whats_new_196_preview_lyrics_body">Das Player-Visuals-Studio und die Seite eines Themes im Theme Store spielen ausgedachte Songtexte in der echten Songtextansicht ab, Wort für Wort, sodass Hervorhebung, Lichtstrahlen und Übergänge wie im Player zu sehen sind. Im Studio hat der Songtext des laufenden Songs weiterhin Vorrang.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">Der Visualizer kann unter dem Songtext bleiben</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Player-Visuals-Studio › Songtext › Visualizer unter dem Songtext: Die Songtextansicht behält Spektrum, Wave Candy oder 3D-Spektrogramm des Covers unten, mit dem Songtext darüber.</string>
     <string name="whats_new_196_rays_sung_title">Die Lichtstrahlen folgen dem Gesang</string>
     <string name="whats_new_196_rays_sung_body">Sie bleiben aus, bis das erste Wort gesungen wird, und bei wortgenau getimten Songtexten gehen sie aus, wenn das gesungene Wort endet, statt darauf stehen zu bleiben.</string>
     <string name="whats_new_196_letters_title">Buchstaben im Songtext werden nicht mehr abgeschnitten</string>

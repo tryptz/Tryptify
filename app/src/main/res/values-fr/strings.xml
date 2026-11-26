@@ -1331,6 +1331,8 @@
     <string name="fx_line_align_start">À gauche</string>
     <string name="fx_soft_focus">Flou doux</string>
     <string name="fx_soft_focus_summary">Les lignes éloignées de celle qui est chantée deviennent floues et s’estompent, d’autant plus qu’elles sont loin. Visible dans le lecteur ; Android 12 et versions ultérieures.</string>
+    <string name="fx_visualizer_under_lyrics">Visualiseur sous les paroles</string>
+    <string name="fx_visualizer_under_lyrics_desc">Avec un visualiseur sur la pochette (spectre, Wave Candy ou spectrogramme 3D), la vue des paroles le garde en bas et les paroles s’affichent par-dessus. Désactivé, il part avec la pochette.</string>
     <string name="fx_font">Police</string>
     <string name="fx_playback_sync">Synchronisation de la lecture</string>
     <string name="fx_bluetooth_sync_delay">Retard de synchro Bluetooth</string>
@@ -3720,6 +3722,8 @@
     <string name="whats_new_196_store_lists_body">Deux listes de plus à côté de Populaires, Nouveautés et Les miens : les thèmes que vous aimez, et ceux que vous enregistrez avec le signet sur la page d’un thème, pour y revenir plus tard. Les deux suivent votre compte.</string>
     <string name="whats_new_196_preview_lyrics_title">Les aperçus chantent des paroles entières</string>
     <string name="whats_new_196_preview_lyrics_body">Le Studio visuel du lecteur et la page d’un thème dans la boutique jouent des paroles inventées dans la vraie vue des paroles, mot après mot : la mise en évidence, les rayons divins et les transitions s’affichent comme dans le lecteur. Dans le Studio, les paroles du morceau en cours passent toujours en premier.</string>
+    <string name="whats_new_196_vis_under_lyrics_title">Le visualiseur peut rester sous les paroles</string>
+    <string name="whats_new_196_vis_under_lyrics_body">Studio visuel du lecteur › Paroles › Visualiseur sous les paroles : la vue des paroles garde en bas le spectre, Wave Candy ou le spectrogramme 3D de la pochette, avec les paroles par-dessus.</string>
     <string name="whats_new_196_rays_sung_title">Les rayons divins suivent le chant</string>
     <string name="whats_new_196_rays_sung_body">Ils restent éteints jusqu’au premier mot chanté, et avec des paroles synchronisées au mot ils s’éteignent quand le mot chanté se termine au lieu de s’y attarder.</string>
     <string name="whats_new_196_letters_title">Les lettres des paroles ne sont plus coupées</string>
