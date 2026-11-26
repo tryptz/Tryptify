@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -81,13 +83,16 @@ class ConnectViewModel @Inject constructor(private val connect: ConnectControlle
     fun playOn(id: String) = connect.playOn(id)
     fun remote(action: String) = connect.remote(action)
     fun seek(seconds: Double) = connect.remote("seek", seconds)
+
+    /** Sets the volume of the device playing elsewhere, 0 to 1. */
+    fun volume(value: Double) = connect.remoteVolume(value)
     fun serverNowMs(): Long = connect.serverNowMs()
 }
 
 /**
  * Tryptify Connect in the player: what plays on another device, with its
- * controls and Play here, and the listener's devices, each a tap to move the
- * music there. A pane of the player's own glass through its `overlay` slot,
+ * controls, its volume and Play here, and the listener's devices, each a tap
+ * to move the music there. A pane of the player's own glass through its `overlay` slot,
  * like the Speed panel and the audio tools (never a dialog or a
  * ModalBottomSheet: see Glass in docs/ui-invariants.md).
  */
@@ -161,7 +166,7 @@ internal fun BoxScope.ConnectPanel(
                         Spacer(Modifier.height(10.dp))
                         Text(stringResource(R.string.tryptify_connect), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
-                    ConnectContent(state, viewModel.myId, viewModel::playOn, viewModel::remote, viewModel::seek, viewModel::serverNowMs)
+                    ConnectContent(state, viewModel.myId, viewModel::playOn, viewModel::remote, viewModel::seek, viewModel::volume, viewModel::serverNowMs)
                 }
             }
         }
@@ -175,6 +180,7 @@ private fun ConnectContent(
     onPlayOn: (String) -> Unit,
     onRemote: (String) -> Unit,
     onSeek: (Double) -> Unit,
+    onVolume: (Double) -> Unit,
     serverNowMs: () -> Long,
 ) {
     val dim = LocalContentColor.current.copy(alpha = 0.8f)
@@ -224,6 +230,9 @@ private fun ConnectContent(
             Spacer(Modifier.weight(1f))
             Button(onClick = { onPlayOn(myId) }) { Text(stringResource(R.string.connect_play_here)) }
         }
+        // That device's volume, where it says one (an app before 1.9.6, or a
+        // device whose volume is fixed, says none) and is there to set it.
+        elsewhere.volume?.takeIf { online }?.let { RemoteVolume(it, onVolume) }
     }
     val devices = remember(state.devices, myId) { state.devices.sortedWith(compareBy<ConnectDevice> { it.id != myId }.thenBy { it.name }) }
     Column {
@@ -306,5 +315,42 @@ private fun RemoteTimeline(
             Spacer(Modifier.weight(1f))
             Text(remember(duration) { clockOf(duration) }, style = MaterialTheme.typography.labelSmall, color = dim)
         }
+    }
+}
+
+/**
+ * The other device's volume: where that device says it is, and a drag to set
+ * it there. Every step of the drag is sent (the controller keeps to ten a
+ * second), so the volume moves with the finger. Let go, the thumb stays put
+ * for a moment and then shows that device's own word again: a phone's volume
+ * has steps, and lands on the nearest.
+ *
+ * The phone's volume keys are not this: they stay the phone's own.
+ */
+@Composable
+private fun RemoteVolume(volume: Double, onVolume: (Double) -> Unit) {
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    var held by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(held) { if (held != null) { kotlinx.coroutines.delay(1200); held = null } }
+    val shown = (dragging ?: held ?: volume.toFloat()).coerceIn(0f, 1f)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (shown > 0f) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+            contentDescription = stringResource(R.string.dac_volume),
+            tint = LocalContentColor.current,
+        )
+        Spacer(Modifier.width(10.dp))
+        androidx.compose.material3.Slider(
+            value = shown,
+            onValueChange = {
+                dragging = it
+                onVolume(it.toDouble())
+            },
+            onValueChangeFinished = {
+                held = dragging
+                dragging = null
+            },
+            modifier = Modifier.weight(1f),
+        )
     }
 }

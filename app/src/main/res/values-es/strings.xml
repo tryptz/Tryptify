@@ -3377,6 +3377,7 @@
     <string name="connect_here_from">Suena aquí, desde %1$s</string>
     <string name="connect_made_way">%1$s empezó a reproducir, así que este teléfono se pausó</string>
     <string name="connect_cannot_play">“%1$s” no se puede reproducir en este teléfono</string>
+    <string name="connect_like_there">Esta canción es un archivo de %1$s. Dale Me gusta allí.</string>
     <string name="connect_not_connected">Tryptify Connect no está conectado</string>
     <string name="connect_signed_out">Inicia sesión para ver tus otros dispositivos y pasar la música entre ellos.</string>
     <string name="connect_connecting">Conectando…</string>
@@ -3726,6 +3727,8 @@
     <string name="whats_new_196_crossfeed_room_body">Crossfeed ahora es Desactivado, Crossfeed o Sala: la Binaural Room del mezclador por sí sola, con su propia HRTF, un LFE que deja los graves fuera de la sala y una vista 2D o 3D. Mantén pulsado Crossfeed en Herramientas de audio del reproductor. Se conserva al reiniciar la app.</string>
     <string name="whats_new_196_room_presets_title">Diez presets para la Binaural Room</string>
     <string name="whats_new_196_room_presets_body">Diez presets para la Binaural Room, en el mezclador y en la página de Crossfeed: seis configuraciones reales, de los monitores de estudio a la sala de conciertos, que resuenan como esas salas, y cuatro que amplían el espacio. Todos suenan al mismo volumen.</string>
+    <string name="whats_new_196_connect_follow_title">El reproductor sigue a tu otro dispositivo</string>
+    <string name="whats_new_196_connect_follow_body">Cuando este teléfono no reproduce nada y otro de tus dispositivos sí, el reproductor muestra esa canción: portada, letra y tiempo. Sus controles manejan ese dispositivo, y el panel de Tryptify Connect ajusta su volumen.</string>
     <string name="atmos_room_builtin">Sala integrada</string>
     <string name="atmos_room_custom">Mi sala</string>
     <string name="atmos_rooms">Salas</string>

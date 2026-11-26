@@ -99,6 +99,7 @@ class PlayerViewModel @Inject constructor(
     private val sharedLinkResolver: tf.monochrome.android.share.SharedLinkResolver,
     private val shareLinks: tf.monochrome.android.share.ShareLinks,
     private val preparingPlay: tf.monochrome.android.player.PreparingPlay,
+    private val connect: tf.monochrome.android.connect.ConnectController,
 ) : ViewModel() {
 
     /**
@@ -109,8 +110,43 @@ class PlayerViewModel @Inject constructor(
     fun acquireSpectrum() = spectrumAnalyzer.acquire()
     fun releaseSpectrum() = spectrumAnalyzer.release()
 
+    // --- Another device's song, followed (Tryptify Connect) ---
+
+    /**
+     * This phone was asked to play a song of its own and it has not started
+     * yet. The player shows that song at once, not the other device's while
+     * it loads; playing ends the follow by itself.
+     */
+    private val startingHere = MutableStateFlow(false)
+    private var startingHereJob: Job? = null
+
+    /**
+     * Another device's song, shown in place of this phone's own while this
+     * phone plays nothing (the rule is `ConnectProtocol.follows`). While it
+     * is set, everything the player shows is that device's: [currentTrack],
+     * [isPlaying], [positionMs] and [durationMs], and so the lyrics, the
+     * like and the cover with them; and every control steers that device
+     * ([togglePlayPause], the skips, [seekTo]). This phone's own queue and
+     * player are untouched underneath, and come back when the follow ends.
+     */
+    val followed: StateFlow<tf.monochrome.android.connect.ConnectController.Followed?> =
+        combine(connect.followed, startingHere) { f, starting -> f.takeIf { !starting } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, connect.followed.value)
+
     // --- State from QueueManager (runs in-process, no IPC needed) ---
-    val currentTrack: StateFlow<Track?> = queueManager.currentTrack
+    /** The song the player shows: this phone's own, or the one [followed]. Playing reads `queueManager.currentTrack`. */
+    val currentTrack: StateFlow<Track?> = combine(queueManager.currentTrack, followed) { own, f -> f?.track ?: own }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, connect.followed.value?.track ?: queueManager.currentTrack.value)
+
+    /**
+     * This phone's own song, whatever is followed. For the screens that work
+     * on the phone's own audio and must never be handed another device's
+     * song or steer it: the lyrics editor, which times the phone's song
+     * against the phone's player, and the Discover deck's previews. With
+     * [ownIsPlaying], [ownPositionMs], [ownDurationMs], [togglePlayPauseHere]
+     * and [seekHere].
+     */
+    val ownCurrentTrack: StateFlow<Track?> = queueManager.currentTrack
 
     // The full UnifiedTrack for the current track, when known (carries source,
     // codec/sample-rate/bit-depth, and per-artist credits the legacy Track drops).
@@ -126,7 +162,13 @@ class PlayerViewModel @Inject constructor(
 
     // --- Player state (observed from MediaController) ---
     private val _isPlaying = MutableStateFlow(false)
-    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+
+    /** Whether the song shown plays: on the device [followed], or here. */
+    val isPlaying: StateFlow<Boolean> = combine(_isPlaying, followed) { own, f -> f?.now?.playing ?: own }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, connect.followed.value?.now?.playing ?: false)
+
+    /** Whether this phone's own player plays ([ownCurrentTrack]). */
+    val ownIsPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     // --- Sleep timer ---
     // Owned here (this ViewModel is created at the nav-host level and shared,
@@ -162,7 +204,7 @@ class PlayerViewModel @Inject constructor(
                 _sleepTimerRemainingMs.value = left
                 delay(minOf(1_000L, left))
             }
-            if (_isPlaying.value) togglePlayPause()
+            if (_isPlaying.value) toggleHere()
             _sleepTimerMinutes.value = 0
             _sleepTimerRemainingMs.value = 0L
             sleepTimerJob = null
@@ -170,7 +212,38 @@ class PlayerViewModel @Inject constructor(
     }
 
     private val _positionMs = MutableStateFlow(0L)
-    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    /** Where this phone's own player is ([ownCurrentTrack]). */
+    val ownPositionMs: StateFlow<Long> = _positionMs.asStateFlow()
+
+    /**
+     * A seek just sent to the device followed: shown until that device says
+     * where it is now, or [FOLLOW_SEEK_HOLD_MS] pass, so the scrubber does not
+     * jump back to the old second while the seek is on its way.
+     */
+    private class FollowSeek(val device: String, val positionMs: Long, val sentAtServerMs: Long, val untilMs: Long)
+
+    @Volatile private var followSeek: FollowSeek? = null
+
+    /** Turned over by the followed song's clock: its position is worked out each time, never kept. */
+    private val followTick = MutableStateFlow(0L)
+
+    private fun followSeekFor(f: tf.monochrome.android.connect.ConnectController.Followed): FollowSeek? =
+        followSeek?.takeIf {
+            it.device == f.now.device && f.now.at <= it.sentAtServerMs && android.os.SystemClock.elapsedRealtime() < it.untilMs
+        }
+
+    /** Where the followed song has got to: from what its device last said and the server's clock. */
+    private fun followedPositionMs(f: tf.monochrome.android.connect.ConnectController.Followed): Long =
+        followSeekFor(f)?.positionMs
+            ?: (tf.monochrome.android.connect.ConnectProtocol.positionAt(f.now, connect.serverNowMs()) * 1000).toLong()
+
+    private fun followedDurationMs(f: tf.monochrome.android.connect.ConnectController.Followed): Long =
+        ((f.now.track?.duration?.takeIf { it > 0 } ?: f.track.duration.toDouble()) * 1000).toLong().coerceAtLeast(0)
+
+    /** Where the song shown has got to: on the device [followed], or here. */
+    val positionMs: StateFlow<Long> = combine(_positionMs, followed, followTick) { own, f, _ -> if (f != null) followedPositionMs(f) else own }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
     /**
      * The app's own lifecycle, started while any of its screens is. The
@@ -180,7 +253,11 @@ class PlayerViewModel @Inject constructor(
     private val appLifecycle: Lifecycle = ProcessLifecycleOwner.get().lifecycle
 
     private val _durationMs = MutableStateFlow(0L)
-    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    /** How long this phone's own song is ([ownCurrentTrack]). */
+    val ownDurationMs: StateFlow<Long> = _durationMs.asStateFlow()
+    val durationMs: StateFlow<Long> = combine(_durationMs, followed) { own, f -> if (f != null) followedDurationMs(f) else own }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0L)
 
     // No `progress` flow here on purpose. There was one, and it was a getter
     // that allocated a fresh MutableStateFlow on every read, seeded from the
@@ -588,6 +665,7 @@ class PlayerViewModel @Inject constructor(
     init {
         connectToService()
         startPositionPolling()
+        followPositionElsewhere()
         // Back from the background, read the position once. The poll was
         // stopped, and a pause or a seek from the notification moved it without
         // anyone here hearing of it: the bar would come back where it was left.
@@ -618,7 +696,8 @@ class PlayerViewModel @Inject constructor(
                 if (currentTrack.value?.id == trackId) _currentLyrics.value = lyrics
             }
         }
-        viewModelScope.launch { _positionMs.collect { nowPlayingLyrics.setPosition(it) } }
+        // The position shown: another device's while it is followed.
+        viewModelScope.launch { positionMs.collect { nowPlayingLyrics.setPosition(it) } }
         // The sampler records where in a track a capture came from, and cannot
         // reach a MediaController from its own view model.
         viewModelScope.launch { _positionMs.collect { playbackPositions.update(it) } }
@@ -682,7 +761,10 @@ class PlayerViewModel @Inject constructor(
                                 // Local files and collections too: their ids
                                 // are hashes, not TIDAL ids (LyricsLookup).
                                 val unified = unifiedTrackRegistry[track.id]
+                                // So is the number made up for a song followed
+                                // on another device that this phone cannot play.
                                 val skipTidal = LyricsLookup.skipsTidalById(unified?.sourceType) ||
+                                    followed.value?.takeIf { it.track.id == track.id }?.playableHere == false ||
                                     track.deezerId != null ||
                                     qobuzIdRegistry.isQobuzTrack(track.id) ||
                                     qobuzIdRegistry.isDeezerTrack(track.id)
@@ -720,6 +802,12 @@ class PlayerViewModel @Inject constructor(
 
     fun toggleLikeCurrentTrack() {
         val track = currentTrack.value ?: return
+        // A file on the device followed: its number here is made up, and the
+        // like would keep a song this phone can never find again.
+        followed.value?.takeIf { it.track.id == track.id && !it.playableHere }?.let { f ->
+            android.widget.Toast.makeText(context, context.getString(R.string.connect_like_there, f.deviceName), android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         // Favouriting a station would write a row keyed by a synthetic hash and,
         // with auto-download on, hand that same hash to the downloader — which
         // has nothing to fetch. Stations are favourited on the globe instead,
@@ -802,7 +890,8 @@ class PlayerViewModel @Inject constructor(
      * it was picked from (Qobuz for a Deezer pick, the device for a download),
      * else null. Shown beside the source tag on the player.
      */
-    val playedFrom: StateFlow<SourceType?> = _playedFrom.asStateFlow()
+    val playedFrom: StateFlow<SourceType?> = combine(_playedFrom, followed) { own, f -> own.takeIf { f == null } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private fun syncPlayedFrom() {
         val mark = tf.monochrome.android.player.PlayedFrom.of(mediaController?.currentMediaItem?.mediaMetadata)
@@ -824,6 +913,68 @@ class PlayerViewModel @Inject constructor(
             _durationMs.value = mc.duration.coerceAtLeast(0)
             _positionMs.value = mc.currentPosition.coerceAtLeast(0)
             _liveSpeed.value = mc.playbackParameters.speed
+        }
+    }
+
+    /**
+     * Keeps the followed song's position moving. Nothing is sent or asked:
+     * it is worked out from what that device last said and this phone's
+     * reckoning of the server's clock, as often as the phone's own position
+     * is read (four times a second, sooner when a lyric word is due), and
+     * only while a screen is up and that device plays.
+     */
+    private fun followPositionElsewhere() {
+        viewModelScope.launch {
+            followed.collectLatest { f ->
+                if (f == null) return@collectLatest
+                val endMs = followedDurationMs(f).takeIf { it > 0 }
+                while (isActive) {
+                    if (appScreensStopped(appLifecycle.currentState)) {
+                        appLifecycle.currentStateFlow.first { !appScreensStopped(it) }
+                        continue
+                    }
+                    followTick.value++
+                    val held = followSeekFor(f)
+                    if (held != null) {
+                        // A seek is on its way: look again when it has had its time.
+                        delay((held.untilMs - android.os.SystemClock.elapsedRealtime()).coerceIn(20L, 250L))
+                        continue
+                    }
+                    val position = followedPositionMs(f)
+                    // Paused, or at the end of a song nobody moved on from: nothing more to follow.
+                    if (!f.now.playing || (endMs != null && position >= endMs)) break
+                    delay(
+                        LyricClock.nextPollDelayMs(
+                            positionMs = position,
+                            speed = f.now.rate.toFloat(),
+                            delayMs = 0f, // that device's own output delay is its own business
+                            lyrics = _currentLyrics.value,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /** Steers the device followed, when there is one: the player's controls are that device's then. */
+    private fun steersFollowed(action: String, value: Double? = null): Boolean {
+        followed.value ?: return false
+        connect.remote(action, value)
+        return true
+    }
+
+    /**
+     * This phone is about to play a song of its own while it follows another
+     * device: the player shows the phone's song from now, not when its audio
+     * starts seconds later. If it never starts, the other device's comes back.
+     */
+    private fun showOwnWhileStarting() {
+        if (connect.followed.value == null) return
+        startingHere.value = true
+        startingHereJob?.cancel()
+        startingHereJob = viewModelScope.launch {
+            withTimeoutOrNull(STARTING_HERE_MS) { connect.followed.first { it == null } }
+            startingHere.value = false
         }
     }
 
@@ -1204,6 +1355,17 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun togglePlayPause() {
+        followed.value?.let { f ->
+            connect.remote(if (f.now.playing) "pause" else "play")
+            return
+        }
+        toggleHere()
+    }
+
+    /** Play or pause this phone's own player, whatever is followed ([ownCurrentTrack]). */
+    fun togglePlayPauseHere() = toggleHere()
+
+    private fun toggleHere() {
         mediaController?.let { mc ->
             when {
                 mc.isPlaying -> mc.pause()
@@ -1218,6 +1380,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun skipToNext() {
+        if (steersFollowed("next")) return
         val next = queueManager.next()
         if (next != null) {
             resolveAndPlay()
@@ -1234,6 +1397,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun skipToPrevious() {
+        if (steersFollowed("prev")) return
         val position = mediaController?.currentPosition ?: 0
         if (position > 3000) {
             mediaController?.seekTo(0)
@@ -1265,16 +1429,36 @@ class PlayerViewModel @Inject constructor(
      * song's previous is the last.
      */
     fun skipToPreviousTrack() {
+        if (steersFollowed("prev")) return
         if (queueManager.previous() != null) resolveAndPlay()
     }
 
     fun seekTo(positionMs: Long) {
+        followed.value?.let { f ->
+            connect.remote("seek", positionMs / 1000.0)
+            followSeek = FollowSeek(
+                f.now.device, positionMs, connect.serverNowMs(),
+                android.os.SystemClock.elapsedRealtime() + FOLLOW_SEEK_HOLD_MS,
+            )
+            followTick.value++
+            // That device paused never says more than its answer: let go of the hold by the clock too.
+            viewModelScope.launch {
+                delay(FOLLOW_SEEK_HOLD_MS + 20)
+                followTick.value++
+            }
+            return
+        }
+        seekHere(positionMs)
+    }
+
+    /** Seeks this phone's own player, whatever is followed ([ownCurrentTrack]). */
+    fun seekHere(positionMs: Long) {
         // A live stream has no position to seek to: ExoPlayer reports no
         // duration, every fraction resolves to zero, and seekTo(0) would drop
         // the connection and reconnect at the live edge — so the scrubber that
         // looks like it rewinds would actually restart the stream. Every seek
         // verb the UI offers funnels through here, so one guard covers them all.
-        if (isLiveStreamTrack(currentTrack.value)) return
+        if (isLiveStreamTrack(queueManager.currentTrack.value)) return
         // Scrubbing before play on a restored session: the player holds no
         // item, so the seek is dropped and play starts from the stale position.
         // Move where it will start instead of seeking something unloaded.
@@ -1287,13 +1471,13 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun seekToFraction(fraction: Float) {
-        val pos = (fraction * _durationMs.value).toLong()
+        val pos = (fraction * durationMs.value).toLong()
         seekTo(pos)
     }
 
     /** Seek relative to the current position, clamped to the track bounds. */
     fun seekBy(deltaMs: Long) {
-        val target = (_positionMs.value + deltaMs).coerceIn(0L, _durationMs.value.coerceAtLeast(0L))
+        val target = (positionMs.value + deltaMs).coerceIn(0L, durationMs.value.coerceAtLeast(0L))
         seekTo(target)
     }
 
@@ -1405,6 +1589,7 @@ class PlayerViewModel @Inject constructor(
 
     private fun resolveAndPlay(startPositionMs: Long = 0L) {
         val track = queueManager.currentTrack.value ?: return
+        showOwnWhileStarting()
         // Consumed on first use and keyed on the track, so replaying it later
         // starts at the beginning and a skipped-past track never hands its
         // offset to a different one.
@@ -1789,6 +1974,8 @@ class PlayerViewModel @Inject constructor(
      */
     private fun previewStartFor(trackId: Long): Int? {
         if (currentTrack.value?.id != trackId) return null
+        // Followed on another device: where it is playing there.
+        if (followed.value != null) return tf.monochrome.android.share.ShareLinks.previewStart(positionMs.value)
         return tf.monochrome.android.share.ShareLinks.previewStart(mediaController?.currentPosition ?: positionMs.value)
     }
 
@@ -1869,6 +2056,12 @@ class PlayerViewModel @Inject constructor(
         // service that never comes up surfaces as a playback error rather than
         // a coroutine parked forever.
         const val CONTROLLER_CONNECT_TIMEOUT_MS = 5_000L
+
+        /** How long a seek sent to the device followed is shown before that device's own word is. */
+        const val FOLLOW_SEEK_HOLD_MS = 3_000L
+
+        /** How long the phone's own song is shown, asked for and not yet playing, before the followed one comes back. */
+        const val STARTING_HERE_MS = 20_000L
     }
 }
 

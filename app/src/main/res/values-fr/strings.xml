@@ -3377,6 +3377,7 @@
     <string name="connect_here_from">Lecture ici, reprise de %1$s</string>
     <string name="connect_made_way">%1$s a commencé la lecture, ce téléphone s’est mis en pause</string>
     <string name="connect_cannot_play">« %1$s » ne peut pas être lu sur ce téléphone</string>
+    <string name="connect_like_there">Ce morceau est un fichier sur %1$s. Aimez-le là-bas.</string>
     <string name="connect_not_connected">Tryptify Connect n’est pas connecté</string>
     <string name="connect_signed_out">Connectez-vous pour voir vos autres appareils et y passer la musique.</string>
     <string name="connect_connecting">Connexion…</string>
@@ -3726,6 +3727,8 @@
     <string name="whats_new_196_crossfeed_room_body">Crossfeed propose maintenant Désactivé, Crossfeed ou Salle : la Binaural Room du mixeur seule, avec sa propre HRTF, un LFE qui garde les basses hors de la salle et une vue 2D ou 3D. Maintenez Crossfeed dans les Outils audio du lecteur. Le réglage est conservé au redémarrage de l’app.</string>
     <string name="whats_new_196_room_presets_title">Dix préréglages pour la Binaural Room</string>
     <string name="whats_new_196_room_presets_body">Dix préréglages pour la Binaural Room, dans le mixeur et sur la page Crossfeed : six installations réelles, des moniteurs de studio à la salle de concert, qui résonnent comme de telles salles, et quatre qui agrandissent l’espace. Tous jouent au même niveau sonore.</string>
+    <string name="whats_new_196_connect_follow_title">Le lecteur suit votre autre appareil</string>
+    <string name="whats_new_196_connect_follow_body">Quand ce téléphone ne lit rien et qu’un autre de vos appareils lit un morceau, le lecteur l’affiche : pochette, paroles et position. Ses commandes pilotent cet appareil, et le panneau Tryptify Connect règle son volume.</string>
     <string name="atmos_room_builtin">Salle intégrée</string>
     <string name="atmos_room_custom">Ma salle</string>
     <string name="atmos_rooms">Salles</string>

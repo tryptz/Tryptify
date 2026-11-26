@@ -3304,6 +3304,7 @@
     <string name="connect_here_from">Playing here, from %1$s</string>
     <string name="connect_made_way">%1$s started playing, so this phone paused</string>
     <string name="connect_cannot_play">“%1$s” can’t play on this phone</string>
+    <string name="connect_like_there">This song is a file on %1$s. Like it there.</string>
     <string name="connect_not_connected">Tryptify Connect is not connected</string>
     <string name="connect_signed_out">Sign in to see your other devices and move music between them.</string>
     <string name="connect_connecting">Connecting…</string>
@@ -3651,6 +3652,8 @@
     <string name="whats_new_196_crossfeed_room_body">Crossfeed is now Off, Crossfeed or Room: the mixer\'s Binaural Room on its own, with an HRTF of its own, an LFE that keeps the bass out of the room, and a 2D or 3D view. Hold Crossfeed in the player\'s Audio tools. It is kept when the app restarts.</string>
     <string name="whats_new_196_room_presets_title">Ten Binaural Room presets</string>
     <string name="whats_new_196_room_presets_body">Ten presets for the Binaural Room, in the mixer and on the Crossfeed page: six real set-ups, from Studio Monitors to a Concert Hall, each ringing as such a room does, and four that enlarge the space. All play at the same loudness.</string>
+    <string name="whats_new_196_connect_follow_title">The player follows your other device</string>
+    <string name="whats_new_196_connect_follow_body">While this phone plays nothing and another of your devices plays, the player shows that song: its cover, lyrics and time. Its controls steer that device, and the Tryptify Connect panel sets its volume.</string>
     <string name="atmos_room_builtin">Built-in room</string>
     <string name="atmos_room_custom">My room</string>
     <string name="atmos_rooms">Rooms</string>

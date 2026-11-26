@@ -11,8 +11,6 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import tf.monochrome.android.connect.ConnectNow
 import tf.monochrome.android.connect.ConnectProtocol
-import tf.monochrome.android.connect.ConnectTrack
-import tf.monochrome.android.domain.model.Album
 import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.Track
 
@@ -55,16 +53,10 @@ fun clockOf(seconds: Double): String {
 }
 
 /**
- * Another device's song as the mini player's [Track]: title, artist, album and
- * cover, enough to show it, with [where] it plays after the artist. Its id
- * is a hash of where it comes from and which song it is, so the bar's cover
- * moves on when that device changes song.
+ * A song followed on another device, as the mini player names it: the same
+ * song, with [where] it plays after the artist ("Swans · Playing on Pixel
+ * 8"), or alone when the song names none. The bar has one line for both.
  */
-fun ConnectTrack.asShownTrackOn(where: String): Track = Track(
-    id = "connect:$src:$id".hashCode().toLong(),
-    title = title.ifBlank { "—" },
-    duration = duration?.toInt() ?: 0,
-    // The artist line says where it plays: "Artist · Playing on Pixel 8".
-    artist = Artist(id = 0, name = listOf(artist, where).filter { it.isNotBlank() }.joinToString(" · ")),
-    album = Album(id = 0, title = album, cover = cover),
+fun Track.shownPlayingOn(where: String): Track = copy(
+    artist = Artist(id = artist?.id ?: 0, name = listOf(displayArtist, where).filter { it.isNotBlank() }.joinToString(" · ")),
 )

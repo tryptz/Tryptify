@@ -3301,6 +3301,7 @@
     <string name="connect_here_from">Läuft jetzt hier, von %1$s</string>
     <string name="connect_made_way">%1$s spielt jetzt, darum pausiert dieses Telefon</string>
     <string name="connect_cannot_play">„%1$s“ kann auf diesem Telefon nicht abgespielt werden</string>
+    <string name="connect_like_there">Dieser Song ist eine Datei auf %1$s. Markiere ihn dort mit „Gefällt mir“.</string>
     <string name="connect_not_connected">Tryptify Connect ist nicht verbunden</string>
     <string name="connect_signed_out">Melde dich an, um deine anderen Geräte zu sehen und Musik zwischen ihnen zu wechseln.</string>
     <string name="connect_connecting">Verbinde…</string>
@@ -3648,6 +3649,8 @@
     <string name="whats_new_196_crossfeed_room_body">Crossfeed ist jetzt Aus, Crossfeed oder Raum: der Binaural Room des Mixers für sich, mit eigener HRTF, einem LFE, der den Bass aus dem Raum hält, und einer 2D- oder 3D-Ansicht. Halte Crossfeed in den Audio-Tools des Players gedrückt. Bleibt nach einem Neustart der App erhalten.</string>
     <string name="whats_new_196_room_presets_title">Zehn Presets für den Binaural Room</string>
     <string name="whats_new_196_room_presets_body">Zehn Presets für den Binaural Room, im Mixer und auf der Crossfeed-Seite: sechs echte Hörsituationen, von Studiomonitoren bis zum Konzertsaal, die so lange nachklingen wie solche Räume, und vier, die den Raum vergrößern. Alle spielen gleich laut.</string>
+    <string name="whats_new_196_connect_follow_title">Der Player folgt deinem anderen Gerät</string>
+    <string name="whats_new_196_connect_follow_body">Spielt dieses Telefon nichts und ein anderes deiner Geräte schon, zeigt der Player diesen Song: Cover, Songtext und Zeit. Seine Tasten steuern dieses Gerät, und im Tryptify-Connect-Bereich stellst du dessen Lautstärke ein.</string>
     <string name="atmos_room_builtin">Eingebauter Raum</string>
     <string name="atmos_room_custom">Mein Raum</string>
     <string name="atmos_rooms">Räume</string>

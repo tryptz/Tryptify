@@ -104,13 +104,17 @@ fun LyricsEditorScreen(
     val canRedo by viewModel.canRedo.collectAsStateWithLifecycle()
     val note by viewModel.note.collectAsStateWithLifecycle()
     val fx by viewModel.lyricsFx.collectAsStateWithLifecycle()
-    val isPlaying by playerViewModel.isPlaying.collectAsStateWithLifecycle()
+    // The phone's own player throughout, never the one the player follows on
+    // another device (Tryptify Connect): the song edited is the phone's own
+    // (LyricsEditorViewModel.track), and a line stamped against another
+    // device's song, at a position worked out from a clock, would be wrong.
+    val isPlaying by playerViewModel.ownIsPlaying.collectAsStateWithLifecycle()
     // Held as State: the play head ticks four times a second, and more at
     // lyric boundaries. Read here it recomposed the whole editor for the
     // transport's clock alone. The transport reads it, and a stamp reads it
     // when it is pressed.
-    val positionState = playerViewModel.positionMs.collectAsStateWithLifecycle()
-    val duration by playerViewModel.durationMs.collectAsStateWithLifecycle()
+    val positionState = playerViewModel.ownPositionMs.collectAsStateWithLifecycle()
+    val duration by playerViewModel.ownDurationMs.collectAsStateWithLifecycle()
     val accent = MaterialTheme.colorScheme.primary
 
     var leaving by remember { mutableStateOf(false) }
@@ -155,14 +159,14 @@ fun LyricsEditorScreen(
 
         // Pinned: the real renderer, condensed, playing the copy as it is.
         Column(Modifier.padding(horizontal = 16.dp)) {
-            StudioPreview(fx = fx, lyrics = draft, positionMs = viewModel.positionMs, analyzer = playerViewModel.spectrumAnalyzer)
+            StudioPreview(fx = fx, lyrics = draft, positionMs = playerViewModel.ownPositionMs, analyzer = playerViewModel.spectrumAnalyzer)
             Spacer(Modifier.height(8.dp))
             Transport(
                 isPlaying = isPlaying,
                 position = positionState,
                 durationMs = duration,
-                onTogglePlay = playerViewModel::togglePlayPause,
-                onSeek = playerViewModel::seekTo,
+                onTogglePlay = playerViewModel::togglePlayPauseHere,
+                onSeek = playerViewModel::seekHere,
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 GlyphButton(
@@ -225,7 +229,7 @@ fun LyricsEditorScreen(
                     accent = accent,
                     onTap = {
                         viewModel.select(i)
-                        playerViewModel.seekTo(line.timeMs)
+                        playerViewModel.seekHere(line.timeMs)
                     },
                     onHold = { rowMenu = i },
                 )
@@ -242,7 +246,7 @@ fun LyricsEditorScreen(
                                 accent = accent,
                                 onClick = {
                                     viewModel.select(i, w)
-                                    playerViewModel.seekTo(word.startMs)
+                                    playerViewModel.seekHere(word.startMs)
                                 },
                             )
                         }

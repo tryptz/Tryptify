@@ -109,4 +109,93 @@ class ConnectProtocolTest {
         assertNull(Json.parseToJsonElement(ConnectProtocol.command("phone00001", "pause")).jsonObject["value"])
         assertEquals("true", Json.parseToJsonElement(ConnectProtocol.transfer("x", true)).jsonObject["force"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun `volume travels both ways, from 0 to 1`() {
+        // Read: a device that says its volume, and one that does not (an app before 1.9.6).
+        val says = ConnectProtocol.parse("""{"type":"now","now":{"device":"webweb0001","playing":true,"volume":0.6}}""")!!
+        assertEquals(0.6, says.now!!.volume!!, 0.0)
+        assertNull(ConnectProtocol.parse("""{"type":"now","now":{"device":"webweb0001","playing":true}}""")!!.now!!.volume)
+        assertNull(ConnectProtocol.parse("""{"type":"now","now":{"device":"webweb0001","volume":null}}""")!!.now!!.volume)
+
+        // Sent: in the state when the phone has one, left out when it has none.
+        val out = ConnectProtocol.StateOut(playing = true, track = song, position = 1.0, rate = 1.0, since = 1)
+        assertNull(Json.parseToJsonElement(ConnectProtocol.state(out)).jsonObject["volume"])
+        assertEquals("0.4", Json.parseToJsonElement(ConnectProtocol.state(out.copy(volume = 0.4))).jsonObject["volume"]!!.jsonPrimitive.content)
+        assertEquals("1.0", Json.parseToJsonElement(ConnectProtocol.state(out.copy(volume = 7.0))).jsonObject["volume"]!!.jsonPrimitive.content)
+        assertNull(Json.parseToJsonElement(ConnectProtocol.state(out.copy(volume = Double.NaN))).jsonObject["volume"])
+
+        // The command another device's slider sends, and how the phone reads one.
+        val set = Json.parseToJsonElement(ConnectProtocol.command("webweb0001", "volume", 0.25)).jsonObject
+        assertEquals("volume", set["action"]!!.jsonPrimitive.content)
+        assertEquals("0.25", set["value"]!!.jsonPrimitive.content)
+        assertTrue("volume" in ConnectProtocol.ACTIONS)
+        assertEquals(0.0, ConnectProtocol.volume(-3.0)!!, 0.0)
+        assertEquals(1.0, ConnectProtocol.volume(9.0)!!, 0.0)
+        assertNull(ConnectProtocol.volume(null))
+        assertNull(ConnectProtocol.volume(Double.POSITIVE_INFINITY))
+    }
+
+    @Test
+    fun `what plays elsewhere is another device's song, while that device is in the room`() {
+        val web = ConnectDevice(id = "webweb0001", name = "Edge on Windows")
+        val now = ConnectNow(device = "webweb0001", playing = true, track = song)
+        assertEquals(now, ConnectProtocol.elsewhere(now, "phone00001", listOf(web)))
+        assertNull("this phone's own song", ConnectProtocol.elsewhere(now.copy(device = "phone00001"), "phone00001", listOf(web)))
+        assertNull("no song", ConnectProtocol.elsewhere(now.copy(track = null), "phone00001", listOf(web)))
+        assertNull("that device has gone", ConnectProtocol.elsewhere(now, "phone00001", emptyList()))
+        assertNull(ConnectProtocol.elsewhere(null, "phone00001", listOf(web)))
+    }
+
+    @Test
+    fun `a paused phone does not speak over a device that plays`() {
+        val web = ConnectNow(device = "webweb0001", playing = true, track = song)
+        // The room would refuse it, and noting it here would drop what the phone follows.
+        assertFalse(ConnectProtocol.maySay(playingHere = false, held = web, myId = "phone00001"))
+        // Playing here, it always speaks: the later start wins.
+        assertTrue(ConnectProtocol.maySay(playingHere = true, held = web, myId = "phone00001"))
+        // Its own song, nobody's, or a device that is paused too: it speaks.
+        assertTrue(ConnectProtocol.maySay(playingHere = false, held = web.copy(device = "phone00001"), myId = "phone00001"))
+        assertTrue(ConnectProtocol.maySay(playingHere = false, held = null, myId = "phone00001"))
+        assertTrue(ConnectProtocol.maySay(playingHere = false, held = web.copy(playing = false), myId = "phone00001"))
+    }
+
+    @Test
+    fun `the phone's volume steps are 0 to 1 and back`() {
+        // Android's media volume in 15 steps, as most phones have it.
+        assertEquals(0.0, DeviceVolume.fractionOf(0, 0, 15)!!, 0.0)
+        assertEquals(1.0, DeviceVolume.fractionOf(15, 0, 15)!!, 0.0)
+        assertEquals(0.6, DeviceVolume.fractionOf(9, 0, 15)!!, 1e-9)
+        // Every step reads back as itself: a slider set from a step lands on it.
+        for (min in 0..1) for (max in listOf(15, 25, 30, 150)) for (i in min..max) {
+            assertEquals("$i of $min..$max", i, DeviceVolume.indexFor(DeviceVolume.fractionOf(i, min, max)!!, min, max))
+        }
+        // Between two steps, the nearest; outside 0 to 1, the ends.
+        assertEquals(4, DeviceVolume.indexFor(0.25, 0, 15))
+        assertEquals(0, DeviceVolume.indexFor(-2.0, 0, 15))
+        assertEquals(15, DeviceVolume.indexFor(7.0, 0, 15))
+        // A minimum above zero (some phones never go silent) is the bottom of the slider.
+        assertEquals(1, DeviceVolume.indexFor(0.0, 1, 15))
+        // No steps at all: no volume to say.
+        assertNull(DeviceVolume.fractionOf(0, 0, 0))
+        assertEquals(3, DeviceVolume.indexFor(0.5, 3, 3))
+    }
+
+    /** The main player's rule and the mini player's: one function, so they cannot differ. */
+    @Test
+    fun `the player follows another device from when it plays until this phone does`() {
+        val playing = ConnectNow(device = "webweb0001", playing = true, track = song)
+        val paused = playing.copy(playing = false)
+        // It plays there and not here: followed.
+        assertTrue(ConnectProtocol.follows(was = false, elsewhere = playing, playingHere = false))
+        // Paused there after being followed: its pause is shown.
+        assertTrue(ConnectProtocol.follows(was = true, elsewhere = paused, playingHere = false))
+        // Found paused, never followed: this phone's own song stays.
+        assertFalse(ConnectProtocol.follows(was = false, elsewhere = paused, playingHere = false))
+        // This phone plays: its own song, whatever the other does.
+        assertFalse(ConnectProtocol.follows(was = true, elsewhere = playing, playingHere = true))
+        assertFalse(ConnectProtocol.follows(was = true, elsewhere = paused, playingHere = true))
+        // Nothing elsewhere (it went, or the song is this phone's): let go.
+        assertFalse(ConnectProtocol.follows(was = true, elsewhere = null, playingHere = false))
+    }
 }

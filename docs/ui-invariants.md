@@ -3405,20 +3405,71 @@ of the listener's devices is online, `Devices` otherwise. It opens
 * Top to bottom: the grab handle and "Tryptify Connect"; when another device
   plays, "Playing on …" (or "Last played on …" once it is gone), the song, its
   timeline (a Slider with the elapsed and total time, moving in step, a drag
-  seeks that device), its Previous, Play/Pause and Next, and Play here; then
-  the devices, this phone
+  seeks that device), its Previous, Play/Pause and Next, and Play here, and
+  under them that device's volume (below); then the devices, this phone
   first, each a list row (`MonoDimens.listRowHeight`) with "Play here" or
   "Play there" when the music can move to it.
+* **The volume slider is the other device's, and is there only when that
+  device says its volume** (`ConnectNow.volume`, 0 to 1) and is online. An
+  app before 1.9.6, a browser before the same change, and a phone whose
+  volume is fixed say none: no slider, never a dead one. Every step of a
+  drag is sent (`ConnectController.remoteVolume` keeps to ten a second, the
+  room's limit, and always sends the last), so the volume moves with the
+  finger; let go, the thumb stays for a moment and then shows that device's
+  own word, because a phone's volume has steps. **The phone's volume keys
+  stay the phone's own** (the owner's choice): they never steer another
+  device. What this phone says and sets as its own volume is `DeviceVolume`:
+  the exclusive USB DAC's level while the DAC carries the song (Android's
+  volume steers nothing heard then), else Android's media volume; another
+  device's command sets it with no system panel popping up.
 * Its text and icons are the glass's ink (Text on glass): the playing device
   is said in words ("Playing"), never by an accent colour.
-* **The mini player follows another device, as Spotify's does.** While this
-  phone plays nothing (or is paused) and another of the listener's devices
-  plays, the bar shows that song, "Artist · Playing on …" on its artist line,
-  its progress line running in step (`rememberRemotePosition`: worked out from
-  that device's last word and the server's clock, nothing sent to keep it
-  moving), and its buttons and swipes steer that device. It keeps following
-  when that device is paused from here, and lets go when this phone plays or
-  that device goes. A tap opens the player with the Connect panel up.
+* **The player follows another device, as Spotify's does: the full player
+  and the mini player alike, by one rule.** While this phone plays nothing
+  (or is paused) and another of the listener's devices plays, the player is
+  that song's: its cover, title, lyrics (in step, word by word), like,
+  timeline and length, and Play/Pause, the skips, the cover's swipe and the
+  scrubber steer that device. It keeps following when that device is paused,
+  and lets go when this phone plays or that device goes; a device found
+  paused is not followed. The rule is `ConnectProtocol.follows`, kept by
+  `ConnectController.followed`; `PlayerViewModel.followed` is the one switch
+  both players read, and while it is set `currentTrack`, `isPlaying`,
+  `positionMs` and `durationMs` are that device's (playing itself reads
+  `queueManager.currentTrack`, never these). Until 1.9.6 only the mini
+  player followed, by a rule of its own, and the full player kept showing
+  the phone's own paused song with the Connect panel opened over it
+  (reported with a screenshot: paused at 0:03 behind a panel at 1:57).
+  - The position is worked out, nothing is sent to keep it moving: from that
+    device's last word and the server's clock, as often as the phone's own
+    is read, and only while a screen is up.
+  - In the full player the place in the queue ("3 / 12") reads "Playing on
+    …": that song is not in this phone's queue. No neighbour covers ride in
+    on a swipe, for the same reason; the swipe still skips there. The mini
+    player says it on its artist line, "Artist · Playing on …"
+    (`shownPlayingOn`).
+  - A tap on a song of the phone's own shows that song at once
+    (`showOwnWhileStarting`), not the other device's until the audio starts.
+  - A seek is shown where it was let go until that device answers, three
+    seconds at most.
+  - A file that lives on that device (`src` "local") is shown and steered,
+    and found lyrics by its name; it cannot be liked from here (a toast
+    says to like it there), since its number on this phone is made up.
+  - Never open the Connect panel by itself over the player again: the
+    player is that song's player now.
+  - **Screens that work on the phone's own audio never follow.** The lyrics
+    editor times the phone's own song (`LyricsEditorViewModel.track` is
+    `queueManager.currentTrack`) against the phone's own player, and the
+    Discover deck seeks its own preview: both read
+    `PlayerViewModel.ownCurrentTrack`, `ownIsPlaying`, `ownPositionMs` and
+    `ownDurationMs` and call `togglePlayPauseHere` and `seekHere`. Handed the
+    followed song's position they would stamp lines of one song with the
+    clock of another, and their seeks would move the other device. Edit
+    lyrics is left out of the player's ⋮ while a song is followed, for the
+    same reason. A new screen that stamps, records or seeks by the player's
+    position asks which of the two it means.
+  - A paused phone never says its state while another device plays
+    (`ConnectController.send`): the room refuses it, and noting it here
+    would make the phone forget what it follows.
 * What it says once ("Now playing on …", "Playing here, from …", "… started
   playing, so this phone paused") is a toast, and only while the app is on
   screen.

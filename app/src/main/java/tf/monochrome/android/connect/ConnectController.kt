@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -40,6 +41,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import tf.monochrome.android.R
 import tf.monochrome.android.data.auth.SupabaseAuthManager
 import tf.monochrome.android.data.device.DeviceIdProvider
+import tf.monochrome.android.domain.model.Album
+import tf.monochrome.android.domain.model.Artist
 import tf.monochrome.android.domain.model.PlaybackSource
 import tf.monochrome.android.domain.model.SourceType
 import tf.monochrome.android.domain.model.Track
@@ -55,9 +58,11 @@ import kotlin.coroutines.resume
 
 /**
  * Tryptify Connect on this phone: it is one of the listener's devices, tells
- * the others what plays here, does what they ask (play, pause, skip, seek),
- * hands its song over at the same second with what comes next, takes one
- * over the same way, and makes way when another device starts later.
+ * the others what plays here and how loud, does what they ask (play, pause,
+ * skip, seek, a volume), hands its song over at the same second with what
+ * comes next, takes one over the same way, and makes way when another device
+ * starts later. While this phone plays nothing and another device plays, it
+ * says which song the player follows ([followed]).
  *
  * Battery first. Connected only when signed in and either the app is on
  * screen or music plays (the phone is awake then anyway), and a minute
@@ -75,6 +80,7 @@ class ConnectController @Inject constructor(
     private val queueManager: QueueManager,
     private val registry: UnifiedTrackRegistry,
     private val streamResolver: StreamResolver,
+    private val volume: DeviceVolume,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visible = MutableStateFlow(false)
@@ -105,6 +111,27 @@ class ConnectController @Inject constructor(
 
     val myId: String get() = deviceId
 
+    /** Another device's song while this phone's player follows it. */
+    data class Followed(
+        /** What that device last said: its song, whether it plays, where, how loud. */
+        val now: ConnectNow,
+        /** The song as this phone's player shows it. */
+        val track: Track,
+        val deviceName: String,
+        /** Whether this phone could play it itself; false for a file on that device. */
+        val playableHere: Boolean,
+    )
+
+    private val _followed = MutableStateFlow<Followed?>(null)
+
+    /**
+     * The song the player shows in place of this phone's own: another
+     * device's, from when it plays while this phone does not until this phone
+     * plays or that device goes ([ConnectProtocol.follows]). The main player
+     * and the mini player both read it, so they cannot disagree.
+     */
+    val followed: StateFlow<Followed?> = _followed.asStateFlow()
+
     /** Says [n] once: to the player screen, and as a toast while the app is on screen. */
     private fun note(n: Note) {
         _notes.tryEmit(n)
@@ -131,6 +158,8 @@ class ConnectController @Inject constructor(
             launch { publishChanges() }
             launch { followEvents() }
             launch { followOthers() }
+            launch { followElsewhere() }
+            launch { publishVolume() }
         }
     }
 
@@ -170,15 +199,33 @@ class ConnectController @Inject constructor(
         val c = signals.change.value
         // Where the play head is now: the last posted position, run on if it plays.
         val positionMs = c.positionMs + if (c.playing) ((System.currentTimeMillis() - c.atMs) * c.speed).toLong() else 0L
-        return ConnectProtocol.StateOut(c.playing, descriptorOf(track), positionMs / 1000.0, c.speed.toDouble(), playSince)
+        return ConnectProtocol.StateOut(c.playing, descriptorOf(track), positionMs / 1000.0, c.speed.toDouble(), playSince, volume.now())
+    }
+
+    /**
+     * The phone's volume moved (the keys, the system panel, the DAC's slider,
+     * another device's command): the others hear of it once it settles. Only
+     * while this phone holds the song: said by a paused phone, it would take
+     * the song shown everywhere from a device that is paused too.
+     */
+    @OptIn(FlowPreview::class)
+    private suspend fun publishVolume() {
+        client.state.map { it.status == ConnectState.Status.ON }.distinctUntilChanged().collectLatest { on ->
+            if (!on) return@collectLatest
+            volume.changes.debounce(VOLUME_SETTLE_MS).collect {
+                if (client.state.value.now?.device == deviceId) send()
+            }
+        }
     }
 
     private suspend fun send() {
         // Signed out or offline there is no one to tell: skip describing the song and encoding it.
         if (!client.canTell) return
         val out = stateOut() ?: return
+        // Paused here while another device plays: not this phone's turn to speak.
+        if (!ConnectProtocol.maySay(out.playing, client.state.value.now, deviceId)) return
         if (client.tell(ConnectProtocol.state(out))) {
-            client.remember(ConnectNow(deviceId, deviceName(), out.playing, out.track, out.position, out.rate, client.serverNowMs(), out.since))
+            client.remember(ConnectNow(deviceId, deviceName(), out.playing, out.track, out.position, out.rate, client.serverNowMs(), out.since, out.volume))
         }
     }
 
@@ -192,10 +239,55 @@ class ConnectController @Inject constructor(
         }
     }
 
+    /**
+     * Follows another device's song while this phone plays nothing: see
+     * [followed]. The song shown is made once a song, not once a message, so
+     * the player's cover and lyrics are not built again at every pause or seek
+     * of that device.
+     */
+    private suspend fun followElsewhere() {
+        var following = false
+        var shown: Triple<ConnectTrack, Track, Boolean>? = null
+        combine(client.state, signals.change.map { it.playing }.distinctUntilChanged()) { s, here -> s to here }.collect { (s, playingHere) ->
+            val elsewhere = ConnectProtocol.elsewhere(s.now, deviceId, s.devices)
+            following = ConnectProtocol.follows(following, elsewhere, playingHere)
+            val track = elsewhere?.track
+            if (!following || track == null) {
+                _followed.value = null
+                return@collect
+            }
+            val known = shown?.takeIf { it.first == track }
+                ?: shownTrackOf(track).let { Triple(track, it.first, it.second) }.also { shown = it }
+            _followed.value = Followed(elsewhere, known.second, nameOf(elsewhere.device, elsewhere.name), known.third)
+        }
+    }
+
+    /** [t] as this phone's player shows it, and whether this phone could play it itself. */
+    private fun shownTrackOf(t: ConnectTrack): Pair<Track, Boolean> {
+        val described = unifiedOf(t)
+        if (described != null) {
+            val id = described.toLegacyTrack().id
+            // A song this phone already knows (it is in its queue, or played
+            // here before) is shown as the phone knows it: with its album,
+            // its quality and its cover.
+            val unified = registry[id] ?: described.also { registry.put(id, it) }
+            return unified.toLegacyTrack() to true
+        }
+        // A file on that device, or a source this phone has none of: shown, and no more.
+        return Track(
+            id = "connect:${t.src}:${t.id}".hashCode().toLong(),
+            title = t.title.ifBlank { "—" },
+            duration = t.duration?.toInt() ?: 0,
+            artist = Artist(id = 0, name = t.artist),
+            album = Album(id = 0, title = t.album, cover = ConnectProtocol.shareableCover(t.cover)),
+        ) to false
+    }
+
     private suspend fun followEvents() {
         client.events.collect { m ->
             when (m.type) {
-                "command" -> withController { mc ->
+                // The volume needs no controller: building one would hold the playback service up for it.
+                "command" -> if (m.action == "volume") m.value?.let { volume.set(it) } else withController { mc ->
                     when (m.action) {
                         "play" -> mc.play()
                         "pause" -> mc.pause()
@@ -264,6 +356,28 @@ class ConnectController @Inject constructor(
         val now = client.state.value.now ?: return
         if (now.device == deviceId) return
         scope.launch { client.tell(ConnectProtocol.command(now.device, action, value)) }
+    }
+
+    private var volumeAsked: Double? = null
+    private var volumeJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Sets the volume of the device playing elsewhere to [value] (0 to 1). A
+     * dragged slider calls this at every step: at most ten go out a second,
+     * which is all the room takes from one device, and the last one always.
+     */
+    fun remoteVolume(value: Double) {
+        volumeAsked = ConnectProtocol.volume(value) ?: return
+        if (volumeJob?.isActive == true) return
+        volumeJob = scope.launch {
+            while (true) {
+                val v = volumeAsked ?: break
+                volumeAsked = null
+                val now = client.state.value.now
+                if (now != null && now.device != deviceId) client.tell(ConnectProtocol.command(now.device, "volume", v))
+                delay(VOLUME_EVERY_MS)
+            }
+        }
     }
 
     /** The server's clock as this phone reckons it, for where another device's song has got to. */
@@ -369,5 +483,7 @@ class ConnectController @Inject constructor(
         private const val LINGER_MS = 60_000L
         private const val PUBLISH_SETTLE_MS = 250L
         private const val CONTROLLER_TIMEOUT_MS = 5_000L
+        private const val VOLUME_SETTLE_MS = 200L
+        private const val VOLUME_EVERY_MS = 110L
     }
 }

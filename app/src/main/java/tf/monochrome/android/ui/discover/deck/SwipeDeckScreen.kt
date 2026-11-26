@@ -216,11 +216,13 @@ private suspend fun seekPastIntro(player: PlayerViewModel, track: UnifiedTrack) 
     if (expectedMs < MIN_SEEK_TRACK_MS) return
     val legacyId = track.toLegacyTrack().id
     withTimeoutOrNull(15_000) {
-        combine(player.currentTrack, player.durationMs) { playing, duration ->
+        // The phone's own player: the deck's preview is the phone's, and a
+        // seek must never reach a device the player follows (Tryptify Connect).
+        combine(player.ownCurrentTrack, player.ownDurationMs) { playing, duration ->
             playing?.id == legacyId && abs(duration - expectedMs) < 10_000
         }.first { it }
     } ?: return
-    player.seekTo(expectedMs / 3)
+    player.seekHere(expectedMs / 3)
 }
 
 @Composable
@@ -368,7 +370,8 @@ private fun DeckBody(
                         },
                     )
                     .clickable(onClickLabel = stringResource(R.string.deck_play_pause)) {
-                        playerViewModel.togglePlayPause()
+                        // The card's own preview, whatever plays on another device.
+                        playerViewModel.togglePlayPauseHere()
                     }
                     .semantics {
                         customActions = listOf(
@@ -474,9 +477,9 @@ private fun Stamp(label: Int, color: Color, tilt: Float, modifier: Modifier, str
 /** How far into the card's song the player is; empty until it is playing that song. */
 @Composable
 private fun PlayingProgress(player: PlayerViewModel, track: UnifiedTrack) {
-    val playing by player.currentTrack.collectAsStateWithLifecycle()
-    val position by player.positionMs.collectAsStateWithLifecycle()
-    val duration by player.durationMs.collectAsStateWithLifecycle()
+    val playing by player.ownCurrentTrack.collectAsStateWithLifecycle()
+    val position by player.ownPositionMs.collectAsStateWithLifecycle()
+    val duration by player.ownDurationMs.collectAsStateWithLifecycle()
     val isThis = playing?.id == track.toLegacyTrack().id && duration > 0
     LinearProgressIndicator(
         progress = { if (isThis) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f },

@@ -3225,6 +3225,7 @@
     <string name="connect_here_from">已从 %1$s 转到这里播放</string>
     <string name="connect_made_way">%1$s 开始播放，这部手机已暂停</string>
     <string name="connect_cannot_play">这部手机无法播放“%1$s”</string>
+    <string name="connect_like_there">这首歌是 %1$s 上的文件，请在那台设备上点喜欢。</string>
     <string name="connect_not_connected">Tryptify Connect 未连接</string>
     <string name="connect_signed_out">登录后即可看到你的其他设备，并在它们之间切换音乐。</string>
     <string name="connect_connecting">正在连接…</string>
@@ -3570,6 +3571,8 @@
     <string name="whats_new_196_crossfeed_room_body">交叉馈送现在可选“关”“交叉馈送”或“房间”：混音器的 Binaural Room 单独使用，有自己的 HRTF、让低音不进入房间的 LFE，以及 2D 或 3D 视图。在播放器的音频工具中长按“交叉馈送”。重启应用后设置仍会保留。</string>
     <string name="whats_new_196_room_presets_title">Binaural Room 的十个预设</string>
     <string name="whats_new_196_room_presets_body">Binaural Room 新增十个预设，混音器和交叉馈送页面中均可使用：六个真实的聆听环境（从录音室监听音箱到音乐厅，混响时间与这类房间相符），以及四个扩展空间感的预设。所有预设的响度一致。</string>
+    <string name="whats_new_196_connect_follow_title">播放器会跟随你的另一台设备</string>
+    <string name="whats_new_196_connect_follow_body">这部手机没有播放、而你的另一台设备在播放时，播放器会显示那首歌：封面、歌词和进度。播放器的按键控制那台设备，Tryptify Connect 面板可调节它的音量。</string>
     <string name="atmos_room_builtin">内置房间</string>
     <string name="atmos_room_custom">我的房间</string>
     <string name="atmos_rooms">房间</string>

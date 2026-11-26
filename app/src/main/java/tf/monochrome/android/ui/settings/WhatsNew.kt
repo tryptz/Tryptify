@@ -253,6 +253,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "The player follows your other device",
+                    body = "While this phone plays nothing and another of your devices plays, the player shows that song: its cover, lyrics and time. Its controls steer that device, and the Tryptify Connect panel sets its volume.",
+                    titleRes = R.string.whats_new_196_connect_follow_title,
+                    bodyRes = R.string.whats_new_196_connect_follow_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYLISTS,
                     title = "Reorder a playlist's songs",
                     body = "Reorder, in a playlist's ⋮ menu, puts a handle on every song: drag one to its new place. Each drop is saved at once, and Done or Back leaves the mode.",

@@ -113,7 +113,7 @@ import tf.monochrome.android.ui.glyph.GlyphRoute
 import tf.monochrome.android.ui.oxford.OxfordViewModel
 import androidx.compose.ui.res.stringResource
 import tf.monochrome.android.R
-import tf.monochrome.android.ui.player.asShownTrackOn
+import tf.monochrome.android.ui.player.shownPlayingOn
 
 sealed class Screen(val route: String) {
     data object Home : Screen("home")
@@ -335,37 +335,15 @@ fun MonochromeNavHost(initialRoute: String? = null) {
 
     // Tryptify Connect, as Spotify does it: while this phone plays nothing and
     // another of the listener's devices does, the mini player shows that song,
-    // its progress runs in step and its buttons steer that device. It keeps
-    // following when that device is paused from here, and lets go when this
-    // phone plays or that device goes.
-    val connectVm: tf.monochrome.android.ui.player.ConnectViewModel = androidx.hilt.navigation.compose.hiltViewModel()
-    val connectState by connectVm.state.collectAsStateWithLifecycle()
-    val elsewhere = connectState.now?.takeIf { n ->
-        n.device != connectVm.myId && n.track != null && connectState.devices.any { it.id == n.device }
-    }
-    var followElsewhere by remember { mutableStateOf(false) }
-    LaunchedEffect(elsewhere?.playing, elsewhere == null, isPlaying) {
-        followElsewhere = when {
-            elsewhere == null || isPlaying -> false
-            elsewhere.playing -> true
-            else -> followElsewhere
-        }
-    }
-    val remote = elsewhere?.takeIf { followElsewhere || (currentTrack == null && it.playing) }
-    // Read only in the progress lambda, like the phone's own position.
-    val remotePosition = tf.monochrome.android.ui.player.rememberRemotePosition(remote, connectVm::serverNowMs)
-    val remoteName = remote?.let { r -> connectState.devices.firstOrNull { it.id == r.device }?.name ?: r.name.orEmpty() }
-    val playingOn = remoteName?.let { stringResource(R.string.connect_playing_on, it) }
-    val remoteTrack = remember(remote?.track, playingOn) {
-        remote?.track?.let { t ->
-            t.asShownTrackOn(playingOn.orEmpty())
-        }
-    }
-    val remoteProgress = remember(remotePosition, remote) {
-        {
-            val d = remote?.track?.duration ?: 0.0
-            if (d > 0) (remotePosition.value / d).toFloat().coerceIn(0f, 1f) else 0f
-        }
+    // its progress runs in step and its buttons steer that device. The rule,
+    // the song, its position and the steering are the player's own
+    // (PlayerViewModel.followed), so this bar and the full player cannot
+    // disagree: currentTrack, isPlaying and the position above are already
+    // that device's. Only the artist line is this bar's: it says where it plays.
+    val followed by playerViewModel.followed.collectAsStateWithLifecycle()
+    val playingOn = followed?.let { stringResource(R.string.connect_playing_on, it.deviceName) }
+    val miniTrack = remember(currentTrack, playingOn) {
+        currentTrack?.let { t -> if (playingOn == null) t else t.shownPlayingOn(playingOn) }
     }
 
     // True when the user is on a destination the page pager is drawn on, rather
@@ -1307,15 +1285,13 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                             tf.monochrome.android.ui.player.LocalGlassArea provides tf.monochrome.android.domain.model.LinkArea.PANELS,
                         ) {
                             MiniPlayer(
-                                track = remoteTrack ?: currentTrack,
-                                isPlaying = remote?.playing ?: isPlaying,
-                                progressProvider = if (remote != null) remoteProgress else progressProvider,
-                                onPlayPauseClick = {
-                                    if (remote != null) connectVm.remote(if (remote.playing) "pause" else "play")
-                                    else playerViewModel.togglePlayPause()
-                                },
-                                onSkipNextClick = { if (remote != null) connectVm.remote("next") else playerViewModel.skipToNext() },
-                                onSkipPreviousClick = { if (remote != null) connectVm.remote("prev") else playerViewModel.skipToPrevious() },
+                                track = miniTrack,
+                                isPlaying = isPlaying,
+                                progressProvider = progressProvider,
+                                // Each steers the device followed, when one is (PlayerViewModel).
+                                onPlayPauseClick = { playerViewModel.togglePlayPause() },
+                                onSkipNextClick = { playerViewModel.skipToNext() },
+                                onSkipPreviousClick = { playerViewModel.skipToPrevious() },
                                 // A plain push, not navigateTool: collapsing an
                                 // earlier player would take every screen above it
                                 // along. One left under the mixer is the only kind

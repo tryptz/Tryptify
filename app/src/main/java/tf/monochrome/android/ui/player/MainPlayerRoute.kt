@@ -219,14 +219,11 @@ fun MainPlayerRoute(
     var showConnectSheet by rememberSaveable { mutableStateOf(false) }
     val connectViewModel: ConnectViewModel = androidx.hilt.navigation.compose.hiltViewModel()
     val connectState by connectViewModel.state.collectAsStateWithLifecycle()
-    // Opened from the mini player while it shows another device's song: the
-    // Connect panel is that song's player here (its timeline and controls).
-    LaunchedEffect(Unit) {
-        val n = connectViewModel.state.value.now
-        val elsewhere = n != null && n.device != connectViewModel.myId && n.track != null && n.playing &&
-            connectViewModel.state.value.devices.any { it.id == n.device }
-        if (elsewhere && !playerViewModel.isPlaying.value) showConnectSheet = true
-    }
+    // Another device's song, followed: this player is that song's then, its
+    // cover, lyrics, timeline and controls (PlayerViewModel.followed). The
+    // Connect panel used to be opened over the player for it, with the
+    // phone's own paused song behind.
+    val followed by playerViewModel.followed.collectAsStateWithLifecycle()
     // Overflow › "Add to playlist" and the create-playlist follow-up it opens.
     // Held as the pending track rather than a flag so the follow-up dialog
     // still knows what to add after the picker sheet is gone.
@@ -398,9 +395,11 @@ fun MainPlayerRoute(
         )
     }
 
-    val queueLabel = if (queue.isNotEmpty()) {
-        "${(currentIndex + 1).coerceAtLeast(1)} / ${queue.size}"
-    } else ""
+    // Where "3 / 12" sits: the phone's place in its own queue, or, for a
+    // song followed on another device, which device plays it. That song is
+    // not in this phone's queue, so a place in it would be wrong.
+    val queueLabel = followed?.let { stringResource(R.string.connect_playing_on, it.deviceName) }
+        ?: if (queue.isNotEmpty()) "${(currentIndex + 1).coerceAtLeast(1)} / ${queue.size}" else ""
 
     // ── Ambient MilkDrop ────────────────────────────────────────────────
     //
@@ -792,7 +791,9 @@ fun MainPlayerRoute(
                         onClick = { addOpenedToLibrary(); dismiss() },
                     )
                 }
-                tf.monochrome.android.ui.components.SongMenuItem(
+                // Not for a song followed on another device: the editor times
+                // the phone's own song against the phone's own player.
+                if (followed == null) tf.monochrome.android.ui.components.SongMenuItem(
                     icon = Icons.Default.EditNote,
                     label = stringResource(R.string.action_edit_lyrics),
                     onClick = { navController.navigateTool(Screen.LyricsEditor); dismiss() },
@@ -895,8 +896,12 @@ fun MainPlayerRoute(
         // a swipe starts until its cover has landed: the skip moves the
         // queue, and the live pair would then be the songs either side of
         // the new one.
-        val liveNeighbours = remember(queue, currentIndex, repeatMode) {
-            SwipeNeighbours.of(queue, currentIndex, repeatMode)
+        // None while another device's song is followed: the songs either
+        // side of it are that device's, and this phone's queue is not it. The
+        // swipe still skips there.
+        val following = followed != null
+        val liveNeighbours = remember(queue, currentIndex, repeatMode, following) {
+            if (following) SwipeNeighbours.NONE else SwipeNeighbours.of(queue, currentIndex, repeatMode)
         }
         val currentNeighbours by rememberUpdatedState(liveNeighbours)
         var swipeNeighbours by remember { mutableStateOf<SwipeNeighbours?>(null) }
@@ -1250,7 +1255,10 @@ fun MainPlayerRoute(
     // its audio actually comes from when that is somewhere else.
     val playedFrom by playerViewModel.playedFrom.collectAsStateWithLifecycle()
     val trackSource = tf.monochrome.android.ui.components.LocalTrackSource.current
-    val pickedFrom = currentUnified?.sourceType ?: state.track?.let(trackSource)
+    // A file on a device followed has no catalog here: no tag, rather than
+    // TIDAL's, which a number nobody claims would get.
+    val pickedFrom = if (followed?.playableHere == false) null
+    else currentUnified?.sourceType ?: state.track?.let(trackSource)
     val playerSource = pickedFrom?.let { it to playedFrom }
 
     Box(modifier = Modifier.fillMaxSize()) {

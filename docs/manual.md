@@ -144,7 +144,7 @@ liked, Save location, and the Download centre for what is in progress.
 
 | Feature | What it does |
 | --- | --- |
-| Tryptify Connect | Moves playback between your phone and tryptify.com at the same second, or steers one from the other |
+| Tryptify Connect | Moves playback between your phone and tryptify.com at the same second, or steers one from the other. While the phone plays nothing and another device plays, the player and the mini player show that song (cover, lyrics, time) and their controls steer that device; the Connect panel (the Devices button in the player's top bar) has that device's volume. |
 | Listening parties | The same moment of the same song with friends, with a shared queue, chat and vote skip |
 | Share links | A tryptify.com link to a song or album that plays in anyone's Tryptify. A file on the phone can be shared too when it is a song from TIDAL, Qobuz or Deezer: it is found by its ISRC tag, or by its name and length. |
 | Last.fm, ListenBrainz | `Settings › Connections › Last.fm scrobbling`, `ListenBrainz` |

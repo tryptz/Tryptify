@@ -31,7 +31,11 @@ data class ConnectTrack(
     val coverArt: String? = null,
 )
 
-/** What plays, on which device: [position] seconds at server time [at]; [since] is when it started playing there. */
+/**
+ * What plays, on which device: [position] seconds at server time [at]; [since]
+ * is when it started playing there. [volume] is that device's, from 0 to 1,
+ * or null from one that does not say (an app before 1.9.6) or cannot set it.
+ */
 @Serializable
 data class ConnectNow(
     val device: String = "",
@@ -42,6 +46,7 @@ data class ConnectNow(
     val rate: Double = 1.0,
     val at: Long = 0,
     val since: Long = 0,
+    val volume: Double? = null,
 )
 
 @Serializable
@@ -94,6 +99,39 @@ object ConnectProtocol {
         other != null && other.playing && other.device != myId && playingHere &&
             (if (other.since > 0) other.since else other.at) >= mySince
 
+    /**
+     * What plays on another device, for this one to show: [now] when it is
+     * another device's, has a song, and that device is in the room.
+     */
+    fun elsewhere(now: ConnectNow?, myId: String, devices: List<ConnectDevice>): ConnectNow? =
+        now?.takeIf { n -> n.device != myId && n.track != null && devices.any { it.id == n.device } }
+
+    /**
+     * Whether this device's player follows [elsewhere], given whether it
+     * [was] following: from the moment that device plays while this one does
+     * not, on while that device is paused (its pause is shown, not this
+     * phone's own song put back), and no longer once this device plays or
+     * nothing is elsewhere. A device found paused is not followed: this
+     * phone's own song stays.
+     */
+    fun follows(was: Boolean, elsewhere: ConnectNow?, playingHere: Boolean): Boolean = when {
+        elsewhere == null || playingHere -> false
+        elsewhere.playing -> true
+        else -> was
+    }
+
+    /**
+     * Whether this device says its state now. A paused device does not while
+     * another one plays: the room refuses that (room.ts, "a paused device
+     * does not take over"), and a phone that noted its own word all the same
+     * would forget the song it follows.
+     */
+    fun maySay(playingHere: Boolean, held: ConnectNow?, myId: String): Boolean =
+        playingHere || held == null || held.device == myId || !held.playing
+
+    /** A volume as the room takes it: 0 to 1, or null for anything that is not a number. */
+    fun volume(v: Double?): Double? = v?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0)
+
     /** Only plain https covers travel: a music server's carry its sign-in, and a file's own picture is this phone's. */
     fun shareableCover(url: String?): String? {
         if (url.isNullOrBlank() || !url.startsWith("https://")) return null
@@ -111,6 +149,7 @@ object ConnectProtocol {
         put("position", now.position)
         put("rate", now.rate)
         put("since", now.since)
+        volume(now.volume)?.let { put("volume", it) }
     }
 
     fun state(now: StateOut): String = json.encodeToString(JsonObject(mapOf("type" to JsonPrimitive("state")) + stateFields(now)))
@@ -130,12 +169,19 @@ object ConnectProtocol {
         put("queue", json.encodeToJsonElement(kotlinx.serialization.builtins.ListSerializer(ConnectTrack.serializer()), queue.take(MAX_QUEUE)))
     })
 
-    /** What this device says it plays. */
-    data class StateOut(val playing: Boolean, val track: ConnectTrack?, val position: Double, val rate: Double, val since: Long)
+    /** What this device says it plays, and its [volume] (0 to 1) when it can say and set one. */
+    data class StateOut(
+        val playing: Boolean,
+        val track: ConnectTrack?,
+        val position: Double,
+        val rate: Double,
+        val since: Long,
+        val volume: Double? = null,
+    )
 
     const val MAX_QUEUE = 100
 
     /** A music server's sign-in in a cover's address: its user, token, salt and password. */
     private val SIGN_IN_PARAMS = setOf("t", "s", "p", "u")
-    val ACTIONS = setOf("play", "pause", "next", "prev", "seek")
+    val ACTIONS = setOf("play", "pause", "next", "prev", "seek", "volume")
 }

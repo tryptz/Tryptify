@@ -3225,6 +3225,7 @@
     <string name="connect_here_from">%1$s から引き継いで再生中</string>
     <string name="connect_made_way">%1$s で再生が始まったため、このスマートフォンは一時停止しました</string>
     <string name="connect_cannot_play">「%1$s」はこのスマートフォンでは再生できません</string>
+    <string name="connect_like_there">この曲は %1$s 上のファイルです。そちらでお気に入りに追加してください。</string>
     <string name="connect_not_connected">Tryptify Connect に接続していません</string>
     <string name="connect_signed_out">サインインすると、ほかのデバイスを表示して音楽を移せます。</string>
     <string name="connect_connecting">接続中…</string>
@@ -3570,6 +3571,8 @@
     <string name="whats_new_196_crossfeed_room_body">クロスフィードは「オフ」「クロスフィード」「部屋」から選べるようになりました。ミキサーの Binaural Room を単体で使い、独自の HRTF、低音を部屋の外に出す LFE、2D または 3D の表示があります。プレーヤーのオーディオツールで「クロスフィード」を長押しします。アプリを再起動しても設定は残ります。</string>
     <string name="whats_new_196_room_presets_title">Binaural Room に 10 個のプリセット</string>
     <string name="whats_new_196_room_presets_body">Binaural Room に 10 個のプリセットが加わり、ミキサーとクロスフィードのページで使えます。スタジオモニターからコンサートホールまで、実際の部屋と同じ長さで響く 6 つの環境と、空間を広げる 4 つです。すべて同じ音量で再生されます。</string>
+    <string name="whats_new_196_connect_follow_title">プレーヤーが別のデバイスに追従</string>
+    <string name="whats_new_196_connect_follow_body">このスマートフォンが何も再生しておらず、別のデバイスが再生しているとき、プレーヤーにその曲のカバー、歌詞、再生位置が表示されます。操作はそのデバイスに届き、Tryptify Connect パネルでその音量を調整できます。</string>
     <string name="atmos_room_builtin">内蔵の部屋</string>
     <string name="atmos_room_custom">自分の部屋</string>
     <string name="atmos_rooms">部屋</string>

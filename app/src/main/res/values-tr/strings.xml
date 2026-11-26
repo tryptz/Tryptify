@@ -3301,6 +3301,7 @@
     <string name="connect_here_from">%1$s cihazından alınıp burada çalıyor</string>
     <string name="connect_made_way">%1$s çalmaya başladı, bu telefon duraklatıldı</string>
     <string name="connect_cannot_play">“%1$s” bu telefonda çalınamıyor</string>
+    <string name="connect_like_there">Bu şarkı %1$s üzerindeki bir dosya. Orada beğen.</string>
     <string name="connect_not_connected">Tryptify Connect bağlı değil</string>
     <string name="connect_signed_out">Diğer cihazlarını görmek ve müziği aralarında taşımak için giriş yap.</string>
     <string name="connect_connecting">Bağlanıyor…</string>
@@ -3648,6 +3649,8 @@
     <string name="whats_new_196_crossfeed_room_body">Crossfeed artık Kapalı, Crossfeed ya da Oda: mikserin Binaural Room efekti tek başına; kendi HRTF’si, bası odanın dışında tutan bir LFE ve 2D ya da 3D görünümle. Oynatıcının Ses araçları bölümünde Crossfeed’e basılı tut. Uygulama yeniden başladığında korunur.</string>
     <string name="whats_new_196_room_presets_title">Binaural Room için on ön ayar</string>
     <string name="whats_new_196_room_presets_body">Binaural Room için on ön ayar, mikserde ve Crossfeed sayfasında: stüdyo monitörlerinden konser salonuna, o tür odalar kadar çınlayan altı gerçek düzen ve alanı genişleten dört ön ayar. Hepsi aynı ses yüksekliğinde çalar.</string>
+    <string name="whats_new_196_connect_follow_title">Oynatıcı diğer cihazını izler</string>
+    <string name="whats_new_196_connect_follow_body">Bu telefon bir şey çalmazken başka bir cihazın çalıyorsa oynatıcı o şarkıyı gösterir: kapağı, sözleri ve süresi. Düğmeler o cihazı yönetir, Tryptify Connect paneli de sesini ayarlar.</string>
     <string name="atmos_room_builtin">Yerleşik oda</string>
     <string name="atmos_room_custom">Odam</string>
     <string name="atmos_rooms">Odalar</string>
