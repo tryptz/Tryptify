@@ -1554,7 +1554,7 @@
     <string name="spectrogram3d_high">Tono más agudo</string>
     <string name="spectrogram3d_high_desc">El borde trasero: los agudos.</string>
     <string name="spectrogram3d_quality">Calidad</string>
-    <string name="spectrogram3d_quality_desc">Detalle de la malla. Más bajo es más ligero en teléfonos antiguos. Se queda en este teléfono: los temas no lo cambian.</string>
+    <string name="spectrogram3d_quality_desc">Detalle. «Baja» es la más ligera: se ilumina cada punto, no cada píxel. Se queda en este teléfono: los temas no lo cambian.</string>
     <string name="spectrogram3d_quality_low">Baja</string>
     <string name="spectrogram3d_quality_medium">Media</string>
     <string name="spectrogram3d_quality_high">Alta</string>

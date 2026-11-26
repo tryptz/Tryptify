@@ -17,14 +17,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -176,15 +174,20 @@ private fun Spectrogram3DPreview(
     val adjustDone by rememberUpdatedState(onAdjustDone)
     val (running, reportVisibility) = previewGate("spectrogram3d")
 
-    // The live analyzer while audio flows, the waterfall's demo signal otherwise.
+    // The live analyzer while audio flows, the waterfall's demo signal
+    // otherwise. The feed hands out a new array each analysis and is read
+    // here, not collected, so "audio flows" is "the array changed lately".
     val lastLive = remember { longArrayOf(0L) }
-    LaunchedEffect(liveBins != null) {
-        snapshotFlow { live?.invoke() }.collect { if (it != null) lastLive[0] = System.nanoTime() }
-    }
+    val lastSeen = remember { arrayOfNulls<FloatArray>(1) }
     val demo = remember { FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS) }
     val provider: () -> FloatArray = remember {
         {
             val bins = live?.invoke()
+            if (bins != null && bins !== lastSeen[0]) {
+                // The array there at the start is not an analysis.
+                if (lastSeen[0] != null) lastLive[0] = System.nanoTime()
+                lastSeen[0] = bins
+            }
             if (bins != null && System.nanoTime() - lastLive[0] < LIVE_TIMEOUT_NANOS) {
                 bins
             } else {
@@ -249,6 +252,9 @@ private fun Spectrogram3DPreview(
                 glow = glow,
                 isPlaying = true,
                 modifier = Modifier.fillMaxSize(),
+                // The demo and the live sound are levels apart: a change
+                // between them starts the landscape afresh.
+                resetKey = showingLive,
             )
         } else {
             PreviewPaused(Modifier.align(Alignment.Center))

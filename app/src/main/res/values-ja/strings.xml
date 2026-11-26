@@ -1470,7 +1470,7 @@
     <string name="spectrogram3d_high">最高音</string>
     <string name="spectrogram3d_high_desc">奥の端：高音。</string>
     <string name="spectrogram3d_quality">品質</string>
-    <string name="spectrogram3d_quality_desc">メッシュの細かさ。低いほど古いスマートフォンに軽くなります。このスマートフォンにだけ保存され、テーマでは変わりません。</string>
+    <string name="spectrogram3d_quality_desc">細かさ。「低」が最も軽く、ピクセルごとではなく点ごとに光を計算します。このスマートフォンにだけ保存され、テーマでは変わりません。</string>
     <string name="spectrogram3d_quality_low">低</string>
     <string name="spectrogram3d_quality_medium">中</string>
     <string name="spectrogram3d_quality_high">高</string>

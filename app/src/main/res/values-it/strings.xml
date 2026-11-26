@@ -1554,7 +1554,7 @@
     <string name="spectrogram3d_high">Nota più alta</string>
     <string name="spectrogram3d_high_desc">Il bordo posteriore: gli acuti.</string>
     <string name="spectrogram3d_quality">Qualità</string>
-    <string name="spectrogram3d_quality_desc">Dettaglio della mesh. Più basso è più leggero sui telefoni vecchi. Resta su questo telefono: i temi non lo cambiano.</string>
+    <string name="spectrogram3d_quality_desc">Dettaglio. «Bassa» è la più leggera: viene illuminato ogni punto, non ogni pixel. Resta su questo telefono: i temi non lo cambiano.</string>
     <string name="spectrogram3d_quality_low">Bassa</string>
     <string name="spectrogram3d_quality_medium">Media</string>
     <string name="spectrogram3d_quality_high">Alta</string>

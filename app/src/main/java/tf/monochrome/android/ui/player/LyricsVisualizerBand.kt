@@ -47,7 +47,7 @@ internal fun LyricsVisualizerBand(
                 )
             }
             visual == CoverVisual.SPECTROGRAM_3D && SPECTROGRAM_3D_SUPPORTED -> Spectrogram3DOverlay(
-                bins = bins,
+                bins = LocalSpectrogramBins.current ?: bins,
                 settings = spectrogram3d,
                 color = color,
                 glow = glow,

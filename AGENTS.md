@@ -858,6 +858,15 @@ AGSL through, and draws a frame with the app's camera maths. Run it after
 changing the shader; a phone that refuses a shader falls back to the canvas
 drawing and says nothing.
 
+The cover's 3D spectrogram has the same kind of check for its shader
+(`SPECTROGRAM_3D_SHADER` in `ui/player/Spectrogram3D.kt`),
+`tools/spectrogram_3d/check.py` (needs `skia-python` and `numpy`): it compiles
+the shader and draws a made-up landscape the way the app does, with
+`drawVertices`, texture coordinates and the heights as two 8-bit textures. Run
+it after changing the shader; a phone that refuses it lights the mesh's points
+instead and says nothing. Its look and its sound feed are in
+`docs/ui-invariants.md` ("The cover's third view").
+
 Several tests exist specifically to hold the UI invariants — `LightSchemesTest`,
 `CustomSchemeTest`, `GlobeLandClipTest`, `SettingsSearchIndexTest`. They are the
 guarantee, not a formality. If one fails, fix the code; do not loosen the

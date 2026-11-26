@@ -910,7 +910,7 @@ private fun HeroCoverArt(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
             ) {
                 Spectrogram3DOverlay(
-                    bins = spectrumBins,
+                    bins = LocalSpectrogramBins.current ?: spectrumBins,
                     settings = spectrogram3d,
                     color = spectrumColor,
                     glow = spectrumGlow ?: spectrumColor,

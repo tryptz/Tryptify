@@ -1513,7 +1513,7 @@
     <string name="spectrogram3d_high">Highest pitch</string>
     <string name="spectrogram3d_high_desc">The back edge: the treble.</string>
     <string name="spectrogram3d_quality">Quality</string>
-    <string name="spectrogram3d_quality_desc">Mesh detail. Lower is lighter on older phones. It stays on this phone: themes don’t change it.</string>
+    <string name="spectrogram3d_quality_desc">Detail. Low is the lightest: each point is lit, not each pixel. It stays on this phone: themes don’t change it.</string>
     <string name="spectrogram3d_quality_low">Low</string>
     <string name="spectrogram3d_quality_medium">Medium</string>
     <string name="spectrogram3d_quality_high">High</string>

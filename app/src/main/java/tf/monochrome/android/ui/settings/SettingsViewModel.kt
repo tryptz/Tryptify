@@ -124,6 +124,8 @@ class SettingsViewModel @Inject constructor(
 
     /** Shared live FFT bins from the audio pipeline — same source the NowPlaying overlay uses. */
     val spectrumBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrumBins
+    /** The 3D spectrogram's own feed; read its value in the preview's frame loop. */
+    val spectrogramBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrogramBins
 
     /**
      * Reference-counted subscription to the FFT analysis coroutine. The preview

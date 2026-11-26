@@ -1512,7 +1512,7 @@
     <string name="spectrogram3d_high">Höchste Tonhöhe</string>
     <string name="spectrogram3d_high_desc">Die Hinterkante: die Höhen.</string>
     <string name="spectrogram3d_quality">Qualität</string>
-    <string name="spectrogram3d_quality_desc">Netzdetail. Niedriger schont ältere Handys. Bleibt auf diesem Handy: Themes ändern es nicht.</string>
+    <string name="spectrogram3d_quality_desc">Detail. „Niedrig“ ist am leichtesten: Jeder Punkt wird beleuchtet, nicht jedes Pixel. Bleibt auf diesem Handy: Themes ändern es nicht.</string>
     <string name="spectrogram3d_quality_low">Niedrig</string>
     <string name="spectrogram3d_quality_medium">Mittel</string>
     <string name="spectrogram3d_quality_high">Hoch</string>

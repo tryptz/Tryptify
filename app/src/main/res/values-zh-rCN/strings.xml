@@ -1470,7 +1470,7 @@
     <string name="spectrogram3d_high">最高音高</string>
     <string name="spectrogram3d_high_desc">后边缘：高音。</string>
     <string name="spectrogram3d_quality">质量</string>
-    <string name="spectrogram3d_quality_desc">网格细节。较低的设置对旧手机更省力。仅保存在此手机上：主题不会更改它。</string>
+    <string name="spectrogram3d_quality_desc">细节。“低”最省资源：按点而非按像素计算光照。仅保存在此手机上：主题不会更改它。</string>
     <string name="spectrogram3d_quality_low">低</string>
     <string name="spectrogram3d_quality_medium">中</string>
     <string name="spectrogram3d_quality_high">高</string>

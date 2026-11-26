@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Spectrogram3DSettings(
     /** Speed: how many seconds of music the front edge spans, right to left. */
-    val secondsAcross: Float = 6f,
+    val secondsAcross: Float = 4f,
     /** How high the camera looks down: low is a near-flat horizon, high looks down on it. */
     val angleDeg: Float = 18f,
     /** How tall the peaks stand, 1 as shipped. */
@@ -26,11 +26,11 @@ data class Spectrogram3DSettings(
     /** 0 sharp, detailed ridges; 1 soft and rounded. */
     val smoothness: Float = 0.3f,
     /** How quickly the back fades into the cover. */
-    val haze: Float = 0.4f,
+    val haze: Float = 0.55f,
     /** The lowest pitch shown, at the front, in Hz. */
     val minHz: Float = 30f,
     /** The highest pitch shown, at the back, in Hz. */
-    val maxHz: Float = 16_000f,
+    val maxHz: Float = 5_000f,
     /** Mesh detail, [MIN_QUALITY]..[MAX_QUALITY]. Personal: older phones want fewer points. */
     val quality: Int = 2,
     /** The Settings preview is shown. Personal. */

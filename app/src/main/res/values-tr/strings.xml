@@ -1512,7 +1512,7 @@
     <string name="spectrogram3d_high">En tiz ses</string>
     <string name="spectrogram3d_high_desc">Arka kenar: tizler.</string>
     <string name="spectrogram3d_quality">Kalite</string>
-    <string name="spectrogram3d_quality_desc">Ağ ayrıntısı. Düşük olan eski telefonlarda daha hafiftir. Bu telefonda kalır: temalar değiştirmez.</string>
+    <string name="spectrogram3d_quality_desc">Ayrıntı. Düşük en hafifidir: her piksel değil, her nokta aydınlatılır. Bu telefonda kalır: temalar değiştirmez.</string>
     <string name="spectrogram3d_quality_low">Düşük</string>
     <string name="spectrogram3d_quality_medium">Orta</string>
     <string name="spectrogram3d_quality_high">Yüksek</string>

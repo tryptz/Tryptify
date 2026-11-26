@@ -1554,7 +1554,7 @@
     <string name="spectrogram3d_high">Note la plus aiguë</string>
     <string name="spectrogram3d_high_desc">Le bord arrière : les aigus.</string>
     <string name="spectrogram3d_quality">Qualité</string>
-    <string name="spectrogram3d_quality_desc">Détail du maillage. Plus bas, c’est plus léger pour les anciens téléphones. Il reste sur ce téléphone : les thèmes ne le changent pas.</string>
+    <string name="spectrogram3d_quality_desc">Détail. « Basse » est la plus légère : chaque point est éclairé, pas chaque pixel. Reste sur ce téléphone : les thèmes ne la changent pas.</string>
     <string name="spectrogram3d_quality_low">Basse</string>
     <string name="spectrogram3d_quality_medium">Moyenne</string>
     <string name="spectrogram3d_quality_high">Haute</string>

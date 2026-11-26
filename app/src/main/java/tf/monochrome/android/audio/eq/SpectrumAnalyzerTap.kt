@@ -167,6 +167,17 @@ class SpectrumAnalyzerTap @Inject constructor(
     private val _spectrumBins = MutableStateFlow(FloatArray(OUTPUT_BINS))
     val spectrumBins: StateFlow<FloatArray> = _spectrumBins.asStateFlow()
 
+    private val _spectrogramBins = MutableStateFlow(FloatArray(OUTPUT_BINS) { SpectrogramBands.SILENCE_DB })
+
+    /**
+     * The 3D spectrogram's own reading of each analysis ([SpectrogramBands]):
+     * the same [OUTPUT_BINS] log bands in dBFS with the pink tilt, but not
+     * re-centred, smoothed or blurred as [spectrumBins] is, so loud and quiet
+     * keep their difference. A new array each analysis; read its value in a
+     * frame loop rather than collecting it.
+     */
+    val spectrogramBins: StateFlow<FloatArray> = _spectrogramBins.asStateFlow()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var analysisJob: Job? = null
 
@@ -327,6 +338,7 @@ class SpectrumAnalyzerTap @Inject constructor(
             var twiddleSin = buildTwiddleSin(currentSize)
             var smoothed = FloatArray(OUTPUT_BINS)
             var binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
+            var bands = SpectrogramBands(currentSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
             // Per-frame magnitude scratch. Purely intermediate — it is folded
             // into `smoothed` and never escapes this coroutine — so it is held
             // and refilled rather than allocated every frame. (The published
@@ -348,6 +360,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                     twiddleCos = buildTwiddleCos(currentSize)
                     twiddleSin = buildTwiddleSin(currentSize)
                     binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
+                    bands = SpectrogramBands(currentSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
                     smoothed = FloatArray(OUTPUT_BINS)
                     _analysisDirty = false
                     settled = false
@@ -381,6 +394,13 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
 
                 fft(real, imag, twiddleCos, twiddleSin)
+
+                // The 3D spectrogram's reading of the same FFT, before the
+                // display's own treatment below. A fresh array: its reader
+                // keeps the reference.
+                val plain = FloatArray(OUTPUT_BINS)
+                bands.levels(real, imag, plain)
+                _spectrogramBins.value = plain
 
                 // Compute magnitudes for target log-frequency bins.
                 // Zeroed first because the loop below `continue`s past

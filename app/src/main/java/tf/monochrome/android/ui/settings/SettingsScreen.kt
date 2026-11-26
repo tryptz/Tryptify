@@ -1173,10 +1173,11 @@ internal fun VisualizerSettings(
         // The cover's third view, after the waterfall it grew out of. Its
         // preview shares the arbiter, so only the one most on screen runs.
         val spectrogram3d by viewModel.spectrogram3d.collectAsStateWithLifecycle()
+        val spectrogramFeed: () -> FloatArray = remember(viewModel) { { viewModel.spectrogramBins.value } }
         Spectrogram3DSettingsSection(
             settings = spectrogram3d,
             onChange = viewModel::setSpectrogram3d,
-            liveBins = if (spectrumEnabled) ({ spectrumBins }) else null,
+            liveBins = if (spectrumEnabled) spectrogramFeed else null,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

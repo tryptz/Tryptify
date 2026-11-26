@@ -327,6 +327,11 @@ fun MainPlayerRoute(
     val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
     val waterfallSettings by playerViewModel.spectrumWaterfall.collectAsStateWithLifecycle()
     val spectrogram3dSettings by playerViewModel.spectrogram3d.collectAsStateWithLifecycle()
+    // The 3D spectrogram's feed, read where it is drawn: not collected, so a
+    // new analysis recomposes nothing here.
+    val spectrogramFeed: () -> FloatArray = remember(playerViewModel) {
+        { playerViewModel.spectrumAnalyzer.spectrogramBins.value }
+    }
     // The cover's view (Spectrum, Wave Candy, 3D spectrogram), held here so the
     // Lyrics view can keep it under the lyrics and a trip there and back keeps it.
     var coverVisual by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoverVisual.SPECTRUM) }
@@ -696,6 +701,7 @@ fun MainPlayerRoute(
         LocalLyricsSpectrum provides playerViewModel.spectrumAnalyzer,
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
+        LocalSpectrogramBins provides spectrogramFeed,
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
         LocalGlassArea provides LinkArea.PLAYER,

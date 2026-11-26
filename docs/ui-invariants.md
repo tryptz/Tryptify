@@ -381,50 +381,99 @@ as a strip under it, in back-to-front order, in one or two draws.
 Ridgeline's ground under the front line goes on to the bottom of the box (`ridgeGroundBase`): the front baseline sits at 98.5% of the height so its stroke is not cut, and a ground stopping there left a strip of the cover under the dark face. `WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
 hardware-drawn, each line is one stroked path, never `drawLines`.
 
-**The cover's third view, the 3D spectrogram, is one lit mesh too**
-(`Spectrogram3DScene`, `Spectrogram3DOverlay`): the music as a landscape,
-time sideways (the newest at the right edge, scrolling left) and pitch into
-the distance (bass at the front), as in the reference the owner sent
-(2026-11-26). The cover's spectrum button walks Spectrum, Wave Candy, 3D
-spectrogram and round again (`CoverVisual`), skipping a view that cannot
-show: Wave Candy without its settings, the 3D view without the analyzer or
-below Android 10, where `drawVertices` is not drawn on the GPU (it is not
-offered there at all, and Settings says so). Its speed is set in Settings
-only; the cover's speed button stays the spectrum's.
+**The cover's third view, the 3D spectrogram, is a mesh lit by a shader**
+(`Spectrogram3DScene`, `Spectrogram3DGpu`, `Spectrogram3DOverlay`): the music
+as a landscape, time sideways (the newest at the right edge, scrolling left)
+and pitch into the distance (bass at the front), after the reference the
+owner sent (2026-11-26): a glossy blue floor, notes standing up as white bars
+with their loudest tops in a second colour. The cover's spectrum button
+walks Spectrum, Wave Candy, 3D spectrogram and round again (`CoverVisual`),
+skipping a view that cannot show: Wave Candy without its settings, the 3D
+view without the analyzer or below Android 10 (not offered there at all, and
+Settings says so). Its speed is set in Settings only; the cover's speed
+button stays the spectrum's.
 
-- **One `drawVertices` call, back to front.** The strip nearest the back is
-  drawn first, so nearer ridges cover what they hide without a depth buffer,
-  and a front wall last, from the front ridge down to the box's bottom (the
-  cover showed through under the nearest peaks without it); at most about
-  29,000 points at Ultra (96 pitch rows), under the 16-bit index limit.
-- **The ground fills the box from bottom to near the top** (`Camera.of`,
-  `BACK_EDGE`): a low camera looking down a long landscape, as in the
-  reference. Fitted to keep a full peak inside the box, it was a thin strip
-  along the bottom with most of the band empty (seen in the first render,
-  2026-11-26). Peaks rise over the rows behind them and may reach the top.
+The first version lit a few thousand mesh points from the display's
+spectrum and looked nothing like the reference ("looks bad compared to the
+video", the owner, 2026-11-26). What the rework rests on, each found by
+drawing the real scene and shader with Skia beside the reference's frames:
+
+- **Its own feed, never the display's spectrum.** `SpectrumAnalyzerTap.
+  spectrogramBins` (`SpectrogramBands`): per log band the strongest FFT bin,
+  dBFS with the pink tilt, and no more. `spectrumBins` is re-centred on its
+  midband every frame, so a quiet moment was raised to a loud one's level and
+  the landscape was bumps everywhere, silence included. Provided once around
+  the player (`LocalSpectrogramBins`) and read in the frame loop, not
+  collected.
+- **Level against the loudest band, over a narrow range.** A reference
+  follows the loudest band (up within frames, down 2 dB a second, never for
+  a rest's silence), the floor is `RANGE_DB` (28) under it and a full peak
+  `HEADROOM_DB` (7) under it. Measured on dense music, half of all bands lie
+  about 22 dB under the loudest and a tenth within 13: with 46 dB of range
+  nearly everything stood near the top and the picture was white.
+- **Pitch spread by `rowHz`**, even in ln(1 + f/600) (about the mel scale):
+  near even in Hz in the bass and middle, so a note's harmonics are evenly
+  spaced bars, and by the octave above. By the octave alone they crowd into
+  thin lines. 30 Hz to 5 kHz as shipped: above that it is hi-hats, thin
+  streaks across the bars. Some of the feed's tilt is taken back
+  (`TILT_BACK_DB_PER_OCTAVE`), so the far rows lie lower than the near ones,
+  as the sound does.
+- **A note is held as it dies** (rise `ATTACK_TAU`, fall `RELEASE_TAU`, both
+  longer with Smoothness): a run of short notes on a pitch is one bar with a
+  pinch between them, as in the reference, not a row of bumps. A little of
+  what the pitch blur removes is put back (`DETAIL`), and what lies under
+  the floor still stirs it (`RIPPLE`): the ripple the gloss catches.
+- **Low relief** (`HEIGHT_SCALE`): the reference is embossed wax, not a
+  mountain range; tall walls showed the colour bands as hard stripes.
+- **One `drawVertices` call, back to front**, the strip nearest the back
+  first, then a front wall in shade down to the box's bottom. The mesh is
+  coarser than the history (a mesh column stands for two or three history
+  columns and rides the same ones until it leaves at the left, so nothing
+  swims); at most about 27,000 points at Ultra, under the 16-bit index
+  limit. The ground runs from the box's bottom to near its top
+  (`Camera.of`, `BACK_EDGE`) with the camera close (`DISTANCE`), so the
+  front bars loom as in the reference.
+- **Lit per pixel from Android 13** (`SPECTROGRAM_3D_SHADER`, the paint's
+  shader, the mesh's texture coordinates each pixel's place in the
+  history): floor in the album's colour, flanks to white, tops in its second
+  colour (`SpectrogramPalette` keeps both saturated and gives a grey second
+  colour a hue of its own); a key light, sharp gloss, a mirrored sky by
+  Fresnel, subsurface light through the ridges, shade in the hollows, and
+  the far rows out of focus and hazed. The slope is measured over the texels
+  a pixel covers there, from the camera, so the far rows do not shimmer.
+  The history reaches it as **two 8-bit alpha textures**, the high and low
+  byte of a 16-bit height: alpha is untouched by colour management, and the
+  decode is linear, so the GPU's filtering interpolates heights exactly
+  (one 8-bit texture terraced the gloss). Two pairs, used turn about, so
+  the render thread never reads the pair being written. The shader is the
+  overlay's own, never shared: it is a paint's shader.
+- **Below Android 13, or at Low quality, each mesh point is lit instead**
+  (`Lighting`, the same colours and lights without the mirrored sky and the
+  hollows' shade): the way out if a phone's GPU draws the shader wrong.
 - **Time by the clock, never by frames.** Columns are pushed every
   `secondsAcross / columns` seconds of playing time and the newest glides in
   by its `phase`, on the app's frame clock: it draws at whatever Settings ›
   System › Performance › Frame rate limit allows and scrolls at the same
-  speed at every rate (`Spectrogram3DSceneTest`). A long gap is not caught
-  up on. Paused, it stands still and asks for no frames.
-- **Lit per point, in the album's colours.** A wrapped key light, a
-  Blinn-Phong gloss, and subsurface scattering: a lamp behind the landscape
-  glowing through the ridges and their rims in the album's second colour
-  (the dominant one, raised to full strength, since it is often the dark
-  background). The back darkens and fades into the cover with the haze.
+  speed at every rate. A long gap is not caught up on. Paused, it stands
+  still and asks for no frames. The floor is there from the start: a
+  cleared history is flat, not missing.
 - **Settings › 3D spectrogram**, after the waterfall, with a preview that can
   be switched off and is steered like the waterfall's (one finger: up and
   down the camera, left and right the speed; pinch: peak height). Speed,
   camera angle, peak height, gloss, subsurface glow, smoothness, depth haze,
-  the pitch range (log sliders, two octaves at least) and quality. All of
-  it travels in a theme's visualizer part except quality and the preview
-  switch, the listener's own (`withPersonalFrom`). Not seen on a phone when
-  it was written. Its look was tuned on renders of the real scene off the
-  phone (the scene's mesh and colours drawn by a software stand-in for
-  `drawVertices`, fed a Python copy of the analyzer on the reference's
-  audio): sharp pitch detail (smoothness 0.3, 48 rows at Medium), quiet
-  sound kept low (`SHAPE` 2), deep valleys and white peaks.
+  the pitch range and quality. All of it travels in a theme's visualizer
+  part except quality and the preview switch, the listener's own
+  (`withPersonalFrom`). The preview starts the landscape afresh when it
+  changes between the demo signal and the live sound, which are levels
+  apart.
+
+`Spectrogram3DSceneTest` and `SpectrogramBandsTest` hold the numbers;
+`tools/spectrogram_3d/check.py` compiles the shader with Skia (what Android
+runs AGSL through) and draws a frame with it: run it after changing the
+shader, since a phone that refuses a shader falls back and says nothing.
+**Not seen on a phone when it was written**: `drawVertices` with a
+`RuntimeShader` and texture coordinates is drawn here by Skia's CPU
+rasterizer, the phone's by its GPU.
 
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides
