@@ -36,6 +36,7 @@ import kotlinx.coroutines.delay
 import tf.monochrome.android.R
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.domain.model.Spectrogram3DSettings
+import tf.monochrome.android.ui.player.SpectrogramRenderer
 import tf.monochrome.android.ui.player.SPECTROGRAM_3D_SUPPORTED
 import tf.monochrome.android.ui.player.Spectrogram3DOverlay
 import java.util.Locale
@@ -186,6 +187,31 @@ internal fun Spectrogram3DSettingsSection(
         { drag(shown.copy(quality = it.roundToInt())) }, ::commit,
         steps = Spectrogram3DSettings.MAX_QUALITY - Spectrogram3DSettings.MIN_QUALITY - 1,
     )
+    // Which way this phone draws it, said here: the simple version looks
+    // nothing like the lit one, and nothing else tells them apart.
+    val how = remember(shown.quality) { SpectrogramRenderer.here(shown.quality) }
+    val full = how == SpectrogramRenderer.SHADER
+    Text(
+        stringResource(
+            when (how) {
+                SpectrogramRenderer.SHADER -> R.string.spectrogram3d_drawn_full
+                SpectrogramRenderer.MESH_QUALITY_LOW -> R.string.spectrogram3d_drawn_low
+                SpectrogramRenderer.MESH_ANDROID_BELOW_13 -> R.string.spectrogram3d_drawn_old_android
+                SpectrogramRenderer.MESH_SHADER_REFUSED -> R.string.spectrogram3d_drawn_refused
+            },
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (full) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+    )
+    // Back to the look as shipped, in one tap. Quality and the preview
+    // switch are the listener's own and stay.
+    androidx.compose.material3.TextButton(
+        onClick = { onChange(Spectrogram3DSettings.DEFAULT.withPersonalFrom(settings)) },
+        enabled = shown != Spectrogram3DSettings.DEFAULT.withPersonalFrom(shown),
+    ) {
+        Text(stringResource(R.string.settings_reset_to_default))
+    }
 }
 
 /** A pitch as the slider shows it: Hz below a thousand, kHz above. */

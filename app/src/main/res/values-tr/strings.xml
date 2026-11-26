@@ -1523,6 +1523,10 @@
     <string name="spectrogram3d_high_desc">Arka kenar: tizler.</string>
     <string name="spectrogram3d_quality">Kalite</string>
     <string name="spectrogram3d_quality_desc">Ayrıntı. Düşük en hafifidir: her piksel değil, her nokta aydınlatılır. Bu telefonda kalır: temalar değiştirmez.</string>
+    <string name="spectrogram3d_drawn_full">Bu telefon onu tam ışıklandırmayla çiziyor.</string>
+    <string name="spectrogram3d_drawn_low">Kalite Düşük olduğu için bu telefon basit sürümü çiziyor. Gölgeler, dalgacıklar ve sözlerin ışığı için Orta veya üstü gerekir.</string>
+    <string name="spectrogram3d_drawn_old_android">Bu telefon basit sürümü çiziyor: tam ışıklandırma için Android 13 veya üstü gerekir.</string>
+    <string name="spectrogram3d_drawn_refused">Bu telefon basit sürümü çiziyor: grafik sürücüsü ışıklandırmayı reddetti. Düzeltilebilmesi için Ayarlar › Sistem bölümünden günlükleri gönderin.</string>
     <string name="spectrogram3d_quality_low">Düşük</string>
     <string name="spectrogram3d_quality_medium">Orta</string>
     <string name="spectrogram3d_quality_high">Yüksek</string>

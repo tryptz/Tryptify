@@ -5,6 +5,7 @@ import android.graphics.BitmapShader
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
@@ -79,6 +80,8 @@ internal fun Spectrogram3DOverlay(
     lyricLight: ((SpectrogramLamp) -> Unit)? = null,
 ) {
     val scene = remember { Spectrogram3DScene() }
+    // What was last said in the log of how this is drawn. Not state: the draw phase's own.
+    val said = remember { IntArray(5) }
     val lamp = remember { SpectrogramLamp() }
     // The box's left edge in root px. Not state: read in the draw phase only.
     val leftInRoot = remember { FloatArray(1) }
@@ -138,6 +141,57 @@ internal fun Spectrogram3DOverlay(
             }
         }
         FrameStallLog.drew(FrameStallLog.Effect.SPECTROGRAM, (size.width * size.height).toLong())
+        // Once, and again when it changes: which way this phone draws it and
+        // at what size. A phone that refuses the shader draws the simple
+        // version and would otherwise say nothing.
+        val how = SpectrogramRenderer.of(s.quality, Build.VERSION.SDK_INT, gpu != null)
+        if (said[0] != how.ordinal + 1 || said[1] != s.quality || said[2] != scene.texColumns ||
+            said[3] != scene.texRows || said[4] != size.width.toInt()
+        ) {
+            said[0] = how.ordinal + 1; said[1] = s.quality; said[2] = scene.texColumns
+            said[3] = scene.texRows; said[4] = size.width.toInt()
+            Log.i(
+                SPECTROGRAM_TAG,
+                "drawn by $how at quality ${s.quality}: history ${scene.texColumns}x${scene.texRows}, " +
+                    "${scene.vertexCount} points, ${size.width.toInt()}x${size.height.toInt()} px" +
+                    (Spectrogram3DGpu.refusal?.let { ", shader refused: $it" } ?: ""),
+            )
+        }
+    }
+}
+
+private const val SPECTROGRAM_TAG = "Spectrogram3D"
+
+/**
+ * Which way the 3D spectrogram is drawn on this phone, and why. Settings says
+ * it under Quality and the log says it once: a phone that draws the simple
+ * version looks nothing like one that draws the shader, and it used to be
+ * told apart only by looking.
+ */
+internal enum class SpectrogramRenderer {
+    /** Each pixel lit by the shader: shadows, ripples, light through the swells, the lyrics' light. */
+    SHADER,
+    /** Each mesh point lit, because Quality is Low. */
+    MESH_QUALITY_LOW,
+    /** Each mesh point lit, because the shader needs Android 13. */
+    MESH_ANDROID_BELOW_13,
+    /** Each mesh point lit, because this phone would not compile the shader. */
+    MESH_SHADER_REFUSED;
+
+    companion object {
+        fun of(quality: Int, sdk: Int, shaderCompiled: Boolean): SpectrogramRenderer = when {
+            sdk < Build.VERSION_CODES.TIRAMISU -> MESH_ANDROID_BELOW_13
+            !shaderCompiled -> MESH_SHADER_REFUSED
+            quality <= Spectrogram3DSettings.MIN_QUALITY -> MESH_QUALITY_LOW
+            else -> SHADER
+        }
+
+        /** How this phone draws it at [quality]. Compiles the shader once to know. */
+        fun here(quality: Int): SpectrogramRenderer {
+            val sdk = Build.VERSION.SDK_INT
+            val compiled = sdk >= Build.VERSION_CODES.TIRAMISU && Spectrogram3DGpu.compiles
+            return of(quality, sdk, compiled)
+        }
     }
 }
 
@@ -283,9 +337,21 @@ internal class Spectrogram3DGpu private constructor(private val shader: RuntimeS
     }
 
     companion object {
+        /** Why this phone would not compile the shader, once it has been tried; null if it did. */
+        @Volatile var refusal: String? = null
+            private set
+
+        /** Whether this phone compiles the shader. Tried once. */
+        val compiles: Boolean by lazy { createOrNull() != null }
+
         /** A shader of this overlay's own (never shared: it is a paint's shader), or null where it does not compile. */
         fun createOrNull(): Spectrogram3DGpu? =
-            runCatching { Spectrogram3DGpu(RuntimeShader(SPECTROGRAM_3D_SHADER)) }.getOrNull()
+            runCatching { Spectrogram3DGpu(RuntimeShader(SPECTROGRAM_3D_SHADER)) }
+                .onFailure {
+                    refusal = (it.message ?: it.javaClass.simpleName).take(300)
+                    Log.w(SPECTROGRAM_TAG, "this phone would not compile the shader", it)
+                }
+                .getOrNull()
     }
 }
 
@@ -763,7 +829,7 @@ internal class Spectrogram3DScene {
             sampled[j] = heightOf((sampled[j] - floor) / span)
         }
         val sigma = (BLUR_MIN + s.smoothness * BLUR_RANGE) * texRows / 129f
-        val radius = (sigma * 2.5f).roundToInt().coerceIn(0, 12)
+        val radius = (sigma * 2.5f).roundToInt().coerceIn(0, 24)
         for (j in 0 until texRows) {
             var sum = 0f
             var weight = 0f
@@ -1146,7 +1212,7 @@ internal class Spectrogram3DScene {
     }
 
     companion object {
-        const val MAX_ROWS = 192
+        const val MAX_ROWS = 256
         /** The feed's bins run log-spaced from 20 Hz to 20 kHz. */
         const val BIN_BOTTOM_HZ = 20f
         const val BIN_TOP_HZ = 20_000f
@@ -1249,11 +1315,17 @@ internal class Spectrogram3DScene {
         private const val BACK_Z = 0.93f
 
         // By quality 1..4: the mesh's rows, texture rows per mesh row, columns
-        // across the front edge, and texture columns per mesh column.
-        private val MESH_ROWS = intArrayOf(33, 49, 65, 81)
+        // across the front edge, and texture columns per mesh column. Sized
+        // for a phone 1440 px wide: at Medium a history column is under 4 px
+        // at the front and a mesh column under 8. The first sizes were a
+        // third of these and drew visible blocks there ("way too low
+        // resolution", the owner, of the first build with the shader). The
+        // most points one drawVertices call takes is 65,535: Ultra uses
+        // about 57,000 at the lowest camera.
+        private val MESH_ROWS = intArrayOf(49, 81, 97, 113)
         private val ROW_STRIDE = intArrayOf(2, 2, 2, 2)
-        private val FRONT_COLUMNS = intArrayOf(128, 256, 384, 512)
-        private val COL_STRIDE = intArrayOf(1, 2, 3, 3)
+        private val FRONT_COLUMNS = intArrayOf(256, 384, 512, 512)
+        private val COL_STRIDE = intArrayOf(2, 2, 2, 2)
 
         fun frontColumnsFor(quality: Int): Int = FRONT_COLUMNS[quality.coerceIn(1, 4) - 1]
 

@@ -1481,6 +1481,10 @@
     <string name="spectrogram3d_high_desc">奥の端：高音。</string>
     <string name="spectrogram3d_quality">品質</string>
     <string name="spectrogram3d_quality_desc">細かさ。「低」が最も軽く、ピクセルごとではなく点ごとに光を計算します。このスマートフォンにだけ保存され、テーマでは変わりません。</string>
+    <string name="spectrogram3d_drawn_full">このスマートフォンは完全なライティングで描画しています。</string>
+    <string name="spectrogram3d_drawn_low">品質が「低」のため、このスマートフォンは簡易版を描画しています。影、さざ波、歌詞の光には「中」以上が必要です。</string>
+    <string name="spectrogram3d_drawn_old_android">このスマートフォンは簡易版を描画しています。完全なライティングには Android 13 以降が必要です。</string>
+    <string name="spectrogram3d_drawn_refused">このスマートフォンは簡易版を描画しています。グラフィックドライバーがライティングを拒否しました。修正のため「設定 › システム」からログを送信してください。</string>
     <string name="spectrogram3d_quality_low">低</string>
     <string name="spectrogram3d_quality_medium">中</string>
     <string name="spectrogram3d_quality_high">高</string>

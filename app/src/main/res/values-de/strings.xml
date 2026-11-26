@@ -1523,6 +1523,10 @@
     <string name="spectrogram3d_high_desc">Die Hinterkante: die Höhen.</string>
     <string name="spectrogram3d_quality">Qualität</string>
     <string name="spectrogram3d_quality_desc">Detail. „Niedrig“ ist am leichtesten: Jeder Punkt wird beleuchtet, nicht jedes Pixel. Bleibt auf diesem Handy: Themes ändern es nicht.</string>
+    <string name="spectrogram3d_drawn_full">Dieses Telefon zeichnet es mit voller Beleuchtung.</string>
+    <string name="spectrogram3d_drawn_low">Dieses Telefon zeichnet die einfache Version, weil die Qualität auf Niedrig steht. Schatten, Kräuseln und das Licht vom Songtext brauchen Mittel oder höher.</string>
+    <string name="spectrogram3d_drawn_old_android">Dieses Telefon zeichnet die einfache Version: Die volle Beleuchtung braucht Android 13 oder neuer.</string>
+    <string name="spectrogram3d_drawn_refused">Dieses Telefon zeichnet die einfache Version: Sein Grafiktreiber hat die Beleuchtung abgelehnt. Sende die Protokolle über Einstellungen › System, damit es behoben werden kann.</string>
     <string name="spectrogram3d_quality_low">Niedrig</string>
     <string name="spectrogram3d_quality_medium">Mittel</string>
     <string name="spectrogram3d_quality_high">Hoch</string>

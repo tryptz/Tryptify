@@ -85,11 +85,11 @@ declare
         'ProjectMAssetInstaller', 'ProjectMBridge', 'ProjectMEngineRepository', 'ProjectMNativeBridge',
         'ProjectMOverlay', 'QueueForwardingPlayer', 'RadioQueueManager', 'RarNative', 'RoomClient',
         'SafeClipboard', 'ScanCoordinator', 'Scrobbling', 'SearchViewModel', 'SettingsSync', 'ShareLinks',
-        'ShareShrinker', 'ShizukuPeq', 'SofaHrtfApi', 'SongPreview', 'SourceDepthCodec', 'SquiglinkApi',
-        'StepManiaConversion', 'StreamResolver', 'SupabaseAuth', 'SupabaseSync', 'SystemAudioEq',
-        'SystemEqService', 'SystemPeqDaemon', 'SystemPeqEngine', 'SystemPeqService', 'TagReader', 'TimedLyrics',
-        'TrackDownloader', 'TrackShareHelper', 'TryptifyConnect', 'TryptifyGlyph', 'TryptifyMotion',
-        'UsbExclusiveCtl', 'UsbJni', 'YoutubeOnDevice'
+        'ShareShrinker', 'ShizukuPeq', 'SofaHrtfApi', 'SongPreview', 'SourceDepthCodec', 'Spectrogram3D',
+        'SquiglinkApi', 'StepManiaConversion', 'StreamResolver', 'SupabaseAuth', 'SupabaseSync',
+        'SystemAudioEq', 'SystemEqService', 'SystemPeqDaemon', 'SystemPeqEngine', 'SystemPeqService',
+        'TagReader', 'TimedLyrics', 'TrackDownloader', 'TrackShareHelper', 'TryptifyConnect', 'TryptifyGlyph',
+        'TryptifyMotion', 'UsbExclusiveCtl', 'UsbJni', 'YoutubeOnDevice'
     ];
     -- app-tags:end
     agg       jsonb;

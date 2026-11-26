@@ -435,10 +435,17 @@ shader with Skia beside the reference's frames:
   range; tall walls showed the colour bands as hard stripes.
 - **One `drawVertices` call, back to front**, the strip nearest the back
   first, then the front wall down to the box's bottom. The mesh is
-  coarser than the history (a mesh column stands for two or three history
-  columns and rides the same ones until it leaves at the left, so nothing
-  swims); at most about 27,000 points at Ultra, under the 16-bit index
-  limit.
+  coarser than the history (a mesh column stands for two history columns
+  and rides the same ones until it leaves at the left, so nothing swims).
+- **The grid is sized for a phone 1440 px wide** (`FRONT_COLUMNS`,
+  `MESH_ROWS`): at Medium, as shipped, 384 history columns across the front
+  (under 4 px each) by 161 rows, about 30,000 mesh points; 57,000 at Ultra.
+  The first sizes were a third of these, and the first build with the shader
+  on a phone drew blocks ("it's way too low resolution", "it looks nothing
+  like the demo", the owner): the demo had been drawn at High on a picture
+  1080 px wide. Draw a check at the phone's width and the default quality,
+  at 1:1. `drawVertices` reads its indices as unsigned 16-bit numbers, so
+  65,535 points is the limit, and a Kotlin `Short` above 32,767 is negative.
 - **The water runs off the bottom of the picture.** The ground's front edge
   lies a little under the box's bottom (`FRONT_EDGE`), and what shows under a
   raised front row is the water's cut face, its body going deep, never a
@@ -525,7 +532,15 @@ shader with Skia beside the reference's frames:
   tab's first section alone, the owner looked for it and reported "that
   option isn't anywhere". The preview starts the landscape afresh when it
   changes between the demo signal and the live sound, which are levels
-  apart.
+  apart. **Under Quality a line says which way this phone draws it**
+  (`SpectrogramRenderer`: the shader, or the simple version because Quality
+  is Low, Android is under 13, or the phone refused the shader), in the
+  error colour when it is the simple one, and the log says it once (tag
+  `Spectrogram3D`, with the grid, the point count and a refusal's text):
+  the two look nothing alike and nothing else told them apart. Reset to
+  default puts the look back as shipped and keeps Quality and the preview
+  switch: a slider left at an extreme while trying an earlier build is the
+  other way to a picture unlike the demo.
 
 `Spectrogram3DSceneTest` and `SpectrogramBandsTest` hold the numbers;
 `tools/spectrogram_3d/check.py` compiles the shader with Skia (what Android

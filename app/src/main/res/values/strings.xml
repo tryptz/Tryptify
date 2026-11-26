@@ -1524,6 +1524,10 @@
     <string name="spectrogram3d_high_desc">The back edge: the treble.</string>
     <string name="spectrogram3d_quality">Quality</string>
     <string name="spectrogram3d_quality_desc">Detail. Low is the lightest: each point is lit, not each pixel. It stays on this phone: themes don’t change it.</string>
+    <string name="spectrogram3d_drawn_full">This phone draws it with full lighting.</string>
+    <string name="spectrogram3d_drawn_low">This phone is drawing the simple version, because Quality is Low. Shadows, ripples and the light from the lyrics need Medium or higher.</string>
+    <string name="spectrogram3d_drawn_old_android">This phone is drawing the simple version: full lighting needs Android 13 or later.</string>
+    <string name="spectrogram3d_drawn_refused">This phone is drawing the simple version: its graphics driver refused the lighting. Send logs from Settings › System so it can be fixed.</string>
     <string name="spectrogram3d_quality_low">Low</string>
     <string name="spectrogram3d_quality_medium">Medium</string>
     <string name="spectrogram3d_quality_high">High</string>

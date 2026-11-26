@@ -1565,6 +1565,10 @@
     <string name="spectrogram3d_high_desc">Le bord arrière : les aigus.</string>
     <string name="spectrogram3d_quality">Qualité</string>
     <string name="spectrogram3d_quality_desc">Détail. « Basse » est la plus légère : chaque point est éclairé, pas chaque pixel. Reste sur ce téléphone : les thèmes ne la changent pas.</string>
+    <string name="spectrogram3d_drawn_full">Ce téléphone le dessine avec l’éclairage complet.</string>
+    <string name="spectrogram3d_drawn_low">Ce téléphone dessine la version simple, car la qualité est sur Basse. Les ombres, les ondulations et la lumière des paroles demandent Moyenne ou plus.</string>
+    <string name="spectrogram3d_drawn_old_android">Ce téléphone dessine la version simple : l’éclairage complet demande Android 13 ou plus récent.</string>
+    <string name="spectrogram3d_drawn_refused">Ce téléphone dessine la version simple : son pilote graphique a refusé l’éclairage. Envoyez les journaux depuis Réglages › Système pour que ce soit corrigé.</string>
     <string name="spectrogram3d_quality_low">Basse</string>
     <string name="spectrogram3d_quality_medium">Moyenne</string>
     <string name="spectrogram3d_quality_high">Haute</string>

@@ -1481,6 +1481,10 @@
     <string name="spectrogram3d_high_desc">后边缘：高音。</string>
     <string name="spectrogram3d_quality">质量</string>
     <string name="spectrogram3d_quality_desc">细节。“低”最省资源：按点而非按像素计算光照。仅保存在此手机上：主题不会更改它。</string>
+    <string name="spectrogram3d_drawn_full">此手机以完整光照绘制。</string>
+    <string name="spectrogram3d_drawn_low">由于质量设为“低”，此手机正在绘制简化版本。阴影、涟漪和歌词的光需要“中”或更高。</string>
+    <string name="spectrogram3d_drawn_old_android">此手机正在绘制简化版本：完整光照需要 Android 13 或更高版本。</string>
+    <string name="spectrogram3d_drawn_refused">此手机正在绘制简化版本：其图形驱动拒绝了光照效果。请在“设置 › 系统”中发送日志，以便修复。</string>
     <string name="spectrogram3d_quality_low">低</string>
     <string name="spectrogram3d_quality_medium">中</string>
     <string name="spectrogram3d_quality_high">高</string>

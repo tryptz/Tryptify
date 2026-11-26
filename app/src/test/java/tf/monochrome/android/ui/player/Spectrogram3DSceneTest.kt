@@ -218,17 +218,21 @@ class Spectrogram3DSceneTest {
             repeat(600) { scene.advance(bassOnly(), s, 1f / 60) }
             for (lit in listOf(false, true)) {
                 scene.build(1080f, 432f, s, palette, lit)
-                assertTrue(scene.vertexCount in 1 until 32_768)
+                // drawVertices reads its indices as unsigned 16-bit numbers:
+                // up to 65,535 points, the upper half of them negative as
+                // Kotlin sees a Short.
+                fun index(i: Int) = scene.indices[i].toInt() and 0xFFFF
+                assertTrue("$quality: ${scene.vertexCount}", scene.vertexCount in 1 until 65_536)
                 assertEquals(0, scene.indexCount % 3)
-                for (i in 0 until scene.indexCount) assertTrue(scene.indices[i].toInt() in 0 until scene.vertexCount)
+                for (i in 0 until scene.indexCount) assertTrue(index(i) in 0 until scene.vertexCount)
                 val rows = (scene.vertexCount - scene.meshColumns * 2) / scene.meshColumns
                 val surface = scene.meshColumns * rows
                 // The first triangle is on the back strip, the surface's last on
                 // the front one, and the front wall comes after all of it.
                 val end = scene.surfaceIndexCount
-                assertEquals(setOf(rows - 2, rows - 1), (0 until 3).map { scene.indices[it] % rows }.toSet())
-                assertEquals(setOf(0, 1), (end - 3 until end).map { scene.indices[it] % rows }.toSet())
-                for (i in end until scene.indexCount) assertTrue(scene.indices[i] >= surface)
+                assertEquals(setOf(rows - 2, rows - 1), (0 until 3).map { index(it) % rows }.toSet())
+                assertEquals(setOf(0, 1), (end - 3 until end).map { index(it) % rows }.toSet())
+                for (i in end until scene.indexCount) assertTrue(index(i) >= surface)
                 // Every point says where in the history it is: a row's middle,
                 // and for the wall's foot a place under the front row.
                 for (v in 0 until surface) {
@@ -332,6 +336,37 @@ class Spectrogram3DSceneTest {
         val sun = Spectrogram3DScene.SUN
         assertEquals(1f, sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2], 0.01f)
         assertTrue(sun[1] > 0.2f && sun[2] > 0.5f)
+    }
+
+    @Test
+    fun `the grid is fine enough for a phone's width, and the app can say which way it draws`() {
+        // At Medium, as shipped, on a phone 1440 px wide: a column of the
+        // history is under 4 px at the front and a mesh column under 8, and
+        // a row of the history under 5 px on average. The first sizes were a
+        // third of these and drew blocks.
+        val scene = Spectrogram3DScene()
+        repeat(60) { scene.advance(flat(-30f), settings, 1f / 60) }
+        scene.build(1440f, 576f, settings, palette, lit = false)
+        assertEquals(2, settings.quality)
+        assertTrue(1440f / scene.frontColumns < 4f)
+        assertTrue(576f * Spectrogram3DScene.groundShare(settings.angleDeg) / scene.texRows < 5f)
+        var lastRows = 0
+        var lastColumns = 0
+        for (quality in 1..4) {
+            val s = settings.copy(quality = quality)
+            scene.build(1440f, 576f, s, palette, lit = false)
+            assertTrue(scene.texRows >= lastRows && scene.frontColumns >= lastColumns)
+            assertTrue(scene.texRows <= Spectrogram3DScene.MAX_ROWS)
+            lastRows = scene.texRows
+            lastColumns = scene.frontColumns
+        }
+        // Which way a phone draws it: the shader from Android 13 unless
+        // Quality is Low or the phone refused it, and the reason otherwise.
+        assertEquals(SpectrogramRenderer.SHADER, SpectrogramRenderer.of(2, 33, shaderCompiled = true))
+        assertEquals(SpectrogramRenderer.SHADER, SpectrogramRenderer.of(4, 36, shaderCompiled = true))
+        assertEquals(SpectrogramRenderer.MESH_QUALITY_LOW, SpectrogramRenderer.of(1, 36, shaderCompiled = true))
+        assertEquals(SpectrogramRenderer.MESH_SHADER_REFUSED, SpectrogramRenderer.of(3, 36, shaderCompiled = false))
+        assertEquals(SpectrogramRenderer.MESH_ANDROID_BELOW_13, SpectrogramRenderer.of(3, 32, shaderCompiled = false))
     }
 
     @Test
