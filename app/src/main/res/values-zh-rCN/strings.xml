@@ -1213,6 +1213,10 @@
     <string name="fx_preview_background">预览背景</string>
     <string name="fx_button_glass_tint">按钮玻璃色调</string>
     <string name="fx_feel_the_beat_tonight">今晚感受节拍</string>
+    <string name="fx_preview_lyric_1">城市灯火 在呼唤， 我跟随</string>
+    <string name="fx_preview_lyric_2">我唱的 每个字 都化作金光</string>
+    <string name="fx_preview_lyric_3">留住 这一刻， 让它闪耀</string>
+    <string name="fx_preview_lyric_4">色彩 穿过黑暗 升起</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">还没有导入的字体。请在 设置 › 外观 › 字体库 中添加。</string>
     <string name="fx_player_visuals_studio">播放器视觉工作室</string>
     <string name="fx_player">播放器</string>
@@ -2431,9 +2435,13 @@
     <string name="theme_store_popular">热门</string>
     <string name="theme_store_new">最新</string>
     <string name="theme_store_mine">我的</string>
+    <string name="theme_store_liked">喜欢</string>
+    <string name="theme_store_saved">已保存</string>
     <string name="theme_store_retry">重试</string>
     <string name="theme_store_empty">这里还没有主题。成为第一个吧：轻点“分享我的外观”。</string>
     <string name="theme_store_empty_mine">你还没有分享过主题。轻点“分享我的外观”即可上传。</string>
+    <string name="theme_store_empty_liked">你喜欢的主题会显示在这里。在主题页面上轻点 ♥。</string>
+    <string name="theme_store_empty_saved">你保存的主题会显示在这里，方便以后再看。在主题页面上轻点书签图标。</string>
     <string name="theme_store_not_set_up">此应用尚未启用主题商店。</string>
     <string name="theme_store_offline">无法连接主题商店。请检查网络连接。</string>
     <string name="theme_store_gone">此主题已不在主题商店中，作者可能已将其删除。</string>
@@ -2480,6 +2488,8 @@
     <string name="theme_pack_use">使用此主题</string>
     <string name="theme_pack_like">喜欢</string>
     <string name="theme_pack_unlike">取消喜欢</string>
+    <string name="theme_pack_save">保存主题</string>
+    <string name="theme_pack_unsave">从已保存中移除</string>
     <string name="theme_pack_inside">包含内容</string>
     <string name="theme_pack_yours">这是你的主题</string>
     <string name="theme_pack_code_label">分享码</string>
@@ -3511,6 +3521,7 @@
     <string name="whats_new_section_player">正在播放</string>
     <string name="whats_new_section_mixer">混音器</string>
     <string name="whats_new_section_app">应用</string>
+    <string name="whats_new_section_theme_store">主题商店</string>
     <string name="whats_new_196_lyrics_left_title">歌词左对齐与柔焦</string>
     <string name="whats_new_196_lyrics_left_body">播放器视觉工作室 › 歌词 › 字体排印：每行从左侧而不是居中开始，并让远离正在演唱那一行的歌词变得柔和、暗淡。</string>
     <string name="whats_new_196_light_title">体积光的光线过渡</string>
@@ -3519,6 +3530,10 @@
     <string name="whats_new_196_word_end_body">播放器视觉工作室 › 歌词 › 体积光 › 字词结束时：选择“淡出”，或“保持发光”直到下一个字词开始。光线过渡现在位于该部分的顶部。</string>
     <string name="whats_new_196_intro_title">第一行歌词在原位等待</string>
     <string name="whats_new_196_intro_body">在歌曲前奏期间，第一行歌词会停在演唱行将出现的位置，清晰显示，下方的歌词变暗。之前它位于屏幕中间，所有歌词一样亮。</string>
+    <string name="whats_new_196_store_lists_title">主题商店中的“喜欢”和“已保存”</string>
+    <string name="whats_new_196_store_lists_body">在“热门”“最新”和“我的”旁边新增两个列表：你喜欢的主题，以及你在主题页面上用书签保存、方便以后再看的主题。两者都随你的账户同步。</string>
+    <string name="whats_new_196_preview_lyrics_title">预览会唱完整的歌词</string>
+    <string name="whats_new_196_preview_lyrics_body">播放器视觉工作室和主题商店中的主题页面会用真实的歌词视图播放虚构的歌词，逐字，让高亮、体积光和过渡效果与播放器中一样呈现。在工作室中，正在播放的歌曲自身的歌词仍然优先。</string>
     <string name="whats_new_196_rays_sung_title">体积光跟随演唱</string>
     <string name="whats_new_196_rays_sung_body">在第一个字词唱出之前保持关闭；对于逐字计时的歌词，正在演唱的字词结束时随之熄灭，而不是一直停留。</string>
     <string name="whats_new_196_letters_title">歌词字母不再被截断</string>

@@ -150,6 +150,9 @@ fun PackThemeScope(pack: ThemePack, content: @Composable () -> Unit) {
     }
 }
 
+/** The lyrics face: tall enough for the sung line and the lines coming under it. */
+private val LYRICS_FACE_HEIGHT = 300.dp
+
 /** Which face of a pack the preview shows. */
 enum class PreviewFace { PANELS, PLAYER, LYRICS }
 
@@ -170,7 +173,7 @@ fun PackPreview(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(if (face == PreviewFace.LYRICS) 190.dp else 312.dp)
+                .height(if (face == PreviewFace.LYRICS) LYRICS_FACE_HEIGHT else 312.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.background),
             contentAlignment = Alignment.Center,
@@ -193,7 +196,10 @@ fun PackPreview(
                     )
                     val position = remember { MutableStateFlow(0L) }
                     CompositionLocalProvider(LocalVisualLinks provides live) {
-                        StudioPreview(fx, null, position, analyzer)
+                        // Made-up lyrics sung by the player's own lyric
+                        // view, several lines tall: the pack's intro, word
+                        // highlight, rays and glides, not a single sample line.
+                        StudioPreview(fx, null, position, analyzer, generated = true, height = LYRICS_FACE_HEIGHT)
                     }
                 }
             }

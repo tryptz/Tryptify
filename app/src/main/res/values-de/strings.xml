@@ -1255,6 +1255,10 @@
     <string name="fx_preview_background">Vorschau-Hintergrund</string>
     <string name="fx_button_glass_tint">Glastönung der Tasten</string>
     <string name="fx_feel_the_beat_tonight">Spür heut Nacht den Beat</string>
+    <string name="fx_preview_lyric_1">Die Lichter der Stadt rufen, ich folge</string>
+    <string name="fx_preview_lyric_2">Jedes Wort, das ich singe, wird zu Gold</string>
+    <string name="fx_preview_lyric_3">Halt den Moment, lass ihn leuchten</string>
+    <string name="fx_preview_lyric_4">Farben steigen durch die Dunkelheit</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">Noch keine importierten Schriften. Füge sie unter Einstellungen › Darstellung › Schriftbibliothek hinzu.</string>
     <string name="fx_player_visuals_studio">Player-Visuals-Studio</string>
     <string name="fx_player">Player</string>
@@ -2487,9 +2491,13 @@
     <string name="theme_store_popular">Beliebt</string>
     <string name="theme_store_new">Neu</string>
     <string name="theme_store_mine">Meine</string>
+    <string name="theme_store_liked">Gefällt mir</string>
+    <string name="theme_store_saved">Gespeichert</string>
     <string name="theme_store_retry">Erneut versuchen</string>
     <string name="theme_store_empty">Noch keine Themes. Sei die erste Person: Tippe auf „Meinen Look teilen“.</string>
     <string name="theme_store_empty_mine">Du hast noch kein Theme geteilt. Tippe auf „Meinen Look teilen“, um deins hochzuladen.</string>
+    <string name="theme_store_empty_liked">Themes, die dir gefallen, erscheinen hier. Tippe auf der Seite eines Themes auf ♥.</string>
+    <string name="theme_store_empty_saved">Gespeicherte Themes erscheinen hier, damit du später zu ihnen zurückkehren kannst. Tippe auf der Seite eines Themes auf das Lesezeichen.</string>
     <string name="theme_store_not_set_up">Der Theme-Store ist für diese App noch nicht eingeschaltet.</string>
     <string name="theme_store_offline">Der Theme-Store ist nicht erreichbar. Prüfe deine Verbindung.</string>
     <string name="theme_store_gone">Dieses Theme ist nicht mehr im Theme-Store. Vielleicht hat es sein Autor entfernt.</string>
@@ -2536,6 +2544,8 @@
     <string name="theme_pack_use">Dieses Theme verwenden</string>
     <string name="theme_pack_like">Gefällt mir</string>
     <string name="theme_pack_unlike">Gefällt mir nicht mehr</string>
+    <string name="theme_pack_save">Theme speichern</string>
+    <string name="theme_pack_unsave">Aus „Gespeichert“ entfernen</string>
     <string name="theme_pack_inside">Was drin ist</string>
     <string name="theme_pack_yours">Dieses Theme gehört dir</string>
     <string name="theme_pack_code_label">Teilcode</string>
@@ -3589,6 +3599,7 @@
     <string name="whats_new_section_player">Wiedergabe</string>
     <string name="whats_new_section_mixer">Mixer</string>
     <string name="whats_new_section_app">Die App</string>
+    <string name="whats_new_section_theme_store">Theme-Store</string>
     <string name="whats_new_196_lyrics_left_title">Songtext von links und weicher Fokus</string>
     <string name="whats_new_196_lyrics_left_body">Player-Visuals-Studio › Songtext › Typografie: Jede Zeile beginnt links statt in der Mitte, und Zeilen fern der gesungenen werden weich und dunkler.</string>
     <string name="whats_new_196_light_title">Ein Lichtübergang für die Lichtstrahlen</string>
@@ -3597,6 +3608,10 @@
     <string name="whats_new_196_word_end_body">Player-Visuals-Studio › Songtext › Lichtstrahlen › Wenn ein Wort endet: Ausblenden oder Weiterleuchten, bis das nächste Wort beginnt. Der Lichtübergang steht jetzt ganz oben im Abschnitt.</string>
     <string name="whats_new_196_intro_title">Die erste Songtextzeile wartet an ihrem Platz</string>
     <string name="whats_new_196_intro_body">Während des Intros eines Songs wartet die erste Zeile dort, wo die gesungene Zeile stehen wird, gut lesbar, und die Zeilen darunter sind abgedunkelt. Sie stand in der Bildschirmmitte, und alle Zeilen waren gleich hell.</string>
+    <string name="whats_new_196_store_lists_title">„Gefällt mir“ und „Gespeichert“ im Theme Store</string>
+    <string name="whats_new_196_store_lists_body">Zwei weitere Listen neben „Beliebt“, „Neu“ und „Meine“: die Themes, die dir gefallen, und die, die du mit dem Lesezeichen auf der Seite eines Themes speicherst, um später zu ihnen zurückzukehren. Beide gehören zu deinem Konto.</string>
+    <string name="whats_new_196_preview_lyrics_title">Vorschauen singen ganze Songtexte</string>
+    <string name="whats_new_196_preview_lyrics_body">Das Player-Visuals-Studio und die Seite eines Themes im Theme Store spielen ausgedachte Songtexte in der echten Songtextansicht ab, Wort für Wort, sodass Hervorhebung, Lichtstrahlen und Übergänge wie im Player zu sehen sind. Im Studio hat der Songtext des laufenden Songs weiterhin Vorrang.</string>
     <string name="whats_new_196_rays_sung_title">Die Lichtstrahlen folgen dem Gesang</string>
     <string name="whats_new_196_rays_sung_body">Sie bleiben aus, bis das erste Wort gesungen wird, und bei wortgenau getimten Songtexten gehen sie aus, wenn das gesungene Wort endet, statt darauf stehen zu bleiben.</string>
     <string name="whats_new_196_letters_title">Buchstaben im Songtext werden nicht mehr abgeschnitten</string>

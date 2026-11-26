@@ -92,6 +92,7 @@ object WhatsNew {
         PLAYER -> R.string.whats_new_section_player
         MIXER -> R.string.whats_new_section_mixer
         APP -> R.string.whats_new_section_app
+        THEME_STORE -> R.string.whats_new_section_theme_store
         else -> 0
     }
 
@@ -234,6 +235,22 @@ object WhatsNew {
                     body = "A new theme among the presets on Player Visuals Studio's Lyrics tab.",
                     titleRes = R.string.whats_new_196_apple_theme_title,
                     bodyRes = R.string.whats_new_196_apple_theme_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
+                    title = "Previews sing whole lyrics",
+                    body = "Player Visuals Studio and a theme’s page in the Theme Store play made-up lyrics through the real lyric view, word by word, so the highlight, god rays and transitions show as in the player. A playing song’s own lyrics still come first in the Studio.",
+                    titleRes = R.string.whats_new_196_preview_lyrics_title,
+                    bodyRes = R.string.whats_new_196_preview_lyrics_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = THEME_STORE,
+                    title = "Liked and Saved in the Theme Store",
+                    body = "Two more lists beside Popular, New and Mine: the themes you liked, and the ones you saved with the bookmark on a theme’s page, to come back to later. Both follow your account.",
+                    titleRes = R.string.whats_new_196_store_lists_title,
+                    bodyRes = R.string.whats_new_196_store_lists_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,

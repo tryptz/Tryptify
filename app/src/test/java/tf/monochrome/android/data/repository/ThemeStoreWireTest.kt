@@ -81,7 +81,13 @@ class ThemeStoreWireTest {
         assertEquals("K7QX2MPA", StoreWire.cleanCode(" k7qx-2mpa "))
         assertEquals("", StoreWire.cleanCode("--"))
         assertEquals(16, StoreWire.cleanCode("A".repeat(40)).length)
-        assertEquals(listOf("popular", "new", "mine"), StoreSort.entries.map(StoreWire::sortName))
+        assertEquals(listOf("popular", "new", "liked", "mine", "saved"), StoreSort.entries.map(StoreWire::sortName))
+    }
+
+    @Test
+    fun `the server answers every list the store's chips ask for`() {
+        val answered = server.getValue("sorts").jsonArray.map { it.jsonPrimitive.content }.toSet()
+        assertEquals(answered, StoreSort.entries.map(StoreWire::sortName).toSet())
     }
 
     @Test

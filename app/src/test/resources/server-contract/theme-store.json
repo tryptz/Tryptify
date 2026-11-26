@@ -10,6 +10,13 @@
     "PLAYER_GLASS",
     "VISUALIZER"
   ],
+  "sorts": [
+    "liked",
+    "mine",
+    "new",
+    "popular",
+    "saved"
+  ],
   "maxPackBytes": 65536,
   "maxBodyBytes": 196608,
   "maxSnapshotBytes": 163840

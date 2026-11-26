@@ -63,7 +63,11 @@ data class StorePack(
 )
 
 /** How the store lists packs. */
-enum class StoreSort { POPULAR, NEW, MINE }
+/**
+ * The store's lists, in the order its chips show them. Liked and Saved are the
+ * account's own likes and bookmarks, newest first; Mine, what it published.
+ */
+enum class StoreSort { POPULAR, NEW, LIKED, MINE, SAVED }
 
 /** Why a store call failed, in the terms the screen speaks. */
 sealed class StoreError(message: String) : Exception(message) {
@@ -155,7 +159,9 @@ internal object StoreWire {
     fun sortName(sort: StoreSort) = when (sort) {
         StoreSort.POPULAR -> "popular"
         StoreSort.NEW -> "new"
+        StoreSort.LIKED -> "liked"
         StoreSort.MINE -> "mine"
+        StoreSort.SAVED -> "saved"
     }
 
     /** A code as typed: letters and digits only, whatever else came with it. */
@@ -314,6 +320,18 @@ class ThemeStoreRepository @Inject constructor(
 
     suspend fun setLiked(id: String, liked: Boolean): Result<Unit> = call {
         send(if (liked) HttpMethod.Put else HttpMethod.Delete, "packs", id, "like")
+        Unit
+    }
+
+    /** The ids among [ids] this account saved (its bookmarks, counted nowhere). */
+    suspend fun savedAmong(ids: List<String>): Result<Set<String>> = call {
+        if (ids.isEmpty()) return@call emptySet()
+        val res = send(HttpMethod.Get, "saves", query = mapOf("ids" to ids.take(100).joinToString(",")))
+        json.decodeFromString<LikedIds>(res.bodyAsText()).ids.toSet()
+    }
+
+    suspend fun setSaved(id: String, saved: Boolean): Result<Unit> = call {
+        send(if (saved) HttpMethod.Put else HttpMethod.Delete, "packs", id, "save")
         Unit
     }
 

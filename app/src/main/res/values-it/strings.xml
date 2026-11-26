@@ -1297,6 +1297,10 @@
     <string name="fx_preview_background">Sfondo anteprima</string>
     <string name="fx_button_glass_tint">Tinta del vetro dei pulsanti</string>
     <string name="fx_feel_the_beat_tonight">Senti il ritmo stasera</string>
+    <string name="fx_preview_lyric_1">Le luci della città chiamano, le seguo</string>
+    <string name="fx_preview_lyric_2">Ogni parola che canto diventa oro</string>
+    <string name="fx_preview_lyric_3">Tieni l’istante, lascialo brillare</string>
+    <string name="fx_preview_lyric_4">I colori salgono nel buio</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">Nessun font ancora importato. Aggiungili in Impostazioni › Aspetto › Libreria font.</string>
     <string name="fx_player_visuals_studio">Studio visivo del player</string>
     <string name="fx_player">Player</string>
@@ -2543,9 +2547,13 @@
     <string name="theme_store_popular">Popolari</string>
     <string name="theme_store_new">Nuovi</string>
     <string name="theme_store_mine">Miei</string>
+    <string name="theme_store_liked">Piaciuti</string>
+    <string name="theme_store_saved">Salvati</string>
     <string name="theme_store_retry">Riprova</string>
     <string name="theme_store_empty">Ancora nessun tema qui. Sii il primo: tocca «Condividi il mio look».</string>
     <string name="theme_store_empty_mine">Non hai ancora condiviso un tema. Tocca «Condividi il mio look» per pubblicare il tuo.</string>
+    <string name="theme_store_empty_liked">I temi che ti piacciono compaiono qui. Tocca ♥ nella pagina di un tema.</string>
+    <string name="theme_store_empty_saved">I temi salvati compaiono qui, per ritrovarli più tardi. Tocca il segnalibro nella pagina di un tema.</string>
     <string name="theme_store_not_set_up">Il Negozio di temi non è ancora attivo per questa app.</string>
     <string name="theme_store_offline">Impossibile raggiungere il Negozio di temi. Controlla la connessione.</string>
     <string name="theme_store_gone">Questo tema non è più nel negozio. Forse l\'autore l\'ha rimosso.</string>
@@ -2592,6 +2600,8 @@
     <string name="theme_pack_use">Usa questo tema</string>
     <string name="theme_pack_like">Mi piace</string>
     <string name="theme_pack_unlike">Non mi piace più</string>
+    <string name="theme_pack_save">Salva tema</string>
+    <string name="theme_pack_unsave">Rimuovi dai salvati</string>
     <string name="theme_pack_inside">Contenuto</string>
     <string name="theme_pack_yours">Questo tema è tuo</string>
     <string name="theme_pack_code_label">Codice di condivisione</string>
@@ -3667,6 +3677,7 @@
     <string name="whats_new_section_player">In riproduzione</string>
     <string name="whats_new_section_mixer">Mixer</string>
     <string name="whats_new_section_app">L’app</string>
+    <string name="whats_new_section_theme_store">Negozio di temi</string>
     <string name="whats_new_196_lyrics_left_title">Testo da sinistra e messa a fuoco morbida</string>
     <string name="whats_new_196_lyrics_left_body">Visual Studio del lettore › Testo › Tipografia: ogni riga parte da sinistra invece che dal centro, e le righe lontane da quella cantata diventano morbide e scure.</string>
     <string name="whats_new_196_light_title">Una transizione della luce per i raggi di luce</string>
@@ -3675,6 +3686,10 @@
     <string name="whats_new_196_word_end_body">Visual Studio del lettore › Testo › Raggi di luce › Alla fine di una parola: Sfuma, oppure Continua a brillare finché non inizia la parola successiva. La transizione della luce ora è in cima alla sezione.</string>
     <string name="whats_new_196_intro_title">La prima riga del testo attende al suo posto</string>
     <string name="whats_new_196_intro_body">Durante l’intro di un brano, la prima riga attende dove sarà la riga cantata, ben leggibile, e le righe sotto sono attenuate. Prima stava al centro dello schermo, con tutte le righe ugualmente luminose.</string>
+    <string name="whats_new_196_store_lists_title">Piaciuti e Salvati nel Theme Store</string>
+    <string name="whats_new_196_store_lists_body">Due elenchi in più accanto a Popolari, Nuovi e Miei: i temi che ti piacciono e quelli che salvi con il segnalibro nella pagina di un tema, per ritrovarli più tardi. Entrambi seguono il tuo account.</string>
+    <string name="whats_new_196_preview_lyrics_title">Le anteprime cantano testi interi</string>
+    <string name="whats_new_196_preview_lyrics_body">Il Visual Studio del lettore e la pagina di un tema nel Theme Store riproducono testi inventati nella vera vista del testo, parola per parola, così evidenziazione, raggi di luce e transizioni appaiono come nel lettore. Nello Studio il testo del brano in riproduzione ha ancora la precedenza.</string>
     <string name="whats_new_196_rays_sung_title">I raggi di luce seguono il canto</string>
     <string name="whats_new_196_rays_sung_body">Restano spenti finché non viene cantata la prima parola, e con testi sincronizzati parola per parola si spengono quando finisce la parola cantata invece di restarci sopra.</string>
     <string name="whats_new_196_letters_title">Le lettere del testo non vengono più tagliate</string>

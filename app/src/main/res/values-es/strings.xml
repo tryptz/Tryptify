@@ -1297,6 +1297,10 @@
     <string name="fx_preview_background">Fondo de la vista previa</string>
     <string name="fx_button_glass_tint">Tinte del cristal de los botones</string>
     <string name="fx_feel_the_beat_tonight">Siente el ritmo esta noche</string>
+    <string name="fx_preview_lyric_1">Las luces de la ciudad llaman, las sigo</string>
+    <string name="fx_preview_lyric_2">Cada palabra que canto se vuelve oro</string>
+    <string name="fx_preview_lyric_3">Guarda el momento, déjalo brillar</string>
+    <string name="fx_preview_lyric_4">Los colores suben en la oscuridad</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">Aún no hay fuentes importadas. Añádelas en Ajustes › Apariencia › Biblioteca de fuentes.</string>
     <string name="fx_player_visuals_studio">Estudio visual del reproductor</string>
     <string name="fx_player">Reproductor</string>
@@ -2543,9 +2547,13 @@
     <string name="theme_store_popular">Populares</string>
     <string name="theme_store_new">Nuevos</string>
     <string name="theme_store_mine">Míos</string>
+    <string name="theme_store_liked">Me gusta</string>
+    <string name="theme_store_saved">Guardados</string>
     <string name="theme_store_retry">Reintentar</string>
     <string name="theme_store_empty">Aún no hay temas. Sé el primero: toca Compartir mi estilo.</string>
     <string name="theme_store_empty_mine">Todavía no has compartido ningún tema. Toca Compartir mi estilo para subir el tuyo.</string>
+    <string name="theme_store_empty_liked">Los temas que te gustan aparecen aquí. Toca ♥ en la página de un tema.</string>
+    <string name="theme_store_empty_saved">Los temas que guardes aparecen aquí para volver a ellos más tarde. Toca el marcador en la página de un tema.</string>
     <string name="theme_store_not_set_up">La tienda de temas aún no está activada en esta app.</string>
     <string name="theme_store_offline">No se pudo conectar con la tienda de temas. Revisa tu conexión.</string>
     <string name="theme_store_gone">Este tema ya no está en la tienda de temas. Puede que su autor lo haya quitado.</string>
@@ -2592,6 +2600,8 @@
     <string name="theme_pack_use">Usar este tema</string>
     <string name="theme_pack_like">Me gusta</string>
     <string name="theme_pack_unlike">Ya no me gusta</string>
+    <string name="theme_pack_save">Guardar tema</string>
+    <string name="theme_pack_unsave">Quitar de Guardados</string>
     <string name="theme_pack_inside">Qué incluye</string>
     <string name="theme_pack_yours">Este tema es tuyo</string>
     <string name="theme_pack_code_label">Código para compartir</string>
@@ -3667,6 +3677,7 @@
     <string name="whats_new_section_player">Reproduciendo</string>
     <string name="whats_new_section_mixer">Mezclador</string>
     <string name="whats_new_section_app">La app</string>
+    <string name="whats_new_section_theme_store">Tienda de temas</string>
     <string name="whats_new_196_lyrics_left_title">Letras desde la izquierda y enfoque suave</string>
     <string name="whats_new_196_lyrics_left_body">Estudio visual del reproductor › Letra › Tipografía: cada línea empieza a la izquierda en vez de en el centro, y las líneas lejos de la que se canta se vuelven suaves y tenues.</string>
     <string name="whats_new_196_light_title">Una transición de luz para los rayos volumétricos</string>
@@ -3675,6 +3686,10 @@
     <string name="whats_new_196_word_end_body">Estudio visual del reproductor › Letra › Rayos volumétricos › Al terminar una palabra: Desvanecerse, o Seguir brillando hasta que empiece la siguiente. La transición de la luz está ahora al principio de la sección.</string>
     <string name="whats_new_196_intro_title">La primera línea de la letra espera en su sitio</string>
     <string name="whats_new_196_intro_body">Durante la intro de una canción, la primera línea espera donde estará la línea cantada, bien visible, y las de debajo se atenúan. Antes estaba en el centro de la pantalla, con todas las líneas igual de brillantes.</string>
+    <string name="whats_new_196_store_lists_title">Me gusta y Guardados en la tienda de temas</string>
+    <string name="whats_new_196_store_lists_body">Dos listas más junto a Populares, Nuevos y Míos: los temas que te gustan y los que guardas con el marcador en la página de un tema, para volver a ellos más tarde. Ambas van con tu cuenta.</string>
+    <string name="whats_new_196_preview_lyrics_title">Las vistas previas cantan letras completas</string>
+    <string name="whats_new_196_preview_lyrics_body">El Estudio visual del reproductor y la página de un tema en la tienda reproducen letras inventadas en la vista de letras real, palabra a palabra, así que el resaltado, los rayos volumétricos y las transiciones se ven como en el reproductor. En el Estudio, la letra de la canción que suena sigue teniendo prioridad.</string>
     <string name="whats_new_196_rays_sung_title">Los rayos volumétricos siguen el canto</string>
     <string name="whats_new_196_rays_sung_body">Permanecen apagados hasta que se canta la primera palabra, y con letras sincronizadas por palabra se apagan cuando termina la palabra cantada en vez de quedarse en ella.</string>
     <string name="whats_new_196_letters_title">Las letras ya no se cortan</string>

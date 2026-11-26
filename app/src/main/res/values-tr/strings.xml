@@ -1255,6 +1255,10 @@
     <string name="fx_preview_background">Önizleme arka planı</string>
     <string name="fx_button_glass_tint">Düğme camı tonu</string>
     <string name="fx_feel_the_beat_tonight">Bu gece ritmi hisset</string>
+    <string name="fx_preview_lyric_1">Şehrin ışıkları çağırıyor, peşlerinden gidiyorum</string>
+    <string name="fx_preview_lyric_2">Söylediğim her kelime altına dönüşüyor</string>
+    <string name="fx_preview_lyric_3">Bu anı tut, bırak parlasın</string>
+    <string name="fx_preview_lyric_4">Renkler karanlığın içinden yükseliyor</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">Henüz içe aktarılmış yazı tipi yok. Ayarlar › Görünüm › Yazı tipi kitaplığı’ndan ekleyin.</string>
     <string name="fx_player_visuals_studio">Oynatıcı Görsel Stüdyosu</string>
     <string name="fx_player">Oynatıcı</string>
@@ -2487,9 +2491,13 @@
     <string name="theme_store_popular">Popüler</string>
     <string name="theme_store_new">Yeni</string>
     <string name="theme_store_mine">Benimkiler</string>
+    <string name="theme_store_liked">Beğenilenler</string>
+    <string name="theme_store_saved">Kaydedilenler</string>
     <string name="theme_store_retry">Tekrar dene</string>
     <string name="theme_store_empty">Henüz tema yok. İlk siz olun: Görünümümü paylaş’a dokunun.</string>
     <string name="theme_store_empty_mine">Henüz bir tema paylaşmadınız. Kendinizinkini yüklemek için Görünümümü paylaş’a dokunun.</string>
+    <string name="theme_store_empty_liked">Beğendiğiniz temalar burada görünür. Bir temanın sayfasında ♥ simgesine dokunun.</string>
+    <string name="theme_store_empty_saved">Kaydettiğiniz temalar daha sonra dönebilmeniz için burada görünür. Bir temanın sayfasında yer imine dokunun.</string>
     <string name="theme_store_not_set_up">Tema Mağazası bu uygulama için henüz açılmadı.</string>
     <string name="theme_store_offline">Tema Mağazası’na ulaşılamadı. Bağlantınızı kontrol edin.</string>
     <string name="theme_store_gone">Bu tema artık Tema Mağazası’nda değil. Yazarı kaldırmış olabilir.</string>
@@ -2536,6 +2544,8 @@
     <string name="theme_pack_use">Bu temayı kullan</string>
     <string name="theme_pack_like">Beğen</string>
     <string name="theme_pack_unlike">Beğenmekten vazgeç</string>
+    <string name="theme_pack_save">Temayı kaydet</string>
+    <string name="theme_pack_unsave">Kaydedilenlerden kaldır</string>
     <string name="theme_pack_inside">İçindekiler</string>
     <string name="theme_pack_yours">Bu tema sizin</string>
     <string name="theme_pack_code_label">Paylaşım kodu</string>
@@ -3589,6 +3599,7 @@
     <string name="whats_new_section_player">Şimdi çalıyor</string>
     <string name="whats_new_section_mixer">Mikser</string>
     <string name="whats_new_section_app">Uygulama</string>
+    <string name="whats_new_section_theme_store">Tema Mağazası</string>
     <string name="whats_new_196_lyrics_left_title">Soldan başlayan sözler ve yumuşak odak</string>
     <string name="whats_new_196_lyrics_left_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Tipografi: her satır ortadan değil soldan başlar ve söylenen satırdan uzak satırlar yumuşar ve kararır.</string>
     <string name="whats_new_196_light_title">Işık huzmeleri için ışık geçişi</string>
@@ -3597,6 +3608,10 @@
     <string name="whats_new_196_word_end_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Işık huzmeleri › Kelime bittiğinde: Söner ya da bir sonraki kelime başlayana kadar Parlamaya devam eder. Işık geçişi artık bölümün en üstünde.</string>
     <string name="whats_new_196_intro_title">Sözlerin ilk satırı yerinde bekler</string>
     <string name="whats_new_196_intro_body">Şarkının girişi boyunca ilk satır, söylenen satırın duracağı yerde net biçimde bekler, altındaki satırlar soluklaşır. Önceden ekranın ortasındaydı ve tüm satırlar aynı parlaklıktaydı.</string>
+    <string name="whats_new_196_store_lists_title">Tema Mağazası’nda Beğenilenler ve Kaydedilenler</string>
+    <string name="whats_new_196_store_lists_body">Popüler, Yeni ve Benimkiler’in yanında iki liste daha: beğendiğiniz temalar ve daha sonra dönmek için bir temanın sayfasındaki yer imiyle kaydettikleriniz. İkisi de hesabınıza bağlıdır.</string>
+    <string name="whats_new_196_preview_lyrics_title">Önizlemeler sözlerin tamamını söylüyor</string>
+    <string name="whats_new_196_preview_lyrics_body">Oynatıcı Görsel Stüdyosu ve Tema Mağazası’ndaki bir temanın sayfası, uydurma sözleri gerçek söz görünümünde kelime kelime oynatır; vurgu, ışık huzmeleri ve geçişler oynatıcıdaki gibi görünür. Stüdyo’da çalan şarkının kendi sözleri hâlâ önceliklidir.</string>
     <string name="whats_new_196_rays_sung_title">Işık huzmeleri şarkıyı izler</string>
     <string name="whats_new_196_rays_sung_body">İlk kelime söylenene kadar kapalı kalır; kelime zamanlamalı sözlerde söylenen kelime bitince üzerinde kalmak yerine söner.</string>
     <string name="whats_new_196_letters_title">Söz harfleri artık kesilmiyor</string>

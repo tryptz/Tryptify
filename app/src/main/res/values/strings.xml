@@ -1256,6 +1256,10 @@
     <string name="fx_preview_background">Preview background</string>
     <string name="fx_button_glass_tint">Button glass tint</string>
     <string name="fx_feel_the_beat_tonight">Feel the beat tonight</string>
+    <string name="fx_preview_lyric_1">City lights are calling, I follow</string>
+    <string name="fx_preview_lyric_2">Every word I sing turns to gold</string>
+    <string name="fx_preview_lyric_3">Hold the moment, let it glow</string>
+    <string name="fx_preview_lyric_4">Colours rising through the dark</string>
     <string name="fx_no_imported_fonts_yet_add_them_in_settings">No imported fonts yet. Add them in Settings › Appearance › Font Library.</string>
     <string name="fx_player_visuals_studio">Player Visuals Studio</string>
     <string name="fx_player">Player</string>
@@ -2488,9 +2492,13 @@
     <string name="theme_store_popular">Popular</string>
     <string name="theme_store_new">New</string>
     <string name="theme_store_mine">Mine</string>
+    <string name="theme_store_liked">Liked</string>
+    <string name="theme_store_saved">Saved</string>
     <string name="theme_store_retry">Try again</string>
     <string name="theme_store_empty">No themes here yet. Be the first: tap Share my look.</string>
     <string name="theme_store_empty_mine">You haven’t shared a theme yet. Tap Share my look to put yours up.</string>
+    <string name="theme_store_empty_liked">Themes you like show here. Tap ♥ on a theme’s page.</string>
+    <string name="theme_store_empty_saved">Themes you save show here, to come back to later. Tap the bookmark on a theme’s page.</string>
     <string name="theme_store_not_set_up">The Theme Store isn’t switched on for this app yet.</string>
     <string name="theme_store_offline">Couldn’t reach the Theme Store. Check your connection.</string>
     <string name="theme_store_gone">This theme isn’t in the store any more. Its author may have removed it.</string>
@@ -2537,6 +2545,8 @@
     <string name="theme_pack_use">Use this theme</string>
     <string name="theme_pack_like">Like</string>
     <string name="theme_pack_unlike">Unlike</string>
+    <string name="theme_pack_save">Save theme</string>
+    <string name="theme_pack_unsave">Remove from Saved</string>
     <string name="theme_pack_inside">What’s inside</string>
     <string name="theme_pack_yours">This theme is yours</string>
     <string name="theme_pack_code_label">Share code</string>
@@ -3592,6 +3602,7 @@
     <string name="whats_new_section_player">Now playing</string>
     <string name="whats_new_section_mixer">Mixer</string>
     <string name="whats_new_section_app">The app</string>
+    <string name="whats_new_section_theme_store">Theme Store</string>
     <string name="whats_new_196_lyrics_left_title">Lyrics from the left, and soft focus</string>
     <string name="whats_new_196_lyrics_left_body">Player Visuals Studio › Lyrics › Typography: start every line from the left instead of the middle, and let the lines away from the sung one go soft and dim.</string>
     <string name="whats_new_196_light_title">A light transition for the god rays</string>
@@ -3600,6 +3611,10 @@
     <string name="whats_new_196_word_end_body">Player Visuals Studio › Lyrics › God rays › When a word ends: Fade out, or Keep shining until the next word starts. The light transition is now at the top of the section.</string>
     <string name="whats_new_196_intro_title">The first lyric line waits in its place</string>
     <string name="whats_new_196_intro_body">Through a song’s intro the first line waits where the sung line will be, clear, with the lines below it dimmed. It sat in the middle of the screen with every line equally bright.</string>
+    <string name="whats_new_196_store_lists_title">Liked and Saved in the Theme Store</string>
+    <string name="whats_new_196_store_lists_body">Two more lists beside Popular, New and Mine: the themes you liked, and the ones you saved with the bookmark on a theme’s page, to come back to later. Both follow your account.</string>
+    <string name="whats_new_196_preview_lyrics_title">Previews sing whole lyrics</string>
+    <string name="whats_new_196_preview_lyrics_body">Player Visuals Studio and a theme’s page in the Theme Store play made-up lyrics through the real lyric view, word by word, so the highlight, god rays and transitions show as in the player. A playing song’s own lyrics still come first in the Studio.</string>
     <string name="whats_new_196_rays_sung_title">The god rays follow the singing</string>
     <string name="whats_new_196_rays_sung_body">They stay off until the first word is sung, and with word-timed lyrics they go out when the sung word ends instead of resting on it.</string>
     <string name="whats_new_196_letters_title">Lyric letters are no longer cut off</string>

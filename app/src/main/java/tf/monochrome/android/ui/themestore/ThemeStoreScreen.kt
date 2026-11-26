@@ -1,5 +1,7 @@
 package tf.monochrome.android.ui.themestore
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -440,14 +442,21 @@ private fun StoreList(
                             }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Five lists, wider than a phone in most languages: the
+                    // row scrolls sideways rather than squeezing a chip.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
                         StoreSort.entries.forEach { s ->
                             GlassChoiceChip(
                                 label = stringResource(
                                     when (s) {
                                         StoreSort.POPULAR -> R.string.theme_store_popular
                                         StoreSort.NEW -> R.string.theme_store_new
+                                        StoreSort.LIKED -> R.string.theme_store_liked
                                         StoreSort.MINE -> R.string.theme_store_mine
+                                        StoreSort.SAVED -> R.string.theme_store_saved
                                     },
                                 ),
                                 selected = sort == s,
@@ -486,6 +495,8 @@ private fun StoreList(
                             stringResource(
                                 when (sort) {
                                     StoreSort.MINE -> R.string.theme_store_empty_mine
+                                    StoreSort.LIKED -> R.string.theme_store_empty_liked
+                                    StoreSort.SAVED -> R.string.theme_store_empty_saved
                                     else -> R.string.theme_store_empty
                                 },
                             ),

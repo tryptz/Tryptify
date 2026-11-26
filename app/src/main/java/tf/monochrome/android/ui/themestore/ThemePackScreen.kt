@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.outlined.Flag
@@ -110,6 +112,8 @@ data class PackDetailState(
     /** The pack over the viewer's own look: what the app would look like after importing all of it. */
     val preview: ThemePack? = null,
     val liked: Boolean = false,
+    /** In the account's Saved list: a bookmark of its own, counted nowhere. */
+    val saved: Boolean = false,
     val mine: Boolean = false,
     /** The author's store picture is being taken or sent. */
     val pictureBusy: Boolean = false,
@@ -158,12 +162,14 @@ class ThemePackViewModel @Inject constructor(
             store.fetch(id)
                 .onSuccess { (info, pack) ->
                     val liked = store.likedAmong(listOf(id)).getOrDefault(emptySet())
+                    val saved = store.savedAmong(listOf(id)).getOrDefault(emptySet())
                     _state.value = PackDetailState(
                         loading = false,
                         info = info,
                         pack = pack,
                         preview = previewOf(own, pack),
                         liked = id in liked,
+                        saved = id in saved,
                         mine = info.authorId == store.user.value?.id,
                     )
                 }
@@ -181,6 +187,16 @@ class ThemePackViewModel @Inject constructor(
         _state.value = s.copy(liked = liked, info = info.copy(likes = (info.likes + if (liked) 1 else -1).coerceAtLeast(0)))
         viewModelScope.launch {
             store.setLiked(id, liked).onFailure { _state.value = s }
+        }
+    }
+
+    fun toggleSave() {
+        val s = _state.value
+        if (s.info == null) return
+        // Shown at once; put back if the server says no.
+        _state.value = s.copy(saved = !s.saved)
+        viewModelScope.launch {
+            store.setSaved(id, !s.saved).onFailure { _state.value = _state.value.copy(saved = s.saved) }
         }
     }
 
@@ -390,6 +406,20 @@ fun ThemePackScreen(
                                                     Spacer(Modifier.width(6.dp))
                                                     Text("${info.likes}", fontWeight = FontWeight.Bold)
                                                 }
+                                            }
+                                            // Save: the account's own bookmark, listed under Saved.
+                                            GlassPill(
+                                                onClick = viewModel::toggleSave,
+                                                hazeState = backdrop,
+                                                height = 44.dp,
+                                                onClickLabel = stringResource(if (state.saved) R.string.theme_pack_unsave else R.string.theme_pack_save),
+                                            ) {
+                                                Icon(
+                                                    if (state.saved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                                    contentDescription = stringResource(if (state.saved) R.string.theme_pack_unsave else R.string.theme_pack_save),
+                                                    tint = if (state.saved) accent else LocalContentColor.current,
+                                                    modifier = Modifier.padding(horizontal = 14.dp).size(20.dp),
+                                                )
                                             }
                                             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Text(

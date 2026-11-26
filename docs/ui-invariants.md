@@ -702,7 +702,13 @@ slider is shown only while the switch is on and keeps its time while it is
 off. The switch and the slider are the first things in the Studio's God rays
 section, right under its own switch, with "When a word ends" after them (the
 owner asked for the transition at the top, 2026-11-26). Not linked to the music: it is an
-animation's length.
+animation's length. The one-line sample (a store picture, the lyrics editor
+without timings) is always being sung, so its light is never out, and its
+word hops glide. The Studio and a theme's page sing the made-up lyrics
+instead (`PreviewLyrics`, below), whose comma breaths show the fade and Keep
+shining as the player shows them. `LyricSungTest` holds the rule and the
+glide's arithmetic; the fade and the glide themselves were not seen on a
+phone when they were written.
 
 **When a word ends** (`godRayHold`, Fade out as shipped) is the one way the
 light may rest. Fade out is the rule above. Keep shining (`LyricSung.at`
@@ -718,10 +724,7 @@ the look, so a theme applied over it sets it back to Fade out. It, the
 transition's switch and its time are never personal fields
 (`withPersonalFrom`): a saved preset, a share code and a Theme Store pack,
 published and installed, carry all three, and a test walks each of those
-paths (`LyricSungTest`, "the light's three settings travel with the look"). The Studio's sample is always being sung, so its light is
-never out, and its word hops glide. `LyricSungTest` holds the rule and the
-glide's arithmetic; the fade and the glide themselves were not seen on a
-phone when they were written.
+paths (`LyricSungTest`, "the light's three settings travel with the look").
 
 **The Letters march is the Shadertoy, tap for tap.** "Crepuscular light"
 (ls2Xzd) starts from a centre tap, `texture(tc) * 0.4`, and steps *before* it
@@ -1899,6 +1902,38 @@ The tint goes through `customScheme` rather than swapping slots the way
 `DynamicColorScope` does. Slot-swapping works on the player, whose foregrounds
 are hardcoded white, and falls apart across the menus, where the album accent
 lands on surfaces the base theme derived from a different colour entirely.
+
+### Previews sing made-up lyrics
+
+**The Studio's preview and a theme's Lyrics face run the player's own lyric
+view on made-up lyrics** (`StudioPreview` with `generated`,
+`PreviewLyrics`): four lines of the app's own words and the sample's "Feel
+the beat tonight", in the app's language, timed word by word (each word
+longer the more letters it has, a breath of `PAUSE_MS` after a comma, a gap
+between lines, an intro before the first) on a looping clock that moves as
+the player's poll does (`LyricClock.nextPollDelayMs`). So the intro with the
+first line waiting, the word highlight, the rays following the word, their
+fade and hold, soft focus and the line glide are seen as they are in the
+player, not as a single line hopping on the kick. A playing song's synced
+lyrics still come first in the Studio. A store picture keeps the one-line
+sample (`picture = true` never generates): pictures already in the store
+were taken with it, and a card is too small to read lines. The Lyrics face on
+a theme's page is 300 dp tall, so the lines coming show under the sung one;
+the Studio's stays 190 dp. Chinese and Japanese lines are split into words
+at spaces, as the renderer adds a space between words anyway.
+`PreviewLyricsTest` holds the timing.
+
+### Theme Store lists
+
+**Five lists as one row of `GlassChoiceChip`s: Popular, New, Liked, Mine,
+Saved** (`StoreSort`, in that order), the row scrolling sideways because
+five do not fit a phone's width in most languages. Liked and Saved are the account's own (the server's `sort=liked` and
+`sort=saved`, newest first, unlisted packs kept since the listener had them
+open). Saved is a bookmark: the outline/filled bookmark `GlassPill` beside
+the like on a theme's page, counted nowhere, never shown to anyone else.
+The sorts the server answers are in the contract
+(`server-contract/theme-store.json`, `sorts`), and `ThemeStoreWireTest`
+fails when a chip asks for a list the server does not answer.
 
 ### Theme Store pictures
 

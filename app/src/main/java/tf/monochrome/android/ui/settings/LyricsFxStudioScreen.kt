@@ -849,7 +849,7 @@ fun LyricsFxStudioScreen(
         // live example stays locked in view while you tune every parameter.
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             Box {
-                StudioPreview(fx, currentLyrics, viewModel.currentPositionMs, viewModel.spectrumAnalyzer)
+                StudioPreview(fx, currentLyrics, viewModel.currentPositionMs, generated = true, analyzer = viewModel.spectrumAnalyzer)
             }
             Spacer(Modifier.height(12.dp))
 
@@ -2255,6 +2255,14 @@ internal fun StudioPreview(
     analyzer: tf.monochrome.android.audio.eq.SpectrumAnalyzerTap,
     /** Drawn for a theme's store picture: the lyrics alone, without the reactivity label. */
     picture: Boolean = false,
+    /**
+     * With no song's synced lyrics, sing the made-up ones ([PreviewLyrics]) in
+     * the real lyric view instead of the one-line sample: the Studio and a
+     * theme's page. Never for a store picture, which keeps the sample.
+     */
+    generated: Boolean = false,
+    /** The preview's height: the Studio's 190 dp, taller on a theme's page. */
+    height: androidx.compose.ui.unit.Dp = 190.dp,
 ) {
     val anchors = remember { LyricGlyphAnchors() }
     val accent = MaterialTheme.colorScheme.primary
@@ -2268,12 +2276,23 @@ internal fun StudioPreview(
             "lyricsfx",
             "curve=${fx.curvatureDeg}/${fx.effectiveCurvatureSideDeg} target=${fx.curvatureTarget} " +
                 "rays=${fx.godRays}${if (fx.godRaysOnTop) " on top" else ""} shadow=${fx.shadowDepth} " +
-                "lyrics=${if (lyrics?.isSynced == true) "song" else "sample"}",
+                "lyrics=${if (lyrics?.isSynced == true) "song" else if (generated && !picture) "generated" else "sample"}",
         )
     }
     // Show the real currently-playing lyrics when there are synced lines; else a
     // synthetic sample so the preview is never empty.
     val playing = lyrics?.takeIf { it.isSynced && it.lines.isNotEmpty() }
+    // Without them, the made-up lyrics on a looping clock of their own, sung
+    // by the same renderer, so the intro, the word highlight, the rays'
+    // fade and hold and the line glide all show as they do in the player.
+    val madeUp = if (playing == null && generated && !picture) {
+        tf.monochrome.android.ui.player.rememberPreviewLyricLines()
+    } else {
+        null
+    }
+    val madeUpClock = madeUp?.let {
+        tf.monochrome.android.ui.player.rememberPreviewLyricsClock(it, tf.monochrome.android.ui.player.LocalOutputSyncMs.current)
+    }
     // The playing song's lyrics beat with the song, from the player's own
     // analyzer, exactly as they do in the player: still while it is paused.
     // The synthetic kick kept pumping under them, and every kick pushed the
@@ -2289,7 +2308,7 @@ internal fun StudioPreview(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(190.dp)
+            .height(height)
             .clip(RoundedCornerShape(16.dp))
             .background(previewBackground(accent)),
         contentAlignment = Alignment.Center,
@@ -2323,13 +2342,15 @@ internal fun StudioPreview(
             val backdrop = remember(letters, rayLight) { LyricBackdrop(letters, rayLight) }
             LyricBackdropFx(backdrop)
             CompositionLocalProvider(LocalLyricBackdrop provides backdrop) {
-            if (playing != null) {
-                // Exactly the production renderer, on the real lyric lines,
-                // in the box the player gives it (LyricsHeroBox).
+            val sung = playing?.let { it.lines to positionMs }
+                ?: madeUpClock?.let { clock -> madeUp?.let { it to clock } }
+            if (sung != null) {
+                // Exactly the production renderer, on the real lyric lines or
+                // the made-up ones, in the box the player gives it (LyricsHeroBox).
                 Box(Modifier.fillMaxSize().lyricsEdgeFade()) {
                     SyncedLyricsView(
-                        lines = playing.lines,
-                        positionMs = positionMs,
+                        lines = sung.first,
+                        positionMs = sung.second,
                         accent = accent,
                         onSeekTo = {},
                     )
