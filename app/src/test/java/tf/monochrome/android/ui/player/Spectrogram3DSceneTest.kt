@@ -99,16 +99,20 @@ class Spectrogram3DSceneTest {
                 assertTrue(v in 0 until scene.vertexCount)
             }
             val rows = scene.rows
-            // The first triangle is on the back strip, the last on the front one.
+            // The first triangle is on the back strip, the surface's last on the
+            // front one, and the front wall comes after all of it.
             val firstRows = (0 until 3).map { scene.indices[it] % rows }.toSet()
-            val lastRows = (scene.indexCount - 3 until scene.indexCount).map { scene.indices[it] % rows }.toSet()
+            val end = scene.surfaceIndexCount
+            val lastRows = (end - 3 until end).map { scene.indices[it] % rows }.toSet()
             assertEquals(setOf(rows - 2, rows - 1), firstRows)
             assertEquals(setOf(0, 1), lastRows)
+            val surfacePoints = scene.vertexCount - (scene.vertexCount / (rows + 2)) * 2
+            for (i in end until scene.indexCount) assertTrue(scene.indices[i] >= surfacePoints)
         }
     }
 
     @Test
-    fun `the front edge sits on the box's bottom and the field reaches its sides at the back`() {
+    fun `the ground runs from the box's bottom to near its top and fills it side to side`() {
         for (angle in listOf(5f, 18f, 35f, 60f)) {
             val cam = Spectrogram3DScene.Camera.of(angle, 1080f, 432f)
             val out = FloatArray(2)
@@ -118,11 +122,9 @@ class Spectrogram3DSceneTest {
             assertEquals(1080f, out[0], 1f)
             cam.project(cam.fieldHalfWidth, 0f, 1f, out, 0)
             assertTrue("$angle", out[0] >= 1079f)
-            // The back is above the front, and a full peak stays inside the box.
+            // The back of the ground is near the top, whatever the angle.
             cam.project(0f, 0f, 1f, out, 0)
-            assertTrue(out[1] < 432f * Spectrogram3DScene.FRONT_EDGE)
-            cam.project(0f, Spectrogram3DScene.HEIGHT_SCALE, 1f, out, 0)
-            assertTrue("$angle: ${out[1]}", out[1] >= -1f)
+            assertEquals(432f * Spectrogram3DScene.BACK_EDGE, out[1], 0.5f)
         }
     }
 

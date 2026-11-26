@@ -24,9 +24,9 @@ data class Spectrogram3DSettings(
     /** How much light glows through the ridges, in the album's second colour. */
     val subsurface: Float = 0.7f,
     /** 0 sharp, detailed ridges; 1 soft and rounded. */
-    val smoothness: Float = 0.6f,
+    val smoothness: Float = 0.3f,
     /** How quickly the back fades into the cover. */
-    val haze: Float = 0.5f,
+    val haze: Float = 0.4f,
     /** The lowest pitch shown, at the front, in Hz. */
     val minHz: Float = 30f,
     /** The highest pitch shown, at the back, in Hz. */

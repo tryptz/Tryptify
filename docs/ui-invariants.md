@@ -393,8 +393,15 @@ offered there at all, and Settings says so). Its speed is set in Settings
 only; the cover's speed button stays the spectrum's.
 
 - **One `drawVertices` call, back to front.** The strip nearest the back is
-  drawn first, so nearer ridges cover what they hide without a depth buffer;
-  at most about 19,000 points at Ultra, under the 16-bit index limit.
+  drawn first, so nearer ridges cover what they hide without a depth buffer,
+  and a front wall last, from the front ridge down to the box's bottom (the
+  cover showed through under the nearest peaks without it); at most about
+  29,000 points at Ultra (96 pitch rows), under the 16-bit index limit.
+- **The ground fills the box from bottom to near the top** (`Camera.of`,
+  `BACK_EDGE`): a low camera looking down a long landscape, as in the
+  reference. Fitted to keep a full peak inside the box, it was a thin strip
+  along the bottom with most of the band empty (seen in the first render,
+  2026-11-26). Peaks rise over the rows behind them and may reach the top.
 - **Time by the clock, never by frames.** Columns are pushed every
   `secondsAcross / columns` seconds of playing time and the newest glides in
   by its `phase`, on the app's frame clock: it draws at whatever Settings ›
@@ -413,7 +420,11 @@ only; the cover's speed button stays the spectrum's.
   the pitch range (log sliders, two octaves at least) and quality. All of
   it travels in a theme's visualizer part except quality and the preview
   switch, the listener's own (`withPersonalFrom`). Not seen on a phone when
-  it was written: the lighting constants are a first guess.
+  it was written. Its look was tuned on renders of the real scene off the
+  phone (the scene's mesh and colours drawn by a software stand-in for
+  `drawVertices`, fed a Python copy of the analyzer on the reference's
+  audio): sharp pitch detail (smoothness 0.3, 48 rows at Medium), quiet
+  sound kept low (`SHAPE` 2), deep valleys and white peaks.
 
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides

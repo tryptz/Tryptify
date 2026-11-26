@@ -224,13 +224,15 @@ internal class Spectrogram3DScene {
         val drawn = min(filled, (2f * right / dx).toInt() + 1)
         val columns = drawn + 1 // and the live one at the right edge
         val count = columns * rows
-        if (verts.size < count * 2) {
-            verts = FloatArray(count * 2)
-            colors = IntArray(count)
+        // The surface, then the front wall: two points a column.
+        val total = count + columns * 2
+        if (verts.size < total * 2) {
+            verts = FloatArray(total * 2)
+            colors = IntArray(total)
             wx = FloatArray(count)
             wy = FloatArray(count)
         }
-        val quads = (columns - 1) * (rows - 1)
+        val quads = (columns - 1) * (rows - 1) + (columns - 1)
         if (indices.size < quads * 6) indices = ShortArray(quads * 6)
         val lift = HEIGHT_SCALE * s.peakHeight
         // World positions: column c = 0 is the live one at the right edge.
@@ -272,9 +274,32 @@ internal class Spectrogram3DScene {
                 indices[n++] = (b + 1).toShort(); indices[n++] = b.toShort(); indices[n++] = a.toShort()
             }
         }
-        vertexCount = count
+        surfaceIndexCount = n
+        // The front wall, drawn last: from the front ridge down to the box's
+        // bottom, so the cover never shows through under the nearest peaks.
+        for (c in 0 until columns) {
+            val top = count + c * 2
+            val front = c * rows
+            verts[top * 2] = verts[front * 2]
+            verts[top * 2 + 1] = verts[front * 2 + 1]
+            verts[(top + 1) * 2] = verts[front * 2]
+            verts[(top + 1) * 2 + 1] = height
+            val h = if (lift > 0f) wy[front] / lift else 0f
+            colors[top] = light.wall(h, lip = true)
+            colors[top + 1] = light.wall(0f, lip = false)
+        }
+        for (c in 0 until columns - 1) {
+            val a = count + c * 2
+            val b = count + (c + 1) * 2
+            indices[n++] = a.toShort(); indices[n++] = b.toShort(); indices[n++] = (a + 1).toShort()
+            indices[n++] = b.toShort(); indices[n++] = (b + 1).toShort(); indices[n++] = (a + 1).toShort()
+        }
+        vertexCount = total
         indexCount = n
     }
+
+    /** The surface's indices come first; the front wall's follow. */
+    var surfaceIndexCount = 0; private set
 
     fun draw(canvas: android.graphics.Canvas, paint: android.graphics.Paint) {
         if (indexCount == 0) return
@@ -291,8 +316,8 @@ internal class Spectrogram3DScene {
     /**
      * A camera above the front edge looking down at [angleDeg] onto a field
      * 1 deep (pitch) and as wide as it must be to fill the box to the back,
-     * fitted so the front edge sits on the box's bottom and a full-height peak
-     * at the back stays inside it.
+     * fitted so the ground runs from the box's bottom (front) to [BACK_EDGE]
+     * from its top (back).
      */
     class Camera private constructor(
         private val sinA: Float,
@@ -332,13 +357,15 @@ internal class Spectrogram3DScene {
                     val qz = z - camZ
                     return (qy * cosA + qz * sinA) / (-qy * sinA + qz * cosA)
                 }
+                // The ground runs from the box's bottom (the front, the bass)
+                // to near its top (the back, the treble), as in a landscape
+                // seen from a low camera; the peaks rise over the rows behind.
                 val bottom = py(0f, 0f)
-                val top = max(py(HEIGHT_SCALE, 1f), py(HEIGHT_SCALE, 0f))
-                // Width-limited: the front edge spans the box. Height-limited:
-                // smaller, and the front edge runs past the sides.
+                val back = py(0f, 1f)
+                val scale = height * (FRONT_EDGE - BACK_EDGE) / max(back - bottom, 1e-3f)
+                // How much of the front edge that leaves in view: the field
+                // is made wide enough to fill the box at the back.
                 val byWidth = width / 2f * czFront
-                val byHeight = height * FIT_HEIGHT / max(top - bottom, 1e-3f)
-                val scale = min(byWidth, byHeight)
                 val frontHalf = byWidth / scale
                 val originY = height * FRONT_EDGE + bottom * scale
                 return Camera(
@@ -418,6 +445,20 @@ internal class Spectrogram3DScene {
             return argb(alpha, cr, cg, cb)
         }
 
+        /**
+         * The front wall: the deep colour, darker toward the bottom, its top
+         * edge ([lip]) lit by the glow coming through the front ridge.
+         */
+        fun wall(h: Float, lip: Boolean): Int {
+            val t = h.coerceIn(0f, 1f)
+            return if (lip) {
+                val g = subsurface * 0.35f * (0.3f + 0.7f * t)
+                argb(1f, br * DEEP * 1.4f + gr * g, bg * DEEP * 1.4f + gg * g, bb * DEEP * 1.4f + gb * g)
+            } else {
+                argb(1f, br * DEEP * 0.5f, bg * DEEP * 0.5f, bb * DEEP * 0.5f)
+            }
+        }
+
         private fun mix(a: Float, b: Float, t: Float) = a + (b - a) * t
         private fun smooth(e0: Float, e1: Float, x: Float): Float {
             val t = ((x - e0) / (e1 - e0)).coerceIn(0f, 1f)
@@ -426,7 +467,7 @@ internal class Spectrogram3DScene {
     }
 
     companion object {
-        const val MAX_ROWS = 64
+        const val MAX_ROWS = 96
         /** The analyzer's bins run log-spaced from 20 Hz to 20 kHz. */
         const val BIN_BOTTOM_HZ = 20f
         const val BIN_TOP_HZ = 20_000f
@@ -434,25 +475,25 @@ internal class Spectrogram3DScene {
         const val FLOOR_DB = -20f
         const val TOP_DB = 28f
         /** Quiet sound stays near the floor; the peaks rise out of it. */
-        const val SHAPE = 1.5f
+        const val SHAPE = 2f
         /** World height of a full peak at peak height 1 (the field is 1 deep, about 2 wide). */
-        const val HEIGHT_SCALE = 0.28f
+        const val HEIGHT_SCALE = 0.1f
         const val DISTANCE = 2.4f
         const val TARGET_Z = 0.5f
         /** The front edge's place in the box, and the share of the box's height the landscape may fill. */
         const val FRONT_EDGE = 0.985f
-        const val FIT_HEIGHT = 0.95f
+        const val BACK_EDGE = 0.16f
         /** The field at the lowest camera is this many front widths wide. */
         const val MAX_EXTENT = 1.6f
         const val MAX_STEP_SECONDS = 0.1f
         const val LIVE_TAU_MIN = 0.015f
         const val LIVE_TAU_RANGE = 0.12f
-        const val BLUR_MIN = 0.35f
-        const val BLUR_RANGE = 2.0f
+        const val BLUR_MIN = 0.2f
+        const val BLUR_RANGE = 1.6f
 
-        private const val DEEP = 0.22f
-        private const val PEAK_WHITE = 0.7f
-        private const val AMBIENT = 0.16f
+        private const val DEEP = 0.14f
+        private const val PEAK_WHITE = 0.8f
+        private const val AMBIENT = 0.1f
         private const val WRAP = 0.4f
         private const val BEND = 0.6f
         // Key light: above the camera, a little to the left (unit vector).
@@ -465,7 +506,7 @@ internal class Spectrogram3DScene {
         private const val BACK_Z = 0.93f
 
         /** Pitch rows by quality 1..4. */
-        fun rowsFor(quality: Int): Int = intArrayOf(24, 36, 48, 64)[quality.coerceIn(1, 4) - 1]
+        fun rowsFor(quality: Int): Int = intArrayOf(32, 48, 72, 96)[quality.coerceIn(1, 4) - 1]
 
         /** Columns across the front edge by quality 1..4. */
         fun baseColumnsFor(quality: Int): Int = intArrayOf(64, 104, 144, 192)[quality.coerceIn(1, 4) - 1]
