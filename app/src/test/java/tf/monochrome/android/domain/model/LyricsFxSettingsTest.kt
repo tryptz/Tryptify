@@ -358,6 +358,7 @@ class LyricsFxSettingsTest {
         s.godRayExposure, s.godRayDensity,
         s.godRayDecay, s.godRayAzimuthDeg, s.godRayElevationDeg, s.godRaySunSize, s.godRayShimmer,
         s.godRayBeat, s.godRaySpinDps, s.godRaySway, s.godRayTilt, s.godRayFadeMs, s.godRayFade,
+        s.godRayHold,
     )
 
     @Test

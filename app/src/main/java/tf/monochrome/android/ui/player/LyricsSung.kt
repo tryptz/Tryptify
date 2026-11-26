@@ -34,22 +34,46 @@ internal object LyricSung {
      * end, off between words. Otherwise it follows the line: on from its first
      * word to the end of its last.
      *
+     * With [hold] ("Keep shining", `LyricsFxSettings.godRayHold`) the light
+     * does not go out between two things sung. Following the word, a word
+     * keeps it until the next word of its line starts; the line's last word
+     * still goes out at its end. Following the line, a line keeps it until the
+     * next line's turn, and that line is lit from its turn when the one before
+     * handed it on, so the light is carried over instead of dipping before
+     * the new line's first word. The song's last line goes out at its end, and
+     * nothing is lit before the first line.
+     *
      * A line with no word timings has no end of its own, so it is sung until
      * the next line starts. An empty one (an instrumental break, drawn as ♪)
      * is not sung at all.
      */
-    fun at(lines: List<LyricLine>, positionMs: Long, byWord: Boolean): Now {
+    fun at(lines: List<LyricLine>, positionMs: Long, byWord: Boolean, hold: Boolean = false): Now {
         val index = lines.indexOfLast { it.timeMs <= positionMs }
         if (index < 0) return NOT_STARTED
         val line = lines[index]
         val words = line.words
         if (words.isEmpty()) return Now(index, -1, lit = line.text.isNotBlank())
         if (!byWord) {
-            val lit = positionMs >= words.first().startMs && positionMs < lineEndMs(lines, index)
-            return Now(index, -1, lit)
+            val end = if (hold) lines.getOrNull(index + 1)?.timeMs ?: lineEndMs(lines, index) else lineEndMs(lines, index)
+            val begun = positionMs >= words.first().startMs || (hold && handsOn(lines, index))
+            return Now(index, -1, lit = begun && positionMs < end)
         }
         val word = words.indexOfLast { it.startMs <= positionMs }
-        return Now(index, word, lit = word >= 0 && positionMs < wordEndMs(lines, index, word))
+        if (word < 0) return Now(index, -1, lit = false)
+        val end = (if (hold) words.getOrNull(word + 1)?.startMs else null) ?: wordEndMs(lines, index, word)
+        return Now(index, word, lit = positionMs < end)
+    }
+
+    /**
+     * Whether the line before [index] is still lit when [index]'s turn comes,
+     * held on to it: a sung line (not a ♪ break) whose first word came before
+     * that turn.
+     */
+    private fun handsOn(lines: List<LyricLine>, index: Int): Boolean {
+        val before = lines.getOrNull(index - 1) ?: return false
+        if (before.text.isBlank()) return false
+        val first = before.words.firstOrNull() ?: return true
+        return first.startMs < lines[index].timeMs
     }
 
     /**

@@ -2027,6 +2027,10 @@
     <string name="fx_god_ray_transition_desc">光线在字词或歌词行开始时亮起、结束时熄灭，以及从一个字词移到下一个字词所用的时间。设为 0 则立即切换。</string>
     <string name="fx_god_ray_transition_time">过渡时间</string>
     <string name="fx_god_ray_transition_on_desc">光线渐亮、渐灭，并从一个演唱的字词滑向下一个。关闭后，光线会立即切换并跳转。</string>
+    <string name="fx_god_ray_word_end">字词结束时</string>
+    <string name="fx_god_ray_word_end_fade">淡出</string>
+    <string name="fx_god_ray_word_end_keep">保持发光</string>
+    <string name="fx_god_ray_word_end_desc">淡出：每个字词结束时光线熄灭，在下一个字词时重新亮起。保持发光：光线停留在该字词上，直到下一个字词开始再移过去，并在一行的最后一个字词后熄灭。跟随整行时，一行会保持发光，直到下一行开始。</string>
     <string name="fx_god_ray_samples_value">%1$d 个采样</string>
     <string name="fx_god_ray_quality_desc">每像素采样数：光束更干净，但 GPU 开销更大。</string>
     <string name="fx_motion_blur">动态模糊</string>
@@ -3511,6 +3515,10 @@
     <string name="whats_new_196_lyrics_left_body">播放器视觉工作室 › 歌词 › 字体排印：每行从左侧而不是居中开始，并让远离正在演唱那一行的歌词变得柔和、暗淡。</string>
     <string name="whats_new_196_light_title">体积光的光线过渡</string>
     <string name="whats_new_196_light_body">播放器视觉工作室 › 歌词 › 体积光：光线在你设定的时间内渐亮、渐灭，并从一个字词滑向下一个。用开关可关闭过渡，设定的时间会保留。</string>
+    <string name="whats_new_196_word_end_title">体积光可在字词之间持续发光</string>
+    <string name="whats_new_196_word_end_body">播放器视觉工作室 › 歌词 › 体积光 › 字词结束时：选择“淡出”，或“保持发光”直到下一个字词开始。光线过渡现在位于该部分的顶部。</string>
+    <string name="whats_new_196_intro_title">第一行歌词在原位等待</string>
+    <string name="whats_new_196_intro_body">在歌曲前奏期间，第一行歌词会停在演唱行将出现的位置，清晰显示，下方的歌词变暗。之前它位于屏幕中间，所有歌词一样亮。</string>
     <string name="whats_new_196_rays_sung_title">体积光跟随演唱</string>
     <string name="whats_new_196_rays_sung_body">在第一个字词唱出之前保持关闭；对于逐字计时的歌词，正在演唱的字词结束时随之熄灭，而不是一直停留。</string>
     <string name="whats_new_196_letters_title">歌词字母不再被截断</string>

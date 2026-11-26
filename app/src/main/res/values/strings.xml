@@ -2079,6 +2079,10 @@
     <string name="fx_god_ray_transition_desc">How long the light takes to come on when a word or line starts, to go out when it ends, and to move from one word to the next. 0 switches at once.</string>
     <string name="fx_god_ray_transition_time">Transition time</string>
     <string name="fx_god_ray_transition_on_desc">The light fades on and off and glides from one sung word to the next. Off, it switches and jumps at once.</string>
+    <string name="fx_god_ray_word_end">When a word ends</string>
+    <string name="fx_god_ray_word_end_fade">Fade out</string>
+    <string name="fx_god_ray_word_end_keep">Keep shining</string>
+    <string name="fx_god_ray_word_end_desc">Fade out: the light goes out when each word ends and comes back on the next. Keep shining: it stays on the word until the next one starts, then moves there, and goes out after the line’s last word. Following the line, a line keeps it until the next line starts.</string>
     <string name="fx_god_ray_samples_value">%1$d samples</string>
     <string name="fx_god_ray_quality_desc">Samples per pixel: cleaner shafts against GPU cost.</string>
     <string name="fx_motion_blur">Motion blur</string>
@@ -3592,6 +3596,10 @@
     <string name="whats_new_196_lyrics_left_body">Player Visuals Studio › Lyrics › Typography: start every line from the left instead of the middle, and let the lines away from the sung one go soft and dim.</string>
     <string name="whats_new_196_light_title">A light transition for the god rays</string>
     <string name="whats_new_196_light_body">Player Visuals Studio › Lyrics › God rays: the light fades on and off and glides from word to word over a time you set. Its switch turns the fade off without losing that time.</string>
+    <string name="whats_new_196_word_end_title">God rays can keep shining between words</string>
+    <string name="whats_new_196_word_end_body">Player Visuals Studio › Lyrics › God rays › When a word ends: Fade out, or Keep shining until the next word starts. The light transition is now at the top of the section.</string>
+    <string name="whats_new_196_intro_title">The first lyric line waits in its place</string>
+    <string name="whats_new_196_intro_body">Through a song’s intro the first line waits where the sung line will be, clear, with the lines below it dimmed. It sat in the middle of the screen with every line equally bright.</string>
     <string name="whats_new_196_rays_sung_title">The god rays follow the singing</string>
     <string name="whats_new_196_rays_sung_body">They stay off until the first word is sung, and with word-timed lyrics they go out when the sung word ends instead of resting on it.</string>
     <string name="whats_new_196_letters_title">Lyric letters are no longer cut off</string>

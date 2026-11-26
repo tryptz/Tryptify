@@ -46,9 +46,14 @@ class LyricSoftFocusTest {
         assertEquals(2, LyricSoftFocus.steps(5, 7))
         assertEquals(2, LyricSoftFocus.steps(9, 7))
         assertEquals(LyricSoftFocus.MAX_STEPS, LyricSoftFocus.steps(30, 7))
-        // Before the first line is sung, it is the one coming.
-        assertEquals(1, LyricSoftFocus.steps(0, -1))
-        assertEquals(2, LyricSoftFocus.steps(1, -1))
+        // Before the first line is sung, it is the one coming: in focus at
+        // the sung line's place, the rest stepping away from it.
+        assertEquals(0, LyricSoftFocus.steps(0, -1))
+        assertEquals(1, LyricSoftFocus.steps(1, -1))
+        assertEquals(LyricSoftFocus.MAX_STEPS, LyricSoftFocus.steps(30, -1))
+        // The lyric view centres the same line through the intro.
+        assertEquals(0, lyricFocusLine(-1))
+        assertEquals(5, lyricFocusLine(5))
     }
 
     @Test

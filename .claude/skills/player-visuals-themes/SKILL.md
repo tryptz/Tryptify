@@ -221,6 +221,7 @@ Personal fields are omitted here — never set them in a preset.
 | `godRayTilt` | 0..1.5 | 0 | How far tilting the phone swings the light. Device only; > 0 holds the gravity sensor. |
 | `godRayFadeMs` | 0..1000 | 250 | Light transition, ms: how long the light takes to come up when a word or line starts being sung, to go out when it is over, and to glide from one sung word or line to the next. 0 = switches and jumps. The light is out whenever nothing is sung (before the first line, between words when following the word, after a word-timed line's last word). Not music-linkable. |
 | `godRayFade` | bool | true | The Light transition's switch. Off, the light switches and jumps as at 0 ms and `godRayFadeMs` keeps its value. Code reads `godRayFadeTimeMs` (the time, or 0 when off), never `godRayFadeMs` directly. |
+| `godRayHold` | bool | false | When a word ends: false "Fade out" (the light goes out at each word's end), true "Keep shining" (it stays on a word until the next word of the line starts, and goes out after the line's last word; following the line, a line keeps it until the next line's turn). Never lights the intro or a ♪ break. |
 
 ## Player Glass parameter reference
 

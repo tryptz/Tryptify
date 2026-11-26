@@ -61,6 +61,34 @@ internal fun GodRaysControls(
     // Everything below tunes rays that are not drawn while they are off.
     if (!fx.godRays) return
 
+    // How the light moves with the singing comes first (the owner's order):
+    // the transition, then what happens when a word is over.
+    FxToggle(
+        stringResource(R.string.fx_god_ray_transition), fx.godRayFade,
+        description = stringResource(R.string.fx_god_ray_transition_on_desc),
+    ) { on -> onUpdate { it.copy(godRayFade = on) } }
+    // Off, the time has nothing to set; it keeps its value for the next time
+    // the switch is on.
+    if (fx.godRayFade) {
+        // Not linked to the music: it is how long an animation runs, not a
+        // value drawn each frame.
+        FxSlider(
+            stringResource(R.string.fx_god_ray_transition_time), String.format(Locale.US, "%.0f ms", fx.godRayFadeMs),
+            fx.godRayFadeMs, 0f..1000f,
+            description = stringResource(R.string.fx_god_ray_transition_desc),
+            defaultValue = LyricsFxSettings.DEFAULT.godRayFadeMs,
+        ) { v -> onUpdate { it.copy(godRayFadeMs = v) } }
+    }
+    FxChoice(
+        label = stringResource(R.string.fx_god_ray_word_end),
+        options = listOf(
+            stringResource(R.string.fx_god_ray_word_end_fade),
+            stringResource(R.string.fx_god_ray_word_end_keep),
+        ),
+        selected = if (fx.godRayHold) 1 else 0,
+        description = stringResource(R.string.fx_god_ray_word_end_desc),
+    ) { i -> onUpdate { it.copy(godRayHold = i == 1) } }
+
     FxChoice(
         label = stringResource(R.string.fx_god_ray_source),
         options = listOf(
@@ -88,22 +116,6 @@ internal fun GodRaysControls(
             stringResource(R.string.fx_god_ray_follow_word), fx.godRaysFollowWord,
             description = stringResource(R.string.fx_god_ray_follow_word_desc),
         ) { on -> onUpdate { it.copy(godRaysFollowWord = on) } }
-    }
-    FxToggle(
-        stringResource(R.string.fx_god_ray_transition), fx.godRayFade,
-        description = stringResource(R.string.fx_god_ray_transition_on_desc),
-    ) { on -> onUpdate { it.copy(godRayFade = on) } }
-    // Off, the time has nothing to set; it keeps its value for the next time
-    // the switch is on.
-    if (fx.godRayFade) {
-        // Not linked to the music: it is how long an animation runs, not a
-        // value drawn each frame.
-        FxSlider(
-            stringResource(R.string.fx_god_ray_transition_time), String.format(Locale.US, "%.0f ms", fx.godRayFadeMs),
-            fx.godRayFadeMs, 0f..1000f,
-            description = stringResource(R.string.fx_god_ray_transition_desc),
-            defaultValue = LyricsFxSettings.DEFAULT.godRayFadeMs,
-        ) { v -> onUpdate { it.copy(godRayFadeMs = v) } }
     }
 
     FxSlider(

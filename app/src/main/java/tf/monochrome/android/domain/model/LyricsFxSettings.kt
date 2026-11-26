@@ -238,6 +238,17 @@ data class LyricsFxSettings(
      */
     val godRayFade: Boolean = true,
     /**
+     * When a sung word is over (Lyrics FX › God rays › When a word ends).
+     * Off, "Fade out": the light goes out at the word's end and comes up on the
+     * next. On, "Keep shining": it stays on the word until the next word of the
+     * line starts and moves there, and goes out after the line's last word;
+     * following the line, a line keeps it until the next line's turn and
+     * carries it there ([tf.monochrome.android.ui.player.LyricSung]). Nothing
+     * shines before the first line either way. Off as shipped, so a look saved
+     * before the choice reads as it did.
+     */
+    val godRayHold: Boolean = false,
+    /**
      * Samples per pixel: 1/2/3/4 → 16/24/32/50, 50 being the Shadertoy's
      * own count. Higher = cleaner shafts, heavier
      * GPU. Device/perf setting, like [glassSampleRings] — preserved when a
@@ -353,6 +364,7 @@ data class LyricsFxSettings(
             godRayTilt = godRayTilt.c(0f, 1.5f, d.godRayTilt),
             godRayFadeMs = godRayFadeMs.c(0f, 1000f, d.godRayFadeMs),
             godRayFade = godRayFade,
+            godRayHold = godRayHold,
             godRayQuality = godRayQuality.coerceIn(1, 4),
             motionBlurQuality = motionBlurQuality.coerceIn(0, 4),
             lineAlign = if (lineAlign == ALIGN_START) ALIGN_START else ALIGN_CENTER,

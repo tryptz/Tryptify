@@ -25,10 +25,12 @@ internal object LyricSoftFocus {
     /**
      * How many steps [index] is from the sung line [current]. Before the
      * first line is sung ([current] under 0) the first line is the one
-     * coming, a step away.
+     * coming and is in focus, waiting at the sung line's place, and the rest
+     * step away from it. It was a step out of focus itself, and the intro had
+     * no line in focus at all.
      */
     fun steps(index: Int, current: Int): Int =
-        (if (current < 0) index + 1 else abs(index - current)).coerceIn(0, MAX_STEPS)
+        abs(index - current.coerceAtLeast(0)).coerceIn(0, MAX_STEPS)
 
     /** The blur's sigma for a line [steps] away, in dp: none on the sung line. */
     fun blurDp(amount: Float, steps: Int): Float =

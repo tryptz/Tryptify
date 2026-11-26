@@ -222,6 +222,14 @@ object WhatsNew {
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
                     section = LYRICS,
+                    title = "God rays can keep shining between words",
+                    body = "Player Visuals Studio › Lyrics › God rays › When a word ends: Fade out, or Keep shining until the next word starts. The light transition is now at the top of the section.",
+                    titleRes = R.string.whats_new_196_word_end_title,
+                    bodyRes = R.string.whats_new_196_word_end_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = LYRICS,
                     title = "An “Apple Music” lyric theme",
                     body = "A new theme among the presets on Player Visuals Studio's Lyrics tab.",
                     titleRes = R.string.whats_new_196_apple_theme_title,
@@ -498,6 +506,14 @@ object WhatsNew {
                     body = "The rays' soft shafts are drawn at half size and scaled up, a quarter of the pixels, so the lyric view is much lighter to draw with them on. The light on the letters is as sharp as before.",
                     titleRes = R.string.whats_new_196_rays_faster_title,
                     bodyRes = R.string.whats_new_196_rays_faster_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.CHANGED,
+                    section = LYRICS,
+                    title = "The first lyric line waits in its place",
+                    body = "Through a song’s intro the first line waits where the sung line will be, clear, with the lines below it dimmed. It sat in the middle of the screen with every line equally bright.",
+                    titleRes = R.string.whats_new_196_intro_title,
+                    bodyRes = R.string.whats_new_196_intro_body,
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,

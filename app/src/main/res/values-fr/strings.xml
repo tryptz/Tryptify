@@ -2129,6 +2129,10 @@
     <string name="fx_god_ray_transition_desc">Le temps que met la lumière à s’allumer quand un mot ou une ligne commence, à s’éteindre quand il se termine et à passer d’un mot au suivant. À 0, elle bascule d’un coup.</string>
     <string name="fx_god_ray_transition_time">Durée de la transition</string>
     <string name="fx_god_ray_transition_on_desc">La lumière s’allume et s’éteint en fondu et glisse d’un mot chanté au suivant. Désactivée, elle bascule et saute d’un coup.</string>
+    <string name="fx_god_ray_word_end">À la fin d’un mot</string>
+    <string name="fx_god_ray_word_end_fade">S’estomper</string>
+    <string name="fx_god_ray_word_end_keep">Rester allumée</string>
+    <string name="fx_god_ray_word_end_desc">S’estomper : la lumière s’éteint à la fin de chaque mot et revient sur le suivant. Rester allumée : elle reste sur le mot jusqu’au début du suivant, puis s’y déplace, et s’éteint après le dernier mot de la ligne. En suivant la ligne, une ligne la garde jusqu’au début de la ligne suivante.</string>
     <string name="fx_god_ray_samples_value">%1$d échantillons</string>
     <string name="fx_god_ray_quality_desc">Échantillons par pixel : des faisceaux plus nets contre le coût GPU.</string>
     <string name="fx_motion_blur">Flou de mouvement</string>
@@ -3667,6 +3671,10 @@
     <string name="whats_new_196_lyrics_left_body">Studio visuel du lecteur › Paroles › Typographie : chaque ligne commence à gauche au lieu du milieu, et les lignes éloignées de celle chantée deviennent floues et sombres.</string>
     <string name="whats_new_196_light_title">Une transition de lumière pour les rayons divins</string>
     <string name="whats_new_196_light_body">Studio visuel du lecteur › Paroles › Rayons divins : la lumière s’allume et s’éteint en fondu et glisse de mot en mot, sur une durée que vous choisissez. Son interrupteur coupe le fondu sans perdre cette durée.</string>
+    <string name="whats_new_196_word_end_title">Les rayons divins peuvent rester allumés entre les mots</string>
+    <string name="whats_new_196_word_end_body">Studio visuel du lecteur › Paroles › Rayons divins › À la fin d’un mot : S’estomper, ou Rester allumée jusqu’au début du mot suivant. La transition de la lumière est désormais en haut de la section.</string>
+    <string name="whats_new_196_intro_title">La première ligne des paroles attend à sa place</string>
+    <string name="whats_new_196_intro_body">Pendant l’intro d’un morceau, la première ligne attend là où sera la ligne chantée, bien lisible, et les lignes en dessous sont atténuées. Elle était au milieu de l’écran, toutes les lignes aussi lumineuses.</string>
     <string name="whats_new_196_rays_sung_title">Les rayons divins suivent le chant</string>
     <string name="whats_new_196_rays_sung_body">Ils restent éteints jusqu’au premier mot chanté, et avec des paroles synchronisées au mot ils s’éteignent quand le mot chanté se termine au lieu de s’y attarder.</string>
     <string name="whats_new_196_letters_title">Les lettres des paroles ne sont plus coupées</string>

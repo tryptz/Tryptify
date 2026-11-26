@@ -112,6 +112,77 @@ class LyricSungTest {
     }
 
     @Test
+    fun `keep shining holds a word's light until the next word, and the line's last goes out`() {
+        val keep = { at: Long -> LyricSung.at(karaoke, at, byWord = true, hold = true) }
+        assertEquals(LyricSung.Now(0, 0, true), keep(10_000))
+        // The gap between the second and third words is lit, still on the second.
+        assertEquals(LyricSung.Now(0, 1, true), keep(10_700))
+        assertEquals(LyricSung.Now(0, 1, true), keep(10_999))
+        assertEquals(LyricSung.Now(0, 2, true), keep(11_000))
+        // After the line's last word it goes out as it always did.
+        assertEquals(LyricSung.Now(0, 2, false), keep(11_800))
+        assertEquals(LyricSung.Now(0, 2, false), keep(19_999))
+        // The next line is dark until its first word, which brings it up.
+        assertEquals(LyricSung.Now(1, -1, false), keep(20_050))
+        assertEquals(LyricSung.Now(1, 0, true), keep(20_100))
+        // The song's last word goes out at its end.
+        assertEquals(LyricSung.Now(1, 2, false), keep(22_000))
+    }
+
+    @Test
+    fun `keep shining holds a line's light until the next line and carries it over`() {
+        val keep = { at: Long -> LyricSung.at(karaoke, at, byWord = false, hold = true) }
+        assertEquals(LyricSung.Now(0, -1, true), keep(10_000))
+        // Past its last word it stays lit, to the next line's turn.
+        assertEquals(LyricSung.Now(0, -1, true), keep(11_800))
+        assertEquals(LyricSung.Now(0, -1, true), keep(19_999))
+        // The next line takes it at its turn, before its first word: no dip.
+        assertEquals(LyricSung.Now(1, -1, true), keep(20_000))
+        assertEquals(LyricSung.Now(1, -1, true), keep(20_050))
+        // The last line has no next one to hand it to: out at its end.
+        assertEquals(LyricSung.Now(1, -1, true), keep(21_999))
+        assertEquals(LyricSung.Now(1, -1, false), keep(22_000))
+    }
+
+    @Test
+    fun `keep shining never lights the intro or a break`() {
+        for (byWord in listOf(false, true)) {
+            assertEquals(LyricSung.NOT_STARTED, LyricSung.at(karaoke, 0, byWord, hold = true))
+            assertEquals(LyricSung.NOT_STARTED, LyricSung.at(karaoke, 9_999, byWord, hold = true))
+        }
+        val withBreak = listOf(
+            LyricLine(1_000, "One", listOf(word(1_000, 1_500))),
+            LyricLine(2_000, ""),
+            LyricLine(9_000, "Two", listOf(word(9_200, 9_800))),
+        )
+        // The line before a break keeps it until the break, which is dark...
+        assertEquals(LyricSung.Now(0, -1, true), LyricSung.at(withBreak, 1_900, byWord = false, hold = true))
+        assertEquals(LyricSung.Now(1, -1, false), LyricSung.at(withBreak, 2_000, byWord = false, hold = true))
+        // ...and the break hands nothing on: the line after waits for its first word.
+        assertEquals(LyricSung.Now(2, -1, false), LyricSung.at(withBreak, 9_100, byWord = false, hold = true))
+        assertEquals(LyricSung.Now(2, -1, true), LyricSung.at(withBreak, 9_200, byWord = false, hold = true))
+    }
+
+    @Test
+    fun `fade out is the default, and the choice is saved and shared with the look`() {
+        assertFalse(LyricsFxSettings.DEFAULT.godRayHold)
+        LyricsFxSettings.PRESETS.forEach { (name, preset) -> assertFalse(name, preset.godRayHold) }
+        // Without hold, nothing changed: the gap between words is dark.
+        assertEquals(LyricSung.at(karaoke, 10_800, byWord = true), LyricSung.at(karaoke, 10_800, byWord = true, hold = false))
+        val keep = LyricsFxSettings.DEFAULT.copy(godRays = true, godRayHold = true)
+        assertTrue(keep.clamped().godRayHold)
+        val saved = Json { ignoreUnknownKeys = true }
+        val blob = saved.encodeToString(keep)
+        assertTrue(blob, blob.contains("\"godRayHold\":true"))
+        assertEquals(keep, saved.decodeFromString<LyricsFxSettings>(blob))
+        // A look saved before the choice fades out.
+        assertFalse(saved.decodeFromString<LyricsFxSettings>("""{"godRays":true}""").godRayHold)
+        assertTrue(LyricsFxPreset.decode(LyricsFxPreset.encode(LyricsFxPreset("Held", keep)))!!.settings.godRayHold)
+        val pack = ThemePackCodec.decode(ThemePackCodec.encode(ThemePack(name = "Held", lyrics = keep)))!!
+        assertTrue(pack.lyrics!!.godRayHold)
+    }
+
+    @Test
     fun `each word and each line is a place of its own`() {
         val places = listOf(
             LyricSung.NOT_STARTED,

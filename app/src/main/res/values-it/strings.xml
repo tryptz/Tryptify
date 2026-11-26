@@ -2129,6 +2129,10 @@
     <string name="fx_god_ray_transition_desc">Il tempo che la luce impiega ad accendersi quando inizia una parola o una riga, a spegnersi quando finisce e a passare da una parola alla successiva. A 0 cambia all’istante.</string>
     <string name="fx_god_ray_transition_time">Durata della transizione</string>
     <string name="fx_god_ray_transition_on_desc">La luce si accende e si spegne in dissolvenza e scorre da una parola cantata alla successiva. Se disattivata, cambia e salta all’istante.</string>
+    <string name="fx_god_ray_word_end">Alla fine di una parola</string>
+    <string name="fx_god_ray_word_end_fade">Sfuma</string>
+    <string name="fx_god_ray_word_end_keep">Continua a brillare</string>
+    <string name="fx_god_ray_word_end_desc">Sfuma: la luce si spegne alla fine di ogni parola e torna sulla successiva. Continua a brillare: resta sulla parola finché non inizia la successiva, poi si sposta lì, e si spegne dopo l’ultima parola della riga. Seguendo la riga, una riga la mantiene finché non inizia la successiva.</string>
     <string name="fx_god_ray_samples_value">%1$d campioni</string>
     <string name="fx_god_ray_quality_desc">Campioni per pixel: fasci più nitidi al costo di un maggior carico sulla GPU.</string>
     <string name="fx_motion_blur">Sfocatura di movimento</string>
@@ -3667,6 +3671,10 @@
     <string name="whats_new_196_lyrics_left_body">Visual Studio del lettore › Testo › Tipografia: ogni riga parte da sinistra invece che dal centro, e le righe lontane da quella cantata diventano morbide e scure.</string>
     <string name="whats_new_196_light_title">Una transizione della luce per i raggi di luce</string>
     <string name="whats_new_196_light_body">Visual Studio del lettore › Testo › Raggi di luce: la luce si accende e si spegne in dissolvenza e scorre di parola in parola nel tempo che scegli. Il suo interruttore toglie la transizione senza perdere quel tempo.</string>
+    <string name="whats_new_196_word_end_title">I raggi di luce possono continuare a brillare tra le parole</string>
+    <string name="whats_new_196_word_end_body">Visual Studio del lettore › Testo › Raggi di luce › Alla fine di una parola: Sfuma, oppure Continua a brillare finché non inizia la parola successiva. La transizione della luce ora è in cima alla sezione.</string>
+    <string name="whats_new_196_intro_title">La prima riga del testo attende al suo posto</string>
+    <string name="whats_new_196_intro_body">Durante l’intro di un brano, la prima riga attende dove sarà la riga cantata, ben leggibile, e le righe sotto sono attenuate. Prima stava al centro dello schermo, con tutte le righe ugualmente luminose.</string>
     <string name="whats_new_196_rays_sung_title">I raggi di luce seguono il canto</string>
     <string name="whats_new_196_rays_sung_body">Restano spenti finché non viene cantata la prima parola, e con testi sincronizzati parola per parola si spengono quando finisce la parola cantata invece di restarci sopra.</string>
     <string name="whats_new_196_letters_title">Le lettere del testo non vengono più tagliate</string>

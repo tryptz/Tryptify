@@ -474,6 +474,23 @@ takes them back:
   no line has a blur or an animation for it at all. It is seen in the player,
   not in the Studio's sample, which is one line. Android 12 and later.
 
+**Through the intro the first line waits at the sung line's place.** Before
+the first line's turn there is no sung line (the index is -1), and the lyric
+view used to leave the list where it lay: the first line sat on the
+half-viewport top padding, in the middle of the screen, every line the same
+0.6 white with none in focus, and the list moved up only when the singing
+started (the owner's report, 2026-11-26). Now the view centres on
+`lyricFocusLine` (the sung line, or the first through the intro) at
+`ACTIVE_LINE_ANCHOR`, so the first line is where every sung line is and its
+turn re-centres the same line, a snap of nothing; a seek back into the intro
+glides back to it. That line is "ready" (`isReady`): white at
+`READY_LINE_ALPHA`, Medium weight, the inactive scale, so it is clear but not
+yet bold, coloured or grown, and the lines below are dim as they are mid-song.
+Soft focus counts from it too (`LyricSoftFocus.steps` with no sung line:
+the first line is in focus, the rest a step further each). The light stays
+out through the intro whatever is set (below). The lyrics sheet starts its
+list at the top and has no such padding, so it is unchanged.
+
 **The edge margin moves the text, never the box the letters are drawn in.**
 The lyric text starts `lyricSideInset` in from each side of the lyric surface
 (Edge margin plus a fixed 14 dp), and that inset is the lyric list's
@@ -682,8 +699,22 @@ began. 0 switches and jumps, as it did, and so does its switch turned off
 (`godRayFade`, on as shipped; the player and the Studio's sample both read
 `godRayFadeTimeMs`, never `godRayFadeMs` itself, so off is off in both). The
 slider is shown only while the switch is on and keeps its time while it is
-off. Not linked to the music: it is an
-animation's length. The Studio's sample is always being sung, so its light is
+off. The switch and the slider are the first things in the Studio's God rays
+section, right under its own switch, with "When a word ends" after them (the
+owner asked for the transition at the top, 2026-11-26). Not linked to the music: it is an
+animation's length.
+
+**When a word ends** (`godRayHold`, Fade out as shipped) is the one way the
+light may rest. Fade out is the rule above. Keep shining (`LyricSung.at`
+with `hold`): following the word, a word keeps the light until the next word
+of its line starts, and the line's last word still goes out at its end;
+following the line (and with "All lyrics shine"), a line keeps it until the
+next line's turn, and that line is lit from its turn when the one before was
+a sung line, so the light is carried over instead of dipping before the new
+line's first word. A ♪ break hands nothing on, the song's last line goes out
+at its own end, and nothing is lit before the first line: holding is never
+the old resting on the last word through every gap and the intro. Part of
+the look, so a theme applied over it sets it back to Fade out. The Studio's sample is always being sung, so its light is
 never out, and its word hops glide. `LyricSungTest` holds the rule and the
 glide's arithmetic; the fade and the glide themselves were not seen on a
 phone when they were written.

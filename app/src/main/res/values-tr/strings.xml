@@ -2078,6 +2078,10 @@
     <string name="fx_god_ray_transition_desc">Bir kelime veya satır başladığında ışığın yanması, bittiğinde sönmesi ve bir kelimeden diğerine geçmesi için gereken süre. 0’da anında değişir.</string>
     <string name="fx_god_ray_transition_time">Geçiş süresi</string>
     <string name="fx_god_ray_transition_on_desc">Işık yavaşça yanıp söner ve söylenen bir kelimeden diğerine kayar. Kapalıyken anında değişir ve atlar.</string>
+    <string name="fx_god_ray_word_end">Kelime bittiğinde</string>
+    <string name="fx_god_ray_word_end_fade">Söner</string>
+    <string name="fx_god_ray_word_end_keep">Parlamaya devam eder</string>
+    <string name="fx_god_ray_word_end_desc">Söner: ışık her kelime bittiğinde söner ve bir sonrakinde yeniden yanar. Parlamaya devam eder: bir sonraki kelime başlayana kadar kelimede kalır, sonra ona geçer ve satırın son kelimesinden sonra söner. Satır izlenirken, bir satır ışığı bir sonraki satır başlayana kadar korur.</string>
     <string name="fx_god_ray_samples_value">%1$d örnek</string>
     <string name="fx_god_ray_quality_desc">Piksel başına örnek: daha temiz huzmeler ile GPU maliyeti arasında denge.</string>
     <string name="fx_motion_blur">Hareket bulanıklığı</string>
@@ -3589,6 +3593,10 @@
     <string name="whats_new_196_lyrics_left_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Tipografi: her satır ortadan değil soldan başlar ve söylenen satırdan uzak satırlar yumuşar ve kararır.</string>
     <string name="whats_new_196_light_title">Işık huzmeleri için ışık geçişi</string>
     <string name="whats_new_196_light_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Işık huzmeleri: ışık, ayarladığın sürede yavaşça yanıp söner ve kelimeden kelimeye kayar. Anahtarı geçişi kapatır, süre kaybolmaz.</string>
+    <string name="whats_new_196_word_end_title">Işık huzmeleri kelimeler arasında parlamaya devam edebilir</string>
+    <string name="whats_new_196_word_end_body">Oynatıcı Görsel Stüdyosu › Şarkı sözleri › Işık huzmeleri › Kelime bittiğinde: Söner ya da bir sonraki kelime başlayana kadar Parlamaya devam eder. Işık geçişi artık bölümün en üstünde.</string>
+    <string name="whats_new_196_intro_title">Sözlerin ilk satırı yerinde bekler</string>
+    <string name="whats_new_196_intro_body">Şarkının girişi boyunca ilk satır, söylenen satırın duracağı yerde net biçimde bekler, altındaki satırlar soluklaşır. Önceden ekranın ortasındaydı ve tüm satırlar aynı parlaklıktaydı.</string>
     <string name="whats_new_196_rays_sung_title">Işık huzmeleri şarkıyı izler</string>
     <string name="whats_new_196_rays_sung_body">İlk kelime söylenene kadar kapalı kalır; kelime zamanlamalı sözlerde söylenen kelime bitince üzerinde kalmak yerine söner.</string>
     <string name="whats_new_196_letters_title">Söz harfleri artık kesilmiyor</string>

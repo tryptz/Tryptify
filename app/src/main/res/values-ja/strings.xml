@@ -2027,6 +2027,10 @@
     <string name="fx_god_ray_transition_desc">単語や行が始まるときに光が点き、終わるときに消え、単語から次の単語へ移るまでの時間。0 にするとすぐに切り替わります。</string>
     <string name="fx_god_ray_transition_time">切り替え時間</string>
     <string name="fx_god_ray_transition_on_desc">光がゆっくり点いたり消えたりし、歌っている単語から次の単語へ滑らかに移ります。オフにすると、すぐに切り替わって移動します。</string>
+    <string name="fx_god_ray_word_end">単語が終わったとき</string>
+    <string name="fx_god_ray_word_end_fade">フェードアウト</string>
+    <string name="fx_god_ray_word_end_keep">光り続ける</string>
+    <string name="fx_god_ray_word_end_desc">フェードアウト：単語が終わるたびに光が消え、次の単語で再び点きます。光り続ける：次の単語が始まるまで光がその単語にとどまってから移り、行の最後の単語のあとで消えます。行を追う場合は、次の行が始まるまでその行が光り続けます。</string>
     <string name="fx_god_ray_samples_value">%1$d サンプル</string>
     <string name="fx_god_ray_quality_desc">ピクセルあたりのサンプル数。光の筋のきれいさと GPU 負荷のバランス。</string>
     <string name="fx_motion_blur">モーションブラー</string>
@@ -3511,6 +3515,10 @@
     <string name="whats_new_196_lyrics_left_body">プレーヤービジュアル スタジオ › 歌詞 › タイポグラフィ：各行を中央ではなく左から始め、歌っている行から離れた行をぼかして暗くできます。</string>
     <string name="whats_new_196_light_title">ゴッドレイの光の切り替え</string>
     <string name="whats_new_196_light_body">プレーヤービジュアル スタジオ › 歌詞 › ゴッドレイ：光が設定した時間でゆっくり点いて消え、単語から単語へ滑らかに移ります。スイッチで切り替えをオフにしても時間は保たれます。</string>
+    <string name="whats_new_196_word_end_title">ゴッドレイを単語の間も光らせる</string>
+    <string name="whats_new_196_word_end_body">プレーヤービジュアル スタジオ › 歌詞 › ゴッドレイ › 単語が終わったとき：「フェードアウト」か、次の単語が始まるまで「光り続ける」を選べます。光の切り替えはセクションの一番上に移りました。</string>
+    <string name="whats_new_196_intro_title">最初の歌詞の行が定位置で待つように</string>
+    <string name="whats_new_196_intro_body">曲のイントロの間、最初の行は歌っている行が表示される位置ではっきりと待ち、その下の行は暗くなります。以前は画面の中央にあり、すべての行が同じ明るさでした。</string>
     <string name="whats_new_196_rays_sung_title">ゴッドレイが歌に合わせて光る</string>
     <string name="whats_new_196_rays_sung_body">最初の単語が歌われるまではオフのままで、単語ごとにタイミングのある歌詞では、歌っている単語が終わると、そこに残らずに消えます。</string>
     <string name="whats_new_196_letters_title">歌詞の文字が切れなくなりました</string>

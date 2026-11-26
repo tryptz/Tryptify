@@ -2078,6 +2078,10 @@
     <string name="fx_god_ray_transition_desc">Wie lange das Licht braucht, um anzugehen, wenn ein Wort oder eine Zeile beginnt, auszugehen, wenn es endet, und von einem Wort zum nächsten zu wandern. Bei 0 schaltet es sofort um.</string>
     <string name="fx_god_ray_transition_time">Übergangsdauer</string>
     <string name="fx_god_ray_transition_on_desc">Das Licht blendet ein und aus und gleitet von einem gesungenen Wort zum nächsten. Ausgeschaltet schaltet und springt es sofort um.</string>
+    <string name="fx_god_ray_word_end">Wenn ein Wort endet</string>
+    <string name="fx_god_ray_word_end_fade">Ausblenden</string>
+    <string name="fx_god_ray_word_end_keep">Weiterleuchten</string>
+    <string name="fx_god_ray_word_end_desc">Ausblenden: Das Licht geht am Ende jedes Wortes aus und beim nächsten wieder an. Weiterleuchten: Es bleibt auf dem Wort, bis das nächste beginnt, wandert dann dorthin und geht nach dem letzten Wort der Zeile aus. Folgt es der Zeile, behält eine Zeile das Licht, bis die nächste beginnt.</string>
     <string name="fx_god_ray_samples_value">%1$d Samples</string>
     <string name="fx_god_ray_quality_desc">Samples pro Pixel: sauberere Bündel gegen GPU-Last.</string>
     <string name="fx_motion_blur">Bewegungsunschärfe</string>
@@ -3589,6 +3593,10 @@
     <string name="whats_new_196_lyrics_left_body">Player-Visuals-Studio › Songtext › Typografie: Jede Zeile beginnt links statt in der Mitte, und Zeilen fern der gesungenen werden weich und dunkler.</string>
     <string name="whats_new_196_light_title">Ein Lichtübergang für die Lichtstrahlen</string>
     <string name="whats_new_196_light_body">Player-Visuals-Studio › Songtext › Lichtstrahlen: Das Licht blendet über eine einstellbare Zeit ein und aus und gleitet von Wort zu Wort. Sein Schalter schaltet den Übergang ab, ohne die Zeit zu verlieren.</string>
+    <string name="whats_new_196_word_end_title">Lichtstrahlen können zwischen Wörtern weiterleuchten</string>
+    <string name="whats_new_196_word_end_body">Player-Visuals-Studio › Songtext › Lichtstrahlen › Wenn ein Wort endet: Ausblenden oder Weiterleuchten, bis das nächste Wort beginnt. Der Lichtübergang steht jetzt ganz oben im Abschnitt.</string>
+    <string name="whats_new_196_intro_title">Die erste Songtextzeile wartet an ihrem Platz</string>
+    <string name="whats_new_196_intro_body">Während des Intros eines Songs wartet die erste Zeile dort, wo die gesungene Zeile stehen wird, gut lesbar, und die Zeilen darunter sind abgedunkelt. Sie stand in der Bildschirmmitte, und alle Zeilen waren gleich hell.</string>
     <string name="whats_new_196_rays_sung_title">Die Lichtstrahlen folgen dem Gesang</string>
     <string name="whats_new_196_rays_sung_body">Sie bleiben aus, bis das erste Wort gesungen wird, und bei wortgenau getimten Songtexten gehen sie aus, wenn das gesungene Wort endet, statt darauf stehen zu bleiben.</string>
     <string name="whats_new_196_letters_title">Buchstaben im Songtext werden nicht mehr abgeschnitten</string>

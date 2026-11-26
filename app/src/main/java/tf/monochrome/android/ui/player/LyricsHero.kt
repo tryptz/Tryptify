@@ -441,8 +441,11 @@ internal fun SyncedLyricsView(
     // (LyricSung). Derived, so it changes at a word's start and end and not on
     // every position poll, and read outside composition: nothing recomposes.
     val lightByWord = followWord && !fx.godRaysAllLyrics
-    val sungNow = remember(lines, syncDelayMs, lightByWord) {
-        derivedStateOf { LyricSung.at(lines, position - syncDelayMs, byWord = lightByWord) }
+    // "When a word ends": fade out, or keep shining until the next word (or,
+    // following the line, the next line) takes the light over.
+    val lightHold = fx.godRayHold
+    val sungNow = remember(lines, syncDelayMs, lightByWord, lightHold) {
+        derivedStateOf { LyricSung.at(lines, position - syncDelayMs, byWord = lightByWord, hold = lightHold) }
     }
     // The transition (Lyrics FX › God rays): the fade in and out, and the
     // light's glide from one sung word or line to the next.
@@ -545,8 +548,13 @@ internal fun SyncedLyricsView(
         // the surface is being resized (the expand/collapse morph animates
         // the viewport every frame).
         LaunchedEffect(currentLineIndex, maxHeight) {
-            val index = currentLineIndex
-            if (index < 0) return@LaunchedEffect
+            // Through the intro (no line sung yet) the first line waits at the
+            // sung line's anchor, as the next to come: left alone it sat on
+            // the half-viewport padding, in the middle, and moved up only when
+            // it was sung. Its turn then re-centres the same line, a snap of
+            // nothing.
+            if (lines.isEmpty()) return@LaunchedEffect
+            val index = lyricFocusLine(currentLineIndex)
             // Bring the line on-screen first only if it's far away (a big seek);
             // during normal playback the next active line is already visible just
             // below centre, so this is skipped. A plain scrollToItem (no offset)
@@ -666,6 +674,9 @@ internal fun SyncedLyricsView(
             // instead of wrapping or being cut off inside the compact player.
             val isActive = index == currentLineIndex
             val isPast = index < currentLineIndex
+            // Through the intro the first line is the one coming: clear, at
+            // the sung line's anchor, but not bold or coloured until its turn.
+            val isReady = !isActive && index == lyricFocusLine(currentLineIndex)
             // Bass FX rides only the active line: the line pumps (bassBeat)
             // and reports its bounds so the full-screen layer can bloom the
             // glow behind it.
@@ -749,6 +760,7 @@ internal fun SyncedLyricsView(
                     line = line,
                     isActive = isActive,
                     isPast = isPast,
+                    isReady = isReady,
                     // Word-level highlight rides the same Bluetooth-adjusted clock.
                     // Only the sung line reads it. An inactive line's colours
                     // ignore the position and it has no sung word to report
@@ -787,6 +799,7 @@ internal fun SyncedLyricsView(
                         // and the bright rim), so the letter is handed to it solid.
                         isActive -> accent
                         isPast -> Color.White.copy(alpha = 0.35f)
+                        isReady -> Color.White.copy(alpha = READY_LINE_ALPHA)
                         else -> Color.White.copy(alpha = 0.62f)
                     },
                     // Same clock as the emphasis scale, so the light-up and the
@@ -852,6 +865,8 @@ internal fun KaraokeLyricLine(
     isPast: Boolean,
     position: Long,
     accent: Color,
+    /** The first line through the intro, the next to be sung: clear, not yet lit. */
+    isReady: Boolean = false,
     onClick: () -> Unit,
     beatModifier: Modifier = Modifier,
     availableWidth: Dp,
@@ -903,7 +918,11 @@ internal fun KaraokeLyricLine(
                     // Solid fills: the liquidGlass() shader turns the active line into
                     // see-through glass, so the karaoke colours are handed to it opaque.
                     val target = when {
-                        !isActive -> if (isPast) Color.White.copy(alpha = 0.32f) else Color.White.copy(alpha = 0.6f)
+                        !isActive -> when {
+                            isPast -> Color.White.copy(alpha = 0.32f)
+                            isReady -> Color.White.copy(alpha = READY_LINE_ALPHA)
+                            else -> Color.White.copy(alpha = 0.6f)
+                        }
                         position >= word.endMs -> accent.copy(alpha = 0.9f)   // already sung
                         position >= word.startMs -> accent                    // lighting up now
                         else -> Color.White.copy(alpha = 0.45f)               // not yet reached
@@ -1024,6 +1043,16 @@ private const val MIN_LYRIC_SP = 11f
  * active line resting dead-centre with an empty band beneath it.
  */
 private const val ACTIVE_LINE_ANCHOR = 0.38f
+
+/** The first line's colour through the intro: clear against the dimmer lines below, not yet the accent. */
+private const val READY_LINE_ALPHA = 0.9f
+
+/**
+ * The line the lyric view is centred on and focuses: the sung one, or through
+ * the intro (none sung yet, [current] under 0) the first, which is the one
+ * coming.
+ */
+internal fun lyricFocusLine(current: Int): Int = current.coerceAtLeast(0)
 
 /**
  * Line-switch feel. The scroll glide runs a touch longer than the colour/scale
