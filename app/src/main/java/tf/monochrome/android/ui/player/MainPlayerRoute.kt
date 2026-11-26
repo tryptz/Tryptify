@@ -326,6 +326,7 @@ fun MainPlayerRoute(
     val spectrumColor = MaterialTheme.colorScheme.primary
     val waveCandySettings by playerViewModel.waveCandy.collectAsStateWithLifecycle()
     val waterfallSettings by playerViewModel.spectrumWaterfall.collectAsStateWithLifecycle()
+    val spectrogram3dSettings by playerViewModel.spectrogram3d.collectAsStateWithLifecycle()
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
@@ -1108,6 +1109,9 @@ fun MainPlayerRoute(
                     spectrumBins = { spectrumBins },
                     spectrumColor = spectrumColor,
                     waterfall = waterfallSettings,
+                    spectrogram3d = spectrogram3dSettings,
+                    // The album's other colour lights the 3D spectrogram's ridges from within.
+                    spectrumGlow = dominantFade.value,
                     waveSettings = waveCandySettings,
                     onWaveSettings = playerViewModel::setWaveCandy,
                     showSpectrum = showNpSpectrum,

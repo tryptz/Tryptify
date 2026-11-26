@@ -53,6 +53,8 @@ data class ThemeColours(
 data class ThemeVisualizer(
     val waterfall: SpectrumWaterfallSettings? = null,
     val waveCandy: WaveCandySettings? = null,
+    /** The cover's 3D spectrogram, without the listener's own quality and preview switch. */
+    val spectrogram3d: Spectrogram3DSettings? = null,
     val ambientOn: Boolean? = null,
     val ambientOpacity: Int? = null,
     val ambientBlackPoint: Int? = null,
@@ -170,6 +172,7 @@ data class ThemePack(
         visualizer = visualizer?.copy(
             waterfall = visualizer.waterfall?.clamped(),
             waveCandy = visualizer.waveCandy?.clamped(),
+            spectrogram3d = visualizer.spectrogram3d?.clamped(),
             ambientOpacity = visualizer.ambientOpacity?.coerceIn(0, 100),
             ambientBlackPoint = visualizer.ambientBlackPoint?.coerceIn(0, MAX_AMBIENT_BLACK_POINT),
         ),
@@ -231,5 +234,8 @@ object ThemePackCodec {
         lyrics = pack.lyrics?.withPersonalFrom(LyricsFxSettings.DEFAULT),
         playerGlass = pack.playerGlass?.withPersonalFrom(PlayerGlassSettings.DEFAULT),
         panelGlass = pack.panelGlass?.withPersonalFrom(PlayerGlassSettings.DEFAULT),
+        visualizer = pack.visualizer?.let { v ->
+            v.copy(spectrogram3d = v.spectrogram3d?.withPersonalFrom(Spectrogram3DSettings.DEFAULT))
+        },
     )
 }

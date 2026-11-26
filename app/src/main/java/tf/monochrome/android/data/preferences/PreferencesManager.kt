@@ -262,6 +262,7 @@ class PreferencesManager @Inject constructor(
         private val MINI_PLAYER_GLASS_JSON = stringPreferencesKey("mini_player_glass_json")
         private val WAVE_CANDY_JSON = stringPreferencesKey("wave_candy_json")
         private val SPECTRUM_WATERFALL_JSON = stringPreferencesKey("spectrum_waterfall_json")
+        private val SPECTROGRAM_3D_JSON = stringPreferencesKey("spectrogram_3d_json")
 
         // Atmos renderer profile (mode / target layout / HRTF profile). Kept
         // device-local — the layout tracks the connected DAC and the HRTF is a
@@ -608,7 +609,7 @@ class PreferencesManager @Inject constructor(
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
             VISUAL_LINKS_JSON, MUSIC_LINKS_PAUSED,
             PLAYER_GLASS_CUSTOM_PRESETS_JSON, MINI_PLAYER_GLASS_JSON, WAVE_CANDY_JSON,
-            SPECTRUM_WATERFALL_JSON,
+            SPECTRUM_WATERFALL_JSON, SPECTROGRAM_3D_JSON,
             VISUALIZER_SENSITIVITY, VISUALIZER_BRIGHTNESS, VISUALIZER_AUDIO_DELAY_MS,
             // Not VISUALIZER_PRESET_ID: it is the preset on screen, rewritten on
             // every Next on the visualizer and every per-track rotation, and each
@@ -2824,6 +2825,21 @@ class PreferencesManager @Inject constructor(
 
     suspend fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
         dataStore.edit { it[SPECTRUM_WATERFALL_JSON] = json.encodeToString(settings.clamped()) }
+    }
+
+    /** The cover's 3D spectrogram: speed, camera, surface and pitch range. */
+    val spectrogram3d: Flow<tf.monochrome.android.domain.model.Spectrogram3DSettings> = dataStore.data
+        .map { it[SPECTROGRAM_3D_JSON] }
+        .distinctUntilChanged()
+        .map { raw ->
+            raw
+                ?.let { s -> runCatching { json.decodeFromString<tf.monochrome.android.domain.model.Spectrogram3DSettings>(s) }.getOrNull() }
+                ?.clamped()
+                ?: tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT
+        }
+
+    suspend fun setSpectrogram3d(settings: tf.monochrome.android.domain.model.Spectrogram3DSettings) {
+        dataStore.edit { it[SPECTROGRAM_3D_JSON] = json.encodeToString(settings.clamped()) }
     }
 
     /** Atmos renderer profile (mode / target layout / HRTF profile id). */

@@ -245,6 +245,12 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         "Visual Studio",
         listOf("waterfall", "depth", "fade", "angle", "perspective", "ridgeline", "3d", "history", "spectrogram"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    // Beside the waterfall, as the cover's third view.
+    entry(
+        "3D spectrogram", R.string.settings_spectrogram_3d,
+        "Visual Studio",
+        listOf("3d", "spectrogram", "landscape", "terrain", "subsurface", "gloss", "haze", "pitch", "cover visualizer"),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Library ─────────────────────────────────────────────────────────
     // Renamed with the header it points at: SettingsSearchIndexTest greps the

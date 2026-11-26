@@ -381,6 +381,40 @@ as a strip under it, in back-to-front order, in one or two draws.
 Ridgeline's ground under the front line goes on to the bottom of the box (`ridgeGroundBase`): the front baseline sits at 98.5% of the height so its stroke is not cut, and a ground stopping there left a strip of the cover under the dark face. `WaterfallMeshTest` holds the geometry. Below Android 10, where a mesh is not
 hardware-drawn, each line is one stroked path, never `drawLines`.
 
+**The cover's third view, the 3D spectrogram, is one lit mesh too**
+(`Spectrogram3DScene`, `Spectrogram3DOverlay`): the music as a landscape,
+time sideways (the newest at the right edge, scrolling left) and pitch into
+the distance (bass at the front), as in the reference the owner sent
+(2026-11-26). The cover's spectrum button walks Spectrum, Wave Candy, 3D
+spectrogram and round again (`CoverVisual`), skipping a view that cannot
+show: Wave Candy without its settings, the 3D view without the analyzer or
+below Android 10, where `drawVertices` is not drawn on the GPU (it is not
+offered there at all, and Settings says so). Its speed is set in Settings
+only; the cover's speed button stays the spectrum's.
+
+- **One `drawVertices` call, back to front.** The strip nearest the back is
+  drawn first, so nearer ridges cover what they hide without a depth buffer;
+  at most about 19,000 points at Ultra, under the 16-bit index limit.
+- **Time by the clock, never by frames.** Columns are pushed every
+  `secondsAcross / columns` seconds of playing time and the newest glides in
+  by its `phase`, on the app's frame clock: it draws at whatever Settings ›
+  System › Performance › Frame rate limit allows and scrolls at the same
+  speed at every rate (`Spectrogram3DSceneTest`). A long gap is not caught
+  up on. Paused, it stands still and asks for no frames.
+- **Lit per point, in the album's colours.** A wrapped key light, a
+  Blinn-Phong gloss, and subsurface scattering: a lamp behind the landscape
+  glowing through the ridges and their rims in the album's second colour
+  (the dominant one, raised to full strength, since it is often the dark
+  background). The back darkens and fades into the cover with the haze.
+- **Settings › 3D spectrogram**, after the waterfall, with a preview that can
+  be switched off and is steered like the waterfall's (one finger: up and
+  down the camera, left and right the speed; pinch: peak height). Speed,
+  camera angle, peak height, gloss, subsurface glow, smoothness, depth haze,
+  the pitch range (log sliders, two octaves at least) and quality. All of
+  it travels in a theme's visualizer part except quality and the preview
+  switch, the listener's own (`withPersonalFrom`). Not seen on a phone when
+  it was written: the lighting constants are a first guess.
+
 Search bars and other app chrome take **the mini player's** settings
 (`LocalMiniPlayerGlass`), not the player's. The player route overrides
 `LocalPlayerGlass` with its own material for the transport, which is right there

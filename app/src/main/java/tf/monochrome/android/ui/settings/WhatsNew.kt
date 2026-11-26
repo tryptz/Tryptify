@@ -286,6 +286,14 @@ object WhatsNew {
                 ),
                 WhatsNewEntry(
                     kind = WhatsNewKind.NEW,
+                    section = PLAYER,
+                    title = "A 3D spectrogram on the cover",
+                    body = "The cover’s visualizer button has a third view: your music as a glossy landscape glowing in the album’s colours. Settings › 3D spectrogram sets its speed, camera, gloss, glow and more, with a preview you steer by touch.",
+                    titleRes = R.string.whats_new_196_spectrogram_title,
+                    bodyRes = R.string.whats_new_196_spectrogram_body,
+                ),
+                WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
                     section = PLAYLISTS,
                     title = "Reorder a playlist's songs",
                     body = "Reorder, in a playlist's ⋮ menu, puts a handle on every song: drag one to its new place. Each drop is saved at once, and Done or Back leaves the mode.",

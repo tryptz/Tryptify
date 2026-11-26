@@ -73,6 +73,7 @@ class ThemePackRepository @Inject constructor(
             visualizer = ThemeVisualizer(
                 waterfall = p.spectrumWaterfall.first(),
                 waveCandy = p.waveCandy.first(),
+                spectrogram3d = p.spectrogram3d.first(),
                 ambientOn = ambient.enabled,
                 ambientOpacity = ambient.opacityPercent,
                 ambientBlackPoint = ambient.blackPointPercent,
@@ -123,6 +124,8 @@ class ThemePackRepository @Inject constructor(
         pack.visualizer?.let { v ->
             v.waterfall?.let { p.setSpectrumWaterfall(it) }
             v.waveCandy?.let { p.setWaveCandy(it) }
+            // The look only: this phone keeps its own quality and preview switch.
+            v.spectrogram3d?.let { p.setSpectrogram3d(it.withPersonalFrom(p.spectrogram3d.first()).clamped()) }
             v.ambientOn?.let { p.setAmbientVisualizerEnabled(it) }
             v.ambientOpacity?.let { p.setAmbientVisualizerOpacity(it) }
             v.ambientBlackPoint?.let { p.setAmbientVisualizerBlackPoint(it) }

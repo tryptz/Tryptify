@@ -141,6 +141,11 @@ class SettingsViewModel @Inject constructor(
     fun setSpectrumWaterfall(settings: tf.monochrome.android.domain.model.SpectrumWaterfallSettings) {
         viewModelScope.launch { preferences.setSpectrumWaterfall(settings) }
     }
+    val spectrogram3d: StateFlow<tf.monochrome.android.domain.model.Spectrogram3DSettings> = preferences.spectrogram3d
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT)
+    fun setSpectrogram3d(settings: tf.monochrome.android.domain.model.Spectrogram3DSettings) {
+        viewModelScope.launch { preferences.setSpectrogram3d(settings) }
+    }
     fun acquireSpectrum() = spectrumAnalyzerTap.acquire()
     fun releaseSpectrum() = spectrumAnalyzerTap.release()
 

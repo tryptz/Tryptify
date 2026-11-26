@@ -1170,6 +1170,16 @@ internal fun VisualizerSettings(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+        // The cover's third view, after the waterfall it grew out of. Its
+        // preview shares the arbiter, so only the one most on screen runs.
+        val spectrogram3d by viewModel.spectrogram3d.collectAsStateWithLifecycle()
+        Spectrogram3DSettingsSection(
+            settings = spectrogram3d,
+            onChange = viewModel::setSpectrogram3d,
+            liveBins = if (spectrumEnabled) ({ spectrumBins }) else null,
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
         val waveCandy by viewModel.waveCandy.collectAsStateWithLifecycle()
         WaveCandySettingsSection(
             settings = waveCandy,

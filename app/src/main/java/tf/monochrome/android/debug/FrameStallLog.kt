@@ -47,7 +47,7 @@ object FrameStallLog : Choreographer.FrameCallback {
     @Volatile private var running = false
 
     /** The effects that cost the GPU, each counted while the log runs: which were at work in a slow second. */
-    enum class Effect { LENS, SLAB, RAYS, CURVE, FROST }
+    enum class Effect { LENS, SLAB, RAYS, CURVE, FROST, SPECTROGRAM }
 
     private val drawn = java.util.concurrent.atomic.AtomicIntegerArray(Effect.entries.size)
     private val pixels = java.util.concurrent.atomic.AtomicLongArray(Effect.entries.size)
@@ -104,7 +104,8 @@ object FrameStallLog : Choreographer.FrameCallback {
                         "drew lens ${counts[Effect.LENS.ordinal]} (${mpx(Effect.LENS)} Mpx) " +
                         "frost ${counts[Effect.FROST.ordinal]} (${mpx(Effect.FROST)} Mpx) " +
                         "slab ${counts[Effect.SLAB.ordinal]} (${mpx(Effect.SLAB)} Mpx) " +
-                        "rays ${counts[Effect.RAYS.ordinal]} curve ${counts[Effect.CURVE.ordinal]}",
+                        "rays ${counts[Effect.RAYS.ordinal]} curve ${counts[Effect.CURVE.ordinal]} " +
+                        "spectrogram ${counts[Effect.SPECTROGRAM.ordinal]} (${mpx(Effect.SPECTROGRAM)} Mpx)",
                 )
             }
             secondStart = now

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.SkipNext
@@ -136,6 +137,9 @@ fun PlayerHero(
     spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
+    spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings = tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT,
+    /** The album's second colour: the 3D spectrogram's glow. Null takes [spectrumColor]. */
+    spectrumGlow: Color? = null,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
@@ -204,6 +208,8 @@ fun PlayerHero(
                 spectrumBins = spectrumBins,
                 spectrumColor = spectrumColor,
                 waterfall = waterfall,
+                spectrogram3d = spectrogram3d,
+                spectrumGlow = spectrumGlow,
                 waveSettings = waveSettings,
             onWaveSettings = onWaveSettings,
                 showSpectrum = showSpectrum,
@@ -226,6 +232,8 @@ private fun SquareArtHero(
     spectrumBins: (() -> FloatArray)?,
     spectrumColor: Color,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings,
+    spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings,
+    spectrumGlow: Color?,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean,
@@ -255,6 +263,8 @@ private fun SquareArtHero(
             spectrumBins = spectrumBins,
             spectrumColor = spectrumColor,
             waterfall = waterfall,
+            spectrogram3d = spectrogram3d,
+            spectrumGlow = spectrumGlow,
             waveSettings = waveSettings,
             onWaveSettings = onWaveSettings,
             showSpectrum = showSpectrum,
@@ -718,6 +728,31 @@ private fun AmbientPresetButton(
  * NORMAL's, so each step still moves the way it always did at the default
  * averaging time.
  */
+/**
+ * The cover's three views, in the order its button walks them. A view this
+ * phone or this player cannot show (Wave Candy without its settings, the 3D
+ * spectrogram below Android 10 or without the analyzer) is skipped.
+ */
+internal enum class CoverVisual {
+    SPECTRUM,
+    WAVE_CANDY,
+    SPECTROGRAM_3D;
+
+    fun next(waveAvailable: Boolean, spectrogramAvailable: Boolean): CoverVisual {
+        var candidate = this
+        repeat(entries.size) {
+            candidate = entries[(candidate.ordinal + 1) % entries.size]
+            val shown = when (candidate) {
+                SPECTRUM -> true
+                WAVE_CANDY -> waveAvailable
+                SPECTROGRAM_3D -> spectrogramAvailable
+            }
+            if (shown) return candidate
+        }
+        return SPECTRUM
+    }
+}
+
 private enum class SpectrumSpeed(val label: String, val timeScale: Float) {
     SLOW("SLOW", 4f),
     NORMAL("NORMAL", 1f),
@@ -734,6 +769,9 @@ private fun HeroCoverArt(
     spectrumBins: (() -> FloatArray)? = null,
     spectrumColor: Color = PlayerGlowBlue,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
+    spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings = tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT,
+    /** The album's second colour: the 3D spectrogram's glow. Null takes [spectrumColor]. */
+    spectrumGlow: Color? = null,
     waveSettings: tf.monochrome.android.domain.model.WaveCandySettings? = null,
     onWaveSettings: (tf.monochrome.android.domain.model.WaveCandySettings) -> Unit = {},
     showSpectrum: Boolean = true,
@@ -754,9 +792,13 @@ private fun HeroCoverArt(
 ) {
     val spectrumEnabled = showSpectrum
     var spectrumSpeed by remember { mutableStateOf(SpectrumSpeed.NORMAL) }
-    // Which picture the spectrum button puts on the art: the FFT envelope, or
-    // Wave Candy's scope. Saveable so a rotation keeps it.
-    var waveCandy by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // Which picture the spectrum button puts on the art: the FFT envelope,
+    // Wave Candy's scope or the 3D spectrogram. Saveable so a rotation keeps it.
+    var coverVisual by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoverVisual.SPECTRUM) }
+    val waveAvailable = waveSettings != null
+    val spectrogramAvailable = spectrumBins != null && SPECTROGRAM_3D_SUPPORTED
+    val waveCandy = coverVisual == CoverVisual.WAVE_CANDY && waveAvailable
+    val spectrogram = coverVisual == CoverVisual.SPECTROGRAM_3D && spectrogramAvailable
     // Wave Candy's two channels apart, or summed into one line.
     // The kick: Wave Candy's lines swell on it. The cover itself stays still;
     // it used to punch in on every kick, and a cover bouncing to the bass
@@ -771,7 +813,7 @@ private fun HeroCoverArt(
     // the rest of the player's glass: here the artwork really is behind it.
     // The box records itself as the frame the cover is cropped into, so the
     // pane lenses the slice of the cover it covers, not the window's.
-    val glassSpectrum = spectrumEnabled && !(waveCandy && waveSettings != null) &&
+    val glassSpectrum = spectrumEnabled && !waveCandy && !spectrogram &&
         spectrumBins != null && waterfall.style == tf.monochrome.android.domain.model.WaterfallStyle.GLASS
     val coverFrame = rememberBackdropAnchor()
     val coverArt = rememberBackdropArt(track?.coverUrl, enabled = glassSpectrum)
@@ -843,6 +885,22 @@ private fun HeroCoverArt(
                     modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
                 )
             }
+        } else if (spectrumEnabled && spectrogram && spectrumBins != null) {
+            // The bottom 40% of the art: a low camera needs the height for the
+            // peaks to rise out of the landscape.
+            BoxWithConstraints(
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            ) {
+                Spectrogram3DOverlay(
+                    bins = spectrumBins,
+                    settings = spectrogram3d,
+                    color = spectrumColor,
+                    glow = spectrumGlow ?: spectrumColor,
+                    isPlaying = isPlaying,
+                    modifier = Modifier.fillMaxWidth().height(maxHeight * 0.4f),
+                    resetKey = track?.id,
+                )
+            }
         } else if (spectrumEnabled && spectrumBins != null) {
             BoxWithConstraints(
                 modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -879,12 +937,24 @@ private fun HeroCoverArt(
                     enabled = interactive,
                     onClick = { onToggleShowSpectrum(); showControls() },
                 )
-                if (spectrumEnabled && waveSettings != null) {
+                if (spectrumEnabled && (waveAvailable || spectrogramAvailable)) {
+                    // Shows the view a tap moves to: Spectrum, Wave Candy, 3D spectrogram, round again.
+                    val next = coverVisual.next(waveAvailable, spectrogramAvailable)
                     HeroIconButton(
-                        icon = if (waveCandy) Icons.Default.Equalizer else Icons.Default.GraphicEq,
-                        contentDescription = if (waveCandy) stringResource(R.string.hero_switch_to_spectrum) else stringResource(R.string.hero_switch_to_wave_candy),
+                        icon = when (next) {
+                            CoverVisual.SPECTRUM -> Icons.Default.Equalizer
+                            CoverVisual.WAVE_CANDY -> Icons.Default.GraphicEq
+                            CoverVisual.SPECTROGRAM_3D -> Icons.Default.Landscape
+                        },
+                        contentDescription = stringResource(
+                            when (next) {
+                                CoverVisual.SPECTRUM -> R.string.hero_switch_to_spectrum
+                                CoverVisual.WAVE_CANDY -> R.string.hero_switch_to_wave_candy
+                                CoverVisual.SPECTROGRAM_3D -> R.string.hero_switch_to_spectrogram_3d
+                            },
+                        ),
                         enabled = interactive,
-                        onClick = { waveCandy = !waveCandy; showControls() },
+                        onClick = { coverVisual = next; showControls() },
                     )
                 }
                 if (spectrumEnabled && waveCandy && waveSettings != null) {
@@ -895,7 +965,8 @@ private fun HeroCoverArt(
                         onClick = { onWaveSettings(waveSettings.copy(stereo = !waveSettings.stereo)); showControls() },
                     )
                 }
-                if (spectrumEnabled && !(waveCandy && waveSettings != null)) {
+                // The 3D spectrogram's speed is set in Settings only.
+                if (spectrumEnabled && !waveCandy && !spectrogram) {
                     HeroIconButton(
                         icon = Icons.Default.Speed,
                         contentDescription = stringResource(R.string.hero_spectrum_speed),
