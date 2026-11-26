@@ -76,6 +76,20 @@ class SpectrumAnalyzerTap @Inject constructor(
             val hopMs = (hopSamples * 1000f / sampleRate.coerceAtLeast(1)).toLong()
             return maxOf(floorMs, hopMs)
         }
+        /**
+         * The 3D spectrogram's FFT size: about 46 ms of sound at any rate
+         * (2048 samples at 44.1 and 48 kHz). The display's own (4K to 16K,
+         * the listener's choice) hears a fifth of a second at once, which is
+         * fine pitch for one line and a landscape that answers late: a drum
+         * hit is spread over the whole window, before and after it. A short
+         * window is fatter in pitch, which the landscape's bars want anyway.
+         */
+        internal fun spectrogramFftSize(sampleRate: Int): Int = when {
+            sampleRate <= 64_000 -> 2048
+            sampleRate <= 128_000 -> 4096
+            else -> 8192
+        }
+
         /** Frames handed to the native scope ring per push, at most. */
         const val SCOPE_CHUNK = 4096
         private const val MIN_FREQ = 20f
@@ -170,10 +184,10 @@ class SpectrumAnalyzerTap @Inject constructor(
     private val _spectrogramBins = MutableStateFlow(FloatArray(OUTPUT_BINS) { SpectrogramBands.SILENCE_DB })
 
     /**
-     * The 3D spectrogram's own reading of each analysis ([SpectrogramBands]):
-     * the same [OUTPUT_BINS] log bands in dBFS with the pink tilt, but not
-     * re-centred, smoothed or blurred as [spectrumBins] is, so loud and quiet
-     * keep their difference. A new array each analysis; read its value in a
+     * The 3D spectrogram's own reading of each analysis ([SpectrogramBands]),
+     * from its own short FFT ([spectrogramFftSize]): the same [OUTPUT_BINS]
+     * log bands in dBFS with the pink tilt, but not re-centred, smoothed or
+     * blurred as [spectrumBins] is, so loud and quiet keep their difference. A new array each analysis; read its value in a
      * frame loop rather than collecting it.
      */
     val spectrogramBins: StateFlow<FloatArray> = _spectrogramBins.asStateFlow()
@@ -338,7 +352,14 @@ class SpectrumAnalyzerTap @Inject constructor(
             var twiddleSin = buildTwiddleSin(currentSize)
             var smoothed = FloatArray(OUTPUT_BINS)
             var binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
-            var bands = SpectrogramBands(currentSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
+            // The 3D spectrogram's own, shorter FFT (see spectrogramFftSize).
+            var shortSize = spectrogramFftSize(sampleRate)
+            var shortWindow = buildHannWindow(shortSize)
+            var shortReal = FloatArray(shortSize)
+            var shortImag = FloatArray(shortSize)
+            var shortCos = buildTwiddleCos(shortSize)
+            var shortSin = buildTwiddleSin(shortSize)
+            var bands = SpectrogramBands(shortSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
             // Per-frame magnitude scratch. Purely intermediate — it is folded
             // into `smoothed` and never escapes this coroutine — so it is held
             // and refilled rather than allocated every frame. (The published
@@ -360,7 +381,13 @@ class SpectrumAnalyzerTap @Inject constructor(
                     twiddleCos = buildTwiddleCos(currentSize)
                     twiddleSin = buildTwiddleSin(currentSize)
                     binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
-                    bands = SpectrogramBands(currentSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
+                    shortSize = spectrogramFftSize(sampleRate)
+                    shortWindow = buildHannWindow(shortSize)
+                    shortReal = FloatArray(shortSize)
+                    shortImag = FloatArray(shortSize)
+                    shortCos = buildTwiddleCos(shortSize)
+                    shortSin = buildTwiddleSin(shortSize)
+                    bands = SpectrogramBands(shortSize, sampleRate, OUTPUT_BINS, MIN_FREQ, MAX_FREQ, PINK_SLOPE_DB_PER_OCT)
                     smoothed = FloatArray(OUTPUT_BINS)
                     _analysisDirty = false
                     settled = false
@@ -395,11 +422,18 @@ class SpectrumAnalyzerTap @Inject constructor(
 
                 fft(real, imag, twiddleCos, twiddleSin)
 
-                // The 3D spectrogram's reading of the same FFT, before the
-                // display's own treatment below. A fresh array: its reader
-                // keeps the reference.
+                // The 3D spectrogram's reading: the newest sound through its
+                // own short FFT, so a note is there as it starts and gone as
+                // it ends. A fresh array: its reader keeps the reference.
+                var shortStart = writeIdx - shortSize
+                if (shortStart < 0) shortStart += ringLen
+                for (i in 0 until shortSize) {
+                    shortReal[i] = ringLocal[(shortStart + i) % ringLen] * shortWindow[i]
+                    shortImag[i] = 0f
+                }
+                fft(shortReal, shortImag, shortCos, shortSin)
                 val plain = FloatArray(OUTPUT_BINS)
-                bands.levels(real, imag, plain)
+                bands.levels(shortReal, shortImag, plain)
                 _spectrogramBins.value = plain
 
                 // Compute magnitudes for target log-frequency bins.

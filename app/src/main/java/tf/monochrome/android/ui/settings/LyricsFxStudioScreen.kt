@@ -783,6 +783,8 @@ fun LyricsFxStudioScreen(
                 VisualizerSettings(
                     settingsViewModel,
                     onOpenPresetBrowser = { showPresetBrowser = true },
+                    underLyrics = fx.visualizerUnderLyrics,
+                    onUnderLyrics = { on -> viewModel.update { s -> s.copy(visualizerUnderLyrics = on) } },
                 )
             }
             val presets by settingsViewModel.visualizerPresets.collectAsStateWithLifecycle()

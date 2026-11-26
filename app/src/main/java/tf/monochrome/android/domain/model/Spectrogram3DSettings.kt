@@ -3,8 +3,8 @@ package tf.monochrome.android.domain.model
 import kotlinx.serialization.Serializable
 
 /**
- * The cover's third view: the music as a 3D landscape (a spectrogram drawn as a
- * lit, glossy surface). Time runs sideways, the newest at the right edge; pitch
+ * The cover's third view: the music as a sheet of water (a spectrogram drawn
+ * as a lit, rippled surface). Time runs sideways, the newest at the right edge; pitch
  * runs into the distance, bass at the front. Stored as one JSON blob and
  * synced like [SpectrumWaterfallSettings], clamped on the way in and out.
  *
@@ -23,8 +23,18 @@ data class Spectrogram3DSettings(
     val gloss: Float = 0.6f,
     /** How much light glows through the ridges, in the album's second colour. */
     val subsurface: Float = 0.7f,
-    /** 0 sharp, detailed ridges; 1 soft and rounded. */
+    /** 0 sharp, detailed ridges; 1 soft and rounded (a blur across pitch). */
     val smoothness: Float = 0.3f,
+    /** How long the surface takes to rise to a new sound, in ms. 0 is at once. */
+    val attackMs: Float = 12f,
+    /** How long a sound stands as it dies away, in ms. 0 drops at once. */
+    val releaseMs: Float = 160f,
+    /** The water's own small waves and the glints on them, 0 a still pool. */
+    val ripples: Float = 0.6f,
+    /** How dark the shadows the peaks cast are, 0 none. */
+    val shadows: Float = 0.85f,
+    /** How much the words being sung light the surface, in the Lyrics view. 0 leaves it to the sun. */
+    val lyricLight: Float = 0.8f,
     /** How quickly the back fades into the cover. */
     val haze: Float = 0.55f,
     /** The lowest pitch shown, at the front, in Hz. */
@@ -50,6 +60,11 @@ data class Spectrogram3DSettings(
             gloss = gloss.c(0f, 1f, d.gloss),
             subsurface = subsurface.c(0f, 1f, d.subsurface),
             smoothness = smoothness.c(0f, 1f, d.smoothness),
+            attackMs = attackMs.c(0f, MAX_ATTACK_MS, d.attackMs),
+            releaseMs = releaseMs.c(0f, MAX_RELEASE_MS, d.releaseMs),
+            ripples = ripples.c(0f, 1f, d.ripples),
+            shadows = shadows.c(0f, 1f, d.shadows),
+            lyricLight = lyricLight.c(0f, 1f, d.lyricLight),
             haze = haze.c(0f, 1f, d.haze),
             minHz = low,
             maxHz = high,
@@ -64,7 +79,7 @@ data class Spectrogram3DSettings(
     companion object {
         val DEFAULT = Spectrogram3DSettings()
 
-        const val MIN_SECONDS = 2f
+        const val MIN_SECONDS = 0.5f
         const val MAX_SECONDS = 20f
         const val MIN_ANGLE_DEG = 5f
         const val MAX_ANGLE_DEG = 60f
@@ -75,6 +90,8 @@ data class Spectrogram3DSettings(
         const val MIN_HIGH_HZ = 500f
         const val MAX_HZ = 20_000f
         const val MIN_RANGE_RATIO = 4f
+        const val MAX_ATTACK_MS = 200f
+        const val MAX_RELEASE_MS = 1500f
         const val MIN_QUALITY = 1
         const val MAX_QUALITY = 4
     }

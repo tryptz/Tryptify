@@ -296,7 +296,7 @@ object WhatsNew {
                     kind = WhatsNewKind.NEW,
                     section = PLAYER,
                     title = "A 3D spectrogram on the cover",
-                    body = "The cover’s visualizer button has a third view: your music as a glossy landscape glowing in the album’s colours. Settings › 3D spectrogram sets its speed, camera, gloss, glow and more, with a preview you steer by touch.",
+                    body = "The cover’s visualizer button has a third view: your music as water in the album’s colours, with shadows and light glowing through its swells. Under the lyrics, the words being sung light it. Settings › 3D spectrogram tunes it, with a touch preview.",
                     titleRes = R.string.whats_new_196_spectrogram_title,
                     bodyRes = R.string.whats_new_196_spectrogram_body,
                 ),

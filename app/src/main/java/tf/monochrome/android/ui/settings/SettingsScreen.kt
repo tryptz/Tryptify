@@ -1077,6 +1077,9 @@ internal fun VisualizerSettings(
     viewModel: SettingsViewModel,
     /** Opens the glass preset browser the hosting screen draws over itself. */
     onOpenPresetBrowser: () -> Unit,
+    /** Lyrics FX › Visualizer under the lyrics, for the 3D spectrogram's settings to show too. */
+    underLyrics: Boolean? = null,
+    onUnderLyrics: (Boolean) -> Unit = {},
 ) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
@@ -1178,6 +1181,8 @@ internal fun VisualizerSettings(
             settings = spectrogram3d,
             onChange = viewModel::setSpectrogram3d,
             liveBins = if (spectrumEnabled) spectrogramFeed else null,
+            underLyrics = underLyrics,
+            onUnderLyrics = onUnderLyrics,
         )
 
         Spacer(modifier = Modifier.height(16.dp))

@@ -56,6 +56,9 @@ internal fun Spectrogram3DSettingsSection(
     onChange: (Spectrogram3DSettings) -> Unit,
     /** The analyzer's bins, or null when the analyzer is switched off. */
     liveBins: (() -> FloatArray)?,
+    /** Lyrics FX › Visualizer under the lyrics, shown here too: it is asked for here first. Null hides it. */
+    underLyrics: Boolean? = null,
+    onUnderLyrics: (Boolean) -> Unit = {},
 ) {
     var draft by remember(settings) { mutableStateOf(settings) }
     val shown = draft.clamped()
@@ -94,11 +97,31 @@ internal fun Spectrogram3DSettingsSection(
         )
     }
 
+    if (underLyrics != null) {
+        SettingSwitchItem(
+            title = stringResource(R.string.fx_visualizer_under_lyrics),
+            subtitle = stringResource(R.string.fx_visualizer_under_lyrics_desc),
+            checked = underLyrics,
+            onCheckedChange = onUnderLyrics,
+        )
+    }
+
     val percent = { v: Float -> "${(v * 100).roundToInt()}%" }
     SpectroSlider(
         stringResource(R.string.spectrogram3d_speed), stringResource(R.string.spectrogram3d_speed_desc),
         shown.secondsAcross, Spectrogram3DSettings.MIN_SECONDS..Spectrogram3DSettings.MAX_SECONDS,
         { String.format(Locale.US, "%.1f s", it) }, { drag(shown.copy(secondsAcross = it)) }, ::commit,
+    )
+    val ms = { v: Float -> "${v.roundToInt()} ms" }
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_attack), stringResource(R.string.spectrogram3d_attack_desc),
+        shown.attackMs, 0f..Spectrogram3DSettings.MAX_ATTACK_MS,
+        ms, { drag(shown.copy(attackMs = it)) }, ::commit,
+    )
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_release), stringResource(R.string.spectrogram3d_release_desc),
+        shown.releaseMs, 0f..Spectrogram3DSettings.MAX_RELEASE_MS,
+        ms, { drag(shown.copy(releaseMs = it)) }, ::commit,
     )
     SpectroSlider(
         stringResource(R.string.spectrogram3d_angle), stringResource(R.string.spectrogram3d_angle_desc),
@@ -117,6 +140,18 @@ internal fun Spectrogram3DSettingsSection(
     SpectroSlider(
         stringResource(R.string.spectrogram3d_subsurface), stringResource(R.string.spectrogram3d_subsurface_desc),
         shown.subsurface, 0f..1f, percent, { drag(shown.copy(subsurface = it)) }, ::commit,
+    )
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_ripples), stringResource(R.string.spectrogram3d_ripples_desc),
+        shown.ripples, 0f..1f, percent, { drag(shown.copy(ripples = it)) }, ::commit,
+    )
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_shadows), stringResource(R.string.spectrogram3d_shadows_desc),
+        shown.shadows, 0f..1f, percent, { drag(shown.copy(shadows = it)) }, ::commit,
+    )
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_lyric_light), stringResource(R.string.spectrogram3d_lyric_light_desc),
+        shown.lyricLight, 0f..1f, percent, { drag(shown.copy(lyricLight = it)) }, ::commit,
     )
     SpectroSlider(
         stringResource(R.string.spectrogram3d_smoothness), stringResource(R.string.spectrogram3d_smoothness_desc),
@@ -229,7 +264,7 @@ private fun Spectrogram3DPreview(
                             val pan = event.calculatePan()
                             s.copy(
                                 angleDeg = s.angleDeg - pan.y / size.height * 60f,
-                                secondsAcross = s.secondsAcross - pan.x / size.width * 12f,
+                                secondsAcross = s.secondsAcross - pan.x / size.width * 10f,
                             )
                         }
                         val next = moved.clamped()

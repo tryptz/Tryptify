@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import tf.monochrome.android.audio.eq.SpectrumAnalyzerTap
 import tf.monochrome.android.debug.FrameStallLog
 import tf.monochrome.android.domain.model.Spectrogram3DSettings
@@ -69,8 +71,18 @@ internal fun Spectrogram3DOverlay(
     modifier: Modifier = Modifier,
     /** A new value (the next song) clears the landscape. */
     resetKey: Any? = null,
+    /**
+     * The words being sung, as a light: fills in where it stands (root px),
+     * its colour and how much of it is on. Called in the draw phase. Null
+     * where no lyrics are drawn over the surface.
+     */
+    lyricLight: ((SpectrogramLamp) -> Unit)? = null,
 ) {
     val scene = remember { Spectrogram3DScene() }
+    val lamp = remember { SpectrogramLamp() }
+    // The box's left edge in root px. Not state: read in the draw phase only.
+    val leftInRoot = remember { FloatArray(1) }
+    val currentLyricLight by rememberUpdatedState(lyricLight)
     val gpu = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Spectrogram3DGpu.createOrNull() else null
     }
@@ -98,18 +110,21 @@ internal fun Spectrogram3DOverlay(
             }
         }
     }
-    Canvas(modifier.clipToBounds()) {
+    Canvas(modifier.clipToBounds().onGloballyPositioned { leftInRoot[0] = it.positionInRoot().x }) {
         // Read here so a new frame redraws without recomposing.
         @Suppress("UNUSED_EXPRESSION") frame
         val s = currentSettings
         val palette = SpectrogramPalette.of(color.toArgb(), glow.toArgb())
         val shaded = gpu != null && s.quality > Spectrogram3DSettings.MIN_QUALITY
-        scene.build(size.width, size.height, s, palette, lit = !shaded)
+        lamp.strength = 0f
+        currentLyricLight?.invoke(lamp)
+        lamp.x -= leftInRoot[0]
+        scene.build(size.width, size.height, s, palette, lit = !shaded, lamp = lamp)
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
             if (scene.indexCount > 0) {
                 if (shaded && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    gpu!!.draw(native, scene, palette, s)
+                    gpu!!.draw(native, scene, palette, s, lamp)
                 } else {
                     native.drawVertices(
                         android.graphics.Canvas.VertexMode.TRIANGLES,
@@ -124,6 +139,20 @@ internal fun Spectrogram3DOverlay(
         }
         FrameStallLog.drew(FrameStallLog.Effect.SPECTROGRAM, (size.width * size.height).toLong())
     }
+}
+
+/**
+ * The light the words being sung throw on the surface: a lamp standing behind
+ * the field. [x] is its centre and [width] its width in px across the picture,
+ * [strength] how much of it is on (0 none), and its colour.
+ */
+internal class SpectrogramLamp {
+    var x = 0f
+    var width = 0f
+    var strength = 0f
+    var red = 1f
+    var green = 1f
+    var blue = 1f
 }
 
 /**
@@ -207,7 +236,13 @@ internal class Spectrogram3DGpu private constructor(private val shader: RuntimeS
     private var turn = 0
     private val paint = android.graphics.Paint().apply { color = android.graphics.Color.WHITE }
 
-    fun draw(canvas: android.graphics.Canvas, scene: Spectrogram3DScene, palette: SpectrogramPalette, s: Spectrogram3DSettings) {
+    fun draw(
+        canvas: android.graphics.Canvas,
+        scene: Spectrogram3DScene,
+        palette: SpectrogramPalette,
+        s: Spectrogram3DSettings,
+        lamp: SpectrogramLamp,
+    ) {
         val w = scene.texColumns
         val h = scene.texRows
         var p = pairs
@@ -229,6 +264,13 @@ internal class Spectrogram3DGpu private constructor(private val shader: RuntimeS
         shader.setFloatUniform("uBase", palette.base)
         shader.setFloatUniform("uGlow", palette.glow)
         shader.setFloatUniform("uLook", s.gloss, s.subsurface, s.haze, (h - 1).toFloat())
+        shader.setFloatUniform("uWater", scene.waterColumn, Spectrogram3DScene.shadowSteps(s.quality), s.ripples, s.shadows)
+        shader.setFloatUniform("uRipA", scene.rippleA)
+        shader.setFloatUniform("uRipB", scene.rippleB)
+        shader.setFloatUniform("uRipOff", scene.rippleOffsets)
+        shader.setFloatUniform("uSun", Spectrogram3DScene.SUN)
+        shader.setFloatUniform("uLamp", scene.lampX, Spectrogram3DScene.LAMP_Y, Spectrogram3DScene.LAMP_Z, lamp.strength * s.lyricLight)
+        shader.setFloatUniform("uLampCol", lamp.red, lamp.green, lamp.blue, scene.lampHalfWidth)
         paint.shader = shader
         canvas.drawVertices(
             android.graphics.Canvas.VertexMode.TRIANGLES,
@@ -252,11 +294,13 @@ internal class Spectrogram3DGpu private constructor(private val shader: RuntimeS
  * x in columns (the texture repeats sideways, so the ring needs no seam), y
  * in rows from the front; under row 0 it is the front wall.
  *
- * Floor in the album's colour, flanks to white, the loudest tops in its
- * second colour; a key light, a sharp gloss, the sky a wet surface mirrors
- * (stronger at a glancing angle), light glowing through ridges from a lamp
- * behind (subsurface scattering), shade in the hollows, and haze toward the
- * back. The steps the slope is measured over are the texels one pixel covers
+ * Water: a body in the album's colour, deep in the troughs and lighter in
+ * the swells, foam on the high ones and the loudest tops in its second
+ * colour; small ripples of its own that ride the surface and run with the
+ * playing time, the sun's hard glint on them, the sky mirrored more the
+ * flatter the look across it (Fresnel), the bright net of caustics on calm
+ * water, light glowing through the swells from a lamp behind (subsurface
+ * scattering), shade in the hollows, and haze toward the back. The steps the slope is measured over are the texels one pixel covers
  * there, worked out from the camera, so the far rows do not shimmer.
  */
 internal const val SPECTROGRAM_3D_SHADER = """
@@ -269,9 +313,46 @@ uniform float2 uTilt;
 uniform float3 uBase;
 uniform float3 uGlow;
 uniform float4 uLook;
+uniform float4 uWater;
+uniform float4 uRipA;
+uniform float4 uRipB;
+uniform float4 uRipOff;
+uniform float3 uSun;
+uniform float4 uLamp;
+uniform float4 uLampCol;
 
 float height(float2 p) {
     return (uHi.eval(p).a * 65280.0 + uLo.eval(p).a * 255.0) / 65535.0;
+}
+
+// The height to 1 part in 255, at half the cost: for the shadows and the
+// shade, which are soft.
+float coarse(float2 p) {
+    return uHi.eval(p).a * 0.99611;
+}
+
+float hash12(float2 p) {
+    float3 p3 = fract(float3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+// Smooth noise and its slope each way, on a lattice that repeats every
+// `period` cells, so the place it is read at may wrap.
+float3 noised(float2 x, float2 period) {
+    float2 i = floor(x);
+    float2 f = x - i;
+    float2 u = f * f * (3.0 - 2.0 * f);
+    float2 du = 6.0 * f * (1.0 - f);
+    float2 i0 = mod(i, period);
+    float2 i1 = mod(i + 1.0, period);
+    float a = hash12(i0);
+    float b = hash12(float2(i1.x, i0.y));
+    float c = hash12(float2(i0.x, i1.y));
+    float d = hash12(i1);
+    float k = a - b - c + d;
+    return float3(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y,
+                  du * (float2(b - a, c - a) + k * u.yx));
 }
 
 half4 main(float2 p) {
@@ -281,8 +362,11 @@ half4 main(float2 p) {
     float z = zr * uGrid.y;
     float x = uOrigin.y - (q.x - uOrigin.x) * uGrid.x;
     float cz = max(uCam.x * uTilt.x + (z - uCam.y) * uTilt.y, 0.05);
-    float fu = max(2.0, cz / (uCam.z * uGrid.x));
-    float fv = max(1.25, cz * cz / (uCam.z * uCam.x * uGrid.y));
+    // Texels one pixel covers here, each way.
+    float pu = cz / (uCam.z * uGrid.x);
+    float pv = cz * cz / (uCam.z * uCam.x * uGrid.y);
+    float fu = max(2.0, pu);
+    float fv = max(1.25, pv);
 
     float zn = clamp(zr / uLook.w, 0.0, 1.0);
     float haze = uLook.z;
@@ -301,46 +385,161 @@ half4 main(float2 p) {
     float lift = uGrid.z;
     float sx = (hl - hr) * lift / (2.0 * fu * uGrid.x);
     float sz = (hu - hd) * lift / (2.0 * fv * uGrid.y);
+
+    // The water's own ripples: two layers of smooth noise, a broad one and
+    // a fine one, that ride the surface as it scrolls and drift across each
+    // other with the playing time. Each fades out where its cells would be
+    // finer than a pixel, so the far water does not sparkle falsely.
+    float col0 = uWater.x - q.x;
+    float amount = uWater.z;
+    float3 na = noised(float2(col0 * uRipA.x, zr * uRipA.y) + uRipOff.xy, float2(uRipA.z, 64.0));
+    float3 nb = noised(float2(col0 * uRipB.x, zr * uRipB.y) + uRipOff.zw, float2(uRipB.z, 64.0));
+    float fa = 1.0 - smoothstep(0.3, 0.8, uRipA.x * pu + uRipA.y * pv);
+    float fb = 1.0 - smoothstep(0.3, 0.8, uRipB.x * pu + uRipB.y * pv);
+    float2 ga = na.yz * float2(uRipA.x / uGrid.x, uRipA.y / uGrid.y) * uRipA.w * fa;
+    float2 gb = nb.yz * float2(uRipB.x / uGrid.x, uRipB.y / uGrid.y) * uRipB.w * fb;
+    sx += (ga.x + gb.x) * amount;
+    sz += (ga.y + gb.y) * amount;
+
     float3 n = normalize(float3(-sx, 1.0, -sz));
-    float3 P = float3(x, h * lift, z);
+    float y0 = h * lift;
+    float3 P = float3(x, y0, z);
     float3 V = normalize(float3(0.0, uCam.x, uCam.y) - P);
     float ndv = clamp(dot(n, V), 0.0, 1.0);
-
-    // The colour is read a little wider than the height, so its bands curve
-    // with the surface and do not show the texture's grid.
-    float hc = mix(h, around, 0.45);
-    float3 albedo = mix(uBase, float3(0.95, 0.96, 0.99), smoothstep(0.36, 0.58, hc));
-    albedo = mix(albedo, uGlow * 0.5, smoothstep(0.64, 0.86, hc) * 0.94);
-
-    float ao = clamp(1.0 - 3.0 * (around - h), 0.35, 1.0);
-
-    float3 L = normalize(float3(-0.30, 0.80, -0.52));
-    float diffuse = clamp((dot(n, L) + 0.35) / 1.35, 0.0, 1.0);
-    float3 H = normalize(L + V);
-    float ndh = max(dot(n, H), 0.0);
     float gloss = uLook.x;
-    float spec = gloss * (1.7 * pow(ndh, 40.0 + 260.0 * gloss) + 0.2 * pow(ndh, 10.0));
+    float subsurface = uLook.y;
 
+    // Light is added up in linear values and brought back through a film
+    // curve at the end, so a bright place rolls off to white instead of
+    // clipping, as a renderer's picture does.
+    float3 base = uBase * uBase;
+    float3 glowCol = uGlow * uGlow;
+
+    // The water's body: deep in the troughs, lighter where a swell is thin
+    // enough for light to come through, foam on the high ones, and the
+    // loudest tops in the album's second colour. Read a little wider than
+    // the height, so the bands curve with the surface.
+    float hc = mix(h, around, 0.45);
+    float3 deep = base * 0.3;
+    float3 shallow = mix(base, float3(1.0), 0.12);
+    float3 body = mix(deep, shallow, smoothstep(0.0, 0.5, hc));
+    body = mix(body, float3(0.8, 0.88, 1.0), smoothstep(0.4, 0.66, hc) * 0.72);
+    body = mix(body, glowCol * 0.8, smoothstep(0.58, 0.84, hc) * 0.95);
+
+    // Shade in the hollows, near and wide.
+    float fu2 = fu * 3.0 + 2.0;
+    float fv2 = fv * 3.0 + 1.5;
+    float wide = 0.25 * (coarse(q + float2(-fu2, -fv2)) + coarse(q + float2(fu2, -fv2))
+        + coarse(q + float2(-fu2, fv2)) + coarse(q + float2(fu2, fv2)));
+    float ao = clamp(1.0 - 2.8 * (around - h) - 2.2 * max(wide - h, 0.0), 0.12, 1.0);
+
+    // The key light: a low sun behind the field and to one side. The words
+    // being sung are a lamp standing behind the field, and as they light,
+    // the key light turns toward it and takes its colour.
+    float lampOn = uLamp.w;
+    float3 toLamp = float3(clamp(P.x, uLamp.x - uLampCol.a, uLamp.x + uLampCol.a), uLamp.y, uLamp.z) - P;
+    float lampDist = max(length(toLamp), 0.001);
+    float lampNear = 1.0 / (1.0 + 1.1 * lampDist * lampDist);
+    float3 lampCol = uLampCol.rgb * uLampCol.rgb;
+    float turn = lampOn;
+    float3 Ll = toLamp / lampDist;
+    float3 L = normalize(mix(uSun, Ll, turn));
+    float3 keyCol = mix(float3(2.5, 2.36, 2.2), lampCol * (3.6 * lampNear), turn);
+
+    // Shadows and thickness in one walk toward the light over the heights:
+    // how far the ray is under the ground on its way is the shadow, softer
+    // the farther off what casts it; how long it is under the ground is how
+    // much water the light has to come through.
+    float2 track = float2(L.x, L.z);
+    float along = max(length(track), 0.001);
+    float rise = max(L.y, 0.04) / along;
+    float2 texPer = float2(-L.x / uGrid.x, L.z / uGrid.y) / along;
+    float reach = min(lift / rise, 0.45);
+    float steps = uWater.y;
+    float occ = 0.0;
+    float thick = 0.0;
+    float prev = 0.0;
+    for (int i = 0; i < 16; i++) {
+        if (float(i) >= steps) { break; }
+        float f = (float(i) + 0.6) / steps;
+        float t = reach * f * f;
+        float d = coarse(q + texPer * t) * lift - (y0 + t * rise);
+        occ = max(occ, d / (t * 0.07 + 0.001));
+        thick += clamp(d / (0.12 * lift + 0.0001), 0.0, 1.0) * (t - prev);
+        prev = t;
+    }
+    float shadow = mix(1.0, 1.0 - smoothstep(0.0, 1.0, occ), uWater.w);
+
+    float ndl = dot(n, L);
+    float direct = shadow * clamp(ndl, 0.0, 1.0);
+
+    // Subsurface scattering. Light that went into the water comes out again
+    // in the scatter colour: beside the line where light ends (a soft, tinted
+    // edge instead of a hard one), and on the dark side wherever little water
+    // lies between the place and the light, so crests and thin ridges glow
+    // and a thin ridge's shadow is tinted, not black. Strongest looking
+    // toward the light.
+    float3 scatter = mix(mix(body, sqrt(body), 0.5), glowCol * 1.3, 0.85 * smoothstep(0.12, 0.5, h));
+    float wrap = smoothstep(-0.5, 0.0, ndl) * (1.0 - smoothstep(0.0, 0.35, ndl));
+    float through = exp(-thick / (0.004 + 0.022 * subsurface));
+    float toward = max(dot(-V, L), 0.0);
+    float lit = shadow * smoothstep(-0.05, 0.3, ndl);
+    float inside = (1.0 - lit) * through * (0.3 + 1.5 * toward * toward) * (0.3 + 0.7 * h);
+    float3 sss = scatter * keyCol * subsurface * (0.3 * wrap * shadow + 0.7 * inside);
+
+    // The sky's light from above and a weak lamp from the front, neither
+    // with a shadow, less in the hollows.
+    float3 skyCol = mix(base, float3(0.85, 0.92, 1.0), 0.5);
+    float3 fill = skyCol * (0.05 + 0.13 * n.y)
+        + float3(0.05) * clamp(dot(n, float3(0.27, 0.53, -0.8)), 0.0, 1.0);
+
+    // Each light's own glint on every ripple that faces it: the sun's,
+    // and the lamp's under the word that is lit (worked from the lamp's own
+    // direction, not the turned key light's, or it lands between the two).
+    float sharp = 60.0 + 320.0 * gloss;
+    float ndhSun = max(dot(n, normalize(uSun + V)), 0.0);
+    float ndhLamp = max(dot(n, normalize(Ll + V)), 0.0);
+    float3 glint = (float3(2.5, 2.36, 2.2) * ((1.0 - turn) * (3.2 * pow(ndhSun, sharp) + 0.1 * pow(ndhSun, 14.0)))
+        + lampCol * (turn * lampNear * (16.0 * pow(ndhLamp, sharp) + 0.5 * pow(ndhLamp, 14.0)))) * (gloss * shadow);
+
+    // What the water mirrors, more of it the flatter the look across it
+    // (Fresnel): the sky, white at the horizon behind and the album's colour
+    // overhead, and the lit words, a bar of light the ripples draw out into
+    // a streak.
     float3 R = reflect(-V, n);
-    float fres = 0.04 + 0.96 * pow(1.0 - ndv, 5.0);
-    float sky = smoothstep(-0.1, 0.5, R.z) * (1.0 - smoothstep(0.1, 0.85, R.y));
-    float3 env = mix(uBase, float3(1.0), 0.35) * sky;
+    float fres = 0.025 + 0.975 * pow(1.0 - ndv, 5.0);
+    float3 env = mix(mix(base, float3(0.85, 0.92, 1.0), 0.6), base * 0.22, smoothstep(0.0, 0.34, R.y))
+        * smoothstep(-0.25, 0.35, R.z) * (0.45 + 0.55 * ao);
+    float3 hit = P + R * ((uLamp.z - P.z) / max(R.z, 0.05));
+    float offX = max(abs(hit.x - uLamp.x) - uLampCol.a, 0.0);
+    float offY = hit.y - uLamp.y;
+    float bar = exp(-offX * offX / 0.012 - offY * offY / 0.02) * step(0.0, R.z);
+    env += lampCol * (6.0 * lampOn * bar);
 
-    float3 back = normalize(float3(0.18, 0.32, 0.93) + n * 0.6);
-    float through = max(dot(V, -back), 0.0);
-    float rim = (1.0 - ndv) * (1.0 - ndv);
-    float sss = uLook.y * (0.9 * through * through * through + 0.22 * rim) * (0.25 + 0.75 * h);
+    // Caustics: the bright net the ripples throw on calm water where the
+    // light reaches, along the lines where both layers pass through their
+    // middle.
+    float net = (1.0 - abs(2.0 * na.x - 1.0)) * (1.0 - abs(2.0 * nb.x - 1.0));
+    float caustic = net * net * net * amount * fa * (1.0 - smoothstep(0.12, 0.45, h));
 
-    float3 col = albedo * (0.24 + 0.74 * diffuse) * ao
-        + uGlow * sss
-        + env * fres * gloss * 1.2
-        + float3(spec);
+    float3 col = body * (keyCol * direct + fill * ao)
+        + shallow * keyCol * (caustic * 0.16 * (0.3 + 0.7 * shadow))
+        + sss
+        + env * fres * (0.5 + 0.9 * gloss)
+        + glint;
 
-    col = mix(col, uBase * 0.6 + 0.08, haze * 0.9 * zn * sqrt(zn));
+    col = mix(col, base * 0.5 + 0.02, haze * 0.9 * zn * sqrt(zn));
+    // Under the front row the water is cut: its body seen from the side,
+    // the light coming down through it and lost with the depth. Never a
+    // black wall: the water runs to the bottom of the picture.
+    float3 face = mix(body * 0.8 + scatter * (0.35 * subsurface), deep, smoothstep(0.0, 0.7, wall))
+        * (keyCol * 0.34 + skyCol * 0.3) * (1.0 - 0.45 * wall);
+    col = mix(col, face, step(p.y, 0.499));
+    // The film curve, and back out of linear.
+    col = col * (2.51 * col + 0.03) / (col * (2.43 * col + 0.59) + 0.14);
+    col = sqrt(clamp(col, 0.0, 1.0));
     float alpha = 1.0 - haze * smoothstep(0.4, 1.0, zn);
-    // The front wall: in shade from its top edge, to near black at its foot.
-    col = mix(col, uBase * 0.05, step(p.y, 0.499) * (0.82 + 0.18 * wall));
-    return half4(half3(clamp(col, 0.0, 1.0)) * half(alpha), half(alpha));
+    return half4(half3(col) * half(alpha), half(alpha));
 }
 """
 
@@ -378,11 +577,15 @@ internal class Spectrogram3DScene {
     private val sampled = FloatArray(MAX_ROWS)
     private val blurred = FloatArray(MAX_ROWS)
     private val ripple = FloatArray(MAX_ROWS)
+    private val before = FloatArray(MAX_ROWS)
+    private val pushed = FloatArray(MAX_ROWS)
     private val rowBin = FloatArray(MAX_ROWS + 1)
     private val rowTilt = FloatArray(MAX_ROWS)
     private var acc = 0f
     /** How far, in columns, the newest pushed column has moved off the live one. */
     var phase = 0f; private set
+    /** Playing time since the landscape was cleared: what the ripples drift by. */
+    private var playSeconds = 0.0
     /** The level the loudest band was last seen near, in the feed's dB. */
     var referenceDb = MIN_REFERENCE_DB; private set
     private var primed = false
@@ -418,6 +621,16 @@ internal class Spectrogram3DScene {
     var camScale = 0f; private set
     var camSin = 0f; private set
     var camCos = 0f; private set
+    /** The ripples' place: the column the texture's 0 stands at, wrapped at their period. */
+    var waterColumn = 0f; private set
+    /** The two ripple layers: cells per column, cells per row, cells in the period, and height. */
+    val rippleA = FloatArray(4)
+    val rippleB = FloatArray(4)
+    /** How far each layer has drifted, in cells, each way: A's, then B's. */
+    val rippleOffsets = FloatArray(4)
+    /** The lyric lamp's place across the field and half its width, in world units. */
+    var lampX = 0f; private set
+    var lampHalfWidth = 0f; private set
 
     /** Seconds of music between two history columns. */
     fun columnSeconds(s: Spectrogram3DSettings): Float = s.secondsAcross / frontColumnsFor(s.quality)
@@ -431,6 +644,7 @@ internal class Spectrogram3DScene {
         pushes = 0L
         acc = 0f
         phase = 0f
+        playSeconds = 0.0
         referenceDb = MIN_REFERENCE_DB
         primed = false
     }
@@ -479,21 +693,29 @@ internal class Spectrogram3DScene {
         // Up to a new sound quickly, down from it slowly: a note is there at
         // once and is held as it dies, so a run of short notes on one pitch
         // is one bar with a pinch between them, not a row of bumps.
-        val up = 1f - exp(-step / (ATTACK_TAU_MIN + s.smoothness * ATTACK_TAU_RANGE))
-        val down = 1f - exp(-step / (RELEASE_TAU_MIN + s.smoothness * RELEASE_TAU_RANGE))
+        val up = follow(step, s.attackMs)
+        val down = follow(step, s.releaseMs)
+        playSeconds += step
+        System.arraycopy(live, 0, before, 0, texRows)
         for (j in 0 until texRows) {
             val d = blurred[j] - live[j]
             live[j] += d * (if (d > 0f) up else down)
         }
         val colSec = columnSeconds(s)
         acc += step
-        while (acc >= colSec) {
+        // At a fast speed several columns are due in one frame: each is a
+        // step of the way from the live column as the last frame left it to
+        // where it is now, so the surface is a slope there, not a stair.
+        val due = (acc / colSec).toInt()
+        for (i in 1..due) {
             head = (head - 1 + texColumns) % texColumns
-            System.arraycopy(live, 0, ring, head * texRows, texRows)
-            writeSlot(head, live)
+            val f = i.toFloat() / due
+            for (j in 0 until texRows) pushed[j] = before[j] + (live[j] - before[j]) * f
+            System.arraycopy(pushed, 0, ring, head * texRows, texRows)
+            writeSlot(head, pushed)
             pushes++
-            acc -= colSec
         }
+        acc -= due * colSec
         phase = (acc / colSec).coerceIn(0f, 1f)
         // The live column right of the newest, and a copy beyond it: the
         // slope at the right edge is measured against it, not against the
@@ -589,6 +811,22 @@ internal class Spectrogram3DScene {
         }
     }
 
+    /**
+     * One ripple layer for the shader: cells [cell] across (the field is 1
+     * deep), sloping [slope] at full strength, drifting [drift] cells a
+     * second each way. A whole number of cells fits the columns' period, and
+     * the drift is wrapped at the lattice's periods, so neither wrap shows.
+     */
+    private fun ripple(out: FloatArray, at: Int, cell: Float, slope: Float, drift: FloatArray, dx: Float) {
+        val cells = max(1L, Math.round(RIPPLE_PERIOD_COLUMNS * dx.toDouble() / cell))
+        out[0] = cells.toFloat() / RIPPLE_PERIOD_COLUMNS
+        out[1] = worldPerRow / cell
+        out[2] = cells.toFloat()
+        out[3] = slope * cell
+        rippleOffsets[at] = ((playSeconds * drift[0]) % cells).toFloat()
+        rippleOffsets[at + 1] = ((playSeconds * drift[1]) % RIPPLE_PERIOD_ROWS).toFloat()
+    }
+
     /** History column [k] (0 the newest pushed) at pitch row [j]. */
     fun historyHeight(k: Int, j: Int): Float =
         if (k < 0 || k >= texColumns - GUARD) 0f else ring[((head + k) % texColumns) * texRows + j]
@@ -628,7 +866,14 @@ internal class Spectrogram3DScene {
      * point's place in the history ([texs]), and with [lit] each point's
      * colour too, for drawing without the shader.
      */
-    fun build(width: Float, height: Float, s: Spectrogram3DSettings, palette: SpectrogramPalette, lit: Boolean) {
+    fun build(
+        width: Float,
+        height: Float,
+        s: Spectrogram3DSettings,
+        palette: SpectrogramPalette,
+        lit: Boolean,
+        lamp: SpectrogramLamp? = null,
+    ) {
         prepare(s)
         vertexCount = 0
         indexCount = 0
@@ -668,6 +913,18 @@ internal class Spectrogram3DScene {
         originU = u0
         originX = right - phase * dx
         camY = cam.camY; camZ = cam.camZ; camScale = cam.scale; camSin = cam.sinA; camCos = cam.cosA
+        // The ripples ride the history's columns: column k of the history
+        // is column (pushes - 1 - k) of all that ever passed, wrapped at the
+        // ripples' period, which every ripple's phase per column divides.
+        waterColumn = ((pushes - 1) % RIPPLE_PERIOD_COLUMNS).toFloat() + u0
+        ripple(rippleA, 0, RIPPLE_CELL_A, RIPPLE_SLOPE_A, RIPPLE_DRIFT_A, dx)
+        ripple(rippleB, 2, RIPPLE_CELL_B, RIPPLE_SLOPE_B, RIPPLE_DRIFT_B, dx)
+        // The lyric lamp stands where the words are across the picture, at
+        // its own depth and height: a px there is this much of the world.
+        val lampDepth = (cam.camY - LAMP_Y) * cam.sinA + (LAMP_Z - cam.camZ) * cam.cosA
+        val worldPerPx = lampDepth / cam.scale
+        lampX = if (lamp != null) (lamp.x - width / 2f) * worldPerPx else 0f
+        lampHalfWidth = max(MIN_LAMP_HALF_WIDTH, if (lamp != null) lamp.width / 2f * worldPerPx else 0f)
 
         for (c in 0 until columns) {
             val k = columnK[c]
@@ -744,8 +1001,10 @@ internal class Spectrogram3DScene {
     /**
      * A camera above the front edge looking down at [angleDeg] onto a field
      * 1 deep (pitch) and as wide as it must be to fill the box to the back,
-     * fitted so the ground runs from the box's bottom (front) to [BACK_EDGE]
-     * from its top (back).
+     * fitted so the ground runs from the box's bottom (front) up over the
+     * share of its height that goes with the angle ([groundShare]): a low
+     * camera sees the ground as a strip with the peaks tall against what is
+     * behind, a high one looks down on a ground that fills the box.
      */
     class Camera private constructor(
         val sinA: Float,
@@ -791,7 +1050,7 @@ internal class Spectrogram3DScene {
                 // seen from a low camera; the peaks rise over the rows behind.
                 val bottom = py(0f, 0f)
                 val back = py(0f, 1f)
-                val scale = height * (FRONT_EDGE - BACK_EDGE) / max(back - bottom, 1e-3f)
+                val scale = height * groundShare(angleDeg) / max(back - bottom, 1e-3f)
                 // How much of the front edge that leaves in view: the field
                 // is made wide enough to fill the box at the back.
                 val byWidth = width / 2f * czFront
@@ -834,11 +1093,16 @@ internal class Spectrogram3DScene {
             val vl = 1f / sqrt(vx * vx + vy * vy + vz * vz)
             vx *= vl; vy *= vl; vz *= vl
             val ndv = (nx * vx + ny * vy + nz * vz).coerceIn(0f, 1f)
-            val toWhite = smooth(0.36f, 0.58f, h)
-            val toGlow = smooth(0.64f, 0.86f, h) * 0.94f
-            var ar = mix(mix(br, 0.95f, toWhite), gr * 0.5f, toGlow)
-            var ag = mix(mix(bg, 0.96f, toWhite), gg * 0.5f, toGlow)
-            var ab = mix(mix(bb, 0.99f, toWhite), gb * 0.5f, toGlow)
+            val swell = smooth(0f, 0.5f, h)
+            val foam = smooth(0.42f, 0.68f, h) * 0.82f
+            val toGlow = smooth(0.66f, 0.88f, h) * 0.94f
+            fun body(base: Float, white: Float, glow: Float): Float {
+                val water = mix(base * 0.5f, mix(base, 1f, 0.32f), swell)
+                return mix(mix(water, white, foam), glow * 0.52f, toGlow)
+            }
+            var ar = body(br, 0.93f, gr)
+            var ag = body(bg, 0.97f, gg)
+            var ab = body(bb, 1f, gb)
             val diffuse = ((nx * KEY_X + ny * KEY_Y + nz * KEY_Z + 0.35f) / 1.35f).coerceIn(0f, 1f)
             var hx = KEY_X + vx; var hy = KEY_Y + vy; var hz = KEY_Z + vz
             val hl = 1f / sqrt(hx * hx + hy * hy + hz * hz)
@@ -851,7 +1115,7 @@ internal class Spectrogram3DScene {
             val through = (-(vx * dx + vy * dy + vz * dz)).coerceAtLeast(0f)
             val rim = (1f - ndv) * (1f - ndv)
             val sss = subsurface * (0.9f * through * through * through + 0.22f * rim) * (0.25f + 0.75f * h.coerceIn(0f, 1f))
-            val lit = 0.24f + 0.74f * diffuse
+            val lit = 0.42f + 0.58f * diffuse
             ar = ar * lit + gr * sss + spec
             ag = ag * lit + gg * sss + spec
             ab = ab * lit + gb * sss + spec
@@ -864,14 +1128,14 @@ internal class Spectrogram3DScene {
         }
 
         companion object {
-            /** The front wall's top edge: the front row's colour, in shade. */
+            /** The front wall's top edge, the water's cut face: the front row's colour, a little in shade. */
             fun wallTop(front: Int, p: SpectrogramPalette): Int {
-                fun ch(shift: Int, base: Float) = (((front ushr shift) and 0xFF) / 255f) * 0.18f + base * 0.05f * 0.82f
+                fun ch(shift: Int, base: Float) = (((front ushr shift) and 0xFF) / 255f) * 0.7f + base * 0.5f * 0.3f
                 return argb(1f, ch(16, p.base[0]), ch(8, p.base[1]), ch(0, p.base[2]))
             }
 
-            /** The front wall's foot: the floor's colour, nearly black. */
-            fun wallFoot(p: SpectrogramPalette): Int = argb(1f, p.base[0] * 0.05f, p.base[1] * 0.05f, p.base[2] * 0.05f)
+            /** The front wall's foot: the deep water's colour, never black. */
+            fun wallFoot(p: SpectrogramPalette): Int = argb(1f, p.base[0] * 0.3f, p.base[1] * 0.3f, p.base[2] * 0.3f)
 
             private fun mix(a: Float, b: Float, t: Float) = a + (b - a) * t
             private fun smooth(e0: Float, e1: Float, x: Float): Float {
@@ -888,12 +1152,12 @@ internal class Spectrogram3DScene {
         const val BIN_TOP_HZ = 20_000f
         /**
          * The floor lies this far under the reference, and a full peak
-         * [HEADROOM_DB] under it. Measured on dense music: half of all bands
-         * lie about 22 dB under the loudest and a tenth within 13, so a wider
-         * range put nearly everything near the top.
+         * [HEADROOM_DB] under it. Measured on dense music through the short
+         * FFT: half of all bands lie about 24 dB under the loudest and a tenth
+         * within 9, so a wider range put nearly everything near the top.
          */
-        const val RANGE_DB = 28f
-        const val HEADROOM_DB = 7f
+        const val RANGE_DB = 23f
+        const val HEADROOM_DB = 2.5f
         /** dB an octave of the feed's tilt taken back, about 1 kHz. */
         const val TILT_BACK_DB_PER_OCTAVE = 2.2f
         const val PITCH_KNEE_HZ = 600f
@@ -909,9 +1173,24 @@ internal class Spectrogram3DScene {
         const val HEIGHT_SCALE = 0.06f
         const val DISTANCE = 1.6f
         const val TARGET_Z = 0.5f
-        /** The front edge's place in the box, and the back edge's, from its top. */
-        const val FRONT_EDGE = 0.985f
-        const val BACK_EDGE = 0.16f
+        /**
+         * The front edge's place in the box, from its top: a little under
+         * its bottom, so the water runs off the bottom of the picture and
+         * no strip is left under it ("I need the floor to run to the
+         * bottom", the owner, on a dark band under the water).
+         */
+        const val FRONT_EDGE = 1.03f
+        /**
+         * The share of the box's height the ground takes at a camera angle:
+         * a third at the lowest, nearly all of it looking down. Fitting the
+         * ground to the same share at every angle (as it once was) left the
+         * angle nothing to show but the peaks' height.
+         */
+        fun groundShare(angleDeg: Float): Float =
+            GROUND_SHARE_MOST * (1f - exp(-(angleDeg + GROUND_SHARE_LEAD) / GROUND_SHARE_TURN))
+        const val GROUND_SHARE_MOST = 0.955f
+        const val GROUND_SHARE_LEAD = 0.73f
+        const val GROUND_SHARE_TURN = 13.8f
         /** The field at the lowest camera is under this many front widths wide. */
         const val MAX_EXTENT = 1.95f
         /** Ring columns kept out of the history: the live one, its copy, and one between them and the oldest. */
@@ -919,11 +1198,38 @@ internal class Spectrogram3DScene {
         /** How far under the front row the wall's texture coordinates run. */
         const val WALL_ROWS = 6f
         const val MAX_STEP_SECONDS = 0.1f
-        /** How fast a row rises to a sound and falls from it, in seconds, at smoothness 0 and what smoothness 1 adds. */
-        const val ATTACK_TAU_MIN = 0.02f
-        const val ATTACK_TAU_RANGE = 0.1f
-        const val RELEASE_TAU_MIN = 0.06f
-        const val RELEASE_TAU_RANGE = 0.8f
+        /**
+         * The ripples: two layers of noise, a broad and a fine one. Each its
+         * cell's size (the field is 1 deep), its slope at full strength and
+         * its drift in cells a second, along time and along pitch; they
+         * drift across each other, as wind ripples do.
+         */
+        const val RIPPLE_CELL_A = 0.034f
+        const val RIPPLE_SLOPE_A = 0.2f
+        private val RIPPLE_DRIFT_A = floatArrayOf(0.55f, 0.3f)
+        const val RIPPLE_CELL_B = 0.015f
+        const val RIPPLE_SLOPE_B = 0.16f
+        private val RIPPLE_DRIFT_B = floatArrayOf(-0.9f, 0.7f)
+        /** The columns' count wraps here for the ripples; the lattice repeats every this many rows of cells. */
+        const val RIPPLE_PERIOD_COLUMNS = 4096L
+        const val RIPPLE_PERIOD_ROWS = 64.0
+
+        /**
+         * The key light: the way to a low sun behind the field and to its
+         * left, so the peaks throw their shadows forward and to the right and
+         * the light comes through them toward the camera.
+         */
+        val SUN = floatArrayOf(-0.585f, 0.375f, 0.719f)
+        /** The lyric lamp: its height over the water and how far back it stands (the field ends at 1). */
+        const val LAMP_Y = 0.24f
+        const val LAMP_Z = 1.12f
+        const val MIN_LAMP_HALF_WIDTH = 0.08f
+        /** Steps of the walk toward the light that finds the shadows, by quality. */
+        fun shadowSteps(quality: Int): Float = SHADOW_STEPS[quality.coerceIn(1, 4) - 1]
+        private val SHADOW_STEPS = floatArrayOf(0f, 8f, 12f, 16f)
+
+        /** How far a row moves toward its level in [step] seconds with a time constant of [ms]; all the way at 0. */
+        fun follow(step: Float, ms: Float): Float = if (ms <= 0.5f) 1f else 1f - exp(-step / (ms / 1000f))
         /** How much of what the pitch blur removed is put back. */
         const val DETAIL = 0.12f
         /** The share of the height the floor's ripple may take, and how far under the floor it is read from. */

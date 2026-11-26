@@ -108,17 +108,17 @@ class Spectrogram3DSceneTest {
         val loudest = scene.referenceDb
         assertEquals(-30f, loudest, 1f)
         assertTrue(scene.liveHeight(40) > 0.95f)
-        // 22 dB quieter, once the held note has died: under half the height.
+        // 14 dB quieter, once the held note has died: part of the height.
         // The reference has drifted 3 dB down meanwhile, so the sound is
-        // about 19 dB under it, 9 over the floor, of the 21 between floor
+        // about 11 dB under it, 12 over the floor, of the 20.5 between floor
         // and full peak.
-        run(flat(-52f), 1.5f)
+        run(flat(-44f), 1.5f)
         assertEquals(loudest - 3f, scene.referenceDb, 0.3f)
-        val under = scene.referenceDb - (-52f)
+        val under = scene.referenceDb - (-44f)
         val t = (Spectrogram3DScene.RANGE_DB - under) / (Spectrogram3DScene.RANGE_DB - Spectrogram3DScene.HEADROOM_DB)
         val expected = Spectrogram3DScene.RIPPLE + (1f - Spectrogram3DScene.RIPPLE) * Spectrogram3DScene.heightOf(t)
         assertEquals(expected, scene.liveHeight(40), 0.05f)
-        assertTrue("$expected", expected in 0.3f..0.6f)
+        assertTrue("$expected", expected in 0.3f..0.85f)
         // Under the floor it is a ripple, no more.
         run(flat(-70f), 1.5f)
         assertTrue(scene.liveHeight(40) in 0.02f..Spectrogram3DScene.RIPPLE)
@@ -142,18 +142,26 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
-    fun `a note is there at once and held as it dies`() {
-        val scene = Spectrogram3DScene()
-        fun run(bins: FloatArray, seconds: Float) = repeat((seconds * 60).toInt()) { scene.advance(bins, settings, 1f / 60) }
-        run(flat(-30f), 1f)
-        run(silence, 0.1f)
-        // A tenth of a second after it stopped, most of it still stands...
-        val held = scene.liveHeight(40)
-        assertTrue("$held", held > 0.6f)
-        // ...and a tenth of a second after it starts again it is nearly back.
-        run(silence, 2f)
-        run(flat(-31f), 0.1f)
-        assertTrue(scene.liveHeight(40) > 0.8f)
+    fun `a note is there as fast as attack says and stands as long as release says`() {
+        fun heightAfter(s: Spectrogram3DSettings, vararg steps: Pair<FloatArray, Int>): Float {
+            val scene = Spectrogram3DScene()
+            for ((bins, frames) in steps) repeat(frames) { scene.advance(bins, s, 1f / 60) }
+            return scene.liveHeight(40)
+        }
+        // As shipped: a tenth of a second after it stopped, about half of it still stands...
+        val held = heightAfter(settings, flat(-30f) to 60, silence to 6)
+        assertTrue("$held", held in 0.4f..0.7f)
+        // ...and a tenth of a second after it starts again it is back.
+        assertTrue(heightAfter(settings, flat(-30f) to 60, silence to 120, flat(-31f) to 6) > 0.9f)
+        // Release 0 drops it in a frame; a long release holds it.
+        val instant = settings.copy(attackMs = 0f, releaseMs = 0f)
+        assertTrue(heightAfter(instant, flat(-30f) to 60, silence to 1) < 0.02f)
+        assertTrue(heightAfter(settings.copy(releaseMs = Spectrogram3DSettings.MAX_RELEASE_MS), flat(-30f) to 60, silence to 6) > 0.9f)
+        // Attack 0 has it at full height in a frame; the slowest attack is still rising then.
+        assertTrue(heightAfter(instant, flat(-30f) to 30, silence to 30, flat(-30f) to 1) > 0.95f)
+        val slow = settings.copy(attackMs = Spectrogram3DSettings.MAX_ATTACK_MS, releaseMs = 0f)
+        assertTrue(heightAfter(slow, flat(-30f) to 30, silence to 30, flat(-30f) to 1) < 0.3f)
+        assertEquals(1f, Spectrogram3DScene.follow(1f / 120, 0f), 0f)
     }
 
     @Test
@@ -252,7 +260,8 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
-    fun `the ground runs from the box's bottom to near its top and fills it side to side`() {
+    fun `the ground starts at the box's bottom, fills it side to side, and takes more of it the higher the camera`() {
+        var lastBack = 432f
         for (angle in listOf(5f, 18f, 35f, 60f)) {
             val cam = Spectrogram3DScene.Camera.of(angle, 1080f, 432f)
             val out = FloatArray(2)
@@ -262,9 +271,13 @@ class Spectrogram3DSceneTest {
             assertEquals(1080f, out[0], 1f)
             cam.project(cam.fieldHalfWidth, 0f, 1f, out, 0)
             assertTrue("$angle", out[0] >= 1079f)
-            // The back of the ground is near the top, whatever the angle.
+            // The back of the ground climbs with the angle: the slider is a
+            // camera that moves, not one fitted back to the same picture.
             cam.project(0f, 0f, 1f, out, 0)
-            assertEquals(432f * Spectrogram3DScene.BACK_EDGE, out[1], 0.5f)
+            assertEquals(432f * (Spectrogram3DScene.FRONT_EDGE - Spectrogram3DScene.groundShare(angle)), out[1], 0.5f)
+            assertTrue("$angle: ${out[1]} is not well above $lastBack", out[1] < lastBack - 15f)
+            assertTrue("$angle", out[1] > 0f)
+            lastBack = out[1]
             assertTrue(cam.fieldHalfWidth / cam.frontHalfWidth < Spectrogram3DScene.MAX_EXTENT)
         }
     }
@@ -280,6 +293,45 @@ class Spectrogram3DSceneTest {
         assertTrue((scene.colors[rows - 1] ushr 24) < 8)
         scene.build(1080f, 432f, hazy.copy(haze = 0f), palette, lit = true)
         assertEquals(255, scene.colors[rows - 1] ushr 24)
+    }
+
+    @Test
+    fun `the lyric lamp stands where the words are across the picture, and Low walks for no shadows`() {
+        val scene = Spectrogram3DScene()
+        repeat(60) { scene.advance(flat(-30f), settings, 1f / 60) }
+        val lamp = SpectrogramLamp()
+        fun lampAt(x: Float, width: Float): Float {
+            lamp.x = x; lamp.width = width; lamp.strength = 1f
+            scene.build(1080f, 432f, settings, palette, lit = false, lamp = lamp)
+            return scene.lampX
+        }
+        // The middle of the picture is the middle of the field; left is left.
+        assertEquals(0f, lampAt(540f, 200f), 1e-4f)
+        assertTrue(lampAt(200f, 200f) < -0.1f)
+        assertEquals(-lampAt(200f, 200f), lampAt(880f, 200f), 1e-4f)
+        // A point of the world at the lamp's height and depth is drawn back where the words are.
+        val cam = Spectrogram3DScene.Camera.of(settings.angleDeg, 1080f, 432f)
+        val out = FloatArray(2)
+        cam.project(lampAt(310f, 200f), Spectrogram3DScene.LAMP_Y, Spectrogram3DScene.LAMP_Z, out, 0)
+        assertEquals(310f, out[0], 0.5f)
+        // A wider word is a wider lamp, and a single letter is never a pin.
+        lampAt(540f, 600f)
+        val wide = scene.lampHalfWidth
+        lampAt(540f, 4f)
+        assertTrue(wide > scene.lampHalfWidth)
+        assertEquals(Spectrogram3DScene.MIN_LAMP_HALF_WIDTH, scene.lampHalfWidth, 0f)
+        // No lamp given: the middle, as the sun alone lights it.
+        scene.build(1080f, 432f, settings, palette, lit = false)
+        assertEquals(0f, scene.lampX, 0f)
+        // The walk toward the light: none at Low (which the shader does not draw), longer with quality, within the shader's loop.
+        assertEquals(0f, Spectrogram3DScene.shadowSteps(1), 0f)
+        assertTrue(Spectrogram3DScene.shadowSteps(2) < Spectrogram3DScene.shadowSteps(3))
+        assertTrue(Spectrogram3DScene.shadowSteps(4) <= 16f)
+        assertTrue(SPECTROGRAM_3D_SHADER.contains("i < 16;"))
+        // The sun is a direction: behind the field, above it.
+        val sun = Spectrogram3DScene.SUN
+        assertEquals(1f, sun[0] * sun[0] + sun[1] * sun[1] + sun[2] * sun[2], 0.01f)
+        assertTrue(sun[1] > 0.2f && sun[2] > 0.5f)
     }
 
     @Test
@@ -326,7 +378,13 @@ class Spectrogram3DSceneTest {
             secondsAcross = 999f, angleDeg = -5f, peakHeight = Float.NaN, gloss = 7f,
             subsurface = -1f, smoothness = Float.POSITIVE_INFINITY, haze = 2f,
             minHz = 1500f, maxHz = 1600f, quality = 9,
+            attackMs = -3f, releaseMs = 1e9f, ripples = 4f, shadows = Float.NaN, lyricLight = -2f,
         ).clamped()
+        assertEquals(0f, wild.attackMs, 0f)
+        assertEquals(Spectrogram3DSettings.MAX_RELEASE_MS, wild.releaseMs, 0f)
+        assertEquals(1f, wild.ripples, 0f)
+        assertEquals(Spectrogram3DSettings.DEFAULT.shadows, wild.shadows, 0f)
+        assertEquals(0f, wild.lyricLight, 0f)
         assertEquals(Spectrogram3DSettings.MAX_SECONDS, wild.secondsAcross, 0f)
         assertEquals(Spectrogram3DSettings.MIN_ANGLE_DEG, wild.angleDeg, 0f)
         assertEquals(Spectrogram3DSettings.DEFAULT.peakHeight, wild.peakHeight, 0f)
@@ -341,7 +399,10 @@ class Spectrogram3DSceneTest {
 
     @Test
     fun `the look travels with a theme, the quality and the preview switch stay on the phone`() {
-        val mine = Spectrogram3DSettings(angleDeg = 40f, gloss = 0.9f, subsurface = 0.2f, quality = 4, preview = false)
+        val mine = Spectrogram3DSettings(
+            angleDeg = 40f, gloss = 0.9f, subsurface = 0.2f, quality = 4, preview = false,
+            attackMs = 0f, releaseMs = 40f, ripples = 0.1f, shadows = 0.3f, lyricLight = 0.25f, secondsAcross = 0.5f,
+        )
         val json = Json { ignoreUnknownKeys = true }
         assertEquals(mine, json.decodeFromString<Spectrogram3DSettings>(json.encodeToString(mine)))
         assertEquals(Spectrogram3DSettings.DEFAULT, json.decodeFromString<Spectrogram3DSettings>("{}"))
@@ -350,6 +411,8 @@ class Spectrogram3DSceneTest {
         val look = shared.visualizer!!.spectrogram3d!!
         assertEquals(40f, look.angleDeg, 0f)
         assertEquals(0.9f, look.gloss, 0f)
+        // The response, the water, the shadows and the lyrics' light are the look too.
+        assertEquals(mine.copy(quality = look.quality, preview = look.preview), look)
         assertEquals(Spectrogram3DSettings.DEFAULT.quality, look.quality)
         assertTrue(look.preview)
         val theirs = Spectrogram3DSettings(quality = 1, preview = false)

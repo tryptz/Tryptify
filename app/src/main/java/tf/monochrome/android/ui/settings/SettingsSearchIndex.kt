@@ -249,7 +249,16 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
     entry(
         "3D spectrogram", R.string.settings_spectrogram_3d,
         "Visual Studio",
-        listOf("3d", "spectrogram", "landscape", "terrain", "subsurface", "gloss", "haze", "pitch", "cover visualizer"),
+        listOf(
+            "3d", "spectrogram", "landscape", "terrain", "water", "subsurface", "gloss", "haze", "pitch",
+            "shadow", "attack", "release", "cover visualizer",
+        ),
+    ).at(SettingsDestination.Route("lyrics_fx_studio")),
+    // On the Lyrics tab, and again with the 3D spectrogram's settings.
+    entry(
+        "Visualizer under the lyrics", R.string.fx_visualizer_under_lyrics,
+        "Visual Studio",
+        listOf("lyrics", "visualizer", "spectrogram", "spectrum", "wave candy", "under", "behind", "cover", "light"),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
 
     // ── Library ─────────────────────────────────────────────────────────

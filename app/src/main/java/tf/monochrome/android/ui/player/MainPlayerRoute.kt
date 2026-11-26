@@ -1162,6 +1162,16 @@ fun MainPlayerRoute(
                     spectrogram3d = spectrogram3dSettings,
                     isPlaying = isPlaying,
                     resetKey = currentTrack?.id,
+                    // The words being sung light the 3D surface: the god
+                    // rays' own light where there is one, else the accent.
+                    lyricLight = remember(lyricLetters, lyricsRayLight, vibrantFade) {
+                        { lamp ->
+                            lyricLetters.aim(
+                                lamp,
+                                lyricsRayLight?.color ?: lerp(vibrantFade.value, Color.White, 0.35f),
+                            )
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer { alpha = lyricsProgress },

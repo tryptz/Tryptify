@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Compiles the 3D spectrogram's shader with Skia and draws a frame with it.
 
-The cover's 3D spectrogram lights its mesh with an AGSL shader
+The cover's 3D spectrogram (a sheet of water) lights its mesh with an AGSL shader
 (SPECTROGRAM_3D_SHADER in ui/player/Spectrogram3D.kt). A phone that refuses
 the shader says nothing: the view falls back to lighting the mesh's points.
 Skia's runtime-effect compiler is what Android runs AGSL through, so this
 compiles the source as it stands in the Kotlin, then draws a made-up
 landscape the way the app does (drawVertices with texture coordinates, the
 shader as the paint's shader, the heights as two 8-bit alpha textures) and
-checks the picture has the floor's colour, white and the tops' colour in it.
+checks the picture has the water's colour, foam and the tops' colour in it.
 
 Needs skia-python and numpy. Run after changing the shader:
 
@@ -73,6 +73,15 @@ for name, arr in (('uHi', hi), ('uLo', lo)):
 for name, value in dict(
     uGrid=[dx, dz, lift], uOrigin=[0.5, right], uCam=[cam_y, cam_z, scale], uTilt=[sin_a, cos_a],
     uBase=[0.29, 0.30, 0.88], uGlow=[1.0, 0.2, 0.3], uLook=[0.6, 0.7, 0.55, ROWS - 1.0],
+    # The ripples: the place and full strength; two layers of noise, each its
+    # cells per column and per row, the cells in its period and its height;
+    # and how far each has drifted.
+    # ... the steps of the walk that finds the shadows and their strength;
+    uWater=[300.5, 12.0, 1.0, 0.85],
+    uRipA=[102 / 4096, dz / 0.034, 102.0, 0.2 * 0.034], uRipB=[232 / 4096, dz / 0.015, 232.0, 0.16 * 0.015],
+    uRipOff=[3.2, 1.7, 40.5, 9.1],
+    # The sun, and the lyric lamp: its place, how much it is on, its colour and half width.
+    uSun=[-0.585, 0.375, 0.719], uLamp=[0.2, 0.24, 1.12, 0.0], uLampCol=[1.0, 0.9, 0.75, 0.25],
 ).items():
     builder.setUniform(name, [float(v) for v in value])
 paint = skia.Paint()
@@ -87,12 +96,12 @@ out = sys.argv[1] if len(sys.argv) > 1 else 'spectrogram_3d.png'
 image.save(out, skia.kPNG)
 
 rgb = image.toarray(colorType=skia.kRGBA_8888_ColorType)[..., :3].reshape(-1, 3).astype(int)
-blue = np.sum((rgb[:, 2] > 150) & (rgb[:, 0] < 120))
+blue = np.sum((rgb[:, 2] > 70) & (rgb[:, 2] > rgb[:, 0] + 25) & (rgb[:, 2] > rgb[:, 1] + 10))
 white = np.sum(rgb.min(axis=1) > 200)
 red = np.sum((rgb[:, 0] > 120) & (rgb[:, 0] > rgb[:, 2] + 40))
 total = len(rgb)
-print(f'compiled; drew {out}: floor {blue / total:.0%}, white {white / total:.1%}, tops {red / total:.1%}')
-assert blue > total * 0.15, 'no floor in the album colour'
-assert white > total * 0.005, 'no white flanks'
+print(f'compiled; drew {out}: water {blue / total:.0%}, foam {white / total:.1%}, tops {red / total:.1%}')
+assert blue > total * 0.15, 'no water in the album colour'
+assert white > total * 0.005, 'no foam'
 assert red > total * 0.001, 'no tops in the second colour'
 print('ok')

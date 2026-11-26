@@ -29,6 +29,8 @@ internal fun LyricsVisualizerBand(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
     resetKey: Any? = null,
+    /** The words being sung, as a light on the 3D spectrogram's surface ([Spectrogram3DOverlay]). */
+    lyricLight: ((SpectrogramLamp) -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier) {
         val bottom = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -54,6 +56,7 @@ internal fun LyricsVisualizerBand(
                 isPlaying = isPlaying,
                 modifier = bottom.height(maxHeight * 0.4f),
                 resetKey = resetKey,
+                lyricLight = lyricLight,
             )
             else -> SpectrumOverlay(
                 bins = bins,
@@ -65,4 +68,22 @@ internal fun LyricsVisualizerBand(
             )
         }
     }
+}
+
+/**
+ * Aims [lamp] at what the lyric view is singing: the sung word where the
+ * light follows the word, else the middle of the lyric surface (a line's band
+ * has no ends of its own), in [color], as much on as the lyric light is.
+ * Leaves the lamp off while nothing is sung or no lyric surface is laid out.
+ */
+internal fun LyricLetterCapture.aim(lamp: SpectrogramLamp, color: Color) {
+    val box = boxInRoot ?: return
+    val band = bandInRoot() ?: return
+    val whole = band.left <= -GodRayGeometry.UNBOUNDED / 2f || band.right >= GodRayGeometry.UNBOUNDED / 2f
+    lamp.x = if (whole) box.center.x else band.center.x
+    lamp.width = if (whole) box.width * 0.55f else band.width
+    lamp.strength = lightLevel().coerceIn(0f, 1f)
+    lamp.red = color.red
+    lamp.green = color.green
+    lamp.blue = color.blue
 }
