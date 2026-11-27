@@ -66,12 +66,23 @@ object DacEqMapping {
         return if (slope > 0.0 && x > 0.0) 1.0 / sqrt(x) else null
     }
 
+    /**
+     * A band's number as the number it shows. The app keeps a band in
+     * floats, and 0.6 as a float is 0.60000002: taken as that, a filter's
+     * coefficients come out a few parts in a hundred million off the ones
+     * the same EQ gets from its numbers as typed. Read through its shortest
+     * decimal, the float is 0.6 again, and the frames for an EQ are the
+     * frames another tool makes for it, to the byte (`DacEqTp35ProCaptureTest`
+     * holds that against a recorded DAC).
+     */
+    fun exact(value: Float): Double = value.toString().toDouble()
+
     private fun slopeShelf(type: FilterType, form: ShelfForm) =
         form == ShelfForm.SLOPE && type != FilterType.PEAKING
 
     /** A band's Q as the DAC's own number: the slope for a slope-form shelf. */
     fun dacQ(band: EqBand, form: ShelfForm): Double =
-        if (slopeShelf(band.type, form)) slopeForQ(band.q.toDouble(), band.gain.toDouble()) else band.q.toDouble()
+        if (slopeShelf(band.type, form)) slopeForQ(exact(band.q), exact(band.gain)) else exact(band.q)
 
     /** The DAC's number as the Q the app draws; null where it has none ([qForSlope]). */
     fun appQ(type: FilterType, dacQ: Double, gainDb: Double, form: ShelfForm): Double? =
@@ -92,8 +103,8 @@ object DacEqMapping {
                 Band(
                     id = "b$i",
                     type = toDac(b.type),
-                    freqHz = b.freq.toDouble(),
-                    gainDb = b.gain.toDouble(),
+                    freqHz = exact(b.freq),
+                    gainDb = exact(b.gain),
                     q = dacQ(b, form),
                 )
             },

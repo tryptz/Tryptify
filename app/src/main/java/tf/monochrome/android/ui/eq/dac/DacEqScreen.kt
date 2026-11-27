@@ -72,14 +72,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import io.github.chronosauros.contour.core.DeviceCapabilities
 import io.github.chronosauros.contour.core.DeviceTarget
 import kotlinx.coroutines.launch
 import tf.monochrome.android.R
 import tf.monochrome.android.audio.eq.dac.DacEqCatalog
 import tf.monochrome.android.audio.eq.dac.DacEqFit
 import tf.monochrome.android.audio.eq.dac.DacEqMapping
+import tf.monochrome.android.audio.eq.dac.DacEqUntested
 import tf.monochrome.android.audio.usb.daceq.DacLink
 import tf.monochrome.android.audio.usb.daceq.DacNotConfirmed
+import tf.monochrome.android.audio.usb.daceq.caps
+import tf.monochrome.android.audio.usb.daceq.dacName
+import tf.monochrome.android.audio.usb.daceq.untestedDac
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.ui.components.bounceClick
@@ -190,6 +195,14 @@ fun DacEqContent(
 
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             DeviceCard(link = link, onAllow = session::requestPermission)
+            link.untestedDac?.let { untested ->
+                Spacer(Modifier.height(8.dp))
+                Warning(stringResource(R.string.dac_eq_untested, untested.driveAs.caps.name))
+                if (untested.resetsDacSettings) {
+                    Spacer(Modifier.height(4.dp))
+                    Warning(stringResource(R.string.dac_eq_untested_resets))
+                }
+            }
 
             if (dac == null) {
                 Spacer(Modifier.height(16.dp))
@@ -197,9 +210,11 @@ fun DacEqContent(
                 Spacer(Modifier.height(16.dp))
                 SectionLabel(stringResource(R.string.dac_eq_supported))
                 Spacer(Modifier.height(6.dp))
-                DacEqCatalog.all.forEach { known ->
+                val bands = DacEqCatalog.all.map { it.caps.name to it.caps.bands }
+                val untested = DacEqUntested.all.map { "${it.name} (${stringResource(R.string.dac_eq_untested_tag)})" to it.caps().bands }
+                (bands + untested).forEach { (name, count) ->
                     Text(
-                        "${known.caps.name} · ${stringResource(R.string.dac_eq_on_dac_bands, known.caps.bands)}",
+                        "$name · ${stringResource(R.string.dac_eq_on_dac_bands, count)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 3.dp)
@@ -233,7 +248,7 @@ fun DacEqContent(
         }
 
         if (dac != null && state.bands.isNotEmpty()) {
-            val caps = dac.caps
+            val caps = link.caps ?: dac.caps
             val maxGain = max(-caps.gainMinDb, caps.gainMaxDb).toFloat()
 
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -300,7 +315,7 @@ fun DacEqContent(
                     BandEditor(
                         band = band,
                         number = state.bands.sortedBy { it.freq }.indexOf(band) + 1,
-                        dac = dac,
+                        caps = caps,
                         onChange = session::updateBand,
                         onRemove = { session.removeBand(band.id) },
                     )
@@ -353,7 +368,7 @@ fun DacEqContent(
 
     if (importing && dac != null) {
         ImportEqProfileSheet(
-            maxBandGainDb = max(-dac.caps.gainMinDb, dac.caps.gainMaxDb).toFloat(),
+            maxBandGainDb = (link.caps ?: dac.caps).let { max(-it.gainMinDb, it.gainMaxDb).toFloat() },
             onDismiss = { importing = false },
             onImport = { left, _, name ->
                 importing = false
@@ -386,9 +401,11 @@ private fun DeviceCard(link: DacLink, onAllow: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             val (title, detail) = when (link) {
                 DacLink.None -> stringResource(R.string.dac_eq_no_dac) to stringResource(R.string.dac_eq_no_dac_hint)
-                is DacLink.Unknown -> stringResource(R.string.dac_eq_unknown_dac, link.name) to stringResource(R.string.dac_eq_unknown_dac_hint)
-                is DacLink.NeedsPermission -> link.dac.target.caps.name to stringResource(R.string.dac_eq_needs_permission)
-                is DacLink.Ready -> link.dac.target.caps.name to limits(link.dac.target)
+                // Its USB id goes with it, so its owner can say exactly which device this is.
+                is DacLink.Unknown -> stringResource(R.string.dac_eq_unknown_dac, link.name) to
+                    listOfNotNull(link.usbId.takeIf { it.isNotEmpty() }?.let { "USB $it" }, stringResource(R.string.dac_eq_unknown_dac_hint)).joinToString(" · ")
+                is DacLink.NeedsPermission -> link.dacName.orEmpty() to stringResource(R.string.dac_eq_needs_permission)
+                is DacLink.Ready -> link.dacName.orEmpty() to limits(link.caps ?: link.dac.target.caps)
             }
             Text(
                 title,
@@ -412,8 +429,8 @@ private fun DeviceCard(link: DacLink, onAllow: () -> Unit) {
 }
 
 @Composable
-private fun limits(dac: DeviceTarget): String =
-    stringResource(R.string.dac_eq_limits, dac.caps.bands, db(dac.caps.gainMinDb.toFloat()), db(dac.caps.gainMaxDb.toFloat()))
+private fun limits(caps: DeviceCapabilities): String =
+    stringResource(R.string.dac_eq_limits, caps.bands, db(caps.gainMinDb.toFloat()), db(caps.gainMaxDb.toFloat()))
 
 /** What the last read found, and the way to bring it into the editor. */
 @Composable
@@ -471,8 +488,7 @@ private fun FitLine(fit: DacEqFit.Result, dacBands: Int) {
 }
 
 @Composable
-private fun BandEditor(band: EqBand, number: Int, dac: DeviceTarget, onChange: (EqBand) -> Unit, onRemove: () -> Unit) {
-    val caps = dac.caps
+private fun BandEditor(band: EqBand, number: Int, caps: DeviceCapabilities, onChange: (EqBand) -> Unit, onRemove: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth()
@@ -634,11 +650,15 @@ private fun Send(state: DacEqUiState, ready: Boolean, onSend: () -> Unit) {
         Note(stringResource(R.string.dac_eq_same_as_dac))
         Spacer(Modifier.height(10.dp))
     }
+    if (state.needsRead) {
+        Warning(stringResource(R.string.dac_eq_untested_read_first))
+        Spacer(Modifier.height(10.dp))
+    }
     Note(stringResource(R.string.dac_eq_risk))
     Spacer(Modifier.height(10.dp))
     HoldToSend(
         label = stringResource(R.string.dac_eq_hold_to_send),
-        enabled = ready && state.busy == DacEqBusy.IDLE && state.issues.isEmpty() && state.bands.isNotEmpty(),
+        enabled = ready && state.busy == DacEqBusy.IDLE && state.issues.isEmpty() && !state.needsRead && state.bands.isNotEmpty(),
         onSend = onSend,
     )
 }

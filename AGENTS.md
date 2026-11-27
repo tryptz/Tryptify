@@ -669,7 +669,12 @@ What is whose:
   with a simulated DAC.
 - `audio/eq/dac/`: `DacEqMapping` (the app's bands to Contour's and back),
   `DacEqFit` (an EQ made to fit a DAC), `DacEqCatalog` (the 18 device
-  records, by id; Contour keeps its own list internal).
+  records, by id; Contour keeps its own list internal), `DacEqUntested`
+  (DACs Contour does not know, driven as one it does; below).
+- `io/github/chronosauros/contour/usb/DeviceIdentity.kt` is the app's own,
+  in the place of Contour's file of that name, which the vendor script
+  leaves behind: the one place a USB device becomes one of Contour's DACs.
+  It asks Contour first, then `DacEqUntested`.
 - `ui/eq/dac/`: `DacEqSession` (the page's logic), `DacEqViewModel` (the
   presets), `DacEqScreen`.
 
@@ -692,11 +697,50 @@ Rules, beside the page's own in `docs/ui-invariants.md` ("DAC EQ"):
   record the page does not list; a new file Contour's USB layer needs shows
   up as a compile error (add it to `USB_FILES` in the script).
 
+**A DAC Contour does not have is added in `DacEqUntested`, never in
+`third_party/contour`.** An entry names the DAC, its USB vendor id, product
+id and product name, and the proven DAC whose commands it is given; the page
+then calls it untested, sends nothing until a read of it has parsed exactly
+(`needsRead`), and proves every send by read-back like any other. An entry
+is an inference, so it needs evidence that is not the product's name:
+
+- its USB ids and name from a source that had the unit (devicePEQ's copy of
+  WalkPlay's catalog, a recording, an owner's log: the page logs every USB
+  audio device's ids, names and interfaces once under `DacEq`, and shows an
+  unknown one's ids on its card);
+- its command scheme, and a sibling of that scheme that Contour has proven;
+- where there is one, a recording of the unit, replayed in a test: the
+  sibling's code must read it, and the frames it would send must be frames
+  the unit was sent.
+
+The sibling is the one whose requests the unit is known to answer, which is
+not always the nearest product: the EPZ TP65 sits beside the TP35 Pro in the
+catalog and reads its preamp with a request no other WalkPlay recording
+holds. When Contour takes a DAC in, its entry here goes
+(`DacEqUntested.find` already lets Contour's own win).
+
+The one entry is the **EPZ TP35 Pro** (3302:43E6, "TP35 Pro"), driven as the
+Tanchjim Space II and held to +-10 dB. `DacEqTp35ProCaptureTest` replays
+devicePEQ's recording of a real one (`app/src/test/resources/dac-eq/`,
+0BSD): the Space II's read takes its replies, with the one reply that still
+carries bytes of the version reply turned away and asked again, and for the
+EQ that unit was sent the page's fifteen frames are the unit's to the byte
+but for the flag of the last (`01 01 01` where the recording of May 2026 has
+`01 01 00`). Two of those frames, `01 05` and `01 17`, are ones devicePEQ
+stopped sending on 2026-11-11 because they reset a sibling's DAC filter, work
+mode and gain mode; they are in Contour's Space II sequence, so they go, and
+the page says a send may reset the DAC's own settings. Contour's maintainer
+has said the TP35 Pro is planned (its issue 6). The plain EPZ TP35 is
+another product and is reported to have no EQ of its own (reviews and the
+maker's comparison page, read as search summaries only): it is not
+supported, and its card shows its USB ids.
+
 None of it has run against a real DAC: the owner has none of the 18. What
 holds it is Contour's own 414 tests, and the app's against Contour's
 simulated DACs (`DacEqSimulatedSendTest`: one EQ to each of the 18, proven by
 read-back and read in again; `DacEqSessionTest`: the page's logic;
-`DacEqScreenTest`: the page drawn). The simulators answer the protocol's
+`DacEqScreenTest`: the page drawn; `DacEqTp35ProCaptureTest`: the one
+recording of a real unit). The simulators answer the protocol's
 frames in order; they are not the firmware. When a listener reports on a
 DAC, ask for a sent log: Contour logs every frame it sends and receives in
 hex under the tag `ContourUsb` (debug level), and the controller's warnings

@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.github.chronosauros.contour.core.DeviceCapabilities
 import io.github.chronosauros.contour.core.Profile
 import io.github.chronosauros.contour.core.native.KtMicroSaveWait
 import io.github.chronosauros.contour.usb.DacClient
@@ -25,22 +26,54 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import tf.monochrome.android.audio.eq.dac.DacEqUntested
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** What is plugged in, as the DAC EQ page sees it. */
+/**
+ * What is plugged in, as the DAC EQ page sees it. [untested] is set for a DAC
+ * Contour does not know, which the app drives with a proven sibling's
+ * commands ([DacEqUntested]): `dac.target` is then the sibling's.
+ */
 sealed interface DacLink {
     data object None : DacLink
 
-    /** A USB audio device that is not in Contour's catalog: nothing is sent to it. */
-    data class Unknown(val name: String) : DacLink
+    /**
+     * A USB audio device the page does not know: nothing is sent to it.
+     * [usbId] is its vendor and product id ("3302:4325"), shown so that its
+     * owner can say exactly which device it is.
+     */
+    data class Unknown(val name: String, val usbId: String = "") : DacLink
 
-    /** A DAC the catalog knows, which Android has not let the app talk to yet. */
-    data class NeedsPermission(val dac: DacHandle) : DacLink
+    /** A DAC the page knows, which Android has not let the app talk to yet. */
+    data class NeedsPermission(val dac: DacHandle, val untested: DacEqUntested.Entry? = null) : DacLink
 
-    data class Ready(val dac: DacHandle) : DacLink
+    data class Ready(val dac: DacHandle, val untested: DacEqUntested.Entry? = null) : DacLink
 }
+
+/**
+ * The limits the page holds an EQ to for the DAC plugged in, under the name it
+ * shows: the DAC's own, or an untested DAC's (its sibling's, inside its own
+ * gain range). Null with no DAC the page knows.
+ */
+val DacLink.caps: DeviceCapabilities?
+    get() = when (this) {
+        is DacLink.Ready -> untested?.caps() ?: dac.target.caps
+        is DacLink.NeedsPermission -> untested?.caps() ?: dac.target.caps
+        else -> null
+    }
+
+/** The name the page shows for the DAC plugged in; null with none it knows. */
+val DacLink.dacName: String? get() = caps?.name
+
+/** The untested entry the DAC plugged in is driven by, if it is one. */
+val DacLink.untestedDac: DacEqUntested.Entry?
+    get() = when (this) {
+        is DacLink.Ready -> untested
+        is DacLink.NeedsPermission -> untested
+        else -> null
+    }
 
 /** Why a DAC that restarts when it saves was not read again. */
 enum class DacNotConfirmed { TIMEOUT, PERMISSION, SILENT }
@@ -154,6 +187,7 @@ class DacEqController @Inject constructor(
             // Nobody is told about the bus any more: what was last seen there
             // must not greet the next visit as if it were still plugged in.
             _link.value = DacLink.None
+            lastSeen = null
         }
         if (watchers < 0) watchers = 0
     }
@@ -162,20 +196,57 @@ class DacEqController @Inject constructor(
     fun refresh() {
         val usb = manager ?: return
         val devices = runCatching { usb.deviceList.values.toList() }.getOrDefault(emptyList())
+        noteSeen(devices)
         val known = devices.firstNotNullOfOrNull { DacHandle.of(it) }
         val now: DacLink = when {
             known != null -> {
                 // The same unit keeps its handle, so the page is not told
                 // about a "new" DAC each time the bus is looked at.
                 val dac = handleOf(_link.value)?.takeIf { it.key == known.key } ?: known
-                if (usb.hasPermission(requireNotNull(dac.usb))) DacLink.Ready(dac) else DacLink.NeedsPermission(dac)
+                val device = requireNotNull(dac.usb)
+                val untested = DacEqUntested.find(device.vendorId, device.productId, device.productName)
+                if (usb.hasPermission(device)) DacLink.Ready(dac, untested) else DacLink.NeedsPermission(dac, untested)
             }
             else -> devices.firstOrNull(::isAudio)
-                ?.let { DacLink.Unknown(it.productName ?: it.manufacturerName ?: "USB") }
+                ?.let { DacLink.Unknown(it.productName ?: it.manufacturerName ?: "USB", usbId(it)) }
                 ?: DacLink.None
         }
         _link.value = now
     }
+
+    /**
+     * Each USB audio device, once, in the log: its ids, its names and its
+     * interfaces. It is what tells one DAC from another when a listener asks
+     * for theirs to be supported, and what an untested DAC's first report
+     * needs. Reads the descriptors Android already holds; asks the device
+     * nothing.
+     */
+    private fun noteSeen(devices: List<UsbDevice>) {
+        val audio = devices.filter { isAudio(it) || DacHandle.of(it) != null }
+        val seen = audio.joinToString(" | ") { device ->
+            val interfaces = (0 until device.interfaceCount).joinToString(", ") { i ->
+                val intf = device.getInterface(i)
+                val ends = (0 until intf.endpointCount).joinToString(" ") { e ->
+                    val end = intf.getEndpoint(e)
+                    "%s 0x%02x %d".format(if (end.direction == UsbConstants.USB_DIR_IN) "IN" else "OUT", end.address, end.maxPacketSize)
+                }
+                "if ${intf.id}.${intf.alternateSetting} class ${intf.interfaceClass}/${intf.interfaceSubclass}" + if (ends.isEmpty()) "" else " ($ends)"
+            }
+            val how = when {
+                DacEqUntested.find(device.vendorId, device.productId, device.productName) != null -> "untested, driven as ${DacHandle.of(device)?.target?.caps?.name}"
+                DacHandle.of(device) != null -> "known"
+                else -> "not known"
+            }
+            "${usbId(device)} \"${device.productName}\" by \"${device.manufacturerName}\" ($how): $interfaces"
+        }
+        if (seen == lastSeen) return
+        lastSeen = seen
+        if (seen.isNotEmpty()) Log.i(TAG, "USB audio: $seen")
+    }
+
+    private var lastSeen: String? = null
+
+    private fun usbId(device: UsbDevice) = "%04x:%04x".format(device.vendorId, device.productId)
 
     override fun requestPermission() {
         val usb = manager ?: return

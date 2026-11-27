@@ -47,15 +47,16 @@ object DacEqFit {
     /**
      * [source] fitted to [target]. [measurement] and [targetCurve] are the
      * headphone's curve and the curve it was corrected toward, when the
-     * preset kept them.
+     * preset kept them. [caps] are the limits to hold it to: the DAC's own,
+     * or narrower ones for an untested DAC driven as it ([DacEqUntested]).
      */
     fun fit(
         source: List<EqBand>,
         target: DeviceTarget,
         measurement: List<FrequencyPoint> = emptyList(),
         targetCurve: List<FrequencyPoint> = emptyList(),
+        caps: DeviceCapabilities = target.caps,
     ): Result {
-        val caps = target.caps
         val active = source.filter { it.enabled && it.gain != 0f }
         val fits = active.size <= caps.bands && active.all { DacEqMapping.toDac(it.type) in caps.types }
         val fromMeasurement = !fits && measurement.size >= 2 && targetCurve.size >= 2
@@ -134,7 +135,7 @@ object DacEqFit {
         // in range once it is a float.
         val edge = own.coerceIn(qs.start, qs.endInclusive)
         val held = edge + (if (edge == qs.start) 1 else -1) * 1e-4 * (qs.endInclusive - qs.start)
-        val q = DacEqMapping.appQ(band.type, held, moved.gain.toDouble(), form) ?: DacEqMapping.DEFAULT_SHELF_Q
+        val q = DacEqMapping.appQ(band.type, held, DacEqMapping.exact(moved.gain), form) ?: DacEqMapping.DEFAULT_SHELF_Q
         return moved.copy(q = q.toFloat())
     }
 
@@ -146,8 +147,9 @@ object DacEqFit {
     private fun inside(x: Float, lo: Double, hi: Double): Float {
         if (lo > hi) return x
         var f = x.toDouble().coerceIn(lo, hi).toFloat()
-        if (f < lo) f = Math.nextUp(f)
-        if (f > hi) f = Math.nextDown(f)
+        // Judged as the number that is sent ([DacEqMapping.exact]), and as the float itself.
+        if (f < lo || DacEqMapping.exact(f) < lo) f = Math.nextUp(f)
+        if (f > hi || DacEqMapping.exact(f) > hi) f = Math.nextDown(f)
         return f
     }
 

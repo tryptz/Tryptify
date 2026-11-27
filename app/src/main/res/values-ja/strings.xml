@@ -3770,4 +3770,8 @@
     <string name="dac_eq_credit">DAC のプロトコルは Chronosauros 氏の Contour（Apache-2.0）によるものです。</string>
     <string name="whats_new_196_dac_eq_title">DAC EQ：EQ を DAC の中に</string>
     <string name="whats_new_196_dac_eq_body">「設定 › イコライザ › DAC EQ を開く」で、プリセットを対応 USB DAC 本体のメモリに書き込みます。DAC のバンド数に合わせてフィットし、読み戻して確認します。対応は 18 機種、プロトコルは Contour によるものです。実機の DAC では未検証のため、自己責任でお使いください。</string>
+    <string name="dac_eq_untested">未検証：このページでこの DAC を試した人はまだいません。兄弟機の %1$s で実証済みのコマンドだけを送り、読み取り結果が想定どおりに返るまでは何も送信しません。</string>
+    <string name="dac_eq_untested_tag">未検証</string>
+    <string name="dac_eq_untested_read_first">この DAC は未検証です。まず読み取ってください。読み取り結果が想定どおりに返るまでは何も送信しません。</string>
+    <string name="dac_eq_untested_resets">送信のたびに、この DAC 自体の設定（フィルターやゲインモードなど）が初期値に戻ることがあります。</string>
 </resources>

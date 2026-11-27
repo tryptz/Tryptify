@@ -26,6 +26,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import tf.monochrome.android.audio.eq.dac.DacEqUntested
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.EqPreset
 import tf.monochrome.android.domain.model.FilterType
@@ -120,6 +121,36 @@ class DacEqScreenTest {
         compose.onNodeWithText("Fitted again for this DAC", substring = true).assertExists()
         compose.onNodeWithText("Hold to send").performScrollTo().assertIsDisplayed()
         shot("3-ready-to-send")
+    }
+
+    @Test
+    fun `an untested DAC is named as itself and the page says what it is given`() {
+        val dac = SimulatedDac(DacEqUntested.EPZ_TP35_PRO)
+        val page = DacEqSession(dac, scope)
+        dac.plugIn()
+        page.settled { it.held != null }
+        page.load("HD 600", tenPeaks.take(5), emptyList(), emptyList())
+        page.settled { it.fit != null }
+        show(page)
+        compose.onNodeWithText("EPZ TP35 Pro").assertIsDisplayed()
+        // Its own gain range on the card, not the wider one of the DAC it is driven as.
+        compose.onNodeWithText("-10 to +10 dB", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Untested", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("TANCHJIM SPACE II", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("back to their defaults", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hold to send").performScrollTo().assertIsDisplayed()
+        shot("5-untested")
+    }
+
+    @Test
+    fun `a DAC the page does not know is shown with its USB id`() {
+        val dac = SimulatedDac(DeviceTarget.KA15)
+        val page = DacEqSession(dac, scope)
+        dac.unknown("TP35", "3302:4321")
+        show(page)
+        compose.onNodeWithText("TP35 is not supported").assertIsDisplayed()
+        compose.onNodeWithText("USB 3302:4321", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Hold to send").assertDoesNotExist()
     }
 
     @Test

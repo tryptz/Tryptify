@@ -3848,4 +3848,8 @@
     <string name="dac_eq_credit">DAC protokolleri Chronosauros’un Contour projesinden (Apache-2.0).</string>
     <string name="whats_new_196_dac_eq_title">DAC EQ: EQ’nuz DAC’in içinde</string>
     <string name="whats_new_196_dac_eq_body">Ayarlar › Ekolayzer › DAC EQ’yu aç, bir ön ayarı desteklenen bir USB DAC’in kendi belleğine yazar, bantlarına uydurur ve doğrulamak için geri okur. 18 DAC, protokoller Contour’dan. Henüz gerçek bir DAC’te denenmedi: sorumluluk sizde.</string>
+    <string name="dac_eq_untested">Denenmedi: bu DAC’i bu sayfayla henüz kimse denemedi. Yalnızca kardeş modeli %1$s üzerinde kanıtlanmış komutları alır ve bir okuma beklendiği gibi dönene kadar hiçbir şey gönderilmez.</string>
+    <string name="dac_eq_untested_tag">denenmedi</string>
+    <string name="dac_eq_untested_read_first">Bu DAC denenmedi: önce okuyun. Bir okuma beklendiği gibi dönene kadar hiçbir şey gönderilmez.</string>
+    <string name="dac_eq_untested_resets">Her gönderim, bu DAC’in filtre ve kazanç modu gibi kendi ayarlarını da varsayılanlarına döndürebilir.</string>
 </resources>

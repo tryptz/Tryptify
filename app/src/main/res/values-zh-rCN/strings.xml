@@ -3770,4 +3770,8 @@
     <string name="dac_eq_credit">DAC 协议来自 Chronosauros 的 Contour（Apache-2.0）。</string>
     <string name="whats_new_196_dac_eq_title">DAC 均衡器：把均衡存进 DAC</string>
     <string name="whats_new_196_dac_eq_body">“设置 › 均衡器 › 打开 DAC 均衡器”可把预设写入受支持的 USB DAC 自身的存储：按其频段数拟合，并回读验证。支持 18 款 DAC，协议来自 Contour。尚未在真实 DAC 上测试：风险自负。</string>
+    <string name="dac_eq_untested">未经测试：还没有人在本页上用过这款 DAC。它只会收到已在同系列的 %1$s 上验证过的命令，并且在读取结果符合预期之前不会发送任何内容。</string>
+    <string name="dac_eq_untested_tag">未经测试</string>
+    <string name="dac_eq_untested_read_first">这款 DAC 未经测试：请先读取。在读取结果符合预期之前不会发送任何内容。</string>
+    <string name="dac_eq_untested_resets">每次发送还可能把此 DAC 自身的设置（如滤波器和增益模式）恢复为默认值。</string>
 </resources>

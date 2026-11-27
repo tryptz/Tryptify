@@ -2769,6 +2769,27 @@ DAC's read-back mismatches) are English sentences from its core, shown as
 they are under a translated heading. With the fit in front they are rare.
 Do not translate them by matching their text: they change with Contour.
 
+**A DAC the page drives on an inference says so, and is read before it is
+written.** `DacEqUntested` lists DACs Contour does not know, each driven
+with the commands of a proven sibling (the EPZ TP35 Pro, as the Tanchjim
+Space II). For such a DAC the card shows its own name and its own limits
+(`DacLink.caps`: the sibling's, inside the DAC's own gain range, so a band
+cannot be set to a gain the sibling takes and this DAC does not); a line
+under the card says it is untested and names the sibling; another says a
+send may reset the DAC's own settings where the sibling's commands are known
+to do that; and the button stays off until a read of the DAC has parsed
+exactly as the sibling's would (`needsRead`). That read is the only evidence
+the inference holds on the unit in hand, so never let a send through without
+it, and never show such a DAC under the sibling's name. A USB audio device
+the page does not know at all is named on the card with its USB ids, so its
+owner can say which device it is; nothing is ever sent to one.
+
+**A band's numbers go to the DAC as they read.** `DacEqMapping.exact` reads
+a float through its shortest decimal, so a Q shown as 0.6 is sent as 0.6 and
+not as the 0.60000002 the float holds. The difference is a few parts in a
+hundred million of a coefficient, and it is what makes the page's frames for
+an EQ the same bytes another tool sends for it.
+
 **The line that says no real DAC has been tried stays until one has.** The
 page was built with none of the 18 DACs to hand: `DacEqSimulatedSendTest`
 and `DacEqSessionTest` send to Contour's simulated DACs, which answer the

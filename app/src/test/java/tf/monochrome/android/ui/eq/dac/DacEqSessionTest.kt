@@ -18,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tf.monochrome.android.audio.eq.dac.DacEqUntested
 import tf.monochrome.android.audio.usb.daceq.DacLink
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
@@ -158,6 +159,44 @@ class DacEqSessionTest {
         assertEquals(0f, loaded.sendPreampDb)
         page.send()
         assertEquals(DacEqOutcome.Verified, page.settled { it.outcome != null }.outcome)
+    }
+
+    @Test
+    fun `an untested DAC is sent nothing until a read of it has parsed`() {
+        val dac = SimulatedDac(DacEqUntested.EPZ_TP35_PRO).apply { answersReads = false }
+        val page = page(dac)
+        dac.plugIn()
+        val silent = page.settled { it.readError != null }
+        assertTrue(silent.needsRead)
+        page.load(null, tenPeaks.take(3).map { it.copy(gain = -2f) }, emptyList(), emptyList())
+        assertTrue(page.settled { it.fit != null }.needsRead)
+        page.send()
+        Thread.sleep(300)
+        assertEquals(0, dac.sends)
+        assertNull(page.state.value.outcome)
+
+        // Its own gain range, not its sibling's wider one.
+        page.dragBand(0, freq = 1000f, gain = 12f)
+        assertEquals(10f, page.settled().bands.first { it.id == 0 }.gain)
+        page.dragBand(0, freq = 1000f, gain = -2f)
+
+        // It answers its sibling's reads after all: now it may be sent to.
+        dac.answersReads = true
+        page.read()
+        val read = page.settled { it.held != null }
+        assertFalse(read.needsRead)
+        assertEquals(emptyList<String>(), read.issues)
+        page.send()
+        assertEquals(DacEqOutcome.Verified, page.settled { it.outcome != null }.outcome)
+        assertEquals(1, dac.sends)
+    }
+
+    @Test
+    fun `a DAC Contour has proven needs no read first`() {
+        val dac = SimulatedDac(DeviceTarget.EPZ_TP65).apply { answersReads = false }
+        val page = page(dac)
+        dac.plugIn()
+        assertFalse(page.settled { it.readError != null }.needsRead)
     }
 
     @Test

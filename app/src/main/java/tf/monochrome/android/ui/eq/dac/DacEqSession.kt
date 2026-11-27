@@ -1,6 +1,7 @@
 package tf.monochrome.android.ui.eq.dac
 
 import io.github.chronosauros.contour.core.DacImport
+import io.github.chronosauros.contour.core.DeviceCapabilities
 import io.github.chronosauros.contour.core.DeviceTarget
 import io.github.chronosauros.contour.core.Profile
 import io.github.chronosauros.contour.usb.DacSnapshot
@@ -20,6 +21,8 @@ import tf.monochrome.android.audio.eq.dac.DacEqMapping
 import tf.monochrome.android.audio.usb.daceq.DacEqDevice
 import tf.monochrome.android.audio.usb.daceq.DacLink
 import tf.monochrome.android.audio.usb.daceq.DacNotConfirmed
+import tf.monochrome.android.audio.usb.daceq.caps
+import tf.monochrome.android.audio.usb.daceq.untestedDac
 import tf.monochrome.android.domain.model.EqBand
 import tf.monochrome.android.domain.model.FilterType
 import tf.monochrome.android.domain.model.FrequencyPoint
@@ -69,6 +72,11 @@ data class DacEqUiState(
     val issues: List<String> = emptyList(),
     val held: DacEqHeld? = null,
     val onDac: Boolean = false,
+    /**
+     * The DAC is an untested one ([DacEqUntested]) and has not been read
+     * exactly yet: nothing is sent to it until it has.
+     */
+    val needsRead: Boolean = false,
     val slot: Int? = null,
     val busy: DacEqBusy = DacEqBusy.IDLE,
     val progress: Float = 0f,
@@ -102,6 +110,9 @@ class DacEqSession(
             is DacLink.NeedsPermission -> l.dac.target
             else -> null
         }
+
+    /** The limits an EQ is held to for the DAC connected now ([DacLink.caps]). */
+    val caps: DeviceCapabilities? get() = link.value.caps
 
     init {
         scope.launch {
@@ -197,8 +208,9 @@ class DacEqSession(
      */
     fun load(name: String?, bands: List<EqBand>, measurement: List<FrequencyPoint>, aim: List<FrequencyPoint>) {
         val dac = target ?: return
+        val limits = caps ?: return
         scope.launch {
-            val fitted = withContext(fitOn) { DacEqFit.fit(bands, dac, measurement, aim) }
+            val fitted = withContext(fitOn) { DacEqFit.fit(bands, dac, measurement, aim, limits) }
             change {
                 it.copy(
                     bands = fitted.bands,
@@ -225,8 +237,8 @@ class DacEqSession(
         edit { bands -> bands.map { if (it.id == id) held(it.copy(freq = freq, gain = gain)) else it } }
 
     fun addBand() {
-        val dac = target ?: return
-        if (_state.value.bands.size >= dac.caps.bands) return
+        val limits = caps ?: return
+        if (_state.value.bands.size >= limits.bands) return
         val id = (_state.value.bands.maxOfOrNull { it.id } ?: -1) + 1
         edit { it + held(EqBand(id = id, type = FilterType.PEAKING, freq = 1000f, gain = 0f, q = 1f)) }
         change { it.copy(selectedBandId = id) }
@@ -239,9 +251,9 @@ class DacEqSession(
 
     /** [band] inside the connected DAC's limits, with a kind of filter it has. */
     private fun held(band: EqBand): EqBand {
-        val caps = target?.caps ?: return band
-        val type = band.type.takeIf { DacEqMapping.toDac(it) in caps.types } ?: FilterType.PEAKING
-        return DacEqFit.limit(band.copy(type = type), caps)
+        val limits = caps ?: return band
+        val type = band.type.takeIf { DacEqMapping.toDac(it) in limits.types } ?: FilterType.PEAKING
+        return DacEqFit.limit(band.copy(type = type), limits)
     }
 
     private fun edit(how: (List<EqBand>) -> List<EqBand>) =
@@ -283,7 +295,11 @@ class DacEqSession(
     private fun derived(s: DacEqUiState): DacEqUiState {
         val dac = target
         val peak = AutoPreamp.peakBoostDb(s.bands, DacEqMapping.DISPLAY_SAMPLE_RATE)
-        if (dac == null) return s.copy(peakBoostDb = peak, issues = emptyList(), onDac = false)
+        if (dac == null) return s.copy(peakBoostDb = peak, issues = emptyList(), onDac = false, needsRead = false)
+        // An untested DAC is given a proven sibling's commands on an inference.
+        // A read that parses exactly as the sibling's would is the evidence the
+        // inference holds on this unit; without one, nothing is written.
+        val needsRead = link.value.untestedDac != null && (s.held == null || s.held.notExact)
         val profile = profile(s, dac)
         val issues = runCatching { dac.issues(profile) }.getOrElse { listOf(it.message ?: "Unrepresentable EQ") }
         val preamp = when {
@@ -292,7 +308,7 @@ class DacEqSession(
                 ?: runCatching { profile.effectivePreampDb(dac.caps.shelfForm).toFloat() }.getOrDefault(-peak)
         }
         val same = issues.isEmpty() && s.held != null && runCatching { snapshot?.matches(profile) == true }.getOrDefault(false)
-        return s.copy(peakBoostDb = peak, issues = issues, sendPreampDb = preamp, onDac = same)
+        return s.copy(peakBoostDb = peak, issues = issues, sendPreampDb = preamp, onDac = same, needsRead = needsRead)
     }
 
     // ---- sending ----
@@ -301,7 +317,7 @@ class DacEqSession(
     fun send() {
         val s = _state.value
         val dac = target ?: return
-        if (s.busy != DacEqBusy.IDLE || s.issues.isNotEmpty() || link.value !is DacLink.Ready) return
+        if (s.busy != DacEqBusy.IDLE || s.issues.isNotEmpty() || s.needsRead || link.value !is DacLink.Ready) return
         val profile = profile(s, dac)
         change { it.copy(busy = DacEqBusy.SENDING, progress = 0f, outcome = null) }
         scope.launch {

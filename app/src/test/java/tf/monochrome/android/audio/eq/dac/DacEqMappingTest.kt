@@ -46,7 +46,7 @@ class DacEqMappingTest {
 
     @Test
     fun `a shelf on a DAC that takes a Q is sent as it is`() {
-        for (band in shelves) assertEquals(band.q.toDouble(), DacEqMapping.dacQ(band, ShelfForm.Q), 0.0)
+        for (band in shelves) assertEquals(DacEqMapping.exact(band.q), DacEqMapping.dacQ(band, ShelfForm.Q), 0.0)
     }
 
     /** The conversion itself, in Contour's own maths: the two forms draw one curve. */
@@ -110,6 +110,17 @@ class DacEqMappingTest {
     fun `a shelf no Q describes says so`() {
         // A slope well over 1 on a strong boost has no real response.
         assertNull(DacEqMapping.qForSlope(4.0, 18.0))
+    }
+
+    @Test
+    fun `a band's numbers are sent as they read, not as a float holds them`() {
+        assertEquals(0.6, DacEqMapping.exact(0.6f), 0.0)
+        assertEquals(1.41, DacEqMapping.exact(1.41f), 0.0)
+        assertEquals(-2.5, DacEqMapping.exact(-2.5f), 0.0)
+        assertEquals(16000.0, DacEqMapping.exact(16000f), 0.0)
+        assertTrue(0.6f.toDouble() != 0.6)
+        val profile = DacEqMapping.profile("x", listOf(EqBand(0, FilterType.PEAKING, 1234.5f, 4.6f, 0.6f)), null, DeviceTarget.KA15, now = 0L)
+        assertEquals(Band("b0", DacFilter.PEAK, 1234.5, 4.6, 0.6), profile.bands.single())
     }
 
     @Test

@@ -31,7 +31,11 @@ cp "$src/android/core/devices.gradle.kts" "$dst/android/core/devices.gradle.kts"
 # Contour's own app (its R and its UiText) is stood in for by
 # app/src/main/java/io/github/chronosauros/contour/ContourAppShims.kt. A file
 # Contour adds to this set shows up as a compile error: add it here.
-USB_FILES="HidIo.kt HidTransport.kt WalkPlayPort.kt DacHandle.kt DeviceIdentity.kt UsbAudioKeepAlive.kt DacClient.kt UsbLog.kt UacProbe.kt"
+# DeviceIdentity.kt, the dozen lines that turn a USB device into one of
+# Contour's DACs, is left behind on purpose: the app has its own
+# (app/src/main/java/io/github/chronosauros/contour/usb/DeviceIdentity.kt),
+# which asks Contour first and then the app's list of untested DACs.
+USB_FILES="HidIo.kt HidTransport.kt WalkPlayPort.kt DacHandle.kt UsbAudioKeepAlive.kt DacClient.kt UsbLog.kt UacProbe.kt"
 pkg=io/github/chronosauros/contour/usb
 mkdir -p "$dst/android/app/src/main/kotlin/$pkg" "$dst/android/app/src/perf/kotlin/$pkg"
 for f in $USB_FILES; do cp "$src/android/app/src/main/kotlin/$pkg/$f" "$dst/android/app/src/main/kotlin/$pkg/$f"; done

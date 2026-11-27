@@ -3926,4 +3926,8 @@
     <string name="dac_eq_credit">Protocolli dei DAC da Contour di Chronosauros (Apache-2.0).</string>
     <string name="whats_new_196_dac_eq_title">EQ del DAC: il tuo EQ dentro il DAC</string>
     <string name="whats_new_196_dac_eq_body">Impostazioni › Equalizzatore › Apri EQ del DAC scrive un preset nella memoria di un DAC USB supportato, adattato alle sue bande, e lo rilegge per verificarlo. 18 DAC, con protocolli da Contour. Non ancora provato su un DAC reale: a tuo rischio.</string>
+    <string name="dac_eq_untested">Non testato: nessuno ha ancora provato questo DAC con questa pagina. Riceve solo i comandi collaudati sul modello affine, %1$s, e non viene inviato nulla finché una lettura non torna come previsto.</string>
+    <string name="dac_eq_untested_tag">non testato</string>
+    <string name="dac_eq_untested_read_first">Questo DAC non è testato: leggilo prima. Non viene inviato nulla finché una lettura non torna come previsto.</string>
+    <string name="dac_eq_untested_resets">Ogni invio può anche riportare ai valori predefiniti le impostazioni proprie di questo DAC, come il filtro e la modalità di guadagno.</string>
 </resources>
