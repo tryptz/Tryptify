@@ -24,3 +24,5 @@ dependencyResolutionManagement {
 rootProject.name = "Monochrome"
 include(":app")
 include(":baselineprofile")
+// Contour's core (third_party/contour): the DAC catalog and wire codecs behind DAC EQ.
+include(":contour-core")

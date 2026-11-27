@@ -30,6 +30,10 @@ proguard/
 
 # Log Files
 *.log
+# Not Contour's: its tests replay captures from real DACs, kept as .log files
+# (third_party/contour). Ignored, a fresh clone has the tests and not what
+# they read, and they fail there while they pass here.
+!third_party/contour/**/*.log
 
 # Android Studio Navigation editor temp files
 .navigation/

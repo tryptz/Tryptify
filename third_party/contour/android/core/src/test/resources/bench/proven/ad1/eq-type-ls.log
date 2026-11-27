@@ -1,0 +1,59 @@
+# proof: run 2026-11-13-kiwi-ears-ad1-01-mac, file 29-plan-slotactive
+# firmware: 1.0.x
+# date: 2026-11-13
+# verdict: PASS (S2 T07, type LS: EQ written, read back after the DAC returned)
+# contour-bench.jar sha256 dd97ba64b8dbc942430b90a253fe6c77169f3870318c1a90ad2434faeb6666d3
+# device ad1
+# command plan
+# slot active
+# time 2026-11-13T19:58:03+01:00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 03 00 00 00
+TX 4b 26 00 00 00 52 00 00 00 00 00  # query 0x26 (band 1 gain and frequency)
+RX 4b 26 00 00 00 52 00 1e 00 f4 01
+TX 4b 27 00 00 00 52 00 00 00 00 00  # query 0x27 (band 1 Q and type)
+RX 4b 27 00 00 00 52 00 e8 03 04 00
+TX 4b 28 00 00 00 52 00 00 00 00 00  # query 0x28 (band 2 gain and frequency)
+RX 4b 28 00 00 00 52 00 00 00 64 00
+TX 4b 29 00 00 00 52 00 00 00 00 00  # query 0x29 (band 2 Q and type)
+RX 4b 29 00 00 00 52 00 e8 03 00 00
+TX 4b 2a 00 00 00 52 00 00 00 00 00  # query 0x2a (band 3 gain and frequency)
+RX 4b 2a 00 00 00 52 00 00 00 64 00
+TX 4b 2b 00 00 00 52 00 00 00 00 00  # query 0x2b (band 3 Q and type)
+RX 4b 2b 00 00 00 52 00 e8 03 00 00
+TX 4b 2c 00 00 00 52 00 00 00 00 00  # query 0x2c (band 4 gain and frequency)
+RX 4b 2c 00 00 00 52 00 00 00 64 00
+TX 4b 2d 00 00 00 52 00 00 00 00 00  # query 0x2d (band 4 Q and type)
+RX 4b 2d 00 00 00 52 00 e8 03 00 00
+TX 4b 2e 00 00 00 52 00 00 00 00 00  # query 0x2e (band 5 gain and frequency)
+RX 4b 2e 00 00 00 52 00 00 00 64 00
+TX 4b 2f 00 00 00 52 00 00 00 00 00  # query 0x2f (band 5 Q and type)
+RX 4b 2f 00 00 00 52 00 e8 03 00 00
+TX 4b 66 00 00 00 52 00 00 00 00 00  # query 0x66 (digital DAC gain)
+RX 4b 66 00 00 00 52 00 00 02 00 00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 03 00 00 00
+TX 4b 01 00 00 00 52 00 00 00 00 00  # query 0x01 (channel flags)
+RX 4b 01 00 00 00 52 00 00 02 00 00
+TX 4b 26 00 00 00 57 00 1e 00 f4 01  # write 0x26 (band 1 gain and frequency): gain 3.0 dB, 500 Hz
+RX 4b 26 00 00 00 57 00 03 00 00 00
+TX 4b 27 00 00 00 57 00 e8 03 03 00  # write 0x27 (band 1 Q and type): Q 1.0, type 3
+RX 4b 27 00 00 00 57 00 03 00 00 00
+TX 4b 28 00 00 00 57 00 00 00 64 00  # write 0x28 (band 2 gain and frequency): gain 0.0 dB, 100 Hz
+RX 4b 28 00 00 00 57 00 03 00 00 00
+TX 4b 29 00 00 00 57 00 e8 03 00 00  # write 0x29 (band 2 Q and type): Q 1.0, type 0
+RX 4b 29 00 00 00 57 00 03 00 00 00
+TX 4b 2a 00 00 00 57 00 00 00 64 00  # write 0x2a (band 3 gain and frequency): gain 0.0 dB, 100 Hz
+RX 4b 2a 00 00 00 57 00 03 00 00 00
+TX 4b 2b 00 00 00 57 00 e8 03 00 00  # write 0x2b (band 3 Q and type): Q 1.0, type 0
+RX 4b 2b 00 00 00 57 00 03 00 00 00
+TX 4b 2c 00 00 00 57 00 00 00 64 00  # write 0x2c (band 4 gain and frequency): gain 0.0 dB, 100 Hz
+RX 4b 2c 00 00 00 57 00 03 00 00 00
+TX 4b 2d 00 00 00 57 00 e8 03 00 00  # write 0x2d (band 4 Q and type): Q 1.0, type 0
+RX 4b 2d 00 00 00 57 00 03 00 00 00
+TX 4b 2e 00 00 00 57 00 00 00 64 00  # write 0x2e (band 5 gain and frequency): gain 0.0 dB, 100 Hz
+RX 4b 2e 00 00 00 57 00 03 00 00 00
+TX 4b 2f 00 00 00 57 00 e8 03 00 00  # write 0x2f (band 5 Q and type): Q 1.0, type 0
+RX 4b 2f 00 00 00 57 00 03 00 00 00
+TX 4b 00 00 00 00 53 00 00 00 00 00  # SAVE to flash: the DAC drops off the USB bus (reconnect, then read it again)
+# reconnected after 'SAVE to flash: the DAC drops off the USB bus (reconnect, then read it again)': left USB for 1255 ms

@@ -1,0 +1,103 @@
+{
+  "id": "fiio-ka15",
+  "name": "FiiO KA15",
+  "shortName": null,
+  "productName": "FIIO KA15",
+  "vendor": "FiiO",
+  "status": "stable",
+  "usb": {
+    "vid": "0x2972",
+    "pid": "0x0104",
+    "productName": "FIIO KA15",
+    "hidInterface": 0,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 4,
+    "notes": [
+      "capture fixture tests/captures/fiio_fiio_ka15.json; the only FiiO rule with a capture, so the only one whose DeviceCapabilities carry a vid/pid (core/native/FiioCatalog.kt:158, core/DeviceTarget.kt:28-32)",
+      "ignore the upstream WalkPlay-SchemeNo10 collision for this pair (core/native/FiioCatalog.kt:160)",
+      "HID replies stop while no USB audio is streaming; the app keeps a silent output track on the DAC (core/native/FiioCatalog.kt:65-67)",
+      "the Android USB attach filter is generated from this record at build time",
+      "HID interface 0, report 7, 64 bytes (research/protocol/PROTOCOL.md:201)",
+      "Q 0.1-10 is the code's range; FiiO Control and the FiiO web app list 0.25-8 (kept as is)",
+      "after a filter change the echo and the read-back come late, so a restore re-reads before it declares a miss; an earlier filter write hung HID until a replug (17.10.2026)"
+    ]
+  },
+  "family": "fiio",
+  "driver": {
+    "reportId": 7,
+    "saveCommand": 25,
+    "snowskyExchange": false,
+    "disconnectOnSave": false,
+    "peakingGainCompensation": false,
+    "shelfAlphaCompensation": false,
+    "hardwareVerified": true,
+    "capture": { "fixturePath": "tests/captures/fiio_fiio_ka15.json" }
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-12, 12],
+    "q": [0.1, 10],
+    "types": { "PEAK": 0, "LOW_SHELF": 1, "HIGH_SHELF": 2 },
+    "heldTypes": { "BAND_PASS": 3, "LOW_PASS": 4, "HIGH_PASS": 5, "ALL_PASS": 6 },
+    "shelfQScale": "sqrt2",
+    "shelfForm": "q",
+    "peakQScale": 1.0,
+    "emulation": null
+  },
+  "preamp": { "present": true, "db": [-24, 0], "step": 0.1, "wholeDb": true, "registerOffsetDb": 12 },
+  "slots": {
+    "user": [7, 8, 9],
+    "declaredWritable": [7, 8, 9],
+    "stock": [0, 1, 2, 3, 4, 5, 6],
+    "bypass": 10,
+    "labels": { "0": "Jazz", "1": "Pop", "2": "Rock", "3": "Dance", "4": "R&B", "5": "Classic", "6": "Hip-hop", "7": "USER1", "8": "USER2", "9": "USER3", "10": "Close EQ" },
+    "picker": false,
+    "names": "device-by-index",
+    "nameLength": 7
+  },
+  "pacing": { "writeGapMs": 0, "afterSaveMs": 2000, "consumeEchoes": true, "checksum": true, "needsAudioStream": true, "probeGapMs": 200 },
+  "readback": { "qSlack": "fiio-1+q/250" },
+  "settings": [
+    { "id": "volume", "section": "SOUND", "group": 0, "writeVerified": true },
+    { "id": "volume-steps", "section": null, "group": 0, "writeVerified": true },
+    { "id": "balance", "section": null, "group": 0, "writeVerified": true },
+    { "id": "filter", "section": null, "group": 0, "writeVerified": true },
+    { "id": "output", "section": null, "group": 0, "writeVerified": true },
+    { "id": "dre", "section": null, "group": 0, "writeVerified": true },
+    { "id": "uac", "section": "DEVICE", "group": 1, "writeVerified": false },
+    { "id": "brightness", "section": "SCREEN", "group": 2, "writeVerified": true },
+    { "id": "screen-off", "section": null, "group": 2, "writeVerified": true },
+    { "id": "rotation", "section": null, "group": 2, "writeVerified": true },
+    { "id": "language", "section": null, "group": 2, "writeVerified": true }
+  ],
+  "info": ["rate", "fw"],
+  "preview": { "volume": 34, "volume-steps": 0, "balance": 0, "filter": 4, "output": 0, "dre": 1, "uac": 1, "brightness": 5, "screen-off": 2, "rotation": 0, "language": 1, "rate": 2, "fw": 10106 },
+  "reset": { "offered": true, "src": "FiiO Control resetDefault is configured (command 0x21) but show:false (scope-fiio.md:71,81-82); the vendor software hides it, Contour offers it anyway by owner decision 21.10.2026 (FiioReset.OFFERED); proven on the phone 22.10.2026 (run:2026-10-22-fiio-ka15-05-phone, FiioReset.VERIFIED)" },
+  "hwVolume": { "inScope": true, "src": "vendor HID volume 0x02 is shown by FiiO Control (VB) and read on hardware; write proven on the phone 21.10.2026 (run:2026-10-21-fiio-ka15-02-phone; scope-fiio.md:56,73,85); UAC Feature Unit not used by vendor software" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L360",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L1029",
+    "constraintsRef": "peq10Band12dBAllFilters7",
+    "vendorIds": [10610, 2578],
+    "oracle": true,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": ["Explicit FiiO route for exact FIIO KA15 2972:0104; ignore upstream WalkPlay-SchemeNo10 collision"]
+  },
+  "tested": {
+    "date": "2026-10-26",
+    "firmware": "V1.1.6 (bcdDevice 0x0116)",
+    "contour": "1.6 perf builds",
+    "rangesAccepted": { "result": "pass", "note": "Ten bands, USER1-3, all seven filter types and the preamp written and read back on the PC and on phones. A fractional preamp (-4.5, -3.5, -2.5 dB) resets the DAC during the send while every whole dB passes, so the plan rounds the preamp down to a whole dB." },
+    "acoustic": { "result": "pass", "note": "PK and both shelves within 0.010 dB at a 44.1 kHz stream (shelf Q = register / sqrt2); LP, HP, BP and AP passed in a later run; the preamp played -6.001 and -3.001 dB for -6 and -3. USER presets play 12 dB below Close EQ (register offset 12 dB)." },
+    "persistence": { "result": "pass", "note": "USER2 content and its name survived unplug and replug (Pixel)." },
+    "settings": { "result": "pass", "note": "Volume, volume steps, balance, filter, output, DRE, brightness, screen off, rotation and language written, read back and restored on a phone; the USB audio row is never written." },
+    "beyondVendor": "FiiO Control and the FiiO web app list all seven filter types for the KA15; Contour offers them since 2026-10-25 (written and read back on the PC and a phone). FiiO Control hides the factory reset (command 0x21); Contour offers FACTORY RESET with a saved copy first (proven on a phone 2026-10-22: replug, six changes, restore OK).",
+    "runs": ["run:2026-10-20-fiio-ka15-01", "run:2026-10-20-fiio-ka15-04-fr", "run:2026-10-20-fiio-ka15-05-fr", "run:2026-10-20-fiio-ka15-09-eqtest", "run:2026-10-21-fiio-ka15-02-phone", "run:2026-10-22-fiio-ka15-05-phone", "run:2026-10-24-fiio-ka15-02-mac", "run:2026-10-24-fiio-ka15-06-mac-eqtest", "run:2026-10-25-contour16-r7-phone-nothing"]
+  }
+}

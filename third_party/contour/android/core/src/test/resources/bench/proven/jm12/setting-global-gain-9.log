@@ -1,0 +1,45 @@
+# proof: run 2026-11-10-jcally-jm12-10-mac, file 13-setting-plan-global-gain-9
+# firmware: 1.0.1
+# date: 2026-11-10
+# verdict: PASS (S2 T14: Global Gain step 9 written with SAVE, read back after the DAC returned; the 0x24 status byte read 01 here)
+# setting global-gain
+# value 9
+# save true
+# contour-bench.jar sha256 c3ff6433ac887605655ceba2c3ea62a6218dbd96f704fd6bced5910668d3b9e8
+# device jm12
+# command setting-plan
+# slot active
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 03 00 00 01
+TX 4b 26 00 00 00 52 00 00 00 00 00  # query 0x26 (band 1 gain and frequency)
+RX 4b 26 00 00 00 52 00 00 00 64 00
+TX 4b 27 00 00 00 52 00 00 00 00 00  # query 0x27 (band 1 Q and type)
+RX 4b 27 00 00 00 52 00 e8 03 00 00
+TX 4b 28 00 00 00 52 00 00 00 00 00  # query 0x28 (band 2 gain and frequency)
+RX 4b 28 00 00 00 52 00 00 00 64 00
+TX 4b 29 00 00 00 52 00 00 00 00 00  # query 0x29 (band 2 Q and type)
+RX 4b 29 00 00 00 52 00 e8 03 00 00
+TX 4b 2a 00 00 00 52 00 00 00 00 00  # query 0x2a (band 3 gain and frequency)
+RX 4b 2a 00 00 00 52 00 00 00 64 00
+TX 4b 2b 00 00 00 52 00 00 00 00 00  # query 0x2b (band 3 Q and type)
+RX 4b 2b 00 00 00 52 00 e8 03 00 00
+TX 4b 2c 00 00 00 52 00 00 00 00 00  # query 0x2c (band 4 gain and frequency)
+RX 4b 2c 00 00 00 52 00 00 00 64 00
+TX 4b 2d 00 00 00 52 00 00 00 00 00  # query 0x2d (band 4 Q and type)
+RX 4b 2d 00 00 00 52 00 e8 03 00 00
+TX 4b 2e 00 00 00 52 00 00 00 00 00  # query 0x2e (band 5 gain and frequency)
+RX 4b 2e 00 00 00 52 00 00 00 64 00
+TX 4b 2f 00 00 00 52 00 00 00 00 00  # query 0x2f (band 5 Q and type)
+RX 4b 2f 00 00 00 52 00 e8 03 00 00
+TX 4b 66 00 00 00 52 00 00 00 00 00  # query 0x66 (digital DAC gain)
+RX 4b 66 00 00 00 52 00 00 02 00 00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 03 00 00 01
+TX 4b 01 00 00 00 52 00 00 00 00 00  # query 0x01 (channel flags)
+RX 4b 01 00 00 00 52 00 00 02 00 00
+TX 4b 3b 00 00 00 52 00 00 00 00 00  # query 0x3b (Global Gain)
+RX 4b 3b 00 00 00 52 00 08 00 00 00
+TX 4b 3b 00 00 00 57 00 09 00 00 00  # write 0x3b (Global Gain): step 9 = -6.0 dB
+RX 4b 3b 00 00 00 57 00 03 00 00 00
+TX 4b 00 00 00 00 53 00 00 00 00 00  # SAVE to flash: the DAC drops off the USB bus (reconnect, then read it again)
+# reconnected after 'SAVE to flash: the DAC drops off the USB bus (reconnect, then read it again)': left USB for 1254 ms

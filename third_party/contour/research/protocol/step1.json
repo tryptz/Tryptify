@@ -1,0 +1,162 @@
+{
+  "device": "CrinEar Protocol Micro",
+  "vid": "0x3302",
+  "pid": "0xC20F",
+  "firmware_version": "0.2",
+  "current_slot": 0,
+  "preamp_db": 0,
+  "filters": [
+    {
+      "index": 0,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 30.3,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 31,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 98 54 2c 80 a7 bc d3 3f 68 ab d3 7f 59 43 2c c0"
+      }
+    },
+    {
+      "index": 1,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 60.6,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 62,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 f6 ac 58 80 eb 97 a7 3f 0a 53 a7 7f 15 68 58 c0"
+      }
+    },
+    {
+      "index": 2,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 122.2,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 125,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 47 d7 b2 80 ef 3f 4e 3f b9 28 4d 7f 11 c0 b1 c0"
+      }
+    },
+    {
+      "index": 3,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 244.4,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 250,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 ec e8 65 81 e0 6d 9e 3e 14 17 9a 7e 20 92 61 c1"
+      }
+    },
+    {
+      "index": 4,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 488.8,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 500,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 cf ab cc 82 ae 7f 44 3d 31 54 33 7d 52 80 bb c2"
+      }
+    },
+    {
+      "index": 5,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 977.5,
+      "gain_db": 0.0,
+      "q": 0.75,
+      "raw": {
+        "freq": 1000,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 70 49 9c 85 d1 f0 a6 3a 90 b6 63 7a 2f 0f 59 c5"
+      }
+    },
+    {
+      "index": 6,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 1955.0,
+      "gain_db": 0.0,
+      "q": 0.748,
+      "raw": {
+        "freq": 2000,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 0b 06 41 8b b4 de c0 35 f5 f9 be 74 4c 21 3f ca"
+      }
+    },
+    {
+      "index": 7,
+      "enabled": true,
+      "type": "PK",
+      "freq_hz": 3910.0,
+      "gain_db": 0.0,
+      "q": 0.744,
+      "raw": {
+        "freq": 4000,
+        "q_x256": 192,
+        "gain_x256": 0,
+        "type": 2,
+        "slot_byte": 0,
+        "biquad_hex": "00 00 00 40 98 36 8e 96 41 06 2a 2d 68 c9 71 69 bf f9 d5 d2"
+      }
+    }
+  ],
+  "missing_filters": [],
+  "compensation": {
+    "freq_factor": 0.9775,
+    "q_model": "cosNyquist",
+    "design_fs": 96000,
+    "note": "freq_hz/q are devicePEQ-decompensated (realised); raw.* are register values"
+  },
+  "timing_ms": {
+    "version_ms": 7.8,
+    "slot_ms": 8.1,
+    "bands_ms": 499.5,
+    "gain_ms": 4.4,
+    "total_ms": 519.7,
+    "per_band_first_reply_ms": {
+      "0": 64.3,
+      "1": 62.5,
+      "2": 63.1,
+      "3": 61.9,
+      "4": 63.1,
+      "5": 61.8,
+      "6": 62.3,
+      "7": 60.4
+    }
+  }
+}

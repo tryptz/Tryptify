@@ -146,6 +146,11 @@ Contributors and coding agents start at [`AGENTS.md`](AGENTS.md). What changed: 
   (GPL-3.0-or-later, a library the build fetches), NewPipe's PO-token
   WebView (GPL-3.0-or-later, adapted from TeamNewPipe/NewPipe in
   `app/src/main/java/tf/monochrome/android/data/youtube/potoken/` and
-  `app/src/main/assets/po_token.html`) and the rest named in their folders.
+  `app/src/main/assets/po_token.html`), the core of
+  [Contour](https://github.com/Chronosauros/contour) for DAC EQ (Apache-2.0,
+  an unchanged copy in `third_party/contour` with its `LICENSE`, `NOTICE` and
+  `THIRD_PARTY_NOTICES.md`; it carries Contour's ports of devicePEQ, 0BSD,
+  and of FreeDSP-Studio's Black Pearl write sequence, MIT) and the rest named
+  in their folders.
 
 Built by **[tryptz](https://github.com/tryptz)**.

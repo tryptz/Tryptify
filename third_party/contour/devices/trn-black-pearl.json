@@ -1,0 +1,104 @@
+{
+  "id": "trn-black-pearl",
+  "name": "TRN Black Pearl",
+  "shortName": "Black Pearl",
+  "productName": "TRN Black Pearl",
+  "vendor": "TRN",
+  "status": "stable",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0x43E8",
+    "productName": "TE-C",
+    "hidInterface": 0,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 3,
+    "notes": [
+      "WalkPlay SchemeNo16, the same strict path as the Max with its own write sequence; the Android USB attach filter is generated from this record at build time (core/DeviceProtocol.kt:7-11)",
+      "the unit does not enumerate on USB at all without headphones plugged in: nothing on the bus, not even a failed device; Contour then sees nothing and shows NO DAC (research/black-pearl-pc-2026-10-19/FINDINGS.md:10-11; research/protocol/PROTOCOL.md:138-140)",
+      "interface 0 is HID (one collection, usage page 0x0C usage 0x01, report 0x4B), interface 1 is audio; on a Pixel the HID interface 0 with IN 0x86 / OUT 0x05 (research/black-pearl-pc-2026-10-19/FINDINGS.md:8-9; research/protocol/PROTOCOL.md:169-170)",
+      "firmware VERSION command 0.6 (2026-10-19); bcdDevice not recorded (research/black-pearl-pc-2026-10-19/FINDINGS.md:14)",
+      "a stored band is checked against the register format on read, not against the editor caps: frequency 1..48000 Hz, gain +-60 dB; type codes 1 to 5 are accepted on read (core/DeviceProtocol.kt:243-255,287-289)",
+      "A/B and the service screen's band-1 test write are off on the TRN (research/protocol/PROTOCOL.md:168)",
+      "the TRN's own tool stores values beyond +-10 dB (9300 Hz, Q 2.0, -10.4 dB on a tester's Black Pearl, 2026-10-11); which tool that was is not recorded (core/DeviceProtocol.kt:244-248; scope-kt-walkplay.md:106-109)",
+      "preamp -30..0 dB is Contour's policy, not a proven limit (int8 whole-dB register; -12 dB written and kept)",
+      "factory flat spares use register Q 182/256 = 0.7109 (the unit's own factory read); the factory biquads fit Q 0.75, which does not matter at 0 dB",
+      "which tool the TRN's own tool is has not been recorded (no TRN-branded page or app found); the WalkPlay web tool and its Android app are assumed"
+    ]
+  },
+  "family": "walkplay",
+  "driver": {
+    "reportId": 75,
+    "schemeNo": 16,
+    "bandLen": 33,
+    "writeSequence": "trn",
+    "strictParse": true,
+    "importMode": "trn",
+    "ab": false,
+    "designRateHz": 96000
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-10, 10],
+    "q": [0.1, 10],
+    "types": { "PEAK": 2, "LOW_SHELF": 1, "HIGH_SHELF": 3 },
+    "heldTypes": { "LOW_PASS": 4, "HIGH_PASS": 5 },
+    "shelfQScale": "sqrt2",
+    "shelfForm": "q",
+    "coefficientRateHz": 96000,
+    "emulation": null
+  },
+  "preamp": { "present": true, "db": [-30, 0], "step": 0.1, "wholeDb": true, "registerOffsetDb": 0 },
+  "slots": {
+    "user": [0],
+    "declaredWritable": [0],
+    "stock": [],
+    "bypass": null,
+    "labels": { "0": "Custom" },
+    "picker": false,
+    "names": "none",
+    "slotByte": "echo-read-value",
+    "factoryFlat": [[31, 0.7109375, "PEAK"], [62, 0.7109375, "PEAK"], [125, 0.7109375, "PEAK"], [250, 0.7109375, "PEAK"], [500, 0.7109375, "PEAK"], [1000, 0.7109375, "PEAK"], [2000, 0.7109375, "PEAK"], [4000, 0.7109375, "PEAK"], [8000, 0.7109375, "PEAK"], [16000, 0.7109375, "PEAK"]]
+  },
+  "pacing": {
+    "writeGapMs": 25,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": null,
+    "afterSaveMs": 200,
+    "sequence": [
+      "every band write with length byte 0x21, 25 ms after each",
+      "coefficient commit 01 0A 04 00 00 FF FF, 50 ms",
+      "preamp write 01 03 02 00 g, 50 ms",
+      "01 01 00 (EQ flash), 200 ms",
+      "01 04 00 (offset and preamp flash), 200 ms"
+    ]
+  },
+  "readback": { "qSlack": "q256", "readBoundsHz": [1, 48000], "readBoundsDb": [-60, 60] },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": { "offered": "unknown", "src": "the WalkPlay web tool's resetDevice (class s2, which SchemeNo16 resolves to as well) is decoded (walkplay-plan.md item 4, rank KOD): 01 03 02 00 00; eight flat PURE band frames (bands 0-7 only, length byte 0x18, while Contour's own TRN write sends 0x21 for 10 bands); 01 0A 04 00 00 FF FF; 01 01 00; 01 05 01..04; 01 17 00. Contour has it in the bench only (reset-plan trn --owner-consent --low-volume, after a full backup, restored afterwards); not in the app, not run on a unit; the bench must read bands 9 and 10 after a reset (the vendor does not write them); what it erases beyond the EQ is unknown. Restoring the factory flat EQ through the ordinary write remains an EQ reset, not a device reset (scope-kt-walkplay.md:123,134-136)" },
+  "hwVolume": { "inScope": "unknown", "src": "unknown whether the vendor tool controls volume for this model; a retail snippet mentions a 90-step independent volume; UAC Feature Unit descriptor not dumped (scope-kt-walkplay.md:124,138-140)" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L940",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json",
+    "constraintsRef": "peq10Band10dBFullShelves",
+    "vendorIds": [13058],
+    "oracle": false
+  },
+  "tested": {
+    "date": "2026-10-28",
+    "firmware": "0.6 (VERSION command)",
+    "contour": null,
+    "rangesAccepted": { "result": "pass", "note": "The factory state (10 PK bands at 0 dB) was read; PK +10 dB Q 1, PK -10 dB Q 10, both shelves and LP 18 kHz / HP 30 Hz were stored as sent and read back byte identical on the PC, and a five-band profile and a -6 dB preamp sent from a Pixel were verified. The unit also stores values beyond +-10 dB as sent (-10.4 dB seen); Contour sends within +-10." },
+    "acoustic": { "result": "partial", "note": "PK within 0.124 dB with the register as Q (6 of 6) and shelves within 0.124 dB with Q = register / sqrt2; the DAC computes shelves from the registers at the stream rate and does not play the band-frame coefficient bytes. LP, HP and the preamp level were not measured." },
+    "persistence": { "result": "pass", "note": "The whole state including a -12 dB preamp came back after unplug and replug (after 01 04 00), and a write from the phone survived the move to the PC; the preamp without 01 04 00 was not tested." },
+    "settings": { "result": "pass", "note": "The DAC page offers FILTER (FAST-LL, FAST-PC, SLOW-LL, SLOW-PC, NON-OS), OUTPUT (CLASS H, CLASS AB), GAIN (LOW, HIGH) and BALANCE (15 steps to either side) with the WalkPlay web tool's frames (captured 27.10.2026, research/trn-settings-walkplay-2026-10-27): each value read back and was kept after an unplug, with no flash save. On a Pixel (28.10.2026) GAIN LOW, OUTPUT CLASS H, FILTER SLOW-PC and BALANCE L 8 were written from the DAC page, read back VERIFIED and read the same after an unplug and replug; at L 8 the right ear was quieter. Released since Contour 1.6.4. The effect of FILTER, OUTPUT and GAIN on the sound was not measured. The mic gain is not a row: the unit ignores the write." },
+    "beyondVendor": "devicePEQ and FreeDSP list SchemeNo16 as PK, LS and HS only; the WalkPlay web tool offers LP and HP on every scheme and the unit stores both as sent (PC), but Contour keeps LP and HP held back until they are measured acoustically.",
+    "runs": ["run:2026-10-21-trn-black-pearl-01", "run:2026-10-21-trn-black-pearl-02", "run:2026-10-25-trn-black-pearl-01-mac-eqtest"]
+  }
+}

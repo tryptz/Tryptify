@@ -1,0 +1,12 @@
+{
+  "pinnedCommit": "0617f382e76629792a5933e6933e4b396a756a93",
+  "source": "https://github.com/jeromeof/devicePEQ",
+  "files": [
+    {
+      "name": "fiio_fiio_ka15.json",
+      "sha256": "240ee8283a9fcdaa300f15eeb8d6cb15a6a50ac4528162080d9d65df9968f93c",
+      "url": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/tests/captures/fiio_fiio_ka15.json"
+    }
+  ],
+  "note": "Byte-identical upstream captures; exchanges can be asynchronous, duplicated, or null wildcard write expectations. No synthetic packets are labelled captures."
+}

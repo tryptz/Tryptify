@@ -1,0 +1,72 @@
+# proof: run 2026-10-24-kiwi-ears-allegro-mini-02-mac, file 01-reset-plan-reset
+# firmware: not read
+# date: 2026-10-24
+# verdict: OK (CLEAR 0x43 sent once, the DAC echoed it, all 14 registers read the same as the backup, DacLab compared them after the DAC returned)
+# contour-bench.jar sha256 281490f0766be70bcb37341251fde942ee893d641b866e00cd68173b434462d3
+# device allegro-mini
+# command reset-plan
+# slot active
+# time 2026-10-24T10:18:05+02:00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 26 00 00 00 52 00 00 00 00 00  # query 0x26 (band 1 gain and frequency)
+RX 4b 26 00 00 00 52 00 00 00 e8 03
+TX 4b 27 00 00 00 52 00 00 00 00 00  # query 0x27 (band 1 Q and type)
+RX 4b 27 00 00 00 52 00 c3 02 00 00
+TX 4b 28 00 00 00 52 00 00 00 00 00  # query 0x28 (band 2 gain and frequency)
+RX 4b 28 00 00 00 52 00 00 00 d0 07
+TX 4b 29 00 00 00 52 00 00 00 00 00  # query 0x29 (band 2 Q and type)
+RX 4b 29 00 00 00 52 00 c3 02 00 00
+TX 4b 2a 00 00 00 52 00 00 00 00 00  # query 0x2a (band 3 gain and frequency)
+RX 4b 2a 00 00 00 52 00 00 00 88 13
+TX 4b 2b 00 00 00 52 00 00 00 00 00  # query 0x2b (band 3 Q and type)
+RX 4b 2b 00 00 00 52 00 c3 02 00 00
+TX 4b 2c 00 00 00 52 00 00 00 00 00  # query 0x2c (band 4 gain and frequency)
+RX 4b 2c 00 00 00 52 00 00 00 40 1f
+TX 4b 2d 00 00 00 52 00 00 00 00 00  # query 0x2d (band 4 Q and type)
+RX 4b 2d 00 00 00 52 00 c3 02 00 00
+TX 4b 2e 00 00 00 52 00 00 00 00 00  # query 0x2e (band 5 gain and frequency)
+RX 4b 2e 00 00 00 52 00 00 00 10 27
+TX 4b 2f 00 00 00 52 00 00 00 00 00  # query 0x2f (band 5 Q and type)
+RX 4b 2f 00 00 00 52 00 c3 02 00 00
+TX 4b 66 00 00 00 52 00 00 00 00 00  # query 0x66 (digital DAC gain)
+RX 4b 66 00 00 00 52 00 00 02 00 00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 01 00 00 00 52 00 00 00 00 00  # query 0x01 (channel flags)
+RX 4b 01 00 00 00 52 00 00 02 00 00
+TX 4b 3b 00 00 00 52 00 00 00 00 00  # query 0x3b (Global Gain)
+RX 4b 3b 00 00 00 52 00 0d 00 00 00
+TX 4b 00 00 00 00 43 00 00 00 00 00  # CLEAR flash (0x43), the vendor's reset: erases the saved EQ; the DAC echoes it with byte 6 = 3 and may restart or leave the bus
+RX 4b 00 00 00 00 43 00 03 00 00 00
+# reconnected after 'CLEAR flash (0x43), the vendor's reset: erases the saved EQ; the DAC echoes it with byte 6 = 3 and may restart or leave the bus': left USB for 1146 ms
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 26 00 00 00 52 00 00 00 00 00  # query 0x26 (band 1 gain and frequency)
+RX 4b 26 00 00 00 52 00 00 00 e8 03
+TX 4b 27 00 00 00 52 00 00 00 00 00  # query 0x27 (band 1 Q and type)
+RX 4b 27 00 00 00 52 00 c3 02 00 00
+TX 4b 28 00 00 00 52 00 00 00 00 00  # query 0x28 (band 2 gain and frequency)
+RX 4b 28 00 00 00 52 00 00 00 d0 07
+TX 4b 29 00 00 00 52 00 00 00 00 00  # query 0x29 (band 2 Q and type)
+RX 4b 29 00 00 00 52 00 c3 02 00 00
+TX 4b 2a 00 00 00 52 00 00 00 00 00  # query 0x2a (band 3 gain and frequency)
+RX 4b 2a 00 00 00 52 00 00 00 88 13
+TX 4b 2b 00 00 00 52 00 00 00 00 00  # query 0x2b (band 3 Q and type)
+RX 4b 2b 00 00 00 52 00 c3 02 00 00
+TX 4b 2c 00 00 00 52 00 00 00 00 00  # query 0x2c (band 4 gain and frequency)
+RX 4b 2c 00 00 00 52 00 00 00 40 1f
+TX 4b 2d 00 00 00 52 00 00 00 00 00  # query 0x2d (band 4 Q and type)
+RX 4b 2d 00 00 00 52 00 c3 02 00 00
+TX 4b 2e 00 00 00 52 00 00 00 00 00  # query 0x2e (band 5 gain and frequency)
+RX 4b 2e 00 00 00 52 00 00 00 10 27
+TX 4b 2f 00 00 00 52 00 00 00 00 00  # query 0x2f (band 5 Q and type)
+RX 4b 2f 00 00 00 52 00 c3 02 00 00
+TX 4b 66 00 00 00 52 00 00 00 00 00  # query 0x66 (digital DAC gain)
+RX 4b 66 00 00 00 52 00 00 02 00 00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # query 0x24 (EQ switch)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 01 00 00 00 52 00 00 00 00 00  # query 0x01 (channel flags)
+RX 4b 01 00 00 00 52 00 00 02 00 00
+TX 4b 3b 00 00 00 52 00 00 00 00 00  # query 0x3b (Global Gain)
+RX 4b 3b 00 00 00 52 00 0d 00 00 00

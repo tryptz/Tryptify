@@ -1,0 +1,229 @@
+{
+  "id": "fiio-jiezi",
+  "name": "FiiO JadeAudio JIEZI",
+  "shortName": "JIEZI",
+  "productName": "JadeAudio JIEZI",
+  "vendor": "FiiO",
+  "status": "stable",
+  "usb": {
+    "vid": "0x2972",
+    "pid": "0x0151",
+    "productName": "JadeAudio JIEZI",
+    "hidInterface": 0,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 15,
+    "notes": [
+      "found by VID, PID and the exact USB product name \"JadeAudio JIEZI\" (findDevice), so the 1.5 list of DeviceTarget.find stays as it was",
+      "identity read from the unit on 13.11.2026: manufacturer string \"FIIO\", bcdDevice 0x0130; one HID interface (0) with one collection: report 0x03 (consumer), report 0x4B (Input and Output 63 data bytes, vendor page 0xFF01: never written by this record) and report 0x07 (Input and Output 63 data bytes), which carries the FiiO frame protocol",
+      "report 7, not 2: devicePEQ (usbDeviceConfig.js:118, entry \"JadeAudio JIEZI\") says report 2, but the descriptor declares no report 2; FiiO's own web app and FreeDSP-Studio (tools/app/src/dsp_fiio.rs, MIT) say 7",
+      "FiiO Control's config for this model (sc_config_default.db, device_type 118, command builder 101, interval 50 ms) equals the SnowSky Tiny A's: 10 bands, all seven filter types (PEAK, both shelves, BAND_PASS, LOW_PASS, HIGH_PASS, ALL_PASS), +-12 dB in 0.1 dB steps, master gain 0x17, presets 0 Jazz to 6 Hip-hop, USER1-3 as 160-162, Close EQ 240, names (0x30), no EQ switch; settings volume (0x02), volume steps (0x0C), balance (0x07), in-line mic (0x12) and USB audio (0x20, read only), sample rate read 0x09, and no light row (the Tiny A has one)",
+      "band count: 10, read from the unit on 13.11.2026 (command 0x18 on Close EQ); devicePEQ's constraint says 5 (wrong for this unit), FiiO Control and the FiiO web app say 10",
+      "measured on the unit 13.11.2026 (Mac): the SnowSky exchange path, shelf Q = register / sqrt2 (the engine chose it 7 of 7 cases; Q = register is 1.51 dB off), peak Q = register, DSP at the stream rate (48 kHz model), preamp register offset 0 (USER presets play at the Close EQ level), preamp -12..+12 dB in whole dB, Q 0.1-10 and all seven types hold. Still the Tiny A's, not measured on this model: names by slot id up to 8 characters, the firmware read 0x0B (not decoded until its reply layout is seen)",
+      "read on the unit 13.11.2026 (GET only): found on Close EQ (slot 240), 10 bands, preamp register 20 on Close EQ, replies carry a sequence byte and a checksum, volume register 0x02 reads 60 (the maximum)",
+      "step 2, Mac, run 2026-11-13-fiio-jiezi-02-mac: report 7 with 64-byte reports, bcdDevice 0x0130 (T01), USER1-3 (T03), 14 edge writes with Q 0.1 and Q 10 read back (T06), all seven types (T07), preamp -12 / -11 / 0 / +12 dB read back in whole dB with register offset 0 (T08), restore (T13); the cold-plug read (T02) was not run",
+      "acoustic, run 2026-11-13-fiio-jiezi-07-mac-eqtest-stepped (stepped method, 6 tones per octave, -12 dBFS, 48 kHz stream): PK mix 0.17 dB, shelf mix 0.02 dB, preamp -6 dB 0.017 dB, LP 8000 Hz 0.08 dB, HP 100 Hz 0.08 dB, BAND_PASS 1000 Hz Q 1.4 0.11 dB (the unit plays BAND_PASS), ALL_PASS 1000 Hz flat (0.004 dB, so it cannot be told from an ignored type, but it is offered like the Tiny A's), repeatability 0.019 dB; eq-off, run 2026-11-13-fiio-jiezi-08-mac-eqoff: a flat USER1 plays -35.874 dBFS against Close EQ -35.876 dBFS at 1 kHz and the band mean is identical, so the register offset 0 is measured; shelf cases with preamp -12 and -9 dB passed at 0.02 and 0.01 dB",
+      "the multitone acoustic method fails on this unit (the USB output drops samples: the engine counted 18 and 84 gaps in two runs; at -12 dBFS with the volume at 60 the fit residual was -7 dBc, at -24 dBFS the signal sits under the unit's noise floor of about -84 dBFS): measure it with the stepped method",
+      "settings, run 2026-11-13-fiio-jiezi-10-mac-settings T14: volume 60 -> 59 -> 60, balance 0 -> 1 -> 0 and in-line mic 1 -> 0 -> 1 were each written, read back and restored (about 1.05 s a write), so those three rows are writeVerified; volume steps was not written (it changes the level) and USB audio is never written",
+      "phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41; screens kept locally, no run id): the DAC page shows the record's rows (volume, volume steps, balance, in-line mic, USB audio read only, 384 kHz); the mic was written 1 -> 0 -> 1 and read back; the USER slot names were read from the unit; an edge profile to USER3 (LS 20 Hz +12 dB, PK 20 kHz -12 dB Q 10, BP 1 kHz, LP 20 kHz, HP 20 Hz, HS 20 kHz -12 dB Q 5 sent as register Q 7.07, preamp -12 dB) was written and read back VERIFIED; the slot name was rewritten (0x30 frames) and read back; after a replug the first slot reply was 9 (the stale boot value this family shows on a cold plug) and the read that follows gave USER3 with the preamp at -12 dB, ON DAC",
+      "never sent to this device: report 0x4B, FiiO command 0x21 (factory reset) and 0x1A (EQ switch)"
+    ]
+  },
+  "family": "fiio",
+  "driver": {
+    "reportId": 7,
+    "saveCommand": 25,
+    "snowskyExchange": true,
+    "disconnectOnSave": false,
+    "peakingGainCompensation": false,
+    "shelfAlphaCompensation": false,
+    "hardwareVerified": true,
+    "capture": null
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [
+      20,
+      20000
+    ],
+    "gainDb": [
+      -12,
+      12
+    ],
+    "q": [
+      0.1,
+      10
+    ],
+    "types": {
+      "PEAK": 0,
+      "LOW_SHELF": 1,
+      "HIGH_SHELF": 2,
+      "BAND_PASS": 3,
+      "LOW_PASS": 4,
+      "HIGH_PASS": 5,
+      "ALL_PASS": 6
+    },
+    "heldTypes": {},
+    "shelfQScale": "sqrt2",
+    "shelfForm": "q",
+    "peakQScale": 1.0,
+    "emulation": null
+  },
+  "preamp": {
+    "present": true,
+    "db": [
+      -12,
+      12
+    ],
+    "step": 0.1,
+    "wholeDb": true,
+    "registerOffsetDb": 0
+  },
+  "slots": {
+    "user": [
+      160,
+      161,
+      162
+    ],
+    "declaredWritable": [
+      160,
+      161,
+      162
+    ],
+    "stock": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "bypass": 240,
+    "labels": {
+      "0": "Jazz",
+      "1": "Pop",
+      "2": "Rock",
+      "3": "Dance",
+      "4": "R&B",
+      "5": "Classic",
+      "6": "Hip-hop",
+      "160": "USER1",
+      "161": "USER2",
+      "162": "USER3",
+      "240": "Close EQ"
+    },
+    "picker": true,
+    "names": "device-by-slot",
+    "nameLength": 8
+  },
+  "pacing": {
+    "writeGapMs": 0,
+    "afterSaveMs": 800,
+    "consumeEchoes": true,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": 50
+  },
+  "readback": {
+    "qSlack": "fiio-1+q/250"
+  },
+  "settings": [
+    {
+      "id": "volume",
+      "section": null,
+      "group": 0,
+      "writeVerified": true
+    },
+    {
+      "id": "volume-steps",
+      "section": null,
+      "group": 0,
+      "writeVerified": false
+    },
+    {
+      "id": "balance",
+      "section": null,
+      "group": 0,
+      "writeVerified": true
+    },
+    {
+      "id": "mic",
+      "section": null,
+      "group": 1,
+      "writeVerified": true
+    },
+    {
+      "id": "uac",
+      "section": null,
+      "group": 1,
+      "writeVerified": false
+    }
+  ],
+  "info": [
+    "rate"
+  ],
+  "preview": {
+    "volume": 60,
+    "volume-steps": 0,
+    "balance": 0,
+    "mic": 0,
+    "uac": 1,
+    "rate": 2
+  },
+  "reset": {
+    "offered": "unknown",
+    "src": "FiiO Control's config for this model was not read for a factory reset; command 0x21 is never sent to it"
+  },
+  "hwVolume": {
+    "inScope": true,
+    "src": "FiiO Control lists the Tiny A's volume items for this model (volume 0x02, volume steps 0x0C, channel balance 0x07); the volume register 0x02 read 60 and was written 60 -> 59 -> 60 and read back on the unit (run 2026-11-13-fiio-jiezi-10-mac-settings)"
+  },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L118",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L1167",
+    "constraintsRef": "peq5Band12dBAllFilters7",
+    "vendorIds": [
+      10610,
+      2578
+    ],
+    "oracle": false,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": [
+      "No capture file: the identity 2972:0151 \"JadeAudio JIEZI\" was read on a unit; devicePEQ says 5 bands and report 2, the descriptor shows report 7 and the unit reads 10 bands (as FiiO Control says); the exchange path, Q scales, preamp offset 0 and all seven types were measured on the unit (runs 2026-11-13-fiio-jiezi-02-mac, -07-mac-eqtest-stepped, -08-mac-eqoff)"
+    ]
+  },
+  "tested": {
+    "date": "2026-11-13",
+    "firmware": "bcdDevice 0x0130 (no firmware command is known)",
+    "contour": "1.7.1-perf (41) on the Nothing A065, wip/devices-batch-2",
+    "rangesAccepted": {
+      "result": "pass",
+      "note": "Mac, run 2026-11-13-fiio-jiezi-02-mac: ten bands read from the unit; 14 edge writes (Q 0.1 and 10 included) read back (T06); all seven types (T07); preamp -12, -11, 0 and +12 dB read back, whole dB, register offset 0 (T08); USER1-3 (T03); restore (T13)."
+    },
+    "acoustic": {
+      "result": "pass",
+      "note": "Run 2026-11-13-fiio-jiezi-07-mac-eqtest-stepped (stepped, -12 dBFS, 48 kHz stream): PK mix 0.17 dB, shelf mix 0.02 dB, preamp -6 dB 0.017 dB, LP 8000 Hz 0.08 dB, HP 100 Hz 0.08 dB, BP 1000 Hz Q 1.4 0.11 dB (BAND_PASS plays), AP flat (0.004 dB), repeatability 0.019 dB. Shelf Q = register / sqrt2 fits 7 of 7 cases (Q = register is 1.51 dB off), the DSP runs at the stream rate. Run -08-mac-eqoff: a flat USER1 plays at the Close EQ level (-35.874 against -35.876 dBFS), so the preamp register offset is 0."
+    },
+    "persistence": {
+      "result": "pass",
+      "note": "Phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41, screens kept locally): the edge profile on USER3 (LS, PK, BP, LP, HP and HS, preamp -12 dB) read back VERIFIED, the slot rename was read back, and after an unplug and replug the cold read (first slot reply 9, the family's stale boot value, then USER3) matched with the preamp at -12 dB, ON DAC; USER1 and USER2 were untouched."
+    },
+    "settings": {
+      "result": "partial",
+      "note": "Mac, run 2026-11-13-fiio-jiezi-10-mac-settings: volume, balance and in-line mic written, read back and restored. Phone check 13.11.2026: the DAC page matches the record and the mic was written 1 -> 0 -> 1 and read back. Volume steps was not written and USB audio is never written."
+    },
+    "beyondVendor": "devicePEQ says 5 bands; the unit reads 10, as FiiO Control and the FiiO web app also list for this model. All seven filter types, including BAND_PASS and ALL_PASS, were written and read back, and BAND_PASS, LOW_PASS and HIGH_PASS were measured to play as drawn (ALL_PASS is flat, like an ignored type).",
+    "runs": [
+      "run:2026-11-13-fiio-jiezi-02-mac",
+      "run:2026-11-13-fiio-jiezi-07-mac-eqtest-stepped",
+      "run:2026-11-13-fiio-jiezi-08-mac-eqoff",
+      "run:2026-11-13-fiio-jiezi-10-mac-settings"
+    ]
+  }
+}

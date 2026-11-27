@@ -1,0 +1,1 @@
+{"bands": [{"type": "LOW_SHELF", "freq": 1000.0, "gain": 3.0, "q": 1.0}, {"type": "PEAK", "freq": 100.0, "gain": 0.0, "q": 1.0}, {"type": "PEAK", "freq": 100.0, "gain": 0.0, "q": 1.0}, {"type": "PEAK", "freq": 100.0, "gain": 0.0, "q": 1.0}, {"type": "PEAK", "freq": 100.0, "gain": 0.0, "q": 1.0}], "preamp": -15.0, "slot": 3}

@@ -1,0 +1,13 @@
+# proof: run 2026-11-11-moondrop-dusk-06-mac, file 21-select-slot1
+# firmware: unknown (no version command is known; bcdDevice 0x0001)
+# date: 2026-11-11
+# verdict: PASS (S2 T13: the cable put back on the preset it was found on, DUSK-Default, by the RAM select alone and read back)
+# contour-bench.jar sha256 74bab5f3f7dc09af1ef8236bdaa81433558534d5495290cf9ecb0b1d2b33fa01
+# device moondrop-dusk
+# command select
+# slot 1
+# time 2026-11-11T16:00:59+01:00
+TX 01 00 0d 00 5a 00 00 23 2d b3 5a 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  # select preset 1 (DUSK-Default)
+RX 01 00 00 00 5a 80 00 23 2d b3 5a 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+TX 01 00 0d 00 5a 01 00 23 2d b3 5a 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  # read active preset
+RX 01 00 0d 00 5a 81 00 23 2d b3 5a 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00

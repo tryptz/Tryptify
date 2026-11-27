@@ -1,0 +1,33 @@
+# NOT a rig log: constructed from the register values read on the JCally JM12 (31B2:0111 "KT02H20 HIFI Audio", firmware string 1.0.1) on 10.11.2026 with READ 0x52 frames only,
+# laid out like a read-plan log so the tests can replay one KT read. EQ switch 0x24 = 02 (off, factory); bands 0x26-0x2F = factory flat, 0 dB at stored 1000, 2000, 5000, 8000 and 10000 Hz,
+# Q 0.707 (0x02C3), type 0; 0x66 = 00 02 00 00; channel flags 0x01 = 00 02 00 00 (one DAC, digital gain 0). Same read order as the Allegro Mini's log.
+# device jm12
+# command read-plan
+TX 4b 24 00 00 00 52 00 03 00 00 00  # read register 0x24 (EQ enable)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 26 00 00 00 52 00 00 00 00 00  # read register 0x26 (band 0 gain and frequency)
+RX 4b 26 00 00 00 52 00 00 00 e8 03
+TX 4b 27 00 00 00 52 00 00 00 00 00  # read register 0x27 (band 0 Q and type)
+RX 4b 27 00 00 00 52 00 c3 02 00 00
+TX 4b 28 00 00 00 52 00 00 00 00 00  # read register 0x28 (band 1 gain and frequency)
+RX 4b 28 00 00 00 52 00 00 00 d0 07
+TX 4b 29 00 00 00 52 00 00 00 00 00  # read register 0x29 (band 1 Q and type)
+RX 4b 29 00 00 00 52 00 c3 02 00 00
+TX 4b 2a 00 00 00 52 00 00 00 00 00  # read register 0x2a (band 2 gain and frequency)
+RX 4b 2a 00 00 00 52 00 00 00 88 13
+TX 4b 2b 00 00 00 52 00 00 00 00 00  # read register 0x2b (band 2 Q and type)
+RX 4b 2b 00 00 00 52 00 c3 02 00 00
+TX 4b 2c 00 00 00 52 00 00 00 00 00  # read register 0x2c (band 3 gain and frequency)
+RX 4b 2c 00 00 00 52 00 00 00 40 1f
+TX 4b 2d 00 00 00 52 00 00 00 00 00  # read register 0x2d (band 3 Q and type)
+RX 4b 2d 00 00 00 52 00 c3 02 00 00
+TX 4b 2e 00 00 00 52 00 00 00 00 00  # read register 0x2e (band 4 gain and frequency)
+RX 4b 2e 00 00 00 52 00 00 00 10 27
+TX 4b 2f 00 00 00 52 00 00 00 00 00  # read register 0x2f (band 4 Q and type)
+RX 4b 2f 00 00 00 52 00 c3 02 00 00
+TX 4b 66 00 00 00 52 00 00 00 00 00  # read register 0x66 (digital DAC gain)
+RX 4b 66 00 00 00 52 00 00 02 00 00
+TX 4b 24 00 00 00 52 00 03 00 00 00  # read register 0x24 (EQ enable)
+RX 4b 24 00 00 00 52 00 02 00 00 00
+TX 4b 01 00 00 00 52 00 00 00 00 00  # read register 0x01 (channel flags)
+RX 4b 01 00 00 00 52 00 00 02 00 00

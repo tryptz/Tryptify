@@ -1,0 +1,1 @@
+{"bands": [{"type": "PK", "freq": 2000, "gain": 0, "q": 0.707}, {"type": "PK", "freq": 4000, "gain": 0, "q": 0.707}, {"type": "PK", "freq": 10000, "gain": 0, "q": 0.707}, {"type": "PK", "freq": 16000, "gain": 0, "q": 0.707}, {"type": "PK", "freq": 20000, "gain": 0, "q": 0.707}], "preamp": 0, "eqEnabled": false}

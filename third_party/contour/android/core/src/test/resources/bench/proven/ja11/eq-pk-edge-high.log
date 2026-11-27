@@ -1,0 +1,38 @@
+# proof: run 2026-11-11-fiio-ja11-03-mac, file 12-plan-slot3
+# firmware: 2.20
+# date: 2026-11-11
+# verdict: PASS (S2 T06: the edge write verified by the read-back after the unit returned from SAVE)
+# contour-bench.jar sha256 960424b9200edc3d9e4faabd686047d7255b936641c48bbb2d46e1937cd0a609
+# device ja11
+# command plan
+# slot 3
+# time 2026-11-11T01:05:36+01:00
+TX 02 bb 0b 00 00 16 00 00 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query active slot
+RX 02 bb 0b 00 00 16 01 03 bd ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 bb 0b 00 00 18 00 00 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query filter count
+RX 02 bb 0b 00 00 18 01 05 94 ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 bb 0b 00 00 17 00 00 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query preamp
+RX 02 bb 0b 00 00 17 02 ff 88 3e ee 00 00 00 00 00 00 00 00 00 00
+TX 02 bb 0b 00 00 15 01 00 00 ee 00 00 00 00 00 00 00 00 00 00 00  # query band 0
+RX 02 bb 0b 00 00 15 08 00 00 78 00 14 00 0a 00 24 ee 00 00 00 00
+TX 02 bb 0b 00 00 15 01 01 00 ee 00 00 00 00 00 00 00 00 00 00 00  # query band 1
+RX 02 bb 0b 00 00 15 08 01 00 00 00 64 00 64 00 70 ee 00 00 00 00
+TX 02 bb 0b 00 00 15 01 02 00 ee 00 00 00 00 00 00 00 00 00 00 00  # query band 2
+RX 02 bb 0b 00 00 15 08 02 00 00 00 64 00 64 00 b5 ee 00 00 00 00
+TX 02 bb 0b 00 00 15 01 03 00 ee 00 00 00 00 00 00 00 00 00 00 00  # query band 3
+RX 02 bb 0b 00 00 15 08 03 00 00 00 64 00 64 00 f6 ee 00 00 00 00
+TX 02 bb 0b 00 00 15 01 04 00 ee 00 00 00 00 00 00 00 00 00 00 00  # query band 4
+RX 02 bb 0b 00 00 15 08 04 00 00 00 64 00 64 00 26 ee 00 00 00 00
+TX 02 bb 0b 00 00 16 00 00 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query active slot
+RX 02 bb 0b 00 00 16 01 03 bd ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 bb 0b 00 00 16 00 00 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query active slot
+RX 02 bb 0b 00 00 16 01 03 bd ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 aa 0a 00 00 17 02 00 00 00 ee 00 00 00 00 00 00 00 00 00 00  # write preamp register 0 (0.0 dB intended)
+TX 02 aa 0a 00 00 18 01 05 00 ee 00 00 00 00 00 00 00 00 00 00 00  # write filter count 5
+TX 02 aa 0a 00 00 15 08 00 ff 88 4e 20 03 e8 00 00 ee 00 00 00 00  # write band 0: PEAK 20000 Hz, gain -12.0 dB, Q register 1000
+TX 02 aa 0a 00 00 15 08 01 00 00 00 64 00 64 00 00 ee 00 00 00 00  # write band 1: PEAK 100 Hz, gain 0.0 dB, Q register 100
+TX 02 aa 0a 00 00 15 08 02 00 00 00 64 00 64 00 00 ee 00 00 00 00  # write band 2: PEAK 100 Hz, gain 0.0 dB, Q register 100
+TX 02 aa 0a 00 00 15 08 03 00 00 00 64 00 64 00 00 ee 00 00 00 00  # write band 3: PEAK 100 Hz, gain 0.0 dB, Q register 100
+TX 02 aa 0a 00 00 15 08 04 00 00 00 64 00 64 00 00 ee 00 00 00 00  # write band 4: PEAK 100 Hz, gain 0.0 dB, Q register 100
+TX 02 aa 0a 00 00 19 01 03 00 ee 00 00 00 00 00 00 00 00 00 00 00  # save USER1 (slot 3): the DAC drops off the USB bus (reconnect, then read it again)
+# reconnected after 'save USER1 (slot 3): the DAC drops off the USB bus (reconnect, then read it again)': left USB for 2176 ms

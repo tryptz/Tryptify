@@ -1,0 +1,144 @@
+{
+  "id": "kiwi-ears-ad1",
+  "name": "Kiwi Ears AD1",
+  "shortName": "AD1",
+  "productName": "AD1",
+  "vendor": "Kiwi Ears",
+  "status": "stable",
+  "family": "ktmicro",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0x20E3",
+    "productName": "AD1",
+    "hidInterface": 3,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 16,
+    "notes": [
+      "found by VID, PID and the exact USB product name \"AD1\" (findDevice): VID 0x3302 is the WalkPlay vendor id, but this unit speaks the KT Micro register protocol, not WalkPlay's (devicePEQ's WalkPlay scheme table lists PID 0x20E3 under SchemeNo17, which does not describe this unit)",
+      "identity read from the unit on 13.11.2026 (read only): manufacturer string \"Kiwi Ears\", bcdDevice 0x0001; HID interface 3, one collection on the consumer page 0x0C: report 0x01 (consumer), 0x4B (Input and Output 10 data bytes, vendor page 0xFF01) and 0x54 (Input and Output 10 bytes: never sent)",
+      "the KT register reads (op 0x52) were answered exactly like the JCally JM12's: 0x04 firmware string \"1.0.\" (cut at 4 bytes), 0x08 and 0x0C build date text, 0x48 product text \"AD1\", 0x01 = 00 02 00 00, EQ switch 0x24 = 02 (OFF), bands 0x26-0x2F: five PEAK bands at 0 dB, 1000 / 2000 / 5000 / 8000 / 10000 Hz, Q 0.707 (register 0x02C3), the copy at 0x18-0x23 identical, Global Gain 0x3B = 13 (0 dB on the Allegro Mini / JM12 table), register 0x66 = 00 02",
+      "catalog sources: devicePEQ's usbDeviceConfig.js lists PID 0x20E3 in its WalkPlay \"SchemeNo17\" group (line 724, https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L724; walkplayPeq5Band10dBFullShelves: 5 bands, +-10 dB, shelves) and FreeDSP-Studio's tools/app/src/dsp2.rs lists it in `Scheme { no: 17, bands: 5, gain: 10.0, types: SHELVES }` (line 158); neither has a handler for this model. WalkPlay's catalog therefore calls this KT-chip dongle scheme 17, but the unit answers KT Micro register frames on 10-byte reports (not WalkPlay's 63-byte ones), so Contour drives it with the KT path; no source describes the model itself",
+      "the whole record below is the JM12's (same register protocol, same register reads answered) and every value in it that no read of the unit supports is a starting assumption to measure at step 2",
+      "measured on the unit 13.11.2026 (Mac, jar dd97ba64): the unit leaves the USB bus for 0.75-0.97 s after every write (reconnectAfterSave true confirmed); Global Gain 13 -> 12 -> 13 was written, read back and restored (5.6 s a write, the unit left the bus twice); shelf Q register = intended Q (scale 1.0, 0.37 dB for shelves of +-6 dB; register / sqrt2 1.16 dB, register x sqrt2 1.47 dB, the slope form 1.16 dB off); the DSP designs at 24 kHz and the stream is 48 kHz as on the JM12. Still the JM12's, not measured on this unit: the EQ switch status bytes and a send that turns the EQ switch ON (the EQ switch was not written), Global Gain 13 = 0 dB in 1.5 dB steps, register 0x66 is not a preamp, no CLEAR (0x43)",
+      "ranges narrowed to what plays, as the JM12's (owner decision 10.11.2026 \"only what was measured\"), measured on this unit in run 2026-11-13-kiwi-ears-ad1-03-mac-max (stepped, 6 points per octave, -24 dBFS, 48 kHz stream): peaks +-12 dB with Q 0.2-10 (PK Q 0.2 -6 dB within 0.31 dB, PK +9 dB Q 1 and -12 dB Q 10 within 0.50 dB at 6.3 kHz; PK Q 0.1 -6 dB was 0.98 dB off, so Q 0.1 is not offered, peq.q 0.2-10); shelves +-6 dB with Q 0.7-1.0 (shelves of +-6 dB at Q 1.0 and 0.71 within 0.37 dB below 15 kHz; shelves of +9 and -12 dB at Q 0.71 were about 1.0 dB off under every Q convention, so a shelf is limited to +-6 dB, peq.shelfGainDb, and Q 0.7-1.0, peq.shelfQ); five bands within 0.47 dB at 6.3 kHz; repeatability 0.04 dB. The quick run 2026-11-13-kiwi-ears-ad1-02-mac-eqtest passed the PK mix (0.26 dB, repeatability 0.012 dB) and left the shelf mix unclear (HS 8000 Hz -6 dB Q 1 dropped too far above 8 kHz). Register frequency from 10 Hz (intended 20-20000 Hz) held at the edges",
+      "step 2, Mac, run 2026-11-13-kiwi-ears-ad1-01-mac: report 4B with 11-byte reports including the ID, bcdDevice 0x0001 (T01); 6 edge writes including +-12 dB shelves, Q 0.1 and 10 and register 10 Hz read back (T06); PK, LS and HS written and read back (T07); Global Gain restored (T14); state restored (T13); the cold-plug read (T02) was not run. The rig's multitone method fails on this unit: the engine counted 18 gaps and flagged distortion (sample drops on its USB output); measure it with the stepped method",
+      "phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41; screens kept locally, no run id): the cold read showed the factory state (EQ OFF, Global Gain 13); an edge profile inside the narrowed limits (PK 20 Hz +12 dB Q 0.2, PK 20 kHz -12 dB Q 10, LS 100 Hz +6 dB Q 0.7, HS 10 kHz -6 dB Q 1.0, PK 1 kHz -3 dB) was sent: the SAVE re-enumerated the unit, Android asked for the USB permission again (as with the JM12 on this phone), and the read after the reconnect was VERIFIED; the send turned the EQ switch ON; after a replug the cold read still showed EQ ON; the EQ switch OFF from the DAC page was written and read back VERIFIED. Each SAVE needs the permission dialog on this phone",
+      "never sent to this device: report 0x54, KT register 0x66 writes, CLEAR (0x43)"
+    ]
+  },
+  "driver": {
+    "reportId": 75,
+    "payloadBytes": 10,
+    "readOp": "0x52",
+    "writeOp": "0x57",
+    "bandRegisters": {
+      "base": "0x26",
+      "perBand": 2,
+      "layout": [
+        "gainFrequency",
+        "qType"
+      ]
+    },
+    "writeAck": 3,
+    "eqEnableRegister": "0x24",
+    "eqEnableOn": 3,
+    "eqEnableOff": 2,
+    "saveCommand": "0x53",
+    "digitalGainRegister": "0x66",
+    "globalGainRegister": "0x3B",
+    "reconnectAfterSave": true,
+    "eqEnableStatusBytes": true,
+    "sendTurnsEqOn": true
+  },
+  "peq": {
+    "bands": 5,
+    "freqHz": [
+      10,
+      20000
+    ],
+    "designRateHz": 24000,
+    "assumedStreamHz": 48000,
+    "gainDb": [
+      -12,
+      12
+    ],
+    "q": [
+      0.2,
+      10
+    ],
+    "types": {
+      "PEAK": 0,
+      "LOW_SHELF": 3,
+      "HIGH_SHELF": 4
+    },
+    "heldTypes": {},
+    "shelfQScale": 1,
+    "shelfForm": "q",
+    "shelfGainDb": [
+      -6,
+      6
+    ],
+    "shelfQ": [
+      0.7,
+      1.0
+    ]
+  },
+  "preamp": {
+    "present": false,
+    "globalGain": {
+      "register": "0x3B",
+      "steps": 16,
+      "rangeDb": [
+        -18,
+        3
+      ],
+      "stepDb": 1.5,
+      "defaultStep": 13,
+      "defaultDb": 0,
+      "userSteps": [
+        1,
+        15
+      ]
+    }
+  },
+  "slots": {
+    "user": [
+      "Custom"
+    ],
+    "bypass": "EQ switch, register 0x24 (2 = off)",
+    "picker": false,
+    "names": "none"
+  },
+  "reset": {
+    "offered": false
+  },
+  "tested": {
+    "date": "2026-11-13",
+    "firmware": "1.0.x (register 0x04 string, read 13.11.2026)",
+    "contour": "1.7.1-perf (41) on the Nothing A065, wip/devices-batch-2",
+    "rangesAccepted": {
+      "result": "pass",
+      "note": "Mac, run 2026-11-13-kiwi-ears-ad1-01-mac: six edge writes (+-12 dB peaks and shelves, Q 0.1 and 10, register 10 Hz) read back (T06); PK, LS and HS (T07); the unit leaves the bus 0.75-0.97 s after each write and the read after it matches. The record offers the part that also plays as drawn: peaks Q 0.2-10, shelves +-6 dB at Q 0.7-1.0."
+    },
+    "acoustic": {
+      "result": "partial",
+      "note": "Runs 2026-11-13-kiwi-ears-ad1-02-mac-eqtest (multitone; PK mix 0.26 dB, repeatability 0.012 dB) and -03-mac-max (stepped, -24 dBFS): PK Q 0.2 within 0.31 dB, PK +9 dB Q 1 and -12 dB Q 10 within 0.50 dB, shelves of +-6 dB at Q 1.0 and 0.71 within 0.37 dB below 15 kHz with shelf Q = register, five bands within 0.47 dB, repeatability 0.04 dB. PK at Q 0.1 (0.98 dB) and shelves of +9 and -12 dB (about 1.0 dB under every convention) were measured and are not offered."
+    },
+    "persistence": {
+      "result": "pass",
+      "note": "Phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41, screens kept locally): after the SAVE and the unit's return the read-back was VERIFIED, and after an unplug and replug the cold read still showed the profile with the EQ ON, ON DAC."
+    },
+    "settings": {
+      "result": "pass",
+      "note": "Global Gain 13 -> 12 -> 13 written, saved, read back after the unit's return and restored (Mac, run 2026-11-13-kiwi-ears-ad1-01-mac T14, 5.6 s a write). The EQ switch OFF was written from the DAC page on a phone and read back VERIFIED (phone check 13.11.2026)."
+    },
+    "beyondVendor": "Kiwi Ears' web equalizer (https://equalizer.kiwiears.com/, bundle read 14.11.2026) lists the AD1 (VID 0x3302, PID 0x20E3, KT-0211L, KTDeviceManager, the same chip entry as the Allegro Mini) with Save to flash; which filter types it offers on a connected AD1 was not checked. The AD1 plays low and high shelves too, within +-6 dB at Q 0.7-1.0, as the JM12 does, and Contour offers Global Gain (13 = 0 dB, 1.5 dB steps).",
+    "runs": [
+      "run:2026-11-13-kiwi-ears-ad1-01-mac",
+      "run:2026-11-13-kiwi-ears-ad1-02-mac-eqtest",
+      "run:2026-11-13-kiwi-ears-ad1-03-mac-max"
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+# proof: run 2026-11-11-fiio-ja11-03-mac, file 85-setting-plan-volume-59
+# firmware: 2.20
+# date: 2026-11-11
+# verdict: PASS (S2 T14: volume 60 to 59 written, read back as 59, no USB drop)
+# setting volume
+# value 59
+# contour-bench.jar sha256 960424b9200edc3d9e4faabd686047d7255b936641c48bbb2d46e1937cd0a609
+# device ja11
+# command setting-plan
+# slot active
+# time 2026-11-11T01:08:34+01:00
+TX 02 bb 0b 00 00 02 00 1e ee 00 00 00 00 00 00 00 00 00 00 00 00  # query VOLUME (0x02)
+RX 02 bb 0b 00 00 02 01 3c 96 ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 aa 0a 00 00 02 01 3b 29 ee 00 00 00 00 00 00 00 00 00 00 00  # set VOLUME (0x02): data 3b
+TX 02 bb 0b 00 01 02 00 b5 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query VOLUME (0x02)
+RX 02 bb 0b 00 01 02 01 3b 9a ee 00 00 00 00 00 00 00 00 00 00 00

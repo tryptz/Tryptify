@@ -1,0 +1,15 @@
+Contour
+Copyright 2026 Chronosaur
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes the WalkPlay HID PEQ protocol and the biquad coefficient maths ported from
+devicePEQ (https://github.com/jeromeof/devicePEQ), commit 0617f382e76629792a5933e6933e4b396a756a93,
+Copyright 2024 Jerome O'Flaherty, licensed under the 0BSD licence
+(research/protocol/devicepeq-ref/LICENSE-devicePEQ.txt).
+
+The app contains libraries from Android Jetpack (AndroidX) and Kotlin, licensed under the Apache License,
+Version 2.0. The full list is in THIRD_PARTY_NOTICES.md.
+
+CrinEar, Protocol Micro, WalkPlay, Moondrop and all other product names are trademarks of their owners. Contour is
+unofficial and not affiliated with or endorsed by any of them.

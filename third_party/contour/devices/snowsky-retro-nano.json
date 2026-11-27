@@ -1,0 +1,199 @@
+{
+  "id": "snowsky-retro-nano",
+  "name": "SnowSky RETRO NANO",
+  "shortName": "Retro Nano",
+  "productName": "RETRO NANO",
+  "vendor": "SnowSky",
+  "status": "stable",
+  "usb": {
+    "vid": "0x0A12",
+    "pid": "0x4007",
+    "productName": "RETRO NANO",
+    "hidInterface": 3,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 14,
+    "notes": [
+      "found by VID, PID and the exact USB product name \"RETRO NANO\" (findDevice): VID 0x0A12 is a generic Bluetooth-chip vendor id, not FiiO's 0x2972, so the name is what makes it this unit; devicePEQ's FiiO vendor ids already include 0x0A12 (2578)",
+      "identity read from the unit on 13.11.2026: manufacturer string \"FiiO\", bcdDevice 0x1970; HID interface 3 on vendor page 0xFF00 holds the FiiO frame protocol on report 0x07 (Output 65 data bytes, Input 65), plus reports 0x01 and 0x05 (Output 65), 0x02 (Input 65), 0x06 (Input 13) and Feature 3 and 4, which Contour never uses; interface 2 holds a consumer collection and report 0x02 (64 bytes) on page 0xFFA0, also unused",
+      "devicePEQ (usbDeviceConfig.js:587, entry \"RETRO NANO\"): report 7, 10 bands, +-12 dB (peq10Band12dBAllFilters7: PEAK, both shelves, BAND_PASS, LOW_PASS, HIGH_PASS, ALL_PASS), USER slots 160-162, disconnectOnSave false, Close EQ is slot 11 (not 240), stock voicings 0-6, 8 Retro, 9 sDamp-1 and 10 sDamp-2; FreeDSP-Studio (tools/app/src/dsp_fiio.rs, MIT) lists the same table, offers PK, LS, HS, LP and HP and marks it tested on hardware (its default Q scales 1.0, preamp offset 0 and 0.1 dB step were not measured against Close EQ)",
+      "FiiO Control's config for this model (sc_config_default.db, device_type 38, command builder 2) is the Bluetooth one (16-bit command ids, connect mode 2): it confirms 10 bands, all seven filter types, +-12 dB in 0.1 dB steps, an EQ switch, USER1-3 and the voicings above, and lists no USB HID setting rows, so the record has no DAC Settings",
+      "acoustic result, 13.11.2026 (dac-lab run 2026-11-13-snowsky-retro-nano-10-mac-eqtest-stepped, stepped method, 48 kHz stream, USER1): repeatability 0.009 dB; PK mix (100 Hz Q 0.7 +5, 1 kHz Q 2 -6, 6 kHz Q 5 +5) within 0.27 dB; preamp -6 dB within 0.009 dB (register offset 0: USER presets play at the Close EQ level, unlike the Melody and the JA11); HP 100 Hz within 0.09 dB; shelf mix (LS 100 Hz +5, HS 8000 Hz -6) within 0.08 dB with shelf Q = register (scale 1.0; register / sqrt2 is 1.44 dB off); LP 8000 Hz Q 0.71 is 14 dB off against a 48 kHz model above 10 kHz and fits within 0.04 dB with the DSP designing its biquads at 96 kHz (192 kHz 1.8 dB, 384 kHz 2.2 dB); peaks play Q = register; confirmed against the corrected record (shelf Q scale 1.0, bench jar 45444ce6, run 2026-11-13-snowsky-retro-nano-11-mac-eqtest-stepped): PK mix 0.12 dB, shelves 0.08 dB, preamp -6 dB 0.007 dB, LP 8000 Hz 0.04 dB, HP 100 Hz 0.09 dB, repeatability 0.005 dB, and the engine's model picked the q shelf form at a 96 kHz DSP by itself; eq-off, run 2026-11-13-snowsky-retro-nano-12-mac-eqoff: a flat USER1 plays -30.331 dBFS against Close EQ (slot 11) -30.332 dBFS, so the preamp register offset 0 is measured, and shelf cases with preamp -12 and -9 dB passed at 0.09 dB",
+      "BAND_PASS (BP 1000 Hz Q 1.4) plays flat (0.00 dB everywhere, a band pass would give -34..0 dB): the unit ignores it, so it is not offered; ALL_PASS (1000 Hz) is flat in amplitude (0.004 dB), which cannot be told from an ignored type, so it is not offered either",
+      "DSP rate: the unit designs its biquads at 96 kHz whatever the stream; the app draws every curve at 96 kHz (Dsp.FS), so no extra record field is needed",
+      "the multitone acoustic method fails on this unit because its USB output drops about one sample every 10 s (a click); measure it with the stepped method",
+      "the write path is the plain FiiO one (not the SnowSky exchange): slots 8 and 9 are real voicings here, which the SnowSky path reads as a stale slot register; pacing is FreeDSP-Studio's 150 ms between writes (no echo read, no checksum), names are kept in the app, and the unit is expected to take a plain paced write like FreeDSP-Studio's",
+      "measured on the unit 13.11.2026 (Mac, read only; HID probe and contour-bench read-plan): found on Close EQ (slot query 0x16 answers 11), the filter count 0x18 answers 10, and the preamp query 0x17 answers ONCE, after about 6 ms, with a frame whose command is 0x18 (one data byte, 0: `bb 0b 00 00 18 01 00 00 ee`), not a 0x17 reply; nothing else follows within 1 s. On Close EQ the unit reports \"no EQ\" instead of a gain. `driver.bypassPreampAnswersAsCount` makes the app and the bench read that one frame, on the bypass slot only, as no EQ active (preamp register 0, no band queries); every other slot still needs a real 0x17 reply, and the band reads on Close EQ were not tried",
+      "a read on Close EQ sends slot (0x16), count (0x18), preamp (0x17) and a closing slot query (0x16); the USER slots are read by selecting each one (select 0x16 with 160-162, then slot, count, preamp, ten bands and slot) and the bench's select puts the unit back on slot 11, as for the KA15 (slot 10) and the Tiny A (240): the plain FiiO path does that, the SnowSky exchange path does not fit this unit because it reads slot values 7-9 as a stale last-band index and slots 8 and 9 are real voicings here",
+      "Q range measured 13.11.2026 (dac-lab runs 2026-11-13-snowsky-retro-nano-03-mac T06 and -04-mac-qprobe): a PEAK band holds Q 0.25, 0.3, 7 and 8; Q 0.1, 0.15, 0.2, 9, 9.5 and 10 are refused and read back as 0.71 (the unit's default). Same as FiiO Control's 0.25-8. Frequency 20 and 20000 Hz and gain -12/+12 dB held; all seven types and preamp -12/-11/0/+12 dB (whole dB, register offset 0) held.",
+      "transport on the phone (Nothing A065, 13.11.2026): in PC mode the unit keeps the identity 0A12:4007 \"RETRO NANO\"; interface 3 has one interrupt IN endpoint (0x89, 64 bytes) and no OUT endpoint, while report 7 is 66 bytes with the ID, so the report arrives as several packets of one transfer. The transport takes the only interrupt IN endpoint when none is as big as the report, asks for the whole report, and sends by SET_REPORT; the first read then took 72 ms on slot 11. Android asks for the USB permission again after the replug",
+      "phone check 13.11.2026 (perf APK 1.7.1 / 41; screens kept locally, no run id): read on Close EQ (slot 11, preamp 0 dB); an edge profile to USER1 (LS 20 Hz +12 dB Q 0.25, PK 20 kHz -12 dB Q 8, LP 20 kHz, HP 20 Hz, HS 20 kHz -12 dB Q 5 sent as register Q 5.00, preamp -12 dB) was written and read back VERIFIED; after a replug the cold read gave slot 160 with preamp -12 dB, ON DAC; the app offers PEAK, both shelves, LP and HP, USER1-3 and no settings page",
+      "never sent to this device: report 0x01, 0x05, 0x06 and 0x02 writes, Feature reports, FiiO commands 0x21 (factory reset), 0x1A (EQ switch) and 0x30 (names)"
+    ]
+  },
+  "family": "fiio",
+  "driver": {
+    "reportId": 7,
+    "saveCommand": 25,
+    "snowskyExchange": false,
+    "bypassPreampAnswersAsCount": true,
+    "disconnectOnSave": false,
+    "peakingGainCompensation": false,
+    "shelfAlphaCompensation": false,
+    "hardwareVerified": true,
+    "capture": null
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [
+      20,
+      20000
+    ],
+    "gainDb": [
+      -12,
+      12
+    ],
+    "q": [
+      0.25,
+      8
+    ],
+    "types": {
+      "PEAK": 0,
+      "LOW_SHELF": 1,
+      "HIGH_SHELF": 2,
+      "LOW_PASS": 4,
+      "HIGH_PASS": 5
+    },
+    "heldTypes": {},
+    "shelfQScale": 1.0,
+    "shelfForm": "q",
+    "peakQScale": 1.0,
+    "emulation": null
+  },
+  "preamp": {
+    "present": true,
+    "db": [
+      -12,
+      12
+    ],
+    "step": 0.1,
+    "wholeDb": true,
+    "registerOffsetDb": 0
+  },
+  "slots": {
+    "user": [
+      160,
+      161,
+      162
+    ],
+    "declaredWritable": [
+      160,
+      161,
+      162
+    ],
+    "stock": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      8,
+      9,
+      10
+    ],
+    "bypass": 11,
+    "labels": {
+      "0": "Jazz",
+      "1": "Pop",
+      "2": "Rock",
+      "3": "Dance",
+      "4": "R&B",
+      "5": "Classic",
+      "6": "Hip-hop",
+      "8": "Retro",
+      "9": "sDamp-1",
+      "10": "sDamp-2",
+      "160": "USER1",
+      "161": "USER2",
+      "162": "USER3",
+      "11": "Close EQ"
+    },
+    "picker": true,
+    "names": "app",
+    "nameLength": 7
+  },
+  "pacing": {
+    "writeGapMs": 150,
+    "afterSaveMs": 800,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": 100
+  },
+  "readback": {
+    "qSlack": "fiio-1+q/250"
+  },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": {
+    "offered": "unknown",
+    "src": "FiiO Control's Bluetooth config for this model was not read for a factory reset; command 0x21 is never sent to it"
+  },
+  "hwVolume": {
+    "inScope": "unknown",
+    "src": "FiiO Control's config for this model has Bluetooth volume items only; no USB HID volume command is known"
+  },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L587",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L1029",
+    "constraintsRef": "peq10Band12dBAllFilters7",
+    "vendorIds": [
+      10610,
+      2578
+    ],
+    "oracle": false,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": [
+      "No capture file: the identity 0A12:4007 \"RETRO NANO\" was read on a unit; PK, LS, HS, LP and HP, the shelf and peak Q convention (Q = register), the 96 kHz DSP design and the preamp (register offset 0) were measured on it (runs 2026-11-13-snowsky-retro-nano-03-mac, -04-mac-qprobe and -10-mac-eqtest-stepped); BAND_PASS plays flat and ALL_PASS cannot be told from an ignored type, so devicePEQ's two extra types are not offered"
+    ]
+  },
+  "tested": {
+    "date": "2026-11-13",
+    "firmware": "bcdDevice 0x1970 (no firmware command is known)",
+    "contour": "1.7.1-perf (41) on the Nothing A065, wip/devices-batch-2",
+    "rangesAccepted": {
+      "result": "pass",
+      "note": "Mac: frequency 20 and 20000 Hz and gain -12 / +12 dB held at the edges; a PEAK band holds Q 0.25-8 (0.1-0.2 and 9-10 are refused and read back as 0.71, run 2026-11-13-snowsky-retro-nano-04-mac-qprobe); all seven types were written and read back (T07), the record offers the five that play; preamp -12, -11, 0 and +12 dB held (whole dB, register offset 0, T08)."
+    },
+    "acoustic": {
+      "result": "pass",
+      "note": "Runs 2026-11-13-snowsky-retro-nano-10-mac-eqtest-stepped and -11-mac-eqtest-stepped (stepped method, 48 kHz stream, USER1; -11 against the corrected record, bench jar 45444ce6): PK mix 0.12 dB, shelf mix 0.08 dB with Q = register, preamp -6 dB 0.007 dB, LP 8000 Hz 0.04 dB with the DSP at 96 kHz, HP 100 Hz 0.09 dB, repeatability 0.005 dB; the engine's model chose shelf q at 96 kHz by itself. Run -12-mac-eqoff: a flat USER1 plays at the Close EQ level (-30.331 against -30.332 dBFS), register offset 0 measured, shelf cases with preamp -12 and -9 dB within 0.09 dB. BP plays flat and AP is indistinguishable from an ignored type, so neither is offered."
+    },
+    "persistence": {
+      "result": "pass",
+      "note": "Phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41, screens kept locally): the edge profile written to USER1 read back VERIFIED; after an unplug and replug (Android USB permission asked again) the cold read gave slot 160 with the preamp at -12 dB, ON DAC. The report is 66 bytes on a 64-byte interrupt IN endpoint with no OUT endpoint: the transport reads the multi-packet report and writes by SET_REPORT."
+    },
+    "settings": {
+      "result": "not-run",
+      "note": "No DAC Settings rows: the unit answers none of the FiiO settings reads over USB HID. Run:2026-11-13-snowsky-retro-nano-13-mac-settings-read. PC mode: Contour's GET frames (bb 0b 00 SEQ cmd 00 CRC ee) and the plain form (sequence and CRC 0) for volume 0x02, volume steps 0x0C, balance 0x07, mic 0x12, light 0x06, USB audio 0x20, filter 0x03, gain 0x04, output 0x05, DRE 0x32, buttons 0x0D, brightness 0x0E, screen off 0x0F, rotation 0x10, language 0x11, sample rate 0x09 and firmware 0x0B got no reply within 1 s, while slot 0x16, count 0x18 and preamp 0x17 answered in 6 ms. PH mode: the GET frames with sequence and CRC for 0x02, 0x0C, 0x07, 0x12, 0x06, 0x20, 0x03, 0x04, 0x05, 0x32, 0x0D, 0x09 and 0x0B got no reply either, while 0x16 and 0x18 answered. In the BT mode the unit leaves the USB bus. FiiO Control configures this model over Bluetooth (16-bit command ids) and lists no USB HID setting; no frames are guessed."
+    },
+    "beyondVendor": "FiiO Control's Bluetooth config for this model lists all seven filter types and Q 0.25-8; the unit plays PEAK, both shelves, LOW_PASS and HIGH_PASS, ignores BAND_PASS and cannot be shown to play ALL_PASS. Contour offers the five that play and USER1-3 with names kept in the app.",
+    "runs": [
+      "run:2026-11-13-snowsky-retro-nano-02-mac",
+      "run:2026-11-13-snowsky-retro-nano-03-mac",
+      "run:2026-11-13-snowsky-retro-nano-04-mac-qprobe",
+      "run:2026-11-13-snowsky-retro-nano-10-mac-eqtest-stepped",
+      "run:2026-11-13-snowsky-retro-nano-11-mac-eqtest-stepped",
+      "run:2026-11-13-snowsky-retro-nano-12-mac-eqoff",
+      "run:2026-11-13-snowsky-retro-nano-13-mac-settings-read"
+    ]
+  }
+}

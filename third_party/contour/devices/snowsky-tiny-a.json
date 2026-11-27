@@ -1,0 +1,101 @@
+{
+  "id": "snowsky-tiny-a",
+  "name": "SnowSky Tiny A",
+  "shortName": "Tiny A",
+  "productName": "SNOWSKY TINY A",
+  "vendor": "SnowSky",
+  "status": "stable",
+  "usb": {
+    "vid": "0x2972",
+    "pid": "0x0147",
+    "productName": "SNOWSKY TINY A",
+    "hidInterface": 0,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 7,
+    "notes": [
+      "USB product id measured on the unit 13.10.2026 (core/native/FiioCatalog.kt:126-128)",
+      "no capture fixture: routed by the product id alone (core/native/FiioCatalog.kt:287, core/DeviceTarget.kt:158); DeviceCapabilities therefore carry vid/pid 0 today (core/DeviceTarget.kt:28-32)",
+      "bcdDevice 1.10 on the PC probe 13.10.2026 and on the 14.10.2026 captures; FiiO Control and the vendor firmware command 0x0B read V1.2.0 on 17.10.2026 (core/native/DacSettings.kt:195 preview fw 10200); the current firmware is not confirmed",
+      "one HID collection (interface 0), report 7, usage page 0x0C (advbeta-reddit-astra@39c16e3:research/tiny-a-pc-2026-10-13/FINDINGS.md:3; research/protocol/PROTOCOL.md:265)",
+      "behaves like the Melody (same firmware family): every write except SAVE echoes in 4-11 ms, SAVE has no AA echo, the slot query goes stale on a USER slot (advbeta-reddit-astra@39c16e3:research/tiny-a-pc-2026-10-13/FINDINGS.md:7-13); this is the snowskyExchange path (core/native/FiioCatalog.kt:83-85)",
+      "cold plug with a USER slot playing: the first slot reply is a boot value 00 and after the band reads it says 09; fixed in Contour 1.5.1 (research/snowsky-names-types-2026-10-14/FINDINGS.md:7-12)",
+      "reading an inactive USER slot is not possible: the slot byte of a band query is ignored; Contour scans the USER slots by selecting them (research/snowsky-names-types-2026-10-14/FINDINGS.md:34-39)",
+      "FiiO Control config has no filter, DRE or gain item for the Tiny A (scope-fiio.md:193-194,207)",
+      "Q 0.1-10 is the code's range; FiiO Control and the FiiO web app list 0.25-8 (kept as is)",
+      "preamp register offset 0, measured 13.11.2026 (run 2026-11-13-snowsky-tiny-a-08-mac-eqoff, -24 dBFS): a flat USER1 with register 0 plays +0.004 dB against Close EQ (slot 240), the two Close EQ sweeps agree within 0.0008 dB; unlike the Melody and the JA11, USER presets play at the Close EQ level"
+    ]
+  },
+  "family": "fiio",
+  "driver": {
+    "reportId": 7,
+    "saveCommand": 25,
+    "snowskyExchange": true,
+    "disconnectOnSave": false,
+    "peakingGainCompensation": false,
+    "shelfAlphaCompensation": false,
+    "hardwareVerified": true,
+    "capture": null
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-12, 12],
+    "q": [0.1, 10],
+    "types": { "PEAK": 0, "LOW_SHELF": 1, "HIGH_SHELF": 2, "BAND_PASS": 3, "LOW_PASS": 4, "HIGH_PASS": 5, "ALL_PASS": 6 },
+    "heldTypes": {},
+    "shelfQScale": "sqrt2",
+    "shelfForm": "q",
+    "peakQScale": 1.0,
+    "emulation": null
+  },
+  "preamp": { "present": true, "db": [-12, 12], "step": 0.1, "wholeDb": true, "registerOffsetDb": 0 },
+  "slots": {
+    "user": [160, 161, 162],
+    "declaredWritable": [160, 161, 162],
+    "stock": [0, 1, 2, 3, 4, 5, 6],
+    "bypass": 240,
+    "labels": { "0": "Jazz", "1": "Pop", "2": "Rock", "3": "Dance", "4": "R&B", "5": "Classic", "6": "Hip-hop", "160": "USER1", "161": "USER2", "162": "USER3", "240": "Close EQ" },
+    "picker": true,
+    "names": "device-by-slot",
+    "nameLength": 8
+  },
+  "pacing": { "writeGapMs": 0, "afterSaveMs": 800, "consumeEchoes": true, "checksum": false, "needsAudioStream": false, "probeGapMs": 50 },
+  "readback": { "qSlack": "fiio-1+q/250" },
+  "settings": [
+    { "id": "volume", "section": null, "group": 0, "writeVerified": true },
+    { "id": "volume-steps", "section": null, "group": 0, "writeVerified": true },
+    { "id": "balance", "section": null, "group": 0, "writeVerified": true },
+    { "id": "mic", "section": null, "group": 1, "writeVerified": true },
+    { "id": "light", "section": null, "group": 1, "writeVerified": true },
+    { "id": "uac", "section": null, "group": 1, "writeVerified": false }
+  ],
+  "info": ["rate", "fw"],
+  "preview": { "volume": 60, "volume-steps": 0, "balance": -3, "mic": 0, "light": 1, "uac": 1, "rate": 2, "fw": 10200 },
+  "reset": { "offered": true, "src": "FiiO Control shows Restore default settings (command 0x21); wipe scope unknown; Contour ships none for any device (scope-fiio.md:208,214-215,244)" },
+  "hwVolume": { "inScope": true, "src": "vendor HID volume 0x02 write verified on hardware (scope-fiio.md:201,218); UAC Feature Unit id not recorded and not used by vendor software" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L457",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L1167",
+    "constraintsRef": "peq5Band12dBAllFilters7",
+    "vendorIds": [10610, 2578],
+    "oracle": false,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": ["No capture file: the USB product ID (2972:0147) was measured on the Tiny A; devicePEQ constraints say 5 bands, hardware reads 10"]
+  },
+  "tested": {
+    "date": "2026-10-24",
+    "firmware": "bcdDevice 1.10 (FiiO Control reads V1.2.0; the current firmware is not confirmed)",
+    "contour": null,
+    "rangesAccepted": { "result": "pass", "note": "Ten bands on every slot (a count of 5 or 2 reads back as 10 with the old bands still active), USER1-3 and all seven filter types written and read back; preamp -12, 0 and +12 dB hold, whole dB only (-11.9 dB reads back -11.0)." },
+    "acoustic": { "result": "partial", "note": "PK within 0.008 dB with the register as Q; LS 100 Hz and HS 8000 Hz within 0.025 dB with shelf Q = register / sqrt2 (7 of 7 cases fit). BP, LP, HP and AP (a pass filter is kept at 0 dB) and the preamp level were not measured." },
+    "persistence": { "result": "not-run", "note": "Only a slot switch and back and two cold plugs were checked; a power cycle after a save was not tested." },
+    "settings": { "result": "pass", "note": "Volume, volume steps, balance, mic and light written, read back and restored on a Pixel; the USB audio row is never written. FiiO Control has no filter, DRE or gain item for the Tiny A." },
+    "beyondVendor": "The FiiO web app wrote PK, LS, HS, BP, LP, HP and AP on the Tiny A and every write echoed; Contour offers all seven (devicePEQ lists five bands, the unit has ten). Names of up to 8 characters (A-Z, 0-9) work as in the web app.",
+    "runs": ["run:2026-10-22-snowsky-tiny-a-01-phone", "run:2026-10-22-snowsky-tiny-a-02", "run:2026-10-24-snowsky-tiny-a-05-mac-eqtest", "run:2026-11-13-snowsky-tiny-a-08-mac-eqoff"]
+  }
+}

@@ -162,6 +162,19 @@ cmake -S app/src/main/cpp/tags/tests -B build/tags-tests
 cmake --build build/tags-tests && ctest --test-dir build/tags-tests --output-on-failure
 ```
 
+Contour's core (`third_party/contour`, the DAC catalog and wire codecs behind
+DAC EQ) is a Gradle module of its own, `:contour-core`, with Contour's own
+tests, which replay captures from real DACs:
+
+```
+./gradlew :contour-core:test
+```
+
+It is a copy, not a submodule, so compiling needs nothing fetched. Nothing in
+`third_party/contour` is edited by hand: `tools/contour/vendor.sh <a Contour
+checkout>` copies a newer Contour over it, and `VENDORED.md` there names the
+commit. Run its tests after that; they are 414 at the first copy (2026-11-27).
+
 Nothing runs any of these automatically: the one CI workflow
 (`.github/workflows/main.yml`) only builds and signs a release.
 

@@ -1,0 +1,92 @@
+{
+  "id": "fiio-k13-r2r",
+  "name": "FiiO K13 R2R",
+  "shortName": null,
+  "productName": "FIIO K13 R2R",
+  "vendor": "FiiO",
+  "status": "stable",
+  "usb": {
+    "vid": "0x2972",
+    "pid": "0x0120",
+    "productName": "FIIO K13 R2R",
+    "hidInterface": 3,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 5,
+    "notes": [
+      "USB product id measured on the unit 2026-10-10 (Pixel, firmware 1.15): 2972:0120, product \"FIIO K13 R2R\" (core/native/FiioCatalog.kt:120-124)",
+      "no capture fixture: routed by the product id alone (core/native/FiioCatalog.kt:200, core/DeviceTarget.kt:158); DeviceCapabilities therefore carry vid/pid 0 today (core/DeviceTarget.kt:28-32)",
+      "two identical USB configurations; Contour opens the first one only (android/app/src/main/kotlin/io/github/chronosauros/contour/usb/HidTransport.kt:68-72)",
+      "report 7, 33 bytes in and out, declared on Generic Desktop usage 0x00 (research/protocol/PROTOCOL.md:241-247)",
+      "FiiO Control reaches the K13 R2R over Bluetooth only (connect_mode 1); over USB the only vendor path is PEQ in the FiiO web app (scope-fiio.md:22-30,111)",
+      "Q 0.1-10 is the code's range; FiiO Control and the FiiO web app list 0.25-8 (kept as is)",
+      "preamp register offset 0, measured 13.11.2026 (run 2026-11-13-fiio-k13-r2r-04-mac-eqoff, -24 dBFS): a flat USER1 with register 0 plays +0.09 dB against BYPASS (slot 240), the two BYPASS sweeps agree within 0.002 dB; USER presets play at the BYPASS level",
+      "persistence was shown at a 300 ms write gap only"
+    ]
+  },
+  "family": "fiio",
+  "driver": {
+    "reportId": 7,
+    "saveCommand": 25,
+    "snowskyExchange": false,
+    "disconnectOnSave": false,
+    "peakingGainCompensation": false,
+    "shelfAlphaCompensation": false,
+    "hardwareVerified": true,
+    "capture": null
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-24, 12],
+    "q": [0.1, 10],
+    "types": { "PEAK": 0, "LOW_SHELF": 1, "HIGH_SHELF": 2, "BAND_PASS": 3, "LOW_PASS": 4, "HIGH_PASS": 5, "ALL_PASS": 6 },
+    "heldTypes": {},
+    "shelfQScale": 1.0,
+    "shelfForm": "q",
+    "peakQScale": "sqrt2",
+    "emulation": null
+  },
+  "preamp": { "present": true, "db": [-24, 12], "step": 0.1, "wholeDb": false, "registerOffsetDb": 0 },
+  "slots": {
+    "user": [160, 161, 162, 163, 164, 165, 166, 167, 168, 169],
+    "declaredWritable": [160, 161, 162, 163, 164, 165, 166, 167, 168, 169],
+    "stock": [0, 1, 2, 3, 4, 5, 6, 8],
+    "bypass": 240,
+    "labels": { "0": "Jazz", "1": "Pop", "2": "Rock", "3": "Dance", "4": "R&B", "5": "Classic", "6": "Hip-hop", "8": "Retro", "9": "sDamp-1", "10": "sDamp-2", "160": "USER1", "161": "USER2", "162": "USER3", "163": "USER4", "164": "USER5", "165": "USER6", "166": "USER7", "167": "USER8", "168": "USER9", "169": "USER10", "240": "BYPASS" },
+    "picker": true,
+    "names": "app",
+    "nameLength": 7
+  },
+  "pacing": { "writeGapMs": 300, "afterSaveMs": 800, "consumeEchoes": false, "checksum": false, "needsAudioStream": false, "probeGapMs": null },
+  "readback": { "qSlack": "fiio-1+q/250" },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": { "offered": false, "src": "FiiO Control resetDefault 0x110301 with show:false; only Clear pairing is shown, over Bluetooth (scope-fiio.md:39-40,134)" },
+  "hwVolume": { "inScope": false, "src": "UAC path has no Feature Unit and no vendor app has a volume item (scope-fiio.md:138)" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L375",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L994",
+    "constraintsRef": "peq10Band12dBWideAllFilters",
+    "vendorIds": [10610, 2578],
+    "oracle": true,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": ["No capture file: the USB product ID was measured on the K13 R2R; of the KA15 hardware flags only the fixed band count"]
+  },
+  "tested": {
+    "date": "2026-10-25",
+    "firmware": "1.15",
+    "contour": null,
+    "rangesAccepted": { "result": "pass", "note": "Ten bands (a count of 9 reads as 10), USER1-10, all seven filter types and the preamp written and read back on the PC and on phones. The DAC reads some Q registers one lower than written (990 to 989), which the read-back tolerance accepts." },
+    "acoustic": { "result": "pass", "note": "PK within 0.136 dB with Q = register / sqrt2 (6 of 6); shelves within 0.028 dB and LP, HP, BP and AP within 0.268 dB with the register as Q. The preamp level and its register offset were not measured." },
+    "persistence": { "result": "pass", "note": "Ten bands and the preamp survived a power cycle in USER9 and USER10 at a 300 ms write gap (Pixel)." },
+    "settings": { "result": "not-run", "note": "Contour offers no DAC Settings rows for the K13 R2R: FiiO Control reaches it over Bluetooth only, and over USB the only vendor path is PEQ in the FiiO web app." },
+    "beyondVendor": "The FiiO web app offers USER1-USER10 with no rename and the seven filter types (it wrote BP, LP, HP and AP, and a read after HP returned type 5). Contour offers the same; its Q range 0.1-10 is wider than the 0.25-8 the vendor apps list.",
+    "runs": ["run:2026-10-25-fiio-k13-r2r-02-mac-eqtest", "run:2026-10-25-fiio-k13-r2r-phone-nothing", "run:2026-11-13-fiio-k13-r2r-04-mac-eqoff"]
+  }
+}

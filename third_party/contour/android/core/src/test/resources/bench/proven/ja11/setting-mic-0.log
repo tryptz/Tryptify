@@ -1,0 +1,18 @@
+# proof: run 2026-11-11-fiio-ja11-03-mac, file 92-setting-plan-mic-0
+# firmware: 2.20
+# date: 2026-11-11
+# verdict: PASS (S2 T14: the original 0 written back after the re-enumeration, read back as 0)
+# setting mic
+# value 0
+# contour-bench.jar sha256 960424b9200edc3d9e4faabd686047d7255b936641c48bbb2d46e1937cd0a609
+# device ja11
+# command setting-plan
+# slot active
+# time 2026-11-11T01:08:41+01:00
+TX 02 bb 0b 00 00 12 00 f2 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query IN-LINE MIC (0x12)
+RX 02 bb 0b 00 00 12 01 01 9f ee 00 00 00 00 00 00 00 00 00 00 00
+TX 02 aa 0a 00 00 12 01 00 fd ee 00 00 00 00 00 00 00 00 00 00 00  # set IN-LINE MIC (0x12): data 00
+# the DAC stopped answering after this frame (it restarts)
+# reconnected after 'set IN-LINE MIC (0x12): data 00': left USB for 1402 ms
+TX 02 bb 0b 00 01 12 00 59 ee 00 00 00 00 00 00 00 00 00 00 00 00  # query IN-LINE MIC (0x12)
+RX 02 bb 0b 00 01 12 01 00 b6 ee 00 00 00 00 00 00 00 00 00 00 00

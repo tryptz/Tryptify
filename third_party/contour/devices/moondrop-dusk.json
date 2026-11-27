@@ -1,0 +1,119 @@
+{
+  "id": "moondrop-dusk",
+  "name": "Moondrop DUSK-SP",
+  "shortName": "DUSK-SP",
+  "productName": "DUSK-SP",
+  "vendor": "Moondrop",
+  "status": "stable",
+  "usb": {
+    "vid": "0x35D8",
+    "pid": "0x1499",
+    "productName": "DUSK-SP",
+    "hidInterface": 3,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 13,
+    "notes": [
+      "USB manufacturer MOONDROP, product string DUSK-SP, bcdDevice 0x0001; HID interface 3 on the Consumer page 0x0C (usage 0x01), report 1 Input and Output 61 bytes each (62 with the ID), report 2 the inline volume keys (read-only, nothing sent; run:2026-11-11-moondrop-dusk-01-mac)",
+      "a new driver family, not the Dawn Pro 2's 0x4B protocol: FreeDSP-Studio calls it gen 1, devicePEQ \"Conexant\" (Moondrop FreeDSP, MAY and Echo-B use it too; FreeDSP-Studio tools/app/src/dsp.rs, MIT, tested by its author on a DUSK-SP)",
+      "transport: control pipe only. Every request is SET_REPORT(Output, id 1: 0x21 0x09 wValue 0x0201) and then GET_REPORT(Input, id 1: 0xA1 0x01 wValue 0x0101), 62 bytes each way; the cable does not answer on its interrupt endpoints",
+      "frame: 01 00 0d 00 CMD FLAG 00 23 2d b3, then int32 little-endian dwords from offset 10, zero padding; reads CMD 0x5a (active preset) and 0xdd (band n, 1-9) with FLAG 1, writes CMD 0x5a (select) and 0xdc (band meta, coefficients, commit) with FLAG 0",
+      "read on the owner's unit 11.11.2026 (run:2026-11-11-moondrop-dusk-01-mac, read only): active preset 1; the Custom bank holds nine PK bands at 0 dB, Q 1.0 (raw 256) at 300, 1000, 1500, 2000, 2500, 3000, 3500, 4000 and 4500 Hz; a band reply carries freq, Q x 256, type and gain (signed int24, whole dB) and nothing after byte 33, so the coefficients cannot be read back",
+      "a band is two things: a meta record (freq, Q x 256, type 0 PK / 1 low shelf / 2 high shelf, whole-dB gain) that the tools read back and a coefficient set for each of 44.1, 48, 96, 192 and 384 kHz (b0 b1 b2 -a1 -a2 over a0, x 2^22) that is the sound; the meta record is a label, so the coefficients carry the exact gain and the meta gain is the rounded whole dB",
+      "Contour writes only the Custom EQ (index 0); presets 1 DUSK-Default, 2 DUSK-V, 3 DUSK-Harman, 4 DUSK-Bass+ and 5 DUSK-Diffuse-Tilted live in firmware: while the cable plays one of them, the bands a read returns are the Custom bank, not what plays",
+      "measured on the unit 11.11.2026 (runs run:2026-11-11-moondrop-dusk-02-mac, -04-mac, -05-mac-replug): every frame of a write is acknowledged with an echo (`01 00 00 00 dc 80 ...`, select `5a 80`) and the meta read right after the commit equals what was written",
+      "the commit `dc 00 [ff]` stores the Custom bank to flash AND restarts the cable: it leaves the USB bus about 650 ms after the commit's reply (664 and 645 ms in run 04) and is back after 0.5-0.7 s (away 1.2 s in all); the Custom bank is kept byte-equal over the restart and over the owner's replug (run 05)",
+      "after every restart and every physical plug-in the cable plays preset 1 (DUSK-Default); a select of 0 followed by the commit does not survive a restart (run 04, 03-select-slot0); a select without the commit (`5a 00 [5a, idx]` alone) switches at once, keeps the cable on the bus and still reads the same after 3 s and 8 s (run 04, select-nocommit-0.json): the preset choice is RAM only and nothing known makes the Custom EQ the power-up preset",
+      "no firmware version command is known for this protocol; tested.firmware is \"unknown\"",
+      "the DUSK-SP ends in 2-pin IEM plugs, so there is no 3.5 mm output for the rig's line input and the acoustic check is not run"
+    ]
+  },
+  "family": "moondrop-gen1",
+  "driver": {
+    "reportId": 1,
+    "reportBytes": 62,
+    "transport": "control-pipe",
+    "readPresetCommand": "0x5a",
+    "readBandCommand": "0xdd",
+    "writeCommand": "0xdc",
+    "customIndex": 0,
+    "commitCode": "0xff",
+    "restartsAfterCommit": true,
+    "coefficientScaleBits": 22,
+    "hardwareVerified": true
+  },
+  "peq": {
+    "bands": 9,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-12, 12],
+    "q": [0.2, 10],
+    "types": { "PEAK": 0, "LOW_SHELF": 1, "HIGH_SHELF": 2 },
+    "heldTypes": {},
+    "shelfQScale": 1.0,
+    "shelfForm": "slope",
+    "coefficientRatesHz": [44100, 48000, 96000, 192000, 384000],
+    "emulation": null
+  },
+  "preamp": {
+    "present": false,
+    "src": "the cable has no preamp register: FreeDSP-Studio folds one into a single band's numerator, which cannot be read back, and there is no acoustic test for this cable, so Contour offers none"
+  },
+  "slots": {
+    "user": [0],
+    "declaredWritable": [0],
+    "stock": [1, 2, 3, 4, 5],
+    "bypass": null,
+    "labels": { "0": "Custom EQ", "1": "DUSK-Default", "2": "DUSK-V", "3": "DUSK-Harman", "4": "DUSK-Bass+", "5": "DUSK-Diffuse-Tilted" },
+    "stockPicker": true,
+    "stockPickerInline": true,
+    "powerUpPreset": 1,
+    "presetBands": {
+      "src": "The five firmware presets as Crinacle, who co-designed the DUSK, published them (https://crinacle.com/2024/04/10/moondrop-x-crinacle-dusk-eq-dsp-values/, 10.04.2024); the same values are in FreeDSP-Studio tools/app/src/app.rs STARTING (MIT, (c) 2026 EffectiveEquivalent, snapshot of 16.10.2026). All PEAK filters, [Hz, dB, Q], no preamp. The cable cannot report them (while it plays preset 1-5 a band read returns the Custom bank), so Contour shows these as what plays.",
+      "bands": {
+        "1": [[1400, -3, 0.8], [5400, -3, 2.0], [14000, -5, 2.0]],
+        "2": [[250, -3, 0.4], [1500, -6, 0.6], [5400, -3, 2.0], [14000, -5, 2.0]],
+        "3": [[80, -2, 0.2], [400, -3, 0.4], [1600, -4, 1.2], [14000, -10, 2.0]],
+        "4": [[140, 1, 0.4], [200, -1, 3.0], [300, -6, 0.4], [1500, -7, 0.6], [5400, -3, 2.5], [8000, -5, 0.4], [14000, -7, 2.0]],
+        "5": [[65, -7, 0.7], [1500, -5, 0.4], [2900, 3, 2.5], [6000, -2, 3.0], [14000, -10, 2.0]]
+      }
+    },
+    "picker": false,
+    "names": "none",
+    "factoryBank": [[300, 1.0, "PEAK"], [1000, 1.0, "PEAK"], [1500, 1.0, "PEAK"], [2000, 1.0, "PEAK"], [2500, 1.0, "PEAK"], [3000, 1.0, "PEAK"], [3500, 1.0, "PEAK"], [4000, 1.0, "PEAK"], [4500, 1.0, "PEAK"]]
+  },
+  "pacing": {
+    "replyWaitMs": 12,
+    "writeGapMs": 6,
+    "afterCommitMs": 10,
+    "afterSelectMs": 12,
+    "restartLeavesAfterMs": 650,
+    "restartAwayMs": [500, 700],
+    "reconnectGoneWaitMs": 3000,
+    "reconnectBackWaitMs": 15000
+  },
+  "readback": {
+    "compares": "the nine meta records (type, integer Hz, Q x 256, whole-dB gain) and the active preset index; the coefficients cannot be read"
+  },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": { "offered": false, "src": "no reset command is known for this protocol; Contour sends only the select, band and commit frames above" },
+  "hwVolume": { "inScope": false, "src": "the inline volume keys are HID report 2 (consumer keys); no volume register is known" },
+  "upstream": {
+    "sourceUrl": "https://github.com/EffectiveEquivalent/FreeDSP-Studio",
+    "source": "tools/app/src/dsp.rs (MIT, (c) 2026 EffectiveEquivalent), snapshot of 16.10.2026 without git metadata, sha256 10fec0160677193f722d50f4c30a4dc7b5a30e629f5057cd4ee8910adb4165f7; devicePEQ's \"Conexant\" handler is the same protocol"
+  },
+  "tested": {
+    "date": "2026-11-11",
+    "firmware": "unknown (no version command is known for this protocol; bcdDevice 0x0001)",
+    "contour": "1.6.6-perf on wip/devices-batch: Mac bench jar 74bab5f3, phone APK e8957394 on a Nothing A065, Android 15",
+    "rangesAccepted": { "result": "pass", "note": "Mac, run 2026-11-11-moondrop-dusk-06-mac: six edge writes (20 and 20000 Hz, +-12 dB, Q 0.2 and 10 for PK, Q 0.2 and 5.02 for the shelves, the highest a slope-form shelf has at +-12 dB) and PK, LS and HS each written to the Custom EQ and read back meta record for meta record after the cable's restart; the coefficients cannot be read back. Phone, run 2026-11-11-moondrop-dusk-09-phone: a nine-band profile of all three types at the edges, with 6.7, -3.5 and 2.4 dB, read back VERIFIED (the meta records hold 7, -4 and 2 dB)." },
+    "acoustic": { "result": "not-run", "note": "No line measurement: the DUSK-SP ends in 2-pin IEM plugs, so the rig cannot take its output. Checked by ear only (the owner, Moondrop Dusk on a Nothing phone, run 2026-11-11-moondrop-dusk-09-phone): from a flat Custom EQ to LS 100 Hz +8 dB and HS 6 kHz -10 dB the bass rose and the treble fell. Whether the cable plays the curve Contour draws within a fraction of a dB is not measured." },
+    "persistence": { "result": "pass", "note": "The commit stores the Custom EQ to flash and restarts the cable: it leaves USB about 0.65 s after the commit and is back 0.5-0.7 s later, and after every restart and every plug-in it plays preset 1 (DUSK-Default). Mac, runs 04 and 05: the Custom bank was byte-equal after the restart and after the owner's unplug and plug. Phone, run 09: after an unplug and plug the cold read gave preset 1 and the nine meta records as sent; a select of the Custom EQ switched the cable back to them (186 ms)." },
+    "settings": { "result": "pass", "note": "The PRESET row (Custom EQ and the five firmware presets) is a select without the commit, read back: on the phone DUSK-Harman, Custom EQ and DUSK-Default, about 190 ms each and no restart. A select with the commit does not survive the restart (run 04), so Contour never sends one." },
+    "beyondVendor": "No vendor tool was read for the DUSK-SP; the protocol comes from FreeDSP-Studio (MIT), whose author reports that the stock app keeps whole dB. Contour offers nine PK, low-shelf and high-shelf bands at 20-20000 Hz, +-12 dB and Q 0.2-10 (shelves to 5.02), sends the exact gain in the filter coefficients and switches the five firmware presets; the cable has no preamp, so none is offered.",
+    "runs": ["run:2026-11-11-moondrop-dusk-01-mac", "run:2026-11-11-moondrop-dusk-02-mac", "run:2026-11-11-moondrop-dusk-04-mac", "run:2026-11-11-moondrop-dusk-05-mac-replug", "run:2026-11-11-moondrop-dusk-06-mac", "run:2026-11-11-moondrop-dusk-07-mac-restore", "run:2026-11-11-moondrop-dusk-08-mac-restore", "run:2026-11-11-moondrop-dusk-09-phone"]
+  }
+}

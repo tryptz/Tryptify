@@ -1,0 +1,102 @@
+{
+  "id": "crinear-protocol-micro",
+  "name": "CrinEar Protocol Micro",
+  "shortName": "Micro",
+  "productName": "CrinEar Protocol Micro",
+  "vendor": "CrinEar",
+  "status": "stable",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0xC20F",
+    "productName": "unknown",
+    "hidInterface": 3,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 1,
+    "notes": [
+      "WalkPlay SchemeNo11; the Android USB attach filter is generated from this record at build time",
+      "unofficial support; not affiliated with CrinEar (core/Device.kt:68)",
+      "report 0x4B, 64 bytes on the wire (report id plus 63 payload bytes); report 0x54 exists and is not used (core/WalkPlay.kt:24-25; research/protocol/PROTOCOL.md:17-19)",
+      "one top-level Consumer Control collection (usage page 0x0C, usage 0x01); the Android transport takes HID interface 3 first, else the first HID interface (android/app/src/main/kotlin/io/github/chronosauros/contour/usb/HidTransport.kt:86-87; research/protocol/PROTOCOL.md:13,182-183)",
+      "the HID interface number differs between enumerations on the PC: MI_02 once, MI_03 another time; the match is on usage 0x0C (dac-lab:devices/crinear-protocol-micro.md)",
+      "USB product string and bcdDevice not recorded in the sources read (dac-lab:devices/crinear-protocol-micro.md)",
+      "Contour uses raw frequency and Q on the wire; devicePEQ's SchemeNo11 compensation (ratio 0.9775, cos-Nyquist Q) is deliberately left out (research/protocol/PROTOCOL.md:73-93; core/WalkPlay.kt:10-17)",
+      "reads are the 1.2.2 predicates and parsers, permissive (core/DeviceProtocol.kt:225-262); A/B uses TEMP_WRITE, proven RAM-only on the Micro (core/DeviceProtocol.kt:24, core/WalkPlay.kt:289-292)",
+      "the WalkPlay web tool's Volume slider is the preamp frame 01 03 02 00 g (-16..+6 dB); Contour offers -30..0 dB and keeps the positive part off until the level moves",
+      "no vendor tool or UAC feature drives hardware volume (a Feature Unit 0x10 exists, no official tool uses it)"
+    ]
+  },
+  "family": "walkplay",
+  "driver": {
+    "reportId": 75,
+    "schemeNo": 11,
+    "bandLen": 24,
+    "writeSequence": "devicepeq",
+    "strictParse": false,
+    "importMode": "micro",
+    "ab": true,
+    "designRateHz": 96000
+  },
+  "peq": {
+    "bands": 8,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-10, 10],
+    "q": [0.1, 10],
+    "types": { "PEAK": 2, "LOW_SHELF": 1, "HIGH_SHELF": 1 },
+    "heldTypes": { "LOW_PASS": 4, "HIGH_PASS": 5 },
+    "shelfQScale": 1.0,
+    "shelfForm": "slope",
+    "coefficientRateHz": 93750,
+    "emulation": "micro-hs-as-ls"
+  },
+  "preamp": { "present": true, "db": [-30, 0], "step": 0.1, "wholeDb": true, "registerOffsetDb": 0 },
+  "slots": {
+    "user": [0],
+    "declaredWritable": [0],
+    "stock": [],
+    "bypass": null,
+    "labels": { "0": "Custom" },
+    "picker": false,
+    "names": "none",
+    "slotByte": "echo-read-value",
+    "factoryFlat": [[31, 0.75, "PEAK"], [62, 0.75, "PEAK"], [125, 0.75, "PEAK"], [250, 0.75, "PEAK"], [500, 0.75, "PEAK"], [1000, 0.75, "PEAK"], [2000, 0.75, "PEAK"], [4000, 0.75, "PEAK"]]
+  },
+  "pacing": {
+    "writeGapMs": 20,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": null,
+    "afterSaveMs": 200,
+    "sequence": [
+      "every band write, 20 ms after it (120 ms after the last band)",
+      "preamp write 01 03 02 00 g, 50 ms",
+      "commit 01 05, 20 ms; 01 17, 20 ms; TEMP_WRITE 01 0A 04 00 00 FF FF, 50 ms; FLASH_EQ 01 01 01, 0 ms, then 200 ms"
+    ]
+  },
+  "readback": { "qSlack": "none" },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": { "offered": false, "src": "the official tool (EQ.Hangout.Audio / devicePEQ) has no reset (scope-kt-walkplay.md:182,190-192). The WalkPlay web tool's resetDevice (class s2, which SchemeNo11 resolves to) is decoded (walkplay-plan.md item 4, rank KOD): 01 03 02 00 00; eight flat PURE band frames (50/200/500/1000/2500/5000/10000/15000 Hz, Q 0.75, 0 dB, PK, length byte 0x18); 01 0A 04 00 00 FF FF; 01 01 00; 01 05 01..04; 01 17 00. Contour has it in the bench only (reset-plan micro --owner-consent, after a full backup, restored afterwards); not in the app, not run on a unit; what it erases beyond the EQ is unknown" },
+  "hwVolume": { "inScope": false, "src": "UAC Feature Unit 0x10 exists on the Micro, but neither official tool drives it (scope-kt-walkplay.md:181,194-196); the Micro answered none of the WalkPlay extra commands 0x11/0x16/0x19/0x1B/0x1D (scope-kt-walkplay.md:170,180)" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/walkplayHidHandler.js",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json#L262",
+    "constraintsRef": "walkplayPeq8Band10dBLsLowpass",
+    "vendorIds": [13058],
+    "oracle": false
+  },
+  "tested": {
+    "date": "2026-11-25",
+    "firmware": "0.2 (VERSION command)",
+    "contour": null,
+    "rangesAccepted": { "result": "pass", "note": "Eight bands, PK and LS, LP 8000 Hz, HP 100 Hz and the preamp written and read back byte for byte on the PC and on phones. The preamp is whole dB: +3 dB is accepted by the register but moved the level by +0.00 dB, so a positive preamp is not offered." },
+    "acoustic": { "result": "pass", "note": "At a 48 kHz stream the PK mix, the shelf mix with the emulated HS, LP 8000, HP 100 and the preamp -6 (level -6.00 dB) pass. The DSP plays the coefficient bytes at 93 750 Hz (96 000 x 125/128), so Contour designs them for 93 750 Hz and every case fits within 0.057 dB; shelves play the slope form. The preamp at -10, -20 and -30 dB moves the level by -10.00, -20.00 and -30.00 dB (1:1), and the PK mix under a -20 dB preamp passes (2026-11-25)." },
+    "persistence": { "result": "pass", "note": "A full send from a phone (eight bands, preamp -23 dB under MAX VOLUME -20, commit) read back the same after unplugging and plugging the unit into a Mac (2026-11-25). TEMP_WRITE alone is RAM-only (the earlier state came back after unplugging)." },
+    "settings": { "result": "partial", "note": "The DAC page offers MAX VOLUME (-30..0 dB in whole dB): a fixed cut Contour adds under every profile's preamp and sends in the preamp frame, so the unit keeps it with the EQ. The mic gain row is read only: the unit takes the write for some values only (phone -3 accepted, -1 ignored; PC -1 ignored)." },
+    "beyondVendor": "CrinEar's tool (EQ.Hangout.Audio, devicePEQ) offers eight bands with no reset and no volume. Contour adds a high shelf (sent as an inverted low shelf with the gain sum in the preamp) and, since 2026-10-25, LP and HP, rounds the preamp to whole dB, and MAX VOLUME: one level under every profile, kept in the DAC, for a unit that has no volume buttons. The WalkPlay web tool has a reset, which Contour keeps in the bench only (not run on a unit).",
+    "runs": ["run:2026-10-22-crinear-protocol-micro-01-phone", "run:2026-10-22-crinear-protocol-micro-02", "run:2026-10-24-crinear-protocol-micro-04-mac-eqtest", "run:2026-10-24-crinear-protocol-micro-05-mac-eqtest", "run:2026-10-25-crinear-protocol-micro-07-mac-eqtest-48k", "run:2026-11-25-crinear-protocol-micro-08-mac-max-volume", "run:2026-11-25-crinear-protocol-micro-09-mac-after-pixel-read"]
+  }
+}

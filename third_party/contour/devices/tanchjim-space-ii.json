@@ -1,0 +1,236 @@
+{
+  "id": "tanchjim-space-ii",
+  "name": "TANCHJIM SPACE II",
+  "shortName": "Space II",
+  "productName": "TANCHJIM-SPACE II",
+  "vendor": "Tanchjim",
+  "status": "stable",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0x4381",
+    "productName": "TANCHJIM-SPACE II",
+    "hidInterface": 0,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 17,
+    "notes": [
+      "WalkPlay SchemeNo16 (devicePEQ's and FreeDSP-Studio's scheme tables list PID 0x4381 under SchemeNo16, the scheme of the CrinEar Protocol Max and the TRN Black Pearl); found by VID, PID and the exact USB product name \"TANCHJIM-SPACE II\" (findDevice), so the 1.5 list of DeviceTarget.find stays as it was",
+      "identity read from the unit on 13.11.2026 (read only): manufacturer string \"TANCHJIM\", bcdDevice 0x0001; HID interface 0, one collection on the consumer page 0x0C: report 0x03 (consumer), 0x4B (Input and Output 63 data bytes, vendor page 0xFF01) and 0x54 (Input and Output 63 bytes: never sent)",
+      "WalkPlay reads answered on the unit: version (80 0C 00) \"1.2\", the bulk PEQ slot byte 0, ten bands 0-9 all PEAK (type 2) at 0 dB, register Q 0x00B6 (0.711), 31 / 62 / 125 / 250 / 500 / 1000 / 2000 / 4000 / 8000 / 16000 Hz, slot byte 0 on each, global gain (80 03 00) 0 dB: the same factory flat as the Protocol Max and the TRN Black Pearl",
+      "sources for the rest: devicePEQ (usbDeviceConfig.js:769, entry \"TANCHJIM-SPACE PRO\") gives the sibling model 10 bands, +-10 dB, peaks only (walkplayPeq10Band10dBPkOnly), SchemeNo16, deviceHandlesPregain false; FreeDSP-Studio (tools/app/src/dsp2.rs, MIT) lists the Space Pro as 10 bands, +-10 dB, Q to 10, peaks only, global preamp; no source lists the Space II itself",
+      "catalog source for the scheme and the vendor range: devicePEQ's usbDeviceConfig.js lists PID 0x4381 in its \"SchemeNo16\" group (line 702, https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L702; peq10Band10dBFullShelves: 10 bands, +-10 dB, PEAK and both shelves, deviceHandlesPregain false) and FreeDSP-Studio's tools/app/src/dsp2.rs lists 0x4381 in `Scheme { no: 16, bands: 10, gain: 10.0, types: SHELVES }` (line 143); +-12 dB stays a candidate beyond that catalog (the Max took it), and the measured shelf Q convention differs from the Max's",
+      "confirmed by the read: ten bands, PEAK, the slot byte 0 and the global gain register; the record is otherwise the Protocol Max's (devicePEQ write sequence with 24-byte band frames, strict read-back with the Max's read bounds, preamp -30..0 dB in whole dB, 96 kHz coefficient design)",
+      "beyond the catalog (all measured on the unit, see the measured notes): LOW_SHELF and HIGH_SHELF, LOW_PASS and HIGH_PASS, cuts to -12 dB and boosts to +9 dB (the engine caps boosts at +9 dB; +12 dB boosts were written and read back but not played), Q 0.1-10, coefficient rate 96000; a shelf boost whose coefficient bytes overflow signed Q30 is refused (no wrapped sending on this unit)",
+      "measured on the unit 13.11.2026 (Mac, dac-lab runs 2026-11-13-tanchjim-space-ii-01-mac and -02-mac-eqtest, stream 48 kHz): ten PEAK bands, PK, LS, HS, LP and HP each written and read back (T07), nine edge writes verified (T06; the tool refused a high shelf at the lowest frequency with the largest gain and the lowest Q before any frame, as validate predicts), preamp -30, -29 and 0 dB read back with register offset 0 (T08), state restored (T13); acoustic quick test: PK mix within 0.08 dB, shelf mix 0.19 dB, LP 8000 Hz 0.14 dB, HP 100 Hz 0.10 dB, repeatability 0.23 dB; shelves play Q = register (alpha = sin w0 / 2Q at a 48 kHz DSP: 4 of 4 cases, worst 0.19 dB; the Max's Q = register / sqrt2 fits 3 of 4, worst 1.16 dB; the slope form 3 of 4, worst 1.18 dB; any hypothesis at 96 kHz is 6.9 dB off), so shelfQScale is 1.0, not the Max's sqrt2; peaks play Q = register",
+      "beyond-vendor run 2026-11-13-tanchjim-space-ii-04-mac-max (tests/eq/space-2-max.json, multitone, -24 dBFS, boosts capped at +9 dB by the engine): LP 4000 Hz Q 0.71 within 0.06 dB, HP 300 Hz Q 0.71 within 0.23 dB, PK +9 dB Q 1 and -12 dB Q 10 within 0.06 dB, PK -6 dB Q 0.1 within 0.04 dB, LS -12 dB and HS -9 dB Q 0.71 within 0.03 dB, ten bands within 0.03 dB, repeatability 0.03 dB; quick run 2026-11-13-tanchjim-space-ii-03-mac-eqtest with the scale-1.0 record (the unit's volume at maximum): PK 0.013 dB, shelves 0.010 dB, preamp -6 dB 0.024 dB (a played -6 dB: the register offset is 0), LP 0.015 dB, HP 0.08 dB, repeatability 0.007 dB",
+      "the preamp reply header is read the TRN's lenient way (the preamp is the int8 at d[4], the two bytes before it unchecked) until the unit's own reply bytes are seen",
+      "the Tanchjim app's DAC settings (gain, digital filter, amp class, USB mode) are not in the record: no WalkPlay command is known for this unit beyond the Max's and TRN's, and none was read; the code offers no DAC Settings rows and never sends 01 19 (gain mode, which is a physical switch on the Max) or 0x54 to it",
+      "phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41; screens kept locally, no run id): the cold read showed the ten factory bands, ON DAC; an edge profile (LS 20 Hz -12 dB Q 0.1, PK 1 kHz +12 dB Q 10, LP 20 kHz, HP 20 Hz, HS 20 kHz -12 dB Q 5, preamp -30 dB) was written and read back VERIFIED (write 823 ms, read-back 616 ms); after a replug the cold read gave firmware 1.2, slot 0 and preamp -30 dB, ON DAC; the DAC page has no rows and the unit has no slots to pick",
+      "never sent to this device: report 0x54, 01 19, 01 01 00 outside a mic save, the factory reset, firmware commands"
+    ]
+  },
+  "family": "walkplay",
+  "driver": {
+    "reportId": 75,
+    "schemeNo": 16,
+    "bandLen": 24,
+    "writeSequence": "devicepeq",
+    "strictParse": true,
+    "importMode": "strict",
+    "ab": false,
+    "designRateHz": 96000
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [
+      20,
+      20000
+    ],
+    "gainDb": [
+      -12,
+      12
+    ],
+    "q": [
+      0.1,
+      10
+    ],
+    "types": {
+      "PEAK": 2,
+      "LOW_SHELF": 1,
+      "HIGH_SHELF": 3,
+      "LOW_PASS": 4,
+      "HIGH_PASS": 5
+    },
+    "heldTypes": {},
+    "shelfQScale": 1.0,
+    "shelfForm": "q",
+    "coefficientRateHz": 96000,
+    "emulation": null
+  },
+  "preamp": {
+    "present": true,
+    "db": [
+      -30,
+      0
+    ],
+    "step": 0.1,
+    "wholeDb": true,
+    "registerOffsetDb": 0
+  },
+  "slots": {
+    "user": [
+      0
+    ],
+    "declaredWritable": [
+      0
+    ],
+    "stock": [],
+    "bypass": null,
+    "labels": {
+      "0": "Custom"
+    },
+    "picker": false,
+    "names": "none",
+    "slotByte": "echo-read-value",
+    "factoryFlat": [
+      [
+        31,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        62,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        125,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        250,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        500,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        1000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        2000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        4000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        8000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        16000,
+        0.7109375,
+        "PEAK"
+      ]
+    ]
+  },
+  "pacing": {
+    "writeGapMs": 20,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": null,
+    "afterSaveMs": 200,
+    "sequence": [
+      "every band write, 20 ms after it (120 ms after the last band)",
+      "preamp write 01 03 02 00 g, 50 ms",
+      "commit 01 05, 20 ms; 01 17, 20 ms; TEMP_WRITE 01 0A 04 00 00 FF FF, 50 ms; FLASH_EQ 01 01 01, 0 ms, then 200 ms",
+      "then a full strict read-back of every band, the preamp and the slot byte; any mismatch is a failure, not ON DAC"
+    ]
+  },
+  "readback": {
+    "qSlack": "q256",
+    "readBoundsHz": [
+      1,
+      48000
+    ],
+    "readBoundsDb": [
+      -60,
+      60
+    ]
+  },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": {
+    "offered": "unknown",
+    "src": "no Space II vendor tool read; command 0x05 resets are never sent to it"
+  },
+  "hwVolume": {
+    "inScope": true,
+    "src": "vendor HID volume 0x85 (raw 0..60, then the flash save 01 04) as the Tanchjim app 2.5.8.1 sends it; read, written and kept over an unplug on the phone, firmware 1.3, 25.11.2026; it does not follow the phone's media volume"
+  },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L769",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json",
+    "constraintsRef": "walkplayPeq10Band10dBPkOnly",
+    "vendorIds": [
+      13058
+    ],
+    "oracle": false,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": [
+      "No capture file and no source for the Space II itself: ten PEAK bands, the factory flat, the slot byte and the global gain were read on a unit, and PK, LS, HS, LP and HP, cuts to -12 dB, boosts to +9 dB, Q 0.1-10, the shelf Q convention (Q = register) and the preamp (register offset 0) were measured on it (runs 2026-11-13-tanchjim-space-ii-01-mac to -04-mac-max); +12 dB boosts were written and read back but not played (the engine caps boosts at +9 dB)"
+    ],
+    "schemeCatalogUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L702",
+    "schemeConstraintsRef": "peq10Band10dBFullShelves"
+  },
+  "tested": {
+    "date": "2026-11-13",
+    "firmware": "1.2",
+    "contour": "1.7.1-perf (41) on the Nothing A065, wip/devices-batch-2",
+    "rangesAccepted": {
+      "result": "partial",
+      "note": "Mac, run 2026-11-13-tanchjim-space-ii-01-mac: nine edge writes (T06) verified; PK, LS, HS, LP and HP each written and read back (T07); preamp -30, -29 and 0 dB read back (T08); state restored (T13). A high shelf at the lowest frequency with the largest gain and the lowest Q is refused by the planner before any frame (its coefficients overflow signed Q30)."
+    },
+    "acoustic": {
+      "result": "pass",
+      "note": "Runs 2026-11-13-tanchjim-space-ii-02-mac-eqtest, -03-mac-eqtest (scale-1.0 record, volume at maximum: PK 0.013 dB, shelves 0.010 dB, preamp -6 dB 0.024 dB with offset 0, LP 0.015 dB, HP 0.08 dB, repeatability 0.007 dB) and -04-mac-max (multitone, -24 dBFS, boosts capped at +9 dB): LP 4000 Hz 0.06 dB, HP 300 Hz 0.23 dB, PK +9 dB Q 1 and -12 dB Q 10 0.06 dB, PK -6 dB Q 0.1 0.04 dB, LS -12 dB and HS -9 dB 0.03 dB, ten bands 0.03 dB, repeatability 0.03 dB. Shelves play Q = register. +12 dB boosts were not played."
+    },
+    "persistence": {
+      "result": "pass",
+      "note": "Phone check 13.11.2026 (Nothing A065, perf APK 1.7.1 / 41, screens kept locally): the edge profile with the preamp at -30 dB read back VERIFIED, and after an unplug and replug the cold read (firmware 1.2, slot 0, preamp -30 dB, 413 ms) matched, ON DAC."
+    },
+    "settings": {
+      "result": "pass",
+      "note": "FILTER (FAST-LL, FAST-PC, SLOW-LL, SLOW-PC, NON-OS), OUTPUT (work mode; on this unit 0 = CLASS AB and 1 = CLASS H, the Tanchjim app's names, the opposite of the WalkPlay web tool's - corrected 24.11.2026 after a user saw Contour's CLASS H as CLASS AB in the Tanchjim app and the other way round), GAIN (LOW / HIGH) and BALANCE (-15..15 steps) are the Protocol Max's and the TRN's rows, verified on this unit (WalkPlaySettings.SPACE2_VERIFIED true); the FILTER names are the WalkPlay web tool's, not read from the Tanchjim app. The names below are the WalkPlay tool's (work mode 0 = CLASS H) as written on 13.11; in the app's current names read CLASS AB for CLASS H and the other way round. MIC GAIN (the Max's 16-bit encoding plus the flash save 01 01 00) is verified as well (SPACE2_MIC_VERIFIED true), for the unit's 3.5 mm CTIA headset-mic input: a Mac saw a 1-channel USB input and recorded speech from a headset mic (run:2026-11-14-tanchjim-space-ii-09-mac-mic-input; whether MIC GAIN changes that level was not measured), and the maker's app screenshot shows a Microphone Gain Setting row. Mac (run:2026-11-14-tanchjim-space-ii-08-mac-mic-save, the Max's marker run): with a PK 1000 Hz -12 dB Q2 marker on the EQ, mic -7 written with the save read back -7 and the marker played the same (1 kHz +0.002 dB, the band within 0.018 dB, the largest at 150 Hz, a mains harmonic; two reads before the save 0.0096 dB apart); -15..+15 written without the save read back right (31 of 31); +15 (00 7f), +14 (77 77), -14 (89 88) and -15 (00 81) written with the save read back without a wrap (one read right after a save got no reply within 0.6 s, the repeat read -14 twice); after an unplug and replug -15 was still stored and the marker unchanged (within 0.0096 dB); mic 0 and the factory-flat EQ written back, the registers equal to the backup. Read on the Mac first (run:2026-11-13-tanchjim-space-ii-05-mac-settings-read: filter 1, work mode 0, gain 1, balance 0 / 0, mic 0). Mac (run:2026-11-13-tanchjim-space-ii-06-mac-settings, s2 T14): filter 1 -> 2 -> 1, work mode 0 -> 1 -> 0 and mic 0 -> -1 -> 0 written, read back and restored. Effect at line level through the UMC202HD (run:2026-11-13-tanchjim-space-ii-07-mac-settings-effect): GAIN LOW 6.16 dB below HIGH across the band (back within 0.002 dB); BALANCE L 8 lowers the right channel by 8.00 dB and leaves the left one (1.00 dB a step, channel 1 the right one); NON-OS -2.6 dB at 20 kHz, SLOW-LL no change below 20 kHz; Class-AB against Class-H no level difference (as on the Max, which does not prove the mode does nothing). Phone (Nothing A065, perf 1.7.1 / 41, 13.11.2026): the DAC page read 5/5 rows; SLOW-PC, CLASS AB, LOW, L 6 and mic -5 written from the app, each VERIFIED, all unchanged after an unplug and replug (the gain mode too: no physical switch wins, unlike the Max); BALANCE R 15 and L 15 written VERIFIED; the factory state (FAST-LL, CLASS H, HIGH, CENTER, mic 0) written back VERIFIED. Not offered: UAC1 / UAC2 (no frame is known; the Tanchjim app 2.5.8.1 does not show it either, checked on the Pixel 25.11.2026). DRE (0x32, register 00 = ON and 01 = OFF, no save) and VOLUME (0x85, raw 0..60, followed by the flash save 01 04) are the frames of the Tanchjim app 2.5.8.1 (read for interoperability, 25.11.2026). Firmware 1.3 (phone, Pixel 9 Pro, Contour 1.8.1-beta / 42, 25.11.2026): all seven rows read; DRE ON -> OFF -> ON and VOLUME 33 -> 31 -> 33 written VERIFIED, DRE OFF and VOLUME 31 kept over an unplug; the volume register does not follow the phone's media volume; a 200-tap GAIN / OUTPUT run verified every write on 1.2 and on 1.3. The effect of DRE and VOLUME was not measured on the rig, and the Mac rig runs above were on firmware 1.2."
+    },
+    "beyondVendor": "The WalkPlay catalog (devicePEQ SchemeNo16, FreeDSP-Studio scheme 16) says +-10 dB; the unit takes cuts to -12 dB (measured) and boosts to +12 dB on the registers (played to +9 dB), and Q 0.1-10. Contour also offers LOW_PASS and HIGH_PASS, which the Tanchjim sibling's catalog entry (peaks only) does not list.",
+    "runs": [
+      "run:2026-11-13-tanchjim-space-ii-01-mac",
+      "run:2026-11-13-tanchjim-space-ii-02-mac-eqtest",
+      "run:2026-11-13-tanchjim-space-ii-03-mac-eqtest",
+      "run:2026-11-13-tanchjim-space-ii-04-mac-max",
+      "run:2026-11-13-tanchjim-space-ii-05-mac-settings-read",
+      "run:2026-11-13-tanchjim-space-ii-06-mac-settings",
+      "run:2026-11-13-tanchjim-space-ii-07-mac-settings-effect",
+      "run:2026-11-14-tanchjim-space-ii-09-mac-mic-input"
+    ]
+  }
+}

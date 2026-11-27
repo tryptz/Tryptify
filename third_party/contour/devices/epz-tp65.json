@@ -1,0 +1,219 @@
+{
+  "id": "epz-tp65",
+  "name": "EPZ TP65",
+  "shortName": "TP65",
+  "productName": "TP65",
+  "vendor": "EPZ",
+  "status": "stable",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0x4325",
+    "productName": "TP65",
+    "hidInterface": 0,
+    "matchByName": true,
+    "nameAliases": [],
+    "recognisedBy": "findDevice",
+    "listOrder": 18,
+    "notes": [
+      "Supported since Contour 1.8.2, tested by a TP65 owner on their unit (firmware 0.4, Android; https://github.com/Chronosauros/contour/issues/6), not by Contour's maintainer, who has no TP65; nothing was measured. The read-only tester version 1.8.0-tp65test2 passed (issue comment, 26.11.2026: all ten bands and the preamp equal to the Windows reads byte for byte, the same after a replug; Android HID interface 0, IN 0x86, OUT 0x05). 1.8.1-tp65test3 wrote it with the TP65's own sequence (WalkPlayProfiles.TP65_TESTER_WRITE true, WalkPlay.tp65WriteSequence) and passed (issue comment, 26.11.2026: five PEAK sends - 1000 Hz at -1 and -6 dB, 250 / 1000 / 4000 Hz in one send, a change to +1 dB, back to flat - each VERIFIED with only the changed bands and one RAM apply sent; the Android read-back, the read after a replug and the Windows read equal byte for byte, coefficients included; two read timeouts recovered, no write retry; the -6 dB cut sounded as one to its owner). 1.8.1-tp65test4 added the two shelves and passed (issue comment, 27.11.2026: LOW SHELF 100 Hz and HIGH SHELF 4000 Hz at -6 dB, Q 0.71, then flat, each VERIFIED, the band frames byte for byte as planned, no preamp, 01 05, 01 17 or flash frame). 1.8.2 writes it exactly as tp65test4 did; 1.8.0-tp65test1 offered HOLD TO SEND through the Space II's sequence and was withdrawn",
+      "unit evidence from its owner (Windows, firmware 0.4; issue #6 attachment EPZ-TP65-Contour-Contribution.zip, 25.11.2026): VID 0x3302, PID 0x4325, manufacturer string \"EPZ Technology\", product string \"TP65\", bcdDevice 0x0001, HID interface MI_00, usage page 0x0C, 64-byte input and output reports with report ID 0x4B; reads answered: version 80 0C 00 (\"0.4\"), the slot byte 80 09 00 (0, twice), ten bands 80 09 00 00 i 00 (all PEAK, 0 dB, register Q 0x00B6, 31 / 62 / 125 / 250 / 500 / 1000 / 2000 / 4000 / 8000 / 16000 Hz, coefficients those of a 96 kHz RBJ peak at Q 0.75), the offset / preamp 80 03 01 (reply 80 03 02 00 00, 0), and reads of filter 0x11, work mode 0x1D, output 0x19 and balance 0x16 (none written); one PEAK band written (01 09 18, -1 dB at 1000 Hz) with the RAM apply 01 0A 04 00 00 FF FF read back right and still read after a USB replug with no flash command; two read timeouts on Windows (1200 ms) with no known cause. Never tried on a TP65: the preamp write, 01 05, 01 17, the flash 01 01 01, other filter types, the Android USB transport",
+      "catalogs: devicePEQ's usbDeviceConfig.js lists PID 0x4325 in its \"SchemeNo16\" group (line 702, https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L702; peq10Band10dBFullShelves: ten bands, +-10 dB, PEAK and both shelves, Q 0.1-10, deviceHandlesPregain false); FreeDSP-Studio's tools/app/src/dsp2.rs (MIT) lists 0x4325 in `Scheme { no: 16, bands: 10, gain: 10.0, types: SHELVES }` (line 145); no source names the TP65 itself",
+      "found by VID, PID and the exact USB product name \"TP65\" (findDevice); the same PID with any other name matches nothing (another product may use PID 0x4325)",
+      "the record is the catalog's range and types on the Tanchjim Space II's read code and conventions (a measured unit of the same scheme): ten bands, +-10 dB, Q 0.1-10, PEAK, LOW_SHELF and HIGH_SHELF (devicePEQ peq10Band10dBFullShelves, FreeDSP-Studio SHELVES), 96 kHz coefficient design, preamp -30..0 dB in whole dB, the Space II's lenient preamp reply header. PEAK (1.8.1-tp65test3) and both shelves (1.8.1-tp65test4) were written and read back on the unit. The shelf Q convention is NOT measured: the record keeps the Space II's (the Q register is the shelf's Q, peq.shelfQScale 1.0, so the Q field holds the Q the editor shows and the coefficient bytes are designed with), while the Protocol Max and the TRN Black Pearl play a shelf at register / sqrt2; which one the TP65 plays, and whether it plays the registers or the coefficient bytes, only a measurement of its output can tell. The preamp is read with 80 03 01 (DeviceProtocol.preampRequest), the form read on the unit, not the 80 03 00 of the other WalkPlay DACs, and never written: a send needs the profile's preamp to equal what the DAC holds (0 dB on the unit) and is refused before the first frame otherwise. LOW_PASS, HIGH_PASS and +-12 dB (taken by the Space II and the Max) stay candidates for a measured unit",
+      "no DAC settings: the record has no settings rows, so the DAC Settings page is empty and Contour sends no gain, filter, work mode, balance or mic frame and never report 0x54 to this unit. WalkPlayGuard holds the TP65 to an allow-list in every context: the reads 80 0C 00, 80 09 00, 80 09 00 00 i 00 and 80 03 01, the band write 01 09 18 00 i 00 00 and the RAM apply 01 0A 04 00 00 FF FF; everything else (the preamp write, 01 05, 01 17, the flash 01 01 x, 01 04, settings, factory reset, firmware, probes) is refused"
+    ]
+  },
+  "family": "walkplay",
+  "driver": {
+    "reportId": 75,
+    "schemeNo": 16,
+    "bandLen": 24,
+    "writeSequence": "devicepeq",
+    "strictParse": true,
+    "importMode": "strict",
+    "ab": false,
+    "designRateHz": 96000
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [
+      20,
+      20000
+    ],
+    "gainDb": [
+      -10,
+      10
+    ],
+    "q": [
+      0.1,
+      10
+    ],
+    "types": {
+      "PEAK": 2,
+      "LOW_SHELF": 1,
+      "HIGH_SHELF": 3
+    },
+    "heldTypes": {},
+    "shelfQScale": 1.0,
+    "shelfForm": "q",
+    "coefficientRateHz": 96000,
+    "emulation": null
+  },
+  "preamp": {
+    "present": true,
+    "db": [
+      -30,
+      0
+    ],
+    "step": 0.1,
+    "wholeDb": true,
+    "registerOffsetDb": 0
+  },
+  "slots": {
+    "user": [
+      0
+    ],
+    "declaredWritable": [
+      0
+    ],
+    "stock": [],
+    "bypass": null,
+    "labels": {
+      "0": "Custom"
+    },
+    "picker": false,
+    "names": "none",
+    "slotByte": "echo-read-value",
+    "factoryFlat": [
+      [
+        31,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        62,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        125,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        250,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        500,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        1000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        2000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        4000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        8000,
+        0.7109375,
+        "PEAK"
+      ],
+      [
+        16000,
+        0.7109375,
+        "PEAK"
+      ]
+    ]
+  },
+  "pacing": {
+    "writeGapMs": 20,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": null,
+    "afterSaveMs": 200,
+    "sequence": [
+      "connect (every build): version 80 0C 00, the slot byte 80 09 00, ten bands 80 09 00 00 i 00, the preamp 80 03 01; any reply that does not parse stops the read",
+      "a send (since 1.8.1-tp65test3): the same full read first, then only the bands whose registers differ from it, each 01 09 18 00 i 00 00 + 20 coefficient bytes + freq, Q, gain, type, 00, slot, 20 ms after it (120 ms after the last); then the RAM apply 01 0A 04 00 00 FF FF and 250 ms; then the same full strict read-back, compared register by register with the plan",
+      "never in a send: the preamp write 01 03, 01 05, 01 17, the flash 01 01 01. Its owner saw an edited band still read after a replug with no flash command (Windows), as the Space II keeps band frames without one (A/B session, 16.11.2026); a send whose preamp differs from the DAC's is refused before the first write frame, and a band that reads back different ends the send NOT VERIFIED, never sent again by itself"
+    ]
+  },
+  "readback": {
+    "qSlack": "q256",
+    "readBoundsHz": [
+      1,
+      48000
+    ],
+    "readBoundsDb": [
+      -60,
+      60
+    ]
+  },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": {
+    "offered": "unknown",
+    "src": "nothing read from a TP65 by Contour; command 0x05 resets are never sent to it"
+  },
+  "hwVolume": {
+    "inScope": "unknown",
+    "src": "the owner reports physical volume control not validated yet; nothing recorded about a UAC Feature Unit or vendor volume control"
+  },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L702",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json",
+    "constraintsRef": "peq10Band10dBFullShelves",
+    "vendorIds": [
+      13058
+    ],
+    "oracle": false,
+    "status": "beta-unverified",
+    "experimental": false,
+    "bestGuessProductName": false,
+    "codecBlockers": [],
+    "evidenceCaveats": [
+      "Two catalog entries (devicePEQ and FreeDSP-Studio, SchemeNo16 by PID), its owner's Windows evidence (issue #6 attachment: reads, one PEAK band write with the RAM apply and its persistence over a replug) and Contour's tester versions on that unit: a read (1.8.0-tp65test2), five PEAK sends (1.8.1-tp65test3) and two shelf sends (1.8.1-tp65test4), each VERIFIED. The ranges beyond what was written there, the shelf Q convention and the preamp policy are the Space II's and the catalog's, not the TP65's own.",
+      "The TP65 write sends only the frames validated on the unit (band writes and the RAM apply 01 0A) on the Space II's pacing; no preamp, 01 05, 01 17 or flash frame. Gains outside -6..+1 dB, the range edges, positive-gain playback and the DSP output after a Contour write were never measured."
+    ],
+    "schemeCatalogUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L702",
+    "schemeConstraintsRef": "peq10Band10dBFullShelves"
+  },
+  "tested": {
+    "date": "2026-11-27",
+    "firmware": "0.4",
+    "contour": "1.8.1-tp65test4 (43), run by a TP65 owner on their Android phone; the four checks below are theirs, not Contour's",
+    "by": "community",
+    "rangesAccepted": {
+      "result": "not-run",
+      "note": "Not run by Contour (no unit). Its owner wrote with the tester versions: PEAK at 1000 Hz -1 and -6 dB, 250 / 1000 / 4000 Hz in one send, +1 dB and flat (1.8.1-tp65test3, 26.11.2026); LOW SHELF 100 Hz and HIGH SHELF 4000 Hz at -6 dB, Q 0.71, and flat (1.8.1-tp65test4, 27.11.2026); every send VERIFIED, the read-back equal to the plan byte for byte. The edges of the record's ranges (-10..+10 dB, Q 0.1-10, 20-20000 Hz) are the catalog's and were never written; the preamp was only read (0 dB)."
+    },
+    "acoustic": {
+      "result": "not-run",
+      "note": "Nothing measured. Its owner heard the -6 dB PEAK cut as one. The shelf Q convention (Q = register, the Space II's) is not measured."
+    },
+    "persistence": {
+      "result": "not-run",
+      "note": "Not run by Contour. Its owner: after a USB replug the Android read and the Windows read equal the written bands byte for byte (1.8.1-tp65test3), with no flash command sent."
+    },
+    "settings": {
+      "result": "not-run",
+      "note": "No DAC settings: the record has no rows, and Contour sends no settings frame to this unit."
+    },
+    "beyondVendor": "Nothing beyond the catalog: Contour offers devicePEQ's SchemeNo16 ranges (10 bands, -10..+10 dB, Q 0.1-10, PEAK and both shelves). The preamp is read only.",
+    "runs": []
+  }
+}

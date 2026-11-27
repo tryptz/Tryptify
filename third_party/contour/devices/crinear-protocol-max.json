@@ -1,0 +1,119 @@
+{
+  "id": "crinear-protocol-max",
+  "name": "CrinEar Protocol Max",
+  "shortName": "Max",
+  "productName": "Protocol Max",
+  "vendor": "CrinEar",
+  "status": "stable",
+  "usb": {
+    "vid": "0x3302",
+    "pid": "0x43CC",
+    "productName": "Protocol Max",
+    "hidInterface": 0,
+    "matchByName": false,
+    "recognisedBy": "find",
+    "listOrder": 2,
+    "notes": [
+      "WalkPlay SchemeNo16; the Android USB attach filter is generated from this record at build time (research/protocol/PROTOCOL.md:112-114)",
+      "exact allow-list 3302:43CC only; no vendor-wide and no name matching; no other SchemeNo16 pid (research/protocol/PROTOCOL.md:112-114)",
+      "fails closed: exactly one HID interface with a 64-byte interrupt IN endpoint, else no I/O; on the Mac the unit's HID interface is number 0, usage page 12 usage 1, with report 0x4B on vendor usage page 0xFF01 (run:2026-11-10-crinear-protocol-max-01-mac) (android/app/src/main/kotlin/io/github/chronosauros/contour/usb/HidTransport.kt:79-87; research/protocol/PROTOCOL.md:120-123)",
+      "read on a unit (2026-11-10, READ frames only): manufacturer string \"CrinEar Technology\", product string \"Protocol Max\", bcdDevice 0x0001, report 0x4B of 64 bytes, HID report descriptor of 74 bytes, firmware read by the tool \"1.4\"; USB audio output only (2 channels), no input channels",
+      "10 bands read strictly on that unit (the community tester's 8 bands on a 1.2.2 beta build do not match it); factory state: slot byte 0, preamp 0 dB, ten PK bands at 0 dB, register Q 182/256 on 31 / 62 / 125 / 250 / 500 / 1000 / 2000 / 4000 / 8000 / 16000 Hz, the same flat as the TRN Black Pearl",
+      "A/B and the service screen's band-1 test write are off on the Max (TEMP_WRITE is proven RAM-only on the Micro only); no extra WalkPlay commands (research/protocol/PROTOCOL.md:124-125)",
+      "the DSP plays the registers (frequency, gain, Q) at the stream rate, not the coefficient bytes: shelves fit within 0.07 dB with the biquad designed at the 48 kHz stream and 1.5 dB off at 96 kHz; a shelf plays Q = register / sqrt2, the TRN Black Pearl's convention (run:2026-11-10-crinear-protocol-max-13-mac-eqtest-shelf, -16). peq.coefficientRateHz stays 96 000 Hz like the TRN: the bytes Contour sends are designed for it, and they are not played",
+      "peaks, low and high shelves, LOW_PASS and HIGH_PASS (native codes 4 and 5, the TRN's) each played as their own type at a 48 kHz stream, every case within 0.18 dB: -12 dB cuts, +9 dB peak and shelf boosts, Q 0.1 and Q 10 peaks, ten bands in one write (run:2026-11-10-crinear-protocol-max-15-mac-eqtest, -16, -19, -20); registers at +-12 dB are kept (run:2026-11-10-crinear-protocol-max-08-mac)",
+      "offered since the phone run (ProtocolMax.CANDIDATES_VERIFIED true; run:2026-11-10-crinear-protocol-max-22-phone: a full edge profile written from the app, VERIFIED, byte-identical after a replug): LOW_PASS and HIGH_PASS (peq.types), peaks and shelves up to +-12 dB (peq.gainDb; devicePEQ stops at +-10), and a shelf boost whose coefficient bytes overflow signed Q30 sent wrapped to int32 as devicePEQ sends them (the unit plays the registers); the preamp is -30..0 dB in whole dB (Contour policy)",
+      "the WalkPlay DAC Filter tab reads answer on this unit (same frames as the TRN): filter 1 (FAST-LL), work mode 1 (Class-AB in the TRN's mapping), gain mode 1 (High), balance 0 / 0; written on the Mac (run:2026-11-10-crinear-protocol-max-14-mac-settings and the bench's T14): FILTER NON-OS -2.6 dB at 20 kHz, BALANCE 1.00 dB per step with channel 1 the right one, WORK MODE 1 -> 0 and back read back each time (the bench rig at line level showed no level or noise difference between Class-H and Class-AB, which does not prove the mode does nothing); written from the app on a phone (run:2026-11-10-crinear-protocol-max-22-phone): FILTER (SLOW-PC) and BALANCE (L4) were kept after an unplug and are verified; WORK MODE (Class-H) was written from the app, read back and kept after an unplug (verified, WalkPlaySettings.MAX_WORK_MODE_VERIFIED)",
+      "a read accepts what the unit holds in register format (the TRN's tolerance, readBounds 1-48000 Hz, +-60 dB, any type 1-5): a band outside the offered ranges loads with a warning and sending it back stays blocked",
+      "in one Mac run the first band frame of a write was dropped on 2 of about 19 writes and on none of about 60 later ones; the strict read-back caught it each time",
+      "right after a USB stream opens the output is about 26 dB quiet for the first sweep (run:2026-11-10-crinear-protocol-max-10-mac-eqtest): an acoustic test needs the stream open before the first measurement",
+      "GAIN is not offered for the Max, in any build: the unit has a physical Eco / Boost switch that sets the gain mode and wins after every replug. On the phone GAIN Low was written and read back VERIFIED and was High again after the replug, while FILTER and BALANCE stayed (run:2026-11-10-crinear-protocol-max-22-phone). The vendor's tool sends the same 01 19 01 m with no save. Contour therefore has no GAIN row for the Max and never sends 01 19 to it",
+      "high shelf Q limit: the shelf formula has no real answer for a shelf at the top of the Q range with a deep cut (Q 7.07 at -10 dB or lower), so such a band has no finite biquad and Contour blocks it before anything is sent, wrapped or not (the TRN has the same limit)"
+    ]
+  },
+  "family": "walkplay",
+  "driver": {
+    "reportId": 75,
+    "schemeNo": 16,
+    "bandLen": 24,
+    "writeSequence": "devicepeq",
+    "strictParse": true,
+    "importMode": "strict",
+    "ab": false,
+    "designRateHz": 96000
+  },
+  "peq": {
+    "bands": 10,
+    "fixedBandCount": true,
+    "freqHz": [20, 20000],
+    "gainDb": [-12, 12],
+    "q": [0.1, 10],
+    "types": { "PEAK": 2, "LOW_SHELF": 1, "HIGH_SHELF": 3, "LOW_PASS": 4, "HIGH_PASS": 5 },
+    "heldTypes": {},
+    "shelfQScale": "sqrt2",
+    "shelfForm": "q",
+    "coefficientRateHz": 96000,
+    "emulation": null
+  },
+  "preamp": { "present": true, "db": [-30, 0], "step": 0.1, "wholeDb": true, "registerOffsetDb": 0 },
+  "slots": {
+    "user": [0],
+    "declaredWritable": [0],
+    "stock": [],
+    "bypass": null,
+    "labels": { "0": "Custom" },
+    "picker": false,
+    "names": "none",
+    "slotByte": "echo-read-value",
+    "factoryFlat": [[31, 0.7109375, "PEAK"], [62, 0.7109375, "PEAK"], [125, 0.7109375, "PEAK"], [250, 0.7109375, "PEAK"], [500, 0.7109375, "PEAK"], [1000, 0.7109375, "PEAK"], [2000, 0.7109375, "PEAK"], [4000, 0.7109375, "PEAK"], [8000, 0.7109375, "PEAK"], [16000, 0.7109375, "PEAK"]]
+  },
+  "pacing": {
+    "writeGapMs": 20,
+    "consumeEchoes": false,
+    "checksum": false,
+    "needsAudioStream": false,
+    "probeGapMs": null,
+    "afterSaveMs": 200,
+    "sequence": [
+      "every band write, 20 ms after it (120 ms after the last band)",
+      "preamp write 01 03 02 00 g, 50 ms",
+      "commit 01 05, 20 ms; 01 17, 20 ms; TEMP_WRITE 01 0A 04 00 00 FF FF, 50 ms; FLASH_EQ 01 01 01, 0 ms, then 200 ms",
+      "then a full strict read-back of every band, the preamp and the slot byte; any mismatch is a failure, not ON DAC"
+    ]
+  },
+  "readback": { "qSlack": "q256", "readBoundsHz": [1, 48000], "readBoundsDb": [-60, 60] },
+  "settings": [],
+  "info": [],
+  "preview": {},
+  "reset": { "offered": "unknown", "src": "no Max-specific vendor tool read; the official route is the devicePEQ plugin of graph.hangout.audio (Device PEQ, Connect, slot Custom, Pull / Push), which has no reset; the WalkPlay web tool's resetDevice is unattributed (scope-kt-walkplay.md:22-23,182,191)" },
+  "hwVolume": { "inScope": "unknown", "src": "no unit; nothing recorded about a UAC Feature Unit or vendor volume control for the Max" },
+  "upstream": {
+    "sourceUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/usbDeviceConfig.js#L940",
+    "constraintsUrl": "https://github.com/jeromeof/devicePEQ/blob/0617f382e76629792a5933e6933e4b396a756a93/devicePEQ/peqConstraintsConfig.json",
+    "constraintsRef": "peq10Band10dBFullShelves",
+    "vendorIds": [13058],
+    "oracle": false
+  },
+  "tested": {
+    "date": "2026-11-10",
+    "firmware": "1.4",
+    "contour": "1.6.6-perf (39) from wip/devices-batch, APK d62df02f",
+    "rangesAccepted": { "result": "pass", "note": "Mac runs 07 and 08 wrote and read back PK, LS, HS, LP and HP, +-12 dB gains at the edges and the preamp -30..0 dB; on the phone (Nothing A065, run 22) a full edge profile (LS 20 Hz +12, PK 100 Hz -12 Q10, PK 500 Hz +12 Q0.1, HS 20000 Hz -12 Q4, HS 8000 Hz +9 sent wrapped, LP, HP, PK 20000 Hz +12 Q10, preamp -12) was written from the app, read back VERIFIED and ON DAC - SAFE TO UNPLUG. The record offers LP and HP, +-12 dB and Q 0.1-10 (shelf Q 0.0707-7.07, register = Q x sqrt2)." },
+    "acoustic": { "result": "pass", "note": "Runs 15, 16, 19 and 20 at a 48 kHz stream: every case within 0.18 dB of Contour's model (PK, LS, HS, LP, HP, -12 dB cuts, +9 dB boosts, Q 0.1 and Q 10, ten bands, preamp -6). The DSP plays the registers at the stream rate, shelves at Q = register / sqrt2; a shelf boost whose bytes overflow Q30 plays right when sent wrapped." },
+    "persistence": { "result": "pass", "note": "Phone, run 22: after an unplug and replug all ten band registers and the preamp read back byte-identical, and FILTER (SLOW-PC) and BALANCE (L4) were kept. The gain mode is not kept (back on HIGH after the replug), which is why that row is unverified." },
+    "settings": { "result": "pass", "note": "FILTER and BALANCE: written from the app, read back and kept after a replug, effect measured on the Mac (NON-OS -2.6 dB at 20 kHz, 1.00 dB per balance step, channel 1 the right one): offered in a release. WORK MODE: writable and verified (written and read back on the Mac, 1 -> 0 and back; on the phone Class-H written from the app, read back and kept after an unplug). GAIN: not offered, because the unit's physical Eco / Boost switch sets the gain mode and wins after every replug. MIC GAIN: offered for vendor parity (the devicePEQ extras for this profile list micGain; owner 10.11.2026). The unit exposes no audio input, so the setting has no audible path on this DAC; it is written as 01 02 02 lsb msb (-15..+15 whole dB) followed by the WalkPlay web tool's flash save 01 01 00 (200 ms later) and read back (80 02 02 lsb msb, mic 0 on the unit). Encoding source: devicePEQ master's setMicGain / readMicGain (a signed 16-bit little-endian value, t = round(dB x 32767 / 15), read value x 15 / 32767 rounded to the nearest dB). devicePEQ's own +-15 dB encoding (32767 / 32769) wraps on this unit (+15 sent ff 7f read back 00 82 = -15, -15 sent 01 80 read 00 7e = +15; the unit stores the value in steps of 0x80 and rounds, -14..+14 read back right), so Contour clamps t to +-0x7F00 and sends 0x7F00 (00 7f) for +15 and 0x8100 (00 81) for -15, which read back 15 and -15 (Mac sweep, run:2026-11-10-crinear-protocol-max-22-phone raw/mic-sweep-mac.txt), whose header confirms the mic gain on SchemeNo16 (Protocol Max); the WalkPlay-capture encoding of the TRN (01 02 02 80 e) stored wrong values on this unit (phone, perf f18f8fee: 10 read back, -1 read 0, 2 read 3, -11 came back as a 32-bit sign extension). The save is needed: written alone, mic -7 was lost after a replug (read 0); with 01 01 00 it read -7, was kept over an unplug and replug, and the EQ was unaffected (a PK 1000 Hz -12 Q2 marker identical before and after the save and after the replug, within 0.002 dB; run:2026-11-11-crinear-protocol-max-23-mac-mic-save). The Max guard lets 01 01 00 through only as that save. Verified (WalkPlaySettings.MAX_MIC_VERIFIED true), offered in a release. All four software settings are verified; GAIN is a physical switch, not a software setting, so the result is pass." },
+    "beyondVendor": "Contour adds LOW_PASS and HIGH_PASS, peaks and shelves up to +-12 dB, high-shelf boosts that devicePEQ's +-10 dB profile allows but Contour used to refuse (the unit plays the registers), shelves at their measured Q convention, and the filter and balance settings.",
+    "runs": [
+      "run:2026-11-10-crinear-protocol-max-02-mac",
+      "run:2026-11-10-crinear-protocol-max-07-mac",
+      "run:2026-11-10-crinear-protocol-max-08-mac",
+      "run:2026-11-10-crinear-protocol-max-14-mac-settings",
+      "run:2026-11-10-crinear-protocol-max-15-mac-eqtest",
+      "run:2026-11-10-crinear-protocol-max-16-mac-eqtest-shelf",
+      "run:2026-11-10-crinear-protocol-max-19-mac-eqtest-max",
+      "run:2026-11-10-crinear-protocol-max-20-mac-eqtest-hp",
+      "run:2026-11-10-crinear-protocol-max-22-phone",
+      "run:2026-11-11-crinear-protocol-max-23-mac-mic-save"
+    ]
+  }
+}
