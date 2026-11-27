@@ -349,8 +349,35 @@ abstract class PackProjectMPresetsTask : DefaultTask() {
     }
 }
 
+// Contour's licence and notice (third_party/contour, Apache-2.0) as assets,
+// so the APK carries them and the DAC EQ page can show the notice: the
+// licence asks that whoever gets the code gets both.
+@CacheableTask
+abstract class CopyContourNoticesTask : DefaultTask() {
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val notices: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val into = outputDir.get().asFile.resolve("licenses/contour")
+        into.deleteRecursively()
+        into.mkdirs()
+        notices.files.forEach { it.copyTo(into.resolve("${it.name}.txt"), overwrite = true) }
+    }
+}
+
 androidComponents {
     onVariants { variant ->
+        val contourNotices = project.tasks.register<CopyContourNoticesTask>(
+            "copy${variant.name.replaceFirstChar { it.uppercase() }}ContourNotices"
+        ) {
+            notices.from(rootProject.file("third_party/contour/LICENSE"), rootProject.file("third_party/contour/NOTICE"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(contourNotices, CopyContourNoticesTask::outputDir)
         val pack = project.tasks.register<PackProjectMPresetsTask>(
             "pack${variant.name.replaceFirstChar { it.uppercase() }}ProjectMPresets"
         ) {

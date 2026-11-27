@@ -603,6 +603,16 @@ private fun EqualizerTab(
             Text(stringResource(R.string.settings_open_parametric_eq))
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // An EQ written into a USB DAC's own memory (ui/eq/dac).
+        OutlinedButton(
+            onClick = { navController.navigateTool(Screen.DacEq) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.settings_open_dac_eq))
+        }
+
         // ─── Saved Profiles ───
         if (allPresets.isNotEmpty()) {
             Spacer(modifier = Modifier.height(24.dp))

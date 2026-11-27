@@ -644,6 +644,64 @@ and made by reflection.
 - R8: the service is made by name in another process. Its keep rules are at
   the end of `proguard-rules.pro`.
 
+## DAC EQ writes into a USB DAC, through Contour's code
+
+Settings › Equalizer › Open DAC EQ keeps an EQ in a USB DAC's own memory,
+where it plays in every app and on anything the DAC is plugged into. The
+idea, the DAC catalog and every byte on the wire are
+[Contour](https://github.com/Chronosauros/contour)'s (Apache-2.0); the graph,
+the presets, the import and the fit are the app's own.
+
+What is whose:
+
+- `third_party/contour`: Contour, copied and never edited
+  (`tools/contour/vendor.sh`, `VENDORED.md`). `android/core` is the module
+  `:contour-core`. `android/app` holds its USB files (the HID transport, the
+  client that reads, writes and reads back) and its simulated DACs; the app
+  module compiles the first into the APK and the second into its unit tests
+  (`sourceSets` in `app/build.gradle.kts`). `ContourAppShims.kt` and
+  `ui/UiText.kt` under `io/github/chronosauros/contour` stand in for the
+  three things those files name of Contour's app.
+- `audio/usb/daceq/DacEqController`: finds a supported DAC, asks Android for
+  it, reads and sends, and keeps Contour's two USB rules (its controller is
+  not copied): the session guard, and the wait for a DAC that restarts when
+  it saves. The page uses it through `DacEqDevice`, which its tests fill
+  with a simulated DAC.
+- `audio/eq/dac/`: `DacEqMapping` (the app's bands to Contour's and back),
+  `DacEqFit` (an EQ made to fit a DAC), `DacEqCatalog` (the 18 device
+  records, by id; Contour keeps its own list internal).
+- `ui/eq/dac/`: `DacEqSession` (the page's logic), `DacEqViewModel` (the
+  presets), `DacEqScreen`.
+
+Rules, beside the page's own in `docs/ui-invariants.md` ("DAC EQ"):
+
+- Only the DAC's HID interface is opened, for one read or one send, and
+  closed again. The audio interfaces are never claimed, so the rule above
+  about not taking a DAC from Android's audio is not touched. Contour claims
+  the HID interface with force, which unbinds Android's HID driver from it
+  for those seconds (a DAC's own volume buttons do nothing meanwhile).
+- With exclusive USB mode on, the app's libusb driver and this page hold the
+  same DAC at once, on different interfaces. Untried. The FiiO KA15 answers
+  HID only while an Android audio stream to it is open, and Contour's
+  keep-alive opens a silent one: with exclusive mode on there may be no such
+  output, and a read would then time out.
+- Contour marks a DAC read-only until a write is proven on hardware
+  (`DeviceTarget.readOnly`, `Proven`). Leave its channel at release.
+- A newer Contour: run the vendor script, then `./gradlew :contour-core:test`
+  and the app's `*DacEq*` tests. `DacEqCatalogTest` fails for a device
+  record the page does not list; a new file Contour's USB layer needs shows
+  up as a compile error (add it to `USB_FILES` in the script).
+
+None of it has run against a real DAC: the owner has none of the 18. What
+holds it is Contour's own 414 tests, and the app's against Contour's
+simulated DACs (`DacEqSimulatedSendTest`: one EQ to each of the 18, proven by
+read-back and read in again; `DacEqSessionTest`: the page's logic;
+`DacEqScreenTest`: the page drawn). The simulators answer the protocol's
+frames in order; they are not the firmware. When a listener reports on a
+DAC, ask for a sent log: Contour logs every frame it sends and receives in
+hex under the tag `ContourUsb` (debug level), and the controller's warnings
+are under `DacEq`.
+
 ## There is no assistant in the app
 
 An in-app assistant and an "ask for an EQ" sheet on the AutoEQ screen, both

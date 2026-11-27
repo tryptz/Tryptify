@@ -156,6 +156,7 @@ sealed class Screen(val route: String) {
     data object Equalizer : Screen("equalizer")
     data object ParametricEq : Screen("parametric_eq")
     data object ParametricEqEdit : Screen("parametric_eq_edit")
+    data object DacEq : Screen("dac_eq")
     data object Profile : Screen("profile")
 
     /** A listening party: everyone queues songs and hears the same moment. */
@@ -1002,6 +1003,11 @@ fun MonochromeNavHost(initialRoute: String? = null) {
                 composable(Screen.ParametricEqEdit.route) {
                     tf.monochrome.android.devedit.DevEditScreen("parametric_eq_edit") {
                         ParametricEqEditScreen(navController = navController)
+                    }
+                }
+                composable(Screen.DacEq.route) {
+                    tf.monochrome.android.devedit.DevEditScreen("dac_eq") {
+                        tf.monochrome.android.ui.eq.dac.DacEqScreen(navController = navController)
                     }
                 }
                 composable(Screen.Mixer.route) {

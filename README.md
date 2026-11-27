@@ -88,6 +88,7 @@ Tryptify is free and open source. If it makes your listening better, you can sup
 | **A spectrum you can read** | A C++ waterfall from a 16K-point FFT, in six styles, up to 120 fps. |
 | **DSP mixing console** | A C++17 engine with up to 48 buses, 37 processors and EBU R128 meters, a 9.1.6 upmix and a Binaural Room among them. |
 | **Headphone AutoEQ** | Correction from 4,000+ measurements against 10 targets, with target pills and a filter editor under the graph. System-wide for other apps too, an ear each, with an exact parametric mode through Shizuku. |
+| **DAC EQ** | Your EQ written into a supported USB DAC's own memory, fitted to its bands and read back to prove it, so it plays in every app and on anything the DAC is plugged into. 18 DACs, through [Contour](https://github.com/Chronosauros/contour)'s protocols. Not yet tried on a real DAC. |
 | **Dolby Atmos on headphones** | Atmos objects play from a 15.1.12 room of virtual speakers you can see in 3D, through measured ear filters, in the built-in room, a measured one or one you shape yourself. |
 | **Bit-perfect USB DAC** | Its own UAC1/UAC2 driver writes straight to the DAC, Apple's USB-C adapter included, in stereo or in surround on a multichannel interface. |
 | **Speed, pitch, tempo** | 0.25× to 3.0×, by multiplier, semitones or BPM, with two pitch engines. |

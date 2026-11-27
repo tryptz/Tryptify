@@ -71,7 +71,7 @@ declare
     own constant text[] := array[
         'AlbumArtFinder', 'AmbientComposite', 'AmbientVisualizer', 'ArtworkStoreMigration', 'AtmosPipeline',
         'AtmosProcessor', 'AtmosRoom', 'AtmosSofaStore', 'AtmosTap', 'AtmosTrackProvider',
-        'AudioProcessorChain', 'ChartQueue', 'CrashLogger', 'CrossfeedRoom', 'CrtPresetStore',
+        'AudioProcessorChain', 'ChartQueue', 'CrashLogger', 'CrossfeedRoom', 'CrtPresetStore', 'DacEq',
         'DebugScreenRecorder', 'DebugScreenRecordSvc', 'DeviceRegistry', 'DiscordPresence', 'DownloadManager',
         'DownloadQueueWorker', 'DspEngineManager', 'DynamicRange', 'EqProcessor', 'EqRepository',
         'FloatPcmGuard', 'FolderIndexer', 'FrameStall', 'GalaxyFx', 'GlyphAssets', 'GlyphAttempts',

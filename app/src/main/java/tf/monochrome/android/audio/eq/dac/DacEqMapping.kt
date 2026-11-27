@@ -113,12 +113,17 @@ object DacEqMapping {
      */
     fun writesPreamp(target: DeviceTarget): Boolean {
         if (!target.hasPreamp) return false
-        val probe = listOf(EqBand(id = 0, type = FilterType.PEAKING, freq = 1000f, gain = 0f, q = 1f))
-        fun taken(preampDb: Double) = runCatching { target.issues(profile("probe", probe, preampDb, target, 0L)) }
-            .getOrDefault(listOf("refused")).isEmpty()
-        // A DAC that refuses the probe at 0 dB too is refusing something else.
-        return taken(-1.0) || !taken(0.0)
+        // The page asks on every change; a DAC's answer does not change.
+        return preampTaken.getOrPut(target.caps.name) {
+            val probe = listOf(EqBand(id = 0, type = FilterType.PEAKING, freq = 1000f, gain = 0f, q = 1f))
+            fun taken(preampDb: Double) = runCatching { target.issues(profile("probe", probe, preampDb, target, 0L)) }
+                .getOrDefault(listOf("refused")).isEmpty()
+            // A DAC that refuses the probe at 0 dB too is refusing something else.
+            taken(-1.0) || !taken(0.0)
+        }
     }
+
+    private val preampTaken = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     /**
      * A name a DAC's slot can take. Some DACs keep a name with the EQ, A to Z

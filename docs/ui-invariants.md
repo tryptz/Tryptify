@@ -2693,6 +2693,92 @@ with digits are never guessed: "hd 660" must not bring up the HD 600. A plain
 `name.contains(query)` came back as the "improvement" of none of this, and
 missed every one of those.
 
+### DAC EQ
+
+Settings › Equalizer › Open DAC EQ (`ui/eq/dac/`) writes an EQ into a USB
+DAC's own memory. The page is the Parametric EQ editor's layout (the same
+graph, band chips and sliders, opened up from `ParametricEqEditScreen.kt`)
+around three things of its own: the card of the DAC plugged in, where the EQ
+comes from, and the button that sends it. What talks to the DAC is Contour's
+code (AGENTS.md, "DAC EQ").
+
+**Nothing on the page writes to a DAC but the held button.** `HoldToSend`
+fills for 1.2 s and calls `DacEqSession.send` when it is full; letting go
+earlier sends nothing. No send on a tap, on a change, on plugging in or on
+leaving the page, and no "apply automatically" switch: a DAC's memory is not
+the app's, a write replaces what its owner put there, and a brushed button
+must not do that. Reading is different: a DAC is read by itself once when it
+becomes reachable, because a read changes nothing on it.
+
+**"Sent and verified" comes only from a read-back.** Every send ends with the
+DAC read again and every register compared (Contour's sessions do it); the
+page says verified for that and nothing else. A DAC that leaves the USB bus
+to save (the Allegro Mini, the JM12, the DUSK-SP, the JA11) is waited for and
+read when it is back, and until then the page says it is restarting. If that
+read never comes the page says "Not confirmed" and why, never "sent". After
+a send that was not proven the page forgets what it had read, so "On the
+DAC" never shows something a failed write may have changed.
+
+**The EQ in the editor is always inside the connected DAC's limits.** Every
+way in goes through `DacEqFit`: a preset, an import, a drag on the graph, a
+slider, a new band, and plugging in another DAC with an EQ already loaded.
+The band count stops at the DAC's, the filter kinds offered are the DAC's,
+and a value outside its range comes back to the edge. So the button is not
+greyed out for a reason the listener has to hunt for.
+
+**A fit never drops anything silently.** An EQ that fits is sent to the last
+digit. One with too many bands, or a kind of filter the DAC lacks, is fitted
+again with the app's own AutoEQ: from the headphone's measurement when the
+preset kept one, else from the curve the old bands drew. The line under the
+graph says which, how many bands went into how many, and how far the new
+curve is from the old one. Cutting the list at the DAC's count would have
+dropped whatever came last, usually the treble.
+
+**A shelf's Q is converted for the DACs that build a shelf from a slope.**
+The app draws and plays a shelf in the cookbook's Q form; the DACs that are
+sent coefficients (the Protocol Micro, the Echo-A, the DUSK-SP) build theirs
+from a slope, and the same number is two filters, 3 dB apart at Q 2.
+`DacEqMapping.slopeForQ` and `qForSlope` convert on the way out and back, so
+the curve on the graph is the one asked of the DAC. Never pass a band's `q`
+to Contour without `DacEqMapping.dacQ`.
+
+**The curve is the EQ asked for, not a measurement of the DAC.** The graph
+draws with the app's filters; Contour draws the plain cookbook biquad at
+96 kHz, which is also what the coefficient DACs play. Below 2 kHz they are
+one curve; above, an ordinary band is within a third of a dB and a steep,
+strong high shelf up to a dB in the top octave (`DacEqMappingTest`). A DAC
+also keeps numbers on its own grid (a whole hertz; a whole dB of gain on the
+DUSK-SP), which is why "On the DAC" after a send can read a touch
+differently from what was sent.
+
+**A DAC that takes no preamp is sent 0 dB and the page says boosts can
+clip.** Some DACs have no preamp to write and one has a preamp Contour does
+not write yet. `DacEqMapping.writesPreamp` asks Contour's own planner, so a
+DAC is not named in the app. The automatic preamp is Contour's (whole dB on
+most DACs, by its planner's rules), so the number shown is the number the DAC
+holds after a send.
+
+**The page's numbers change with its EQ in one step.** `DacEqSession.change`
+is the only way its state is written, and it works out the preamp a send
+would write, Contour's verdict and "the DAC already holds this" in the same
+update. They were a second update once, and for a moment the page held the
+new bands beside the last EQ's preamp.
+
+**What Contour refuses is shown in Contour's words.** Its reasons (and a
+DAC's read-back mismatches) are English sentences from its core, shown as
+they are under a translated heading. With the fit in front they are rare.
+Do not translate them by matching their text: they change with Contour.
+
+**The line that says no real DAC has been tried stays until one has.** The
+page was built with none of the 18 DACs to hand: `DacEqSimulatedSendTest`
+and `DacEqSessionTest` send to Contour's simulated DACs, which answer the
+protocol's frames and are not the firmware. Take `dac_eq_risk`'s last
+sentence out for a DAC family only when a listener's log shows a verified
+send on it.
+
+`DacEqScreenTest` draws the page on a simulated DAC; with `DAC_EQ_SHOTS` set
+to a folder it also saves each state as a picture.
+
 ### Stats charts
 
 **Bars are glass, and the glass is flat colour.** `glassBar` in `StatsVisuals.kt`

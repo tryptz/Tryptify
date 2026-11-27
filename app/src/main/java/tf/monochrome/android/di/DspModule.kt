@@ -32,4 +32,10 @@ object DspModule {
         preferences: PreferencesManager,
         upmixProcessor: UpmixProcessor,
     ): DspEngineManager = DspEngineManager(processor, preferences, upmixProcessor)
+
+    /** The USB DAC behind the DAC EQ page: the real one. Its tests give a simulated one. */
+    @Provides
+    fun provideDacEqDevice(
+        controller: tf.monochrome.android.audio.usb.daceq.DacEqController,
+    ): tf.monochrome.android.audio.usb.daceq.DacEqDevice = controller
 }

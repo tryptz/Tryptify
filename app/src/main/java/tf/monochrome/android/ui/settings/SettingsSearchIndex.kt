@@ -226,6 +226,8 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         .at(SettingsDestination.Route("equalizer")),
     entry("Parametric EQ", R.string.search_parametric_eq, "Equalizer", listOf("eq", "filter", "peaking", "shelf", "q"))
         .at(SettingsDestination.Route("parametric_eq")),
+    entry("DAC EQ", R.string.dac_eq_title, "Equalizer", listOf("dac", "dongle", "usb", "hardware", "peq", "parametric", "write", "flash", "memory", "contour", "fiio", "moondrop", "crinear", "walkplay"))
+        .at(SettingsDestination.Route("dac_eq")),
     entry("AutoEQ headphone profile", R.string.search_autoeq_headphone_profile, "Equalizer", listOf("headphone", "harman", "target", "correction")),
     entry("Spectrum analyzer", R.string.settings_spectrum_analyzer, "Equalizer", listOf("fft", "visualiser", "frequency", "meter")),
     entry("System-wide AutoEQ", R.string.settings_system_wide_autoeq, "Equalizer", listOf("global", "device", "all audio", "correction", "beta", "other apps", "tile", "quick settings")),

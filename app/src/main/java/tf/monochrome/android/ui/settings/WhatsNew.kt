@@ -357,6 +357,14 @@ object WhatsNew {
                     bodyRes = R.string.whats_new_196_shizuku_peq_body,
                 ),
                 WhatsNewEntry(
+                    kind = WhatsNewKind.NEW,
+                    section = PLAYBACK,
+                    title = "DAC EQ: your EQ inside the DAC",
+                    body = "Settings › Equalizer › Open DAC EQ writes a preset into a supported USB DAC’s own memory, fitted to its bands, then reads it back to prove it. 18 DACs, with protocols from Contour. Not yet tried on a real DAC: at your own risk.",
+                    titleRes = R.string.whats_new_196_dac_eq_title,
+                    bodyRes = R.string.whats_new_196_dac_eq_body,
+                ),
+                WhatsNewEntry(
                     kind = WhatsNewKind.CHANGED,
                     section = PLAYBACK,
                     title = "The player's menu is the song menu",

@@ -61,6 +61,32 @@ class DacSendResult(
 )
 
 /**
+ * A USB DAC as the DAC EQ page uses one: [DacEqController] on a real phone,
+ * and in the page's tests one of Contour's simulated DACs.
+ */
+interface DacEqDevice {
+    val link: StateFlow<DacLink>
+
+    /** The page is on screen: follow what is plugged in. Pair with [unwatch]. */
+    fun watch()
+    fun unwatch()
+
+    /** Shows Android's own "allow this app to use the device" dialog. */
+    fun requestPermission()
+
+    /** What the DAC holds now. Reads only. */
+    suspend fun read(): DacSnapshot
+
+    /**
+     * Writes [profile] and proves it: the DAC is read back and compared. The
+     * one call that changes a DAC. [onProgress] goes from 0 to 1;
+     * [onRestarting] is told when the write is done and the DAC has left the
+     * bus to save it, which can take most of a minute to prove.
+     */
+    suspend fun send(profile: Profile, slot: Int?, onProgress: (Float) -> Unit, onRestarting: () -> Unit = {}): DacSendResult
+}
+
+/**
  * Finds a supported USB DAC, asks Android for it, and reads and writes its
  * EQ through Contour's client (third_party/contour).
  *
@@ -77,11 +103,11 @@ class DacSendResult(
 @Singleton
 class DacEqController @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : DacEqDevice {
     private val manager: UsbManager? = context.getSystemService(UsbManager::class.java)
 
     private val _link = MutableStateFlow<DacLink>(DacLink.None)
-    val link: StateFlow<DacLink> = _link.asStateFlow()
+    override val link: StateFlow<DacLink> = _link.asStateFlow()
 
     /** Goes up whenever a device leaves the bus: an operation begun before is over. */
     @Volatile
@@ -105,8 +131,7 @@ class DacEqController @Inject constructor(
         }
     }
 
-    /** The page is on screen: follow what is plugged in. Pair with [unwatch]. */
-    fun watch() {
+    override fun watch() {
         if (watchers++ == 0) {
             val filter = IntentFilter().apply {
                 addAction(ACTION_USB_PERMISSION)
@@ -123,8 +148,13 @@ class DacEqController @Inject constructor(
         refresh()
     }
 
-    fun unwatch() {
-        if (--watchers == 0) runCatching { context.unregisterReceiver(receiver) }
+    override fun unwatch() {
+        if (--watchers == 0) {
+            runCatching { context.unregisterReceiver(receiver) }
+            // Nobody is told about the bus any more: what was last seen there
+            // must not greet the next visit as if it were still plugged in.
+            _link.value = DacLink.None
+        }
         if (watchers < 0) watchers = 0
     }
 
@@ -147,8 +177,7 @@ class DacEqController @Inject constructor(
         _link.value = now
     }
 
-    /** Shows Android's own "allow this app to use the device" dialog. */
-    fun requestPermission() {
+    override fun requestPermission() {
         val usb = manager ?: return
         val device = (_link.value as? DacLink.NeedsPermission)?.dac?.usb ?: return
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -162,21 +191,22 @@ class DacEqController @Inject constructor(
         usb.requestPermission(device, answer)
     }
 
-    /** What the DAC holds now. Reads only. */
-    suspend fun read(): DacSnapshot = requireClient().readDevice(ready())
+    override suspend fun read(): DacSnapshot = requireClient().readDevice(ready())
 
     /** A DAC with several slots: moves it to [slot] (nothing is saved) and reads that slot. */
     suspend fun readSlot(slot: Int): DacSnapshot = requireClient().readSlot(ready(), slot)
 
-    /**
-     * Writes [profile] and proves it: the DAC is read back and compared. The
-     * one call here that changes a DAC. [onProgress] goes from 0 to 1.
-     */
-    suspend fun send(profile: Profile, slot: Int?, onProgress: (Float) -> Unit): DacSendResult {
+    override suspend fun send(
+        profile: Profile,
+        slot: Int?,
+        onProgress: (Float) -> Unit,
+        onRestarting: () -> Unit,
+    ): DacSendResult {
         val dac = ready()
         val written = requireClient().writeProfile(dac, profile, targetSlot = slot, onProgress = onProgress)
         val pending = written.pending
             ?: return DacSendResult(written.verified, written.mismatches, written.readBack, previousIndex = written.previousIndex)
+        onRestarting()
         return awaitSave(dac, pending)
     }
 
