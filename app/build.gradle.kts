@@ -236,6 +236,16 @@ android {
         }
     }
 
+    // DAC EQ's USB layer is Contour's own (third_party/contour, Apache-2.0),
+    // compiled here as it is: the HID transport and the client that reads,
+    // writes and reads back. Nothing in that folder is edited; what those
+    // files need of Contour's app is in ContourAppShims.kt. The unit tests
+    // also get Contour's simulated DACs, to send an EQ with no DAC plugged in.
+    sourceSets {
+        getByName("main").java.srcDir(rootProject.file("third_party/contour/android/app/src/main/kotlin"))
+        getByName("test").java.srcDir(rootProject.file("third_party/contour/android/app/src/perf/kotlin"))
+    }
+
     testOptions {
         unitTests {
             // Robolectric needs the merged resources and the manifest to
@@ -351,6 +361,10 @@ androidComponents {
 }
 
 dependencies {
+    // Contour's core: the DAC catalog, wire codecs and write-and-verify
+    // sessions behind DAC EQ (third_party/contour, Apache-2.0).
+    implementation(project(":contour-core"))
+
     // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

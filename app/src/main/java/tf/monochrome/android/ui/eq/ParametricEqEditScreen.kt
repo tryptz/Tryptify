@@ -382,7 +382,7 @@ fun ParametricEqEditScreen(
 }
 
 @Composable
-private fun BandChip(
+internal fun BandChip(
     label: String,
     gainDb: Float,
     isSelected: Boolean,
@@ -415,7 +415,7 @@ private fun BandChip(
 }
 
 @Composable
-private fun ValueSlider(
+internal fun ValueSlider(
     label: String,
     value: Float,
     valueRange: ClosedFloatingPointRange<Float>,
@@ -454,21 +454,21 @@ private fun ValueSlider(
     }
 }
 
-private fun logFreqToSlider(freq: Float): Float {
+internal fun logFreqToSlider(freq: Float): Float {
     val logMin = Math.log10(20.0)
     val logMax = Math.log10(20000.0)
     val logF = Math.log10(freq.coerceIn(20f, 20000f).toDouble())
     return ((logF - logMin) / (logMax - logMin)).toFloat().coerceIn(0f, 1f)
 }
 
-private fun sliderToLogFreq(t: Float): Float {
+internal fun sliderToLogFreq(t: Float): Float {
     val logMin = Math.log10(20.0)
     val logMax = Math.log10(20000.0)
     val logF = logMin + t.coerceIn(0f, 1f) * (logMax - logMin)
     return Math.pow(10.0, logF).toFloat().coerceIn(20f, 20000f)
 }
 
-private fun formatFreq(freq: Float): String = when {
+internal fun formatFreq(freq: Float): String = when {
     // Whole kilohertz drop the decimal ("2k"); the rest keep one, written with
     // the reader's own decimal mark ("1,5k" in German). Matching ".0k" on the
     // formatted text missed "2,0k" wherever the mark is a comma.

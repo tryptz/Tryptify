@@ -8,5 +8,9 @@ app that writes a parametric EQ into a USB DAC's own memory. Apache-2.0: see
 - Copied by `tools/contour/vendor.sh`, which says what is copied. Nothing in
   this folder is edited by hand: a change belongs upstream, or in Tryptify's
   own code beside it. Run the script again to move to a newer Contour.
-- Built as the Gradle module `:contour-core` (`contour-core/build.gradle.kts`),
-  where Contour's own tests run: `./gradlew :contour-core:test`.
+- `android/core` is built as the Gradle module `:contour-core`
+  (`contour-core/build.gradle.kts`), where Contour's own tests run:
+  `./gradlew :contour-core:test`.
+- `android/app` holds only the files that talk to a DAC over USB and the
+  simulated DACs. The app module compiles them as they are
+  (`app/build.gradle.kts`).
