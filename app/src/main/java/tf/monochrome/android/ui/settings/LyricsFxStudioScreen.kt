@@ -780,9 +780,17 @@ fun LyricsFxStudioScreen(
                     }
                 }
 
+                // The 3D spectrogram's preview in the player's colours: the
+                // playing album's own where the player takes its colours
+                // from the album, else the accent (MainPlayerRoute's rule).
+                val playing by viewModel.currentTrack.collectAsStateWithLifecycle()
+                val albumTint by settingsViewModel.dynamicColors.collectAsStateWithLifecycle()
+                val playerTint by settingsViewModel.playerDynamicColor.collectAsStateWithLifecycle()
+                val album = tf.monochrome.android.ui.player.rememberAlbumColors(playing?.coverUrl)
                 VisualizerSettings(
                     settingsViewModel,
                     onOpenPresetBrowser = { showPresetBrowser = true },
+                    spectrogramGlow = if (albumTint && playerTint) album.dominant else MaterialTheme.colorScheme.primary,
                     underLyrics = fx.visualizerUnderLyrics,
                     onUnderLyrics = { on -> viewModel.update { s -> s.copy(visualizerUnderLyrics = on) } },
                 )

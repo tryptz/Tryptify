@@ -588,7 +588,17 @@ shader with Skia beside the reference's frames:
   tab's first section alone, the owner looked for it and reported "that
   option isn't anywhere". The preview starts the landscape afresh when it
   changes between the demo signal and the live sound, which are levels
-  apart. **Under Quality a line says which way this phone draws it**
+  apart. **"Live" is looked for on a timer of its own** (`newest`, in the
+  preview's `produceState`): it used to be noticed only when the picture
+  asked for a spectrum, and live sound is drawn from the feed, which never
+  asks, so the preview went to the demo after a second and a half, started
+  afresh, saw live sound, and started afresh again, round and round ("the
+  preview keeps starting again", the owner). **The preview is in the
+  player's colours**: the accent for the water and, for the tops, what the
+  player uses (the playing album's dominant colour where the player takes
+  its colours from the album, else the accent; worked out in the Studio and
+  handed down as `spectrogramGlow`). It used the theme's third colour, and
+  its tops were pink over a cover whose own were teal. **Under Quality a line says which way this phone draws it**
   (`SpectrogramRenderer`: the shader, or the simple version because Quality
   is Low, Android is under 13, or the phone refused the shader), in the
   error colour when it is the simple one, and the log says it once (tag
@@ -610,8 +620,10 @@ shader with Skia beside the reference's frames:
 `tools/spectrogram_3d/check.py` compiles the shader with Skia (what Android
 runs AGSL through) and draws a frame with it: run it after changing the
 shader, since a phone that refuses a shader falls back and says nothing.
-**The owner's phone refused the shader in every build until 2026-11-26, and
-drew the simple version**: "value is out of range for type 'half': 65535",
+**It has run on a phone since 2026-11-27** (the owner's OnePlus, Android 17,
+Skia on Vulkan: "drawn by SHADER at quality 4: history 1008x225, 53705
+points" in its log, and the water in its screenshots). **That phone refused
+the shader in every build until then, and drew the simple version**: "value is out of range for type 'half': 65535",
 for `(uHi.eval(p).a * 65280.0 + uLo.eval(p).a * 255.0) / 65535.0`. A child's
 sample is a `half`, a literal beside it is typed as one, and a half cannot
 hold 65535. The desktop Skia the check compiles with let it pass. Four

@@ -60,6 +60,12 @@ internal fun Spectrogram3DSettingsSection(
     liveBins: (() -> FloatArray)?,
     /** The analyzer's spectra as they are made, for the preview of live sound; null with the analyzer off. */
     liveFeed: SpectrogramFeed? = null,
+    /**
+     * The colour the player gives the loudest tops and the light through the
+     * swells (the playing album's, or the accent with its colours off), so
+     * the preview is in the player's colours. Null takes the accent.
+     */
+    glow: Color? = null,
     /** Lyrics FX › Visualizer under the lyrics, shown here too: it is asked for here first. Null hides it. */
     underLyrics: Boolean? = null,
     onUnderLyrics: (Boolean) -> Unit = {},
@@ -97,6 +103,7 @@ internal fun Spectrogram3DSettingsSection(
             settings = shown,
             liveBins = liveBins,
             liveFeed = liveFeed,
+            glow = glow,
             onAdjust = { drag(it) },
             onAdjustDone = { onChange(it.clamped()) },
         )
@@ -254,11 +261,16 @@ private fun Spectrogram3DPreview(
     settings: Spectrogram3DSettings,
     liveBins: (() -> FloatArray)?,
     liveFeed: SpectrogramFeed?,
+    glow: Color?,
     onAdjust: (Spectrogram3DSettings) -> Unit,
     onAdjustDone: (Spectrogram3DSettings) -> Unit,
 ) {
+    // The player's colours: the accent for the water, and for the tops what
+    // the player uses (handed in). The theme's third colour was used here
+    // once, and the preview's tops were pink over a cover whose own were
+    // teal ("preview and non preview don't show the same colors", the owner).
     val accent = MaterialTheme.colorScheme.primary
-    val glow = MaterialTheme.colorScheme.tertiary
+    val tops = glow ?: accent
     val live by rememberUpdatedState(liveBins)
     // The gesture loop is started once and outlives recompositions, so it
     // reads these through State rather than capturing their first values.
@@ -273,7 +285,8 @@ private fun Spectrogram3DPreview(
     val lastLive = remember { longArrayOf(0L) }
     val lastSeen = remember { arrayOfNulls<FloatArray>(1) }
     val demo = remember { FloatArray(SpectrumAnalyzerTap.OUTPUT_BINS) }
-    val provider: () -> FloatArray = remember {
+    // Looks at the analyzer's newest array and notes when it is a new one.
+    val newest: () -> FloatArray? = remember {
         {
             val bins = live?.invoke()
             if (bins != null && bins !== lastSeen[0]) {
@@ -281,6 +294,12 @@ private fun Spectrogram3DPreview(
                 if (lastSeen[0] != null) lastLive[0] = System.nanoTime()
                 lastSeen[0] = bins
             }
+            bins
+        }
+    }
+    val provider: () -> FloatArray = remember {
+        {
+            val bins = newest()
             if (bins != null && System.nanoTime() - lastLive[0] < LIVE_TIMEOUT_NANOS) {
                 bins
             } else {
@@ -291,8 +310,15 @@ private fun Spectrogram3DPreview(
     }
     val showingLive by produceState(initialValue = false, liveBins) {
         while (true) {
+            // Looked at here, not only when the picture asks for a spectrum:
+            // live sound is drawn from the feed, which never asks, so "the
+            // array changed lately" ran out after a second and a half, the
+            // preview went to the demo and started afresh, saw live sound
+            // again and started afresh once more, round and round ("the
+            // preview keeps starting again", the owner).
+            newest()
             value = liveBins != null && System.nanoTime() - lastLive[0] < LIVE_TIMEOUT_NANOS
-            delay(500)
+            delay(250)
         }
     }
 
@@ -342,7 +368,7 @@ private fun Spectrogram3DPreview(
                 bins = provider,
                 settings = settings,
                 color = accent,
-                glow = glow,
+                glow = tops,
                 isPlaying = true,
                 modifier = Modifier.fillMaxSize(),
                 // The demo and the live sound are levels apart: a change

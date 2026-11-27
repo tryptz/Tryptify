@@ -1080,6 +1080,8 @@ internal fun VisualizerSettings(
     /** Lyrics FX › Visualizer under the lyrics, for the 3D spectrogram's settings to show too. */
     underLyrics: Boolean? = null,
     onUnderLyrics: (Boolean) -> Unit = {},
+    /** The player's colour for the 3D spectrogram's tops, so its preview is in the player's colours. */
+    spectrogramGlow: Color? = null,
 ) {
     val sensitivity by viewModel.visualizerSensitivity.collectAsStateWithLifecycle()
     val brightness by viewModel.visualizerBrightness.collectAsStateWithLifecycle()
@@ -1182,6 +1184,7 @@ internal fun VisualizerSettings(
             onChange = viewModel::setSpectrogram3d,
             liveBins = if (spectrumEnabled) spectrogramFeed else null,
             liveFeed = if (spectrumEnabled) viewModel.spectrogramFeed else null,
+            glow = spectrogramGlow,
             underLyrics = underLyrics,
             onUnderLyrics = onUnderLyrics,
         )
