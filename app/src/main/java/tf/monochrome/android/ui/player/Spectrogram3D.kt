@@ -19,8 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.positionInRoot
@@ -106,6 +109,7 @@ internal fun Spectrogram3DOverlay(
         }
     }
     val currentPlayhead by rememberUpdatedState(playhead)
+    val playing by rememberUpdatedState(isPlaying)
     // What was last said in the log of how this is drawn. Not state: the draw phase's own.
     val said = remember { IntArray(4) }
     val lamp = remember { SpectrogramLamp() }
@@ -145,7 +149,28 @@ internal fun Spectrogram3DOverlay(
             }
         }
     }
-    Canvas(modifier.clipToBounds().onGloballyPositioned { leftInRoot[0] = it.positionInRoot().x }) {
+    Canvas(
+        modifier
+            .clipToBounds()
+            .onGloballyPositioned { leftInRoot[0] = it.positionInRoot().x }
+            // Motion blur: the picture scrolls sideways and nowhere else, so
+            // it is a blur along x alone, as long as the surface moves while
+            // the picture is exposed. Standing still (paused) there is none.
+            // Android 12 and later; before that the layer has no effects.
+            .graphicsLayer {
+                val s = currentSettings
+                val sigma = if (playing && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    Spectrogram3DScene.motionBlurSigmaPx(s.motionBlur, size.width, s.secondsAcross)
+                } else {
+                    0f
+                }
+                renderEffect = if (sigma >= Spectrogram3DScene.MIN_BLUR_SIGMA_PX) {
+                    BlurEffect(Spectrogram3DScene.blurRadiusFor(sigma), 0f, TileMode.Clamp)
+                } else {
+                    null
+                }
+            },
+    ) {
         // Read here so a new frame redraws without recomposing.
         @Suppress("UNUSED_EXPRESSION") frame
         val s = currentSettings
@@ -1352,6 +1377,31 @@ internal class Spectrogram3DScene {
         /** Steps of the walk toward the light that finds the shadows, by quality. */
         fun shadowSteps(quality: Int): Float = SHADOW_STEPS[quality.coerceIn(1, 4) - 1]
         private val SHADOW_STEPS = floatArrayOf(0f, 8f, 12f, 16f)
+
+        /**
+         * Motion blur, as the sigma in px of a blur along the scroll: what a
+         * camera gets of a surface that moves while its shutter is open.
+         * [amount] 1 is an exposure of [MAX_EXPOSURE_S]. The front edge
+         * crosses the picture's [widthPx] in [secondsAcross]; the rows
+         * behind it move less across the screen, so the whole picture takes
+         * the middle's share ([MID_SPEED]): one blur for the layer, a little
+         * short at the front and a little long at the back. A box that wide
+         * is a Gaussian of 0.289 of its width.
+         */
+        fun motionBlurSigmaPx(amount: Float, widthPx: Float, secondsAcross: Float): Float {
+            if (amount <= 0f || widthPx <= 0f || secondsAcross <= 0f) return 0f
+            val smear = widthPx / secondsAcross * (amount.coerceAtMost(1f) * MAX_EXPOSURE_S) * MID_SPEED
+            return min(smear * 0.2887f, MAX_BLUR_SIGMA_PX)
+        }
+
+        /** Android's blur is given a radius, and makes a sigma of 0.57735 of it plus a half. */
+        fun blurRadiusFor(sigmaPx: Float): Float = max(0f, (sigmaPx - 0.5f) / 0.57735f)
+
+        const val MAX_EXPOSURE_S = 1f / 24f
+        const val MID_SPEED = 0.75f
+        /** Under this the blur is not worth a layer of its own. */
+        const val MIN_BLUR_SIGMA_PX = 0.75f
+        const val MAX_BLUR_SIGMA_PX = 32f
 
         /** How far a row moves toward its level in [step] seconds with a time constant of [ms]; all the way at 0. */
         fun follow(step: Float, ms: Float): Float = if (ms <= 0.5f) 1f else 1f - exp(-step / (ms / 1000f))

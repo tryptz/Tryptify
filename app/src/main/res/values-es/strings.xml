@@ -1565,6 +1565,7 @@
     <string name="spectrogram3d_smoothness_desc">Olas nítidas y separadas, o suaves y fundidas.</string>
     <string name="spectrogram3d_haze">Neblina de profundidad</string>
     <string name="spectrogram3d_haze_desc">Lo rápido que el fondo se funde con la portada.</string>
+    <string name="spectrogram3d_motion_blur_desc">Desenfoca el agua en la dirección en que se desplaza, como hace una cámara con lo que se mueve: a más velocidad, estelas más largas. 0 es desactivado. Android 12 y posteriores.</string>
     <string name="spectrogram3d_low">Tono más grave</string>
     <string name="spectrogram3d_low_desc">El borde delantero: los graves.</string>
     <string name="spectrogram3d_high">Tono más agudo</string>

@@ -1524,6 +1524,7 @@
     <string name="spectrogram3d_smoothness_desc">Sharp, separate swells or soft, merged ones.</string>
     <string name="spectrogram3d_haze">Depth haze</string>
     <string name="spectrogram3d_haze_desc">How quickly the back fades into the cover.</string>
+    <string name="spectrogram3d_motion_blur_desc">Blurs the water along its scroll, as a camera does with something that moves: the faster the Speed, the longer the streaks. 0 is off. Android 12 and later.</string>
     <string name="spectrogram3d_low">Lowest pitch</string>
     <string name="spectrogram3d_low_desc">The front edge: the bass.</string>
     <string name="spectrogram3d_high">Highest pitch</string>

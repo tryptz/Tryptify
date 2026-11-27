@@ -1565,6 +1565,7 @@
     <string name="spectrogram3d_smoothness_desc">Des houles nettes et séparées, ou douces et fondues.</string>
     <string name="spectrogram3d_haze">Brume de profondeur</string>
     <string name="spectrogram3d_haze_desc">À quelle vitesse le fond se fond dans la pochette.</string>
+    <string name="spectrogram3d_motion_blur_desc">Floute l’eau dans le sens de son défilement, comme un appareil photo avec ce qui bouge : plus la vitesse est grande, plus les traînées sont longues. 0 : désactivé. Android 12 et versions ultérieures.</string>
     <string name="spectrogram3d_low">Note la plus grave</string>
     <string name="spectrogram3d_low_desc">Le bord avant : les basses.</string>
     <string name="spectrogram3d_high">Note la plus aiguë</string>

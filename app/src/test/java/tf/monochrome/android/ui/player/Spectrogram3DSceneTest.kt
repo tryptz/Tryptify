@@ -428,6 +428,35 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
+    fun `motion blur is as long as the surface moves while the picture is exposed`() {
+        fun sigma(amount: Float, width: Float, seconds: Float) = Spectrogram3DScene.motionBlurSigmaPx(amount, width, seconds)
+        // Off, and nothing to blur without a picture.
+        assertEquals(0f, sigma(0f, 1080f, 4f), 0f)
+        assertEquals(0f, sigma(0.5f, 0f, 4f), 0f)
+        // As shipped, at the shipped speed on a phone 1080 px wide: the front
+        // moves 270 px a second, the exposure is a forty-eighth of a second,
+        // so the middle smears about 4 px, a Gaussian of 1.2.
+        val shipped = sigma(Spectrogram3DSettings.DEFAULT.motionBlur, 1080f, Spectrogram3DSettings.DEFAULT.secondsAcross)
+        assertEquals(1.22f, shipped, 0.05f)
+        assertTrue(shipped >= Spectrogram3DScene.MIN_BLUR_SIGMA_PX)
+        // Twice the speed, twice the streak; twice the exposure too; a wider picture moves more px.
+        assertEquals(2f * shipped, sigma(0.5f, 1080f, 2f), 0.01f)
+        assertEquals(2f * shipped, sigma(1f, 1080f, 4f), 0.01f)
+        assertEquals(2f * shipped, sigma(0.5f, 2160f, 4f), 0.01f)
+        // At the fastest speed it is a long streak, and never past the cap.
+        assertTrue(sigma(0.5f, 1080f, Spectrogram3DSettings.MIN_SECONDS) > 8f)
+        assertEquals(Spectrogram3DScene.MAX_BLUR_SIGMA_PX, sigma(1f, 4000f, 0.5f), 0f)
+        assertEquals(sigma(1f, 1080f, 4f), sigma(7f, 1080f, 4f), 0f)
+        // Android's radius for a sigma: sigma = radius * 0.57735 + 0.5.
+        val radius = Spectrogram3DScene.blurRadiusFor(9f)
+        assertEquals(9f, radius * 0.57735f + 0.5f, 1e-3f)
+        assertEquals(0f, Spectrogram3DScene.blurRadiusFor(0.2f), 0f)
+        // Clamped like the rest, and part of the look.
+        assertEquals(1f, Spectrogram3DSettings(motionBlur = 9f).clamped().motionBlur, 0f)
+        assertEquals(Spectrogram3DSettings.DEFAULT.motionBlur, Spectrogram3DSettings(motionBlur = Float.NaN).clamped().motionBlur, 0f)
+    }
+
+    @Test
     fun `the palette keeps the album's hues and makes them fit to draw with`() {
         // A pale pastel and a near-black: a saturated floor, tops at full strength.
         val pale = SpectrogramPalette.of(0xFFD0BCFF.toInt(), 0xFF140A0A.toInt())

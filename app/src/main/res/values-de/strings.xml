@@ -1523,6 +1523,7 @@
     <string name="spectrogram3d_smoothness_desc">Scharfe, getrennte Wellen oder weiche, verschmolzene.</string>
     <string name="spectrogram3d_haze">Tiefendunst</string>
     <string name="spectrogram3d_haze_desc">Wie schnell der hintere Teil ins Cover übergeht.</string>
+    <string name="spectrogram3d_motion_blur_desc">Verwischt das Wasser in Laufrichtung, wie eine Kamera etwas Bewegtes: je höher das Tempo, desto länger die Schlieren. 0 ist aus. Android 12 und neuer.</string>
     <string name="spectrogram3d_low">Tiefste Tonhöhe</string>
     <string name="spectrogram3d_low_desc">Die Vorderkante: der Bass.</string>
     <string name="spectrogram3d_high">Höchste Tonhöhe</string>

@@ -200,6 +200,10 @@ internal fun Spectrogram3DSettingsSection(
         stringResource(R.string.spectrogram3d_haze), stringResource(R.string.spectrogram3d_haze_desc),
         shown.haze, 0f..1f, percent, { drag(shown.copy(haze = it)) }, ::commit,
     )
+    SpectroSlider(
+        stringResource(R.string.fx_motion_blur), stringResource(R.string.spectrogram3d_motion_blur_desc),
+        shown.motionBlur, 0f..1f, percent, { drag(shown.copy(motionBlur = it)) }, ::commit,
+    )
     // Pitch on a log scale: an octave is the same distance anywhere on the slider.
     SpectroSlider(
         stringResource(R.string.spectrogram3d_low), stringResource(R.string.spectrogram3d_low_desc),

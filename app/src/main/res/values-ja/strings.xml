@@ -1481,6 +1481,7 @@
     <string name="spectrogram3d_smoothness_desc">くっきり分かれたうねりか、やわらかくつながったうねりか。</string>
     <string name="spectrogram3d_haze">奥のかすみ</string>
     <string name="spectrogram3d_haze_desc">奥がカバーに溶け込む速さ。</string>
+    <string name="spectrogram3d_motion_blur_desc">カメラが動くものを写すときのように、スクロール方向に水面をぼかします。速度が速いほど尾が長くなります。0 でオフ。Android 12 以降。</string>
     <string name="spectrogram3d_low">最低音</string>
     <string name="spectrogram3d_low_desc">手前の端：低音。</string>
     <string name="spectrogram3d_high">最高音</string>

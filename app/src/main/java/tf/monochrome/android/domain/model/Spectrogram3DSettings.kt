@@ -50,6 +50,12 @@ data class Spectrogram3DSettings(
     /** How quickly the back fades into the cover. */
     val haze: Float = 0.55f,
     /**
+     * Motion blur: how long the picture is exposed as it scrolls, 0 none and
+     * 1 a twenty-fourth of a second, so the faster the speed, the longer the
+     * streaks.
+     */
+    val motionBlur: Float = 0.5f,
+    /**
      * Played behind the whole player, along the bottom of the screen from
      * edge to edge, under the title and the controls, as it lies under
      * expanded lyrics. Off, it is on the cover.
@@ -92,6 +98,7 @@ data class Spectrogram3DSettings(
             shadows = shadows.c(0f, 1f, d.shadows),
             lyricLight = lyricLight.c(0f, 1f, d.lyricLight),
             haze = haze.c(0f, 1f, d.haze),
+            motionBlur = motionBlur.c(0f, 1f, d.motionBlur),
             minHz = low,
             maxHz = high,
             quality = quality.coerceIn(MIN_QUALITY, MAX_QUALITY),

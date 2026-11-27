@@ -1523,6 +1523,7 @@
     <string name="spectrogram3d_smoothness_desc">Keskin, ayrı dalgalar ya da yumuşak, birleşik olanlar.</string>
     <string name="spectrogram3d_haze">Derinlik pusu</string>
     <string name="spectrogram3d_haze_desc">Arka tarafın kapakla ne kadar hızlı kaynaştığı.</string>
+    <string name="spectrogram3d_motion_blur_desc">Suyu kaydığı yönde bulanıklaştırır; bir kameranın hareket eden şeyde yaptığı gibi: hız arttıkça izler uzar. 0 kapalıdır. Android 12 ve sonrası.</string>
     <string name="spectrogram3d_low">En pes ses</string>
     <string name="spectrogram3d_low_desc">Ön kenar: baslar.</string>
     <string name="spectrogram3d_high">En tiz ses</string>

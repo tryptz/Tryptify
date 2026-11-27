@@ -1481,6 +1481,7 @@
     <string name="spectrogram3d_smoothness_desc">清晰分明的涌浪，或柔和相连的涌浪。</string>
     <string name="spectrogram3d_haze">景深雾化</string>
     <string name="spectrogram3d_haze_desc">后方淡入封面的速度。</string>
+    <string name="spectrogram3d_motion_blur_desc">沿滚动方向模糊水面，就像相机拍摄运动物体那样：速度越快，拖影越长。0 为关闭。需要 Android 12 及以上。</string>
     <string name="spectrogram3d_low">最低音高</string>
     <string name="spectrogram3d_low_desc">前边缘：低音。</string>
     <string name="spectrogram3d_high">最高音高</string>

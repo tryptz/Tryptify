@@ -549,6 +549,17 @@ shader with Skia beside the reference's frames:
   always, down only while the lyrics are expanded. Only a margin is crossed
   (`EdgeBleed.MAX_MARGIN_DP`): a wider gap is the controls standing beside
   it in the side-by-side layout.
+- **Motion blur is a blur along x, as long as the surface moves while the
+  picture is exposed** (`motionBlur`, `motionBlurSigmaPx`, a `BlurEffect` on
+  the view's own layer; "add motion blur to the waveform", the owner). The
+  picture scrolls sideways and nowhere else. Full is a twenty-fourth of a
+  second of exposure, half as shipped (a film camera's), so at the shipped
+  speed it only softens and at the fastest it streaks. One blur for the
+  layer, at the middle rows' speed: the front moves more across the screen
+  than the back, and it is a little short there and a little long behind.
+  None while paused (nothing moves), and none before Android 12, where a
+  layer has no effects. It is the last thing done to the picture, so the
+  glints and the lyric lamp's mirror streak with the rest.
 - **Behind the player, where the listener asks** (`background`,
   `spectrogramBackground` in `MainPlayerRoute`): "make it the option to have
   it play in the background like when in focused lyrics", the owner. One
