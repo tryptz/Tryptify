@@ -102,4 +102,61 @@ class SpectrogramBandsTest {
         assertEquals(440.0, bandHz, 440.0 * 0.03)
         assertTrue(imag.all { it == 0f })
     }
+
+    @Test
+    fun `the shortest FFTs are read whole, the bass as one slope`() {
+        for (size in listOf(256, 512)) {
+            val bands = SpectrogramBands(size, 44_100, 256)
+            // A tone at 2 kHz, through a Hann window, as the analyzer does it.
+            val real = FloatArray(size) { i ->
+                val w = 0.5f - 0.5f * kotlin.math.cos(2.0 * Math.PI * i / (size - 1)).toFloat()
+                w * kotlin.math.sin(2.0 * Math.PI * 2000.0 * i / 44_100.0).toFloat()
+            }
+            val imag = FloatArray(size)
+            fft(real, imag)
+            val out = FloatArray(256)
+            bands.levels(real, imag, out)
+            assertTrue(out.all { it.isFinite() })
+            // Loudest near 2 kHz (band 170 of 256 is 2 kHz on the log scale), and the far ends well under it.
+            val loudest = out.indices.maxByOrNull { out[it] }!!
+            val hz = 20.0 * Math.pow(1000.0, loudest / 255.0)
+            assertTrue("$size: loudest at $hz Hz", hz in 1500.0..2700.0)
+            assertTrue(out[loudest] - out[250] > 20f)
+            // Every band reads inside the FFT: none past its last bin.
+            for (b in 0 until 256) {
+                assertTrue(bands.first[b] in 1..size / 2 - 1)
+                assertTrue(bands.last[b] <= size / 2 - 1)
+                assertTrue(bands.centre[b] >= 1f && bands.centre[b] <= size / 2 - 2f)
+            }
+        }
+    }
+
+    /** A plain radix-2 FFT, in place, for the test's own signals. */
+    private fun fft(real: FloatArray, imag: FloatArray) {
+        val n = real.size
+        var j = 0
+        for (i in 1 until n) {
+            var bit = n shr 1
+            while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
+            j = j xor bit
+            if (i < j) { val t = real[i]; real[i] = real[j]; real[j] = t; val u = imag[i]; imag[i] = imag[j]; imag[j] = u }
+        }
+        var len = 2
+        while (len <= n) {
+            val ang = -2.0 * Math.PI / len
+            for (i in 0 until n step len) {
+                for (k in 0 until len / 2) {
+                    val c = kotlin.math.cos(ang * k).toFloat()
+                    val sn = kotlin.math.sin(ang * k).toFloat()
+                    val xr = real[i + k + len / 2] * c - imag[i + k + len / 2] * sn
+                    val xi = real[i + k + len / 2] * sn + imag[i + k + len / 2] * c
+                    real[i + k + len / 2] = real[i + k] - xr
+                    imag[i + k + len / 2] = imag[i + k] - xi
+                    real[i + k] += xr
+                    imag[i + k] += xi
+                }
+            }
+            len = len shl 1
+        }
+    }
 }

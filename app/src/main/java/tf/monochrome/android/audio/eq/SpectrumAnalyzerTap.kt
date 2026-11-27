@@ -99,9 +99,11 @@ class SpectrumAnalyzerTap @Inject constructor(
          * The 3D spectrogram's FFT sizes, as the listener picks them: samples
          * at 44.1 and 48 kHz (twice that at 88.2 and 96, four times above).
          * A short one answers at once with fat notes; a long one is fine in
-         * pitch and answers as late as it is long.
+         * pitch and answers as late as it is long. 256 and 512 are the
+         * owner's asking (2026-11-26): 6 and 12 ms of sound, a bin 172 and
+         * 86 Hz wide, so the bass is one slope and every hit is a sharp wall.
          */
-        val SPECTROGRAM_FFT_SIZES = intArrayOf(1024, 2048, 4096, 8192, 16384)
+        val SPECTROGRAM_FFT_SIZES = intArrayOf(256, 512, 1024, 2048, 4096, 8192, 16384)
         const val DEFAULT_SPECTROGRAM_FFT = 4096
 
         /** [size] as one of [SPECTROGRAM_FFT_SIZES]: the nearest, by the octave. */

@@ -423,7 +423,8 @@ shader with Skia beside the reference's frames:
   are worked out when the blur changes, not for every row).
 - **The FFT is the listener's** (FFT size, Overlap, in its settings; applied
   by `PlayerViewModel` as `spectrogramFft` and `spectrogramOverlap`). Sizes
-  1024 to 16384 samples at 44.1 and 48 kHz, twice and four times that at the
+  256 to 16384 samples at 44.1 and 48 kHz (256 and 512 at the owner's
+  asking: 6 and 12 ms, the bass one slope, every hit a sharp wall), twice and four times that at the
   higher rates so a size is as long in time (`spectrogramFftSize`), 4096 as
   shipped: short answers at once with fat notes, long is fine in pitch and
   answers as late as it is long, and no Attack setting undoes a long window.

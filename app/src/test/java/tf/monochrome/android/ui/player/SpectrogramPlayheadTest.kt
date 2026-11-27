@@ -54,7 +54,7 @@ class SpectrogramPlayheadTest {
     @Test
     fun `every spectrum is handed over once, in order, and the picture moves on by the time that passed`() {
         for (frameHz in listOf(60, 90, 120, 144)) {
-            for ((fft, hop) in listOf(4096 to 163, 2048 to 82, 16384 to 655, 1024 to 512)) {
+            for ((fft, hop) in listOf(4096 to 163, 2048 to 82, 16384 to 655, 1024 to 512, 256 to 61, 512 to 61)) {
                 val (order, steps, stream) = run(frameHz, fft, hop)
                 // In order, none twice. A spectrum may be named twice in a row:
                 // once as what the picture is moving toward, once as reached.
@@ -164,21 +164,37 @@ class SpectrogramPlayheadTest {
         assertEquals(8192, SpectrumAnalyzerTap.spectrogramFftSize(96_000, 4096))
         assertEquals(16384, SpectrumAnalyzerTap.spectrogramFftSize(192_000, 4096))
         assertEquals(1024, SpectrumAnalyzerTap.spectrogramFftSize(44_100, 1024))
+        // The shortest two, 6 and 12 ms of sound.
+        assertEquals(256, SpectrumAnalyzerTap.spectrogramFftSize(48_000, 256))
+        assertEquals(512, SpectrumAnalyzerTap.spectrogramFftSize(44_100, 512))
+        assertEquals(1024, SpectrumAnalyzerTap.spectrogramFftSize(192_000, 256))
+        assertEquals(256, Spectrogram3DSettings(fftSize = 256).clamped().fftSize)
+        assertEquals(512, Spectrogram3DSettings(fftSize = 512).clamped().fftSize)
         assertEquals(SpectrumAnalyzerTap.FFT_SIZE_HIGH, SpectrumAnalyzerTap.spectrogramFftSize(192_000, 16384))
         // A size that is not on the list is the nearest that is.
         assertEquals(2048, SpectrumAnalyzerTap.spectrogramFftBase(1800))
-        assertEquals(1024, SpectrumAnalyzerTap.spectrogramFftBase(-5))
+        assertEquals(256, SpectrumAnalyzerTap.spectrogramFftBase(-5))
+        assertEquals(512, SpectrumAnalyzerTap.spectrogramFftBase(600))
         assertEquals(16384, SpectrumAnalyzerTap.spectrogramFftBase(1_000_000))
         assertEquals(8192, Spectrogram3DSettings.fftSizeNear(9000))
         // The hop is what the overlap leaves of the window.
         assertEquals(163, SpectrumAnalyzerTap.spectrogramHop(4096, 0.96f))
         assertEquals(2048, SpectrumAnalyzerTap.spectrogramHop(4096, 0.5f))
         assertTrue(SpectrumAnalyzerTap.spectrogramHop(1024, 0.999f) >= 10)
-        // About the same FFT work a pass at every size.
+        // Never more FFT work a pass than a long one costs, and about the
+        // same from 1024 up; the short ones are held to twelve spectra a
+        // pass, which is already more than a frame can show.
         for (size in SpectrumAnalyzerTap.SPECTROGRAM_FFT_SIZES) {
             val work = SpectrumAnalyzerTap.spectraPerPass(size) * size
-            assertTrue("$size: $work", work in 12_000..25_000)
+            assertTrue("$size: $work", work <= 25_000)
+            if (size >= 1024) assertTrue("$size: $work", work >= 12_000)
+            assertTrue(SpectrumAnalyzerTap.spectraPerPass(size) in 1..12)
         }
+        // A short FFT at a high overlap asks for more spectra than a pass
+        // makes: twelve are within what the feed keeps readable and what a
+        // frame hands over.
+        assertTrue(12 * 3 < SpectrogramFeed.CAPACITY - SpectrogramFeed.GUARD)
+        assertTrue(12 * 3 <= SpectrogramPlayhead.MOST_A_FRAME)
         // Settings out of range come back in it.
         val wild = Spectrogram3DSettings(fftSize = 2500, overlapPct = 500f, rangeDb = Float.NaN).clamped()
         assertEquals(2048, wild.fftSize)

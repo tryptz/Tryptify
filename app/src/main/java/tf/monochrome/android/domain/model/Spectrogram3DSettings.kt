@@ -133,7 +133,7 @@ data class Spectrogram3DSettings(
         const val MAX_HZ = 20_000f
         const val MIN_RANGE_RATIO = 4f
         /** The FFT sizes on offer (the analyzer's own list, repeated here for the model: [Spectrogram3DSceneTest] holds them equal). */
-        val FFT_SIZES = intArrayOf(1024, 2048, 4096, 8192, 16384)
+        val FFT_SIZES = intArrayOf(256, 512, 1024, 2048, 4096, 8192, 16384)
         const val MIN_OVERLAP_PCT = 50f
         const val MAX_OVERLAP_PCT = 99f
         const val MIN_RANGE_DB = 12f
