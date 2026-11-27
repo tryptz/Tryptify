@@ -544,6 +544,20 @@ shader with Skia beside the reference's frames:
   always, down only while the lyrics are expanded. Only a margin is crossed
   (`EdgeBleed.MAX_MARGIN_DP`): a wider gap is the controls standing beside
   it in the side-by-side layout.
+- **Behind the player, where the listener asks** (`background`,
+  `spectrogramBackground` in `MainPlayerRoute`): "make it the option to have
+  it play in the background like when in focused lyrics", the owner. One
+  view, in the layer under the player's UI (`fxUnderlay`), along the bottom
+  of the screen from edge to edge (`SPECTROGRAM_BACKGROUND_SHARE`), under the
+  title, the controls and the lyrics, in the cover's view and both lyric
+  views alike. While it is there the cover draws none
+  (`spectrogramInBackground`) and neither does the band under the lyrics:
+  never two. It is still the cover's third view: another view picked there
+  takes it away. The lyrics light it as they light the band, but only while
+  lyrics are up (the lyric view's light is not kept current after it
+  leaves). The legacy layout has no such layer, so there it stays on the
+  cover. The glass over it frosts and bends a picture that is new every
+  frame: what that costs a phone is not measured.
 - **Below Android 13, or at Low quality, each mesh point is lit instead**
   (`Lighting`, the body's colours with a key light, gloss and glow, and no
   shadows, ripples, mirrored sky or lyric lamp): the way out if a phone's GPU

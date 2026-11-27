@@ -111,6 +111,13 @@ internal fun Spectrogram3DSettingsSection(
         )
     }
 
+    SettingSwitchItem(
+        title = stringResource(R.string.spectrogram3d_background),
+        subtitle = stringResource(R.string.spectrogram3d_background_desc),
+        checked = settings.background,
+        onCheckedChange = { onChange(settings.copy(background = it)) },
+    )
+
     val percent = { v: Float -> "${(v * 100).roundToInt()}%" }
     SpectroSlider(
         stringResource(R.string.spectrogram3d_speed), stringResource(R.string.spectrogram3d_speed_desc),

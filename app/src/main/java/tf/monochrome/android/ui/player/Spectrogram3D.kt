@@ -197,6 +197,12 @@ internal fun Spectrogram3DOverlay(
 private const val SPECTROGRAM_TAG = "Spectrogram3D"
 
 /**
+ * 3D spectrogram › Behind the player: the share of the screen's height it
+ * takes, from the bottom, as it does under expanded lyrics.
+ */
+internal const val SPECTROGRAM_BACKGROUND_SHARE = 0.42f
+
+/**
  * Which way the 3D spectrogram is drawn on this phone, and why. Settings says
  * it under Quality and the log says it once: a phone that draws the simple
  * version looks nothing like one that draws the shader, and it used to be

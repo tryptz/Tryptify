@@ -1535,6 +1535,8 @@
     <string name="spectrogram3d_needs_android_10">Necesita Android 10 o posterior.</string>
     <string name="spectrogram3d_preview">Vista previa</string>
     <string name="spectrogram3d_preview_desc">Arrastra arriba y abajo para inclinar la cámara, a izquierda y derecha para cambiar la velocidad. Pellizca para la altura de los picos.</string>
+    <string name="spectrogram3d_background">Detrás del reproductor</string>
+    <string name="spectrogram3d_background_desc">El espectrograma 3D se reproduce como fondo del reproductor: en la parte inferior de la pantalla, de borde a borde, detrás del título, los controles y la letra, como bajo la letra ampliada. Desactivado, está en la portada.</string>
     <string name="spectrogram3d_speed">Velocidad</string>
     <string name="spectrogram3d_speed_desc">Segundos de música a lo ancho de la pantalla. Menos es más rápido.</string>
     <string name="spectrogram3d_attack">Ataque</string>

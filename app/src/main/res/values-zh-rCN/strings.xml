@@ -1451,6 +1451,8 @@
     <string name="spectrogram3d_needs_android_10">需要 Android 10 或更高版本。</string>
     <string name="spectrogram3d_preview">预览</string>
     <string name="spectrogram3d_preview_desc">上下拖动可倾斜镜头，左右拖动可改变速度。双指缩放可调整峰值高度。</string>
+    <string name="spectrogram3d_background">在播放器后方</string>
+    <string name="spectrogram3d_background_desc">3D 频谱图作为播放器的背景播放：沿屏幕底部铺满左右两边，位于标题、控制按钮和歌词之后，就像展开歌词时那样。关闭时，它显示在封面上。</string>
     <string name="spectrogram3d_speed">速度</string>
     <string name="spectrogram3d_speed_desc">屏幕宽度对应的音乐秒数。数值越小越快。</string>
     <string name="spectrogram3d_attack">起音</string>

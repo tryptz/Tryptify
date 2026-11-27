@@ -1493,6 +1493,8 @@
     <string name="spectrogram3d_needs_android_10">Erfordert Android 10 oder neuer.</string>
     <string name="spectrogram3d_preview">Vorschau</string>
     <string name="spectrogram3d_preview_desc">Nach oben und unten ziehen neigt die Kamera, nach links und rechts ändert die Geschwindigkeit. Mit zwei Fingern die Spitzenhöhe.</string>
+    <string name="spectrogram3d_background">Hinter dem Player</string>
+    <string name="spectrogram3d_background_desc">Das 3D-Spektrogramm läuft als Hintergrund des Players: am unteren Bildschirmrand, von Rand zu Rand, hinter Titel, Bedienelementen und Songtext, wie unter dem erweiterten Songtext. Aus: auf dem Cover.</string>
     <string name="spectrogram3d_speed">Geschwindigkeit</string>
     <string name="spectrogram3d_speed_desc">Sekunden Musik über die Bildschirmbreite. Weniger ist schneller.</string>
     <string name="spectrogram3d_attack">Attack</string>

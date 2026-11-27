@@ -1535,6 +1535,8 @@
     <string name="spectrogram3d_needs_android_10">Nécessite Android 10 ou plus récent.</string>
     <string name="spectrogram3d_preview">Aperçu</string>
     <string name="spectrogram3d_preview_desc">Glissez vers le haut ou le bas pour incliner la caméra, à gauche ou à droite pour changer la vitesse. Pincez pour la hauteur des crêtes.</string>
+    <string name="spectrogram3d_background">Derrière le lecteur</string>
+    <string name="spectrogram3d_background_desc">Le spectrogramme 3D joue en arrière-plan du lecteur : en bas de l’écran, bord à bord, derrière le titre, les commandes et les paroles, comme sous les paroles agrandies. Désactivé, il est sur la pochette.</string>
     <string name="spectrogram3d_speed">Vitesse</string>
     <string name="spectrogram3d_speed_desc">Secondes de musique sur la largeur de l’écran. Moins, c’est plus rapide.</string>
     <string name="spectrogram3d_attack">Attaque</string>

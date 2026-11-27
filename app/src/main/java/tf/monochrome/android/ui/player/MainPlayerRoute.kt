@@ -850,6 +850,19 @@ fun MainPlayerRoute(
             Modifier
         }
 
+    // 3D spectrogram › Behind the player: the water is the player's own
+    // background, along the bottom of the screen, and neither the cover nor
+    // the band under the lyrics draws a second one. The legacy layout has no
+    // layer under its UI to draw it in, so there it stays on the cover.
+    val spectrogramBackground = !legacyPlayer && spectrogram3dSettings.background && showNpSpectrum &&
+        coverVisual == CoverVisual.SPECTROGRAM_3D && SPECTROGRAM_3D_SUPPORTED
+    // The words being sung light the 3D surface: the god rays' own light
+    // where there is one, else the accent.
+    val lyricLamp: (SpectrogramLamp) -> Unit = remember(lyricLetters, lyricsRayLight, vibrantFade) {
+        { lamp ->
+            lyricLetters.aim(lamp, lyricsRayLight?.color ?: lerp(vibrantFade.value, Color.White, 0.35f))
+        }
+    }
     val heroSlot: @Composable (Modifier) -> Unit = { heroModifier ->
         // Manual dissolve between the album art / visualizer and the lyric
         // surface (lyricsProgress is hoisted above). The built-in Crossfade
@@ -1120,6 +1133,7 @@ fun MainPlayerRoute(
                     spectrumColor = spectrumColor,
                     waterfall = waterfallSettings,
                     spectrogram3d = spectrogram3dSettings,
+                    spectrogramInBackground = spectrogramBackground,
                     coverVisual = coverVisual,
                     onCoverVisual = { coverVisual = it },
                     // The album's other colour lights the 3D spectrogram's ridges from within.
@@ -1151,10 +1165,11 @@ fun MainPlayerRoute(
             }
             // The 3D spectrogram under the lyrics is lit by the word being
             // sung: the lyric view is asked to follow the word for it.
-            val lampWanted = showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum &&
+            val lampWanted = showLyricsHero && showNpSpectrum &&
+                (lyricsFx.visualizerUnderLyrics || spectrogramBackground) &&
                 coverVisual == CoverVisual.SPECTROGRAM_3D && spectrogram3dSettings.lyricLight > 0f
             androidx.compose.runtime.SideEffect { lyricLetters.wantsLamp = lampWanted }
-            if (showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum) {
+            if (showLyricsHero && lyricsFx.visualizerUnderLyrics && showNpSpectrum && !spectrogramBackground) {
                 // Lyrics FX › Visualizer under the lyrics: the cover's
                 // visualizer stays along the bottom as the art goes, and the
                 // lyrics below are drawn over it.
@@ -1168,16 +1183,7 @@ fun MainPlayerRoute(
                     spectrogram3d = spectrogram3dSettings,
                     isPlaying = isPlaying,
                     resetKey = currentTrack?.id,
-                    // The words being sung light the 3D surface: the god
-                    // rays' own light where there is one, else the accent.
-                    lyricLight = remember(lyricLetters, lyricsRayLight, vibrantFade) {
-                        { lamp ->
-                            lyricLetters.aim(
-                                lamp,
-                                lyricsRayLight?.color ?: lerp(vibrantFade.value, Color.White, 0.35f),
-                            )
-                        }
-                    },
+                    lyricLight = lyricLamp,
                     // Out to the phone's edges: expanded lyrics keep a margin
                     // for the words and stop above the navigation bar, and
                     // the visualizer is not words.
@@ -1441,6 +1447,29 @@ fun MainPlayerRoute(
                             backdrop = lyricBackdrop,
                             modifier = Modifier.graphicsLayer { alpha = lyricsProgress },
                         )
+                    }
+                    // 3D spectrogram › Behind the player: along the bottom of
+                    // the screen, edge to edge, under the title, the controls
+                    // and the lyrics, which the glass over it frosts and bends
+                    // like the rest of what lies here.
+                    if (spectrogramBackground) {
+                        Box(Modifier.fillMaxSize()) {
+                            Spectrogram3DOverlay(
+                                bins = spectrogramFeed,
+                                settings = spectrogram3dSettings,
+                                color = spectrumColor,
+                                glow = dominantFade.value,
+                                isPlaying = isPlaying,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .fillMaxHeight(SPECTROGRAM_BACKGROUND_SHARE),
+                                resetKey = currentTrack?.id,
+                                // Only while lyrics are up: the lyric view's
+                                // light is not kept current after it leaves.
+                                lyricLight = if (lyricsSlotWide) lyricLamp else null,
+                            )
+                        }
                     }
                 },
                 lyricsExpanded = lyricsExpanded,

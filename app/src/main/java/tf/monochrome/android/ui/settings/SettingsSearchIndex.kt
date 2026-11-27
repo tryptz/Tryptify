@@ -251,7 +251,7 @@ val SettingsSearchIndex: List<SettingsEntry> = listOf(
         "Visual Studio",
         listOf(
             "3d", "spectrogram", "landscape", "terrain", "water", "subsurface", "gloss", "haze", "pitch",
-            "shadow", "attack", "release", "cover visualizer",
+            "shadow", "attack", "release", "fft", "overlap", "background", "behind the player", "cover visualizer",
         ),
     ).at(SettingsDestination.Route("lyrics_fx_studio")),
     // On the Lyrics tab, and again with the 3D spectrogram's settings.

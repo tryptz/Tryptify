@@ -1493,6 +1493,8 @@
     <string name="spectrogram3d_needs_android_10">Android 10 veya daha yenisi gerekir.</string>
     <string name="spectrogram3d_preview">Önizleme</string>
     <string name="spectrogram3d_preview_desc">Kamerayı eğmek için yukarı aşağı, hızı değiştirmek için sola sağa sürükleyin. Tepe yüksekliği için iki parmakla sıkıştırın.</string>
+    <string name="spectrogram3d_background">Oynatıcının arkasında</string>
+    <string name="spectrogram3d_background_desc">3D spektrogram oynatıcının arka planı olarak oynar: ekranın altında, kenardan kenara, başlığın, denetimlerin ve sözlerin arkasında, genişletilmiş sözlerin altında olduğu gibi. Kapalıyken kapağın üzerindedir.</string>
     <string name="spectrogram3d_speed">Hız</string>
     <string name="spectrogram3d_speed_desc">Ekran genişliğindeki müzik saniyesi. Az olan daha hızlıdır.</string>
     <string name="spectrogram3d_attack">Atak</string>

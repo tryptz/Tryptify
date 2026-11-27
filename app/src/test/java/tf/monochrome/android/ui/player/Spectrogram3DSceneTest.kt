@@ -495,10 +495,14 @@ class Spectrogram3DSceneTest {
         val mine = Spectrogram3DSettings(
             angleDeg = 40f, gloss = 0.9f, subsurface = 0.2f, quality = 4, preview = false,
             attackMs = 0f, releaseMs = 40f, ripples = 0.1f, shadows = 0.3f, lyricLight = 0.25f, secondsAcross = 0.5f,
+            fftSize = 512, overlapPct = 80f, rangeDb = 40f, background = true,
         )
         val json = Json { ignoreUnknownKeys = true }
         assertEquals(mine, json.decodeFromString<Spectrogram3DSettings>(json.encodeToString(mine)))
         assertEquals(Spectrogram3DSettings.DEFAULT, json.decodeFromString<Spectrogram3DSettings>("{}"))
+        // On the cover unless the listener (or a theme) puts it behind the player.
+        assertFalse(Spectrogram3DSettings.DEFAULT.background)
+        assertTrue(SPECTROGRAM_BACKGROUND_SHARE in 0.3f..0.5f)
         val pack = ThemePack(name = "Wax", visualizer = ThemeVisualizer(spectrogram3d = mine))
         val shared = ThemePackCodec.decode(ThemePackCodec.encode(ThemePackCodec.forSharing(pack)))!!
         val look = shared.visualizer!!.spectrogram3d!!

@@ -1494,6 +1494,8 @@
     <string name="spectrogram3d_needs_android_10">Needs Android 10 or newer.</string>
     <string name="spectrogram3d_preview">Preview</string>
     <string name="spectrogram3d_preview_desc">Drag up and down to tilt the camera, left and right to change the speed. Pinch for peak height.</string>
+    <string name="spectrogram3d_background">Behind the player</string>
+    <string name="spectrogram3d_background_desc">The 3D spectrogram plays as the player’s background: along the bottom of the screen, edge to edge, behind the title, the controls and the lyrics, as it lies under expanded lyrics. Off, it is on the cover.</string>
     <string name="spectrogram3d_speed">Speed</string>
     <string name="spectrogram3d_speed_desc">Seconds of music across the screen. Fewer is faster.</string>
     <string name="spectrogram3d_attack">Attack</string>

@@ -138,6 +138,8 @@ fun PlayerHero(
     spectrumColor: Color = PlayerGlowBlue,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
     spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings = tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT,
+    /** 3D spectrogram › Behind the player: the player draws it as its background, and the cover leaves it out. */
+    spectrogramInBackground: Boolean = false,
     /** The album's second colour: the 3D spectrogram's glow. Null takes [spectrumColor]. */
     spectrumGlow: Color? = null,
     /** The cover's view, when the player holds it; null keeps it here. */
@@ -212,6 +214,7 @@ fun PlayerHero(
                 spectrumColor = spectrumColor,
                 waterfall = waterfall,
                 spectrogram3d = spectrogram3d,
+                spectrogramInBackground = spectrogramInBackground,
                 spectrumGlow = spectrumGlow,
                 coverVisual = coverVisual,
                 onCoverVisual = onCoverVisual,
@@ -238,6 +241,7 @@ private fun SquareArtHero(
     spectrumColor: Color,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings,
     spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings,
+    spectrogramInBackground: Boolean = false,
     spectrumGlow: Color?,
     /** The cover's view, when the player holds it; null keeps it here. */
     coverVisual: CoverVisual? = null,
@@ -272,6 +276,7 @@ private fun SquareArtHero(
             spectrumColor = spectrumColor,
             waterfall = waterfall,
             spectrogram3d = spectrogram3d,
+            spectrogramInBackground = spectrogramInBackground,
             spectrumGlow = spectrumGlow,
             coverVisual = coverVisual,
             onCoverVisual = onCoverVisual,
@@ -780,6 +785,8 @@ private fun HeroCoverArt(
     spectrumColor: Color = PlayerGlowBlue,
     waterfall: tf.monochrome.android.domain.model.SpectrumWaterfallSettings = tf.monochrome.android.domain.model.SpectrumWaterfallSettings.DEFAULT,
     spectrogram3d: tf.monochrome.android.domain.model.Spectrogram3DSettings = tf.monochrome.android.domain.model.Spectrogram3DSettings.DEFAULT,
+    /** 3D spectrogram › Behind the player: the player draws it as its background, and the cover leaves it out. */
+    spectrogramInBackground: Boolean = false,
     /** The album's second colour: the 3D spectrogram's glow. Null takes [spectrumColor]. */
     spectrumGlow: Color? = null,
     /** The cover's view, when the player holds it; null keeps it here. */
@@ -903,7 +910,7 @@ private fun HeroCoverArt(
                     modifier = Modifier.fillMaxWidth().height(maxHeight * 0.25f),
                 )
             }
-        } else if (spectrumEnabled && spectrogram && spectrumBins != null) {
+        } else if (spectrumEnabled && spectrogram && spectrumBins != null && !spectrogramInBackground) {
             // The bottom 40% of the art: a low camera needs the height for the
             // peaks to rise out of the landscape.
             BoxWithConstraints(

@@ -49,6 +49,12 @@ data class Spectrogram3DSettings(
     val lyricLight: Float = 0.8f,
     /** How quickly the back fades into the cover. */
     val haze: Float = 0.55f,
+    /**
+     * Played behind the whole player, along the bottom of the screen from
+     * edge to edge, under the title and the controls, as it lies under
+     * expanded lyrics. Off, it is on the cover.
+     */
+    val background: Boolean = false,
     /** The lowest pitch shown, at the front, in Hz. */
     val minHz: Float = 30f,
     /** The highest pitch shown, at the back, in Hz. */
