@@ -332,9 +332,11 @@ fun MainPlayerRoute(
     val spectrogramFeed: () -> FloatArray = remember(playerViewModel) {
         { playerViewModel.spectrumAnalyzer.spectrogramBins.value }
     }
-    // The cover's view (Spectrum, Wave Candy, 3D spectrogram), held here so the
-    // Lyrics view can keep it under the lyrics and a trip there and back keeps it.
-    var coverVisual by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(CoverVisual.SPECTRUM) }
+    // The cover's view (Spectrum, Wave Candy, 3D spectrogram), read here so
+    // the Lyrics view can keep it under the lyrics. Saved
+    // (PlayerViewModel.coverVisual): held only in this composable, it was
+    // back on the first view every time the player or the app was left.
+    val coverVisual by playerViewModel.coverVisual.collectAsStateWithLifecycle()
 
     val isFullscreenActive = viewMode == NowPlayingViewMode.VISUALIZER && visualizerFullscreen
     // OR'd with the app-wide setting so leaving the visualiser doesn't hand the
@@ -1135,7 +1137,7 @@ fun MainPlayerRoute(
                     spectrogram3d = spectrogram3dSettings,
                     spectrogramInBackground = spectrogramBackground,
                     coverVisual = coverVisual,
-                    onCoverVisual = { coverVisual = it },
+                    onCoverVisual = playerViewModel::setCoverVisual,
                     // The album's other colour lights the 3D spectrogram's ridges from within.
                     spectrumGlow = dominantFade.value,
                     waveSettings = waveCandySettings,

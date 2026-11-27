@@ -370,6 +370,23 @@ class PlayerViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val nowPlayingViewMode: StateFlow<NowPlayingViewMode> = preferences.nowPlayingViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NowPlayingViewMode.COVER_ART)
+
+    /**
+     * The cover's view (Spectrum, Wave Candy, 3D spectrogram), as the
+     * listener left it. Held in memory too, so a tap shows at once and the
+     * saved value only has to catch up. Started eagerly: it is read by the
+     * time the player opens, so the cover never shows the first view and
+     * then jumps.
+     */
+    private val pickedCoverVisual = MutableStateFlow<CoverVisual?>(null)
+    val coverVisual: StateFlow<CoverVisual> = combine(preferences.coverVisual, pickedCoverVisual) { saved, picked ->
+        picked ?: CoverVisual.named(saved)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, CoverVisual.SPECTRUM)
+
+    fun setCoverVisual(visual: CoverVisual) {
+        pickedCoverVisual.value = visual
+        viewModelScope.launch { preferences.setCoverVisual(visual.name) }
+    }
     val romajiLyrics: StateFlow<Boolean> = preferences.romajiLyrics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
     val visualizerEngineEnabled: StateFlow<Boolean> = preferences.visualizerEngineEnabled

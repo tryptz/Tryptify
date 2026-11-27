@@ -753,6 +753,11 @@ enum class CoverVisual {
     WAVE_CANDY,
     SPECTROGRAM_3D;
 
+    companion object {
+        /** The view saved under [name]; the first one for no name or one this build does not know. */
+        fun named(name: String?): CoverVisual = entries.firstOrNull { it.name == name } ?: SPECTRUM
+    }
+
     fun next(waveAvailable: Boolean, spectrogramAvailable: Boolean): CoverVisual {
         var candidate = this
         repeat(entries.size) {

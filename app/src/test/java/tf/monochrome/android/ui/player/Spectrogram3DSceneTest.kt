@@ -463,6 +463,11 @@ class Spectrogram3DSceneTest {
         assertEquals(CoverVisual.SPECTROGRAM_3D, CoverVisual.SPECTRUM.next(false, true))
         assertEquals(CoverVisual.SPECTRUM, CoverVisual.WAVE_CANDY.next(true, false))
         assertEquals(CoverVisual.SPECTRUM, CoverVisual.SPECTRUM.next(false, false))
+        // The view the listener left on is saved by its name and read back;
+        // nothing saved, or a name from another build, is the first view.
+        for (visual in CoverVisual.entries) assertEquals(visual, CoverVisual.named(visual.name))
+        assertEquals(CoverVisual.SPECTRUM, CoverVisual.named(null))
+        assertEquals(CoverVisual.SPECTRUM, CoverVisual.named("HOLOGRAM"))
     }
 
     @Test

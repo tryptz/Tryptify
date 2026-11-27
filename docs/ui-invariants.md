@@ -391,7 +391,12 @@ cover's spectrum button walks Spectrum, Wave Candy, 3D spectrogram and round
 again (`CoverVisual`), skipping a view that cannot show: Wave Candy without
 its settings, the 3D view without the analyzer or below Android 10 (not
 offered there at all, and Settings says so). Its speed is set in Settings
-only; the cover's speed button stays the spectrum's.
+only; the cover's speed button stays the spectrum's. The view picked is
+saved (`cover_visual`, `PlayerViewModel.coverVisual`, read eagerly so the
+cover never shows the first view and then jumps): held only in the player's
+composable, it was back on the first one every time the player or the app
+was left ("the waveform resets to the 1st one instead of remembering which
+one I exit with", the owner).
 
 It was reworked three times on the owner's word, the same day: "looks bad
 compared to the video" (a few thousand lit mesh points), "needs to look like

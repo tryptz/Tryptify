@@ -387,6 +387,8 @@ class PreferencesManager @Inject constructor(
         private val DOWNLOAD_LYRICS = booleanPreferencesKey("download_lyrics")
         private val AUTO_DOWNLOAD_LIKED = booleanPreferencesKey("auto_download_liked")
         private val NOW_PLAYING_VIEW_MODE = stringPreferencesKey("now_playing_view_mode")
+        // The cover's view (Spectrum, Wave Candy, 3D spectrogram), by its name.
+        private val COVER_VISUAL = stringPreferencesKey("cover_visual")
         private val VISUALIZER_ENGINE_ENABLED = booleanPreferencesKey("visualizer_engine_enabled")
         private val VISUALIZER_AUTO_SHUFFLE = booleanPreferencesKey("visualizer_auto_shuffle")
         private val VISUALIZER_PRESET_ID = stringPreferencesKey("visualizer_preset_id")
@@ -603,7 +605,7 @@ class PreferencesManager @Inject constructor(
             DOWNLOAD_QUALITY, DOWNLOAD_LYRICS, AUTO_DOWNLOAD_LIKED,
             LASTFM_ENABLED, LASTFM_USERNAME, LISTENBRAINZ_ENABLED,
             CUSTOM_API_ENDPOINT, QOBUZ_INSTANCE_URL, APPLE_INSTANCE_URL, APPLE_WRAPPER_URL, API_SERVERS, DEV_MODE_ENABLED,
-            NOW_PLAYING_VIEW_MODE, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
+            NOW_PLAYING_VIEW_MODE, COVER_VISUAL, PLAYER_DYNAMIC_COLOR, PLAYER_BLURRED_BACKGROUND,
             MINI_PLAYER_HIDE_WITH_TABS,
             ROMAJI_LYRICS, LYRICS_WORD_PROVIDER,
             LYRICS_FX_JSON, LYRICS_FX_CUSTOM_PRESETS_JSON, GLOBE_FX_JSON, PLAYER_GLASS_JSON,
@@ -1858,6 +1860,16 @@ class PreferencesManager @Inject constructor(
     }
     suspend fun setNowPlayingViewMode(mode: NowPlayingViewMode) {
         dataStore.edit { it[NOW_PLAYING_VIEW_MODE] = mode.name }
+    }
+
+    /**
+     * The cover's view the listener left on (the name of a `CoverVisual`),
+     * or null before one was ever picked. Kept, so leaving the player or the
+     * app does not put it back on the first one.
+     */
+    val coverVisual: Flow<String?> = dataStore.data.map { it[COVER_VISUAL] }.distinctUntilChanged()
+    suspend fun setCoverVisual(name: String) {
+        dataStore.edit { it[COVER_VISUAL] = name }
     }
 
     // --- Radio ranking weights ---
