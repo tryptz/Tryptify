@@ -107,7 +107,7 @@ internal fun Spectrogram3DOverlay(
     }
     val currentPlayhead by rememberUpdatedState(playhead)
     // What was last said in the log of how this is drawn. Not state: the draw phase's own.
-    val said = remember { IntArray(5) }
+    val said = remember { IntArray(4) }
     val lamp = remember { SpectrogramLamp() }
     // The box's left edge in root px. Not state: read in the draw phase only.
     val leftInRoot = remember { FloatArray(1) }
@@ -177,16 +177,18 @@ internal fun Spectrogram3DOverlay(
         // at what size. A phone that refuses the shader draws the simple
         // version and would otherwise say nothing.
         val how = SpectrogramRenderer.of(s.quality, Build.VERSION.SDK_INT, gpu != null)
+        // Not again for a new size: the cover is animated, and its width
+        // changes every frame of that.
         if (said[0] != how.ordinal + 1 || said[1] != s.quality || said[2] != scene.texColumns ||
-            said[3] != scene.texRows || said[4] != size.width.toInt()
+            said[3] != scene.texRows
         ) {
             said[0] = how.ordinal + 1; said[1] = s.quality; said[2] = scene.texColumns
-            said[3] = scene.texRows; said[4] = size.width.toInt()
+            said[3] = scene.texRows
             Log.i(
                 SPECTROGRAM_TAG,
                 "drawn by $how at quality ${s.quality}: history ${scene.texColumns}x${scene.texRows}, " +
                     "${scene.vertexCount} points, ${size.width.toInt()}x${size.height.toInt()} px" +
-                    (Spectrogram3DGpu.refusal?.let { ", shader refused: $it" } ?: ""),
+                    (Spectrogram3DGpu.refusal?.let { ", shader refused: ${it.lineSequence().firstOrNull().orEmpty()}" } ?: ""),
             )
         }
     }
@@ -419,14 +421,22 @@ uniform float3 uSun;
 uniform float4 uLamp;
 uniform float4 uLampCol;
 
+// A child's sample is a `half`, and a literal beside one is typed as a half
+// too: a phone's compiler refuses one a half cannot hold ("value is out of
+// range for type 'half': 65535") and with it the whole shader. So each
+// sample goes into a float first, and the two bytes' weights (65280 and 255
+// over 65535) are written as the small numbers they are.
 float height(float2 p) {
-    return (uHi.eval(p).a * 65280.0 + uLo.eval(p).a * 255.0) / 65535.0;
+    float hi = uHi.eval(p).a;
+    float lo = uLo.eval(p).a;
+    return hi * 0.99610895 + lo * 0.0038910506;
 }
 
 // The height to 1 part in 255, at half the cost: for the shadows and the
 // shade, which are soft.
 float coarse(float2 p) {
-    return uHi.eval(p).a * 0.99611;
+    float hi = uHi.eval(p).a;
+    return hi * 0.99610895;
 }
 
 float hash12(float2 p) {

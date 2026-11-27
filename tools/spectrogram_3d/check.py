@@ -21,6 +21,18 @@ import skia
 HERE = os.path.dirname(os.path.abspath(__file__))
 KT = os.path.join(HERE, '../../app/src/main/java/tf/monochrome/android/ui/player/Spectrogram3D.kt')
 src = re.search(r'internal const val SPECTROGRAM_3D_SHADER = """\n(.*?)"""', open(KT).read(), re.S).group(1)
+# A phone's compiler is stricter than this one. On 2026-11-26 a phone refused
+# the shader for "value is out of range for type 'half': 65535": a child's
+# sample is a half, a literal beside it is typed as one, and this Skia let
+# it pass. So, comments aside: no literal a half cannot hold, and every
+# sample goes into a float before anything is done with it.
+code = re.sub(r'//[^\n]*', '', src)
+for number in re.findall(r'(?<![\w.])\d+(?:\.\d+)?', code):
+    assert float(number) < 32768, f'a literal a half cannot hold: {number}'
+for line in code.splitlines():
+    if '.eval(' in line:
+        assert re.fullmatch(r'\s*float \w+ = u\w+\.eval\(\w+\)\.a;', line), \
+            f'a sample used before it is a float: {line.strip()}'
 effect = skia.RuntimeEffect.MakeForShader(src)  # raises with the compiler's message
 
 W, H = 720, 288

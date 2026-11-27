@@ -401,6 +401,33 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
+    fun `the shader has nothing in it a phone's compiler refuses for a half`() {
+        // The owner's phone refused the whole shader, in every build that
+        // had one, for `(uHi.eval(p).a * 65280.0 + ...) / 65535.0`: "value is
+        // out of range for type 'half': 65535". A child's sample is a half
+        // and a literal beside it is typed as one. The desktop Skia the
+        // check tool compiles with let it pass, so the phone drew the simple
+        // version and nobody knew. Comments aside: no literal a half cannot
+        // hold, and every sample goes into a float before it is used.
+        val code = SPECTROGRAM_3D_SHADER.lines().joinToString("\n") { it.substringBefore("//") }
+        for (number in Regex("""(?<![\w.])\d+(?:\.\d+)?""").findAll(code)) {
+            assertTrue("a literal a half cannot hold: ${number.value}", number.value.toDouble() < 32_768.0)
+        }
+        val samples = code.lines().filter { ".eval(" in it }
+        assertTrue(samples.isNotEmpty())
+        for (line in samples) {
+            assertTrue(
+                "a sample used before it is a float: ${line.trim()}",
+                Regex("""\s*float \w+ = u\w+\.eval\(\w+\)\.a;""").matches(line),
+            )
+        }
+        // The two bytes' weights are 65280 and 255 over 65535, and add up to one.
+        assertTrue(code.contains("hi * 0.99610895 + lo * 0.0038910506"))
+        assertEquals(1.0, 0.99610895 + 0.0038910506, 1e-8)
+        assertEquals(65280.0 / 65535.0, 0.99610895, 1e-8)
+    }
+
+    @Test
     fun `the palette keeps the album's hues and makes them fit to draw with`() {
         // A pale pastel and a near-black: a saturated floor, tops at full strength.
         val pale = SpectrogramPalette.of(0xFFD0BCFF.toInt(), 0xFF140A0A.toInt())

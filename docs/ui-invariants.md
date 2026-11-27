@@ -590,7 +590,18 @@ shader with Skia beside the reference's frames:
 `tools/spectrogram_3d/check.py` compiles the shader with Skia (what Android
 runs AGSL through) and draws a frame with it: run it after changing the
 shader, since a phone that refuses a shader falls back and says nothing.
-**Not seen on a phone when it was written**: `drawVertices` with a
+**The owner's phone refused the shader in every build until 2026-11-26, and
+drew the simple version**: "value is out of range for type 'half': 65535",
+for `(uHi.eval(p).a * 65280.0 + uLo.eval(p).a * 255.0) / 65535.0`. A child's
+sample is a `half`, a literal beside it is typed as one, and a half cannot
+hold 65535. The desktop Skia the check compiles with let it pass. Four
+complaints ("looks bad", "way too low resolution", "nothing like the demo",
+"mega blocky") were that fallback, each answered with a guess at something
+else, until the live log carried the line `Spectrogram3D` writes. So: a
+sample goes into a `float` before anything is done with it, no literal is
+larger than a half holds (the check tool and `Spectrogram3DSceneTest` refuse
+both), and when a picture on a phone is unlike the one drawn here, read the
+line under Quality or the log before anything else. `drawVertices` with a
 `RuntimeShader` and texture coordinates is drawn here by Skia's CPU
 rasterizer, the phone's by its GPU, and what the shadow walk costs a phone's
 GPU is not measured. `FrameStallLog` counts it (`Effect.SPECTROGRAM`); a

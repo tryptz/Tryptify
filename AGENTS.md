@@ -863,8 +863,12 @@ The cover's 3D spectrogram has the same kind of check for its shader
 `tools/spectrogram_3d/check.py` (needs `skia-python` and `numpy`): it compiles
 the shader and draws a made-up landscape the way the app does, with
 `drawVertices`, texture coordinates and the heights as two 8-bit textures. Run
-it after changing the shader; a phone that refuses it lights the mesh's points
-instead and says nothing. Its look and its sound feed are in
+it after changing the shader. A phone that refuses the shader lights the
+mesh's points instead, and says so under Quality in the view's settings and
+in the log (tag `Spectrogram3D`). The desktop Skia is laxer than a phone's:
+on 2026-11-26 the owner's phone refused this shader for a literal a `half`
+cannot hold, beside a child's sample, which the check had passed. The check
+refuses that now, but a pass here is still not a phone compiling it. Its look and its sound feed are in
 `docs/ui-invariants.md` ("The cover's third view").
 
 Several tests exist specifically to hold the UI invariants — `LightSchemesTest`,
