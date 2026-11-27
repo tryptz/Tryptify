@@ -726,6 +726,13 @@ class PlayerViewModel @Inject constructor(
                 spectrumAnalyzer.overlap = w.clamped().overlapPct / 100f
             }
         }
+        // The 3D spectrogram's own FFT size and overlap.
+        viewModelScope.launch {
+            preferences.spectrogram3d.collect { s ->
+                spectrumAnalyzer.spectrogramFft = s.fftSize
+                spectrumAnalyzer.spectrogramOverlap = s.overlapPct / 100f
+            }
+        }
     }
 
     private fun observeCurrentTrackMeta() {

@@ -32,6 +32,15 @@ data class Spectrogram3DSettings(
     val attackMs: Float = 12f,
     /** How long a sound stands as it dies away, in ms. 0 drops at once. */
     val releaseMs: Float = 160f,
+    /**
+     * The FFT's size, in samples at 44.1 and 48 kHz ([FFT_SIZES]): short
+     * answers at once with fat notes, long is fine in pitch and late.
+     */
+    val fftSize: Int = 4096,
+    /** How much each FFT window overlaps the one before, in percent: more is more spectra a second. */
+    val overlapPct: Float = 96f,
+    /** dB from the floor to a full peak: narrow stands everything up, wide keeps the quiet low. */
+    val rangeDb: Float = 23f,
     /** The water's own small waves and the glints on them, 0 a still pool. */
     val ripples: Float = 0.6f,
     /** How dark the shadows the peaks cast are, 0 none. */
@@ -70,6 +79,9 @@ data class Spectrogram3DSettings(
             smoothness = smoothness.c(0f, 1f, d.smoothness),
             attackMs = attackMs.c(0f, MAX_ATTACK_MS, d.attackMs),
             releaseMs = releaseMs.c(0f, MAX_RELEASE_MS, d.releaseMs),
+            fftSize = fftSizeNear(fftSize),
+            overlapPct = overlapPct.c(MIN_OVERLAP_PCT, MAX_OVERLAP_PCT, d.overlapPct),
+            rangeDb = rangeDb.c(MIN_RANGE_DB, MAX_RANGE_DB, d.rangeDb),
             ripples = ripples.c(0f, 1f, d.ripples),
             shadows = shadows.c(0f, 1f, d.shadows),
             lyricLight = lyricLight.c(0f, 1f, d.lyricLight),
@@ -120,6 +132,26 @@ data class Spectrogram3DSettings(
         const val MIN_HIGH_HZ = 500f
         const val MAX_HZ = 20_000f
         const val MIN_RANGE_RATIO = 4f
+        /** The FFT sizes on offer (the analyzer's own list, repeated here for the model: [Spectrogram3DSceneTest] holds them equal). */
+        val FFT_SIZES = intArrayOf(1024, 2048, 4096, 8192, 16384)
+        const val MIN_OVERLAP_PCT = 50f
+        const val MAX_OVERLAP_PCT = 99f
+        const val MIN_RANGE_DB = 12f
+        const val MAX_RANGE_DB = 60f
+
+        /** [size] as one of [FFT_SIZES]: the nearest, by the octave. */
+        fun fftSizeNear(size: Int): Int {
+            var best = FFT_SIZES[0]
+            for (candidate in FFT_SIZES) {
+                if (kotlin.math.abs(kotlin.math.ln(size.coerceAtLeast(1).toFloat() / candidate)) <
+                    kotlin.math.abs(kotlin.math.ln(size.coerceAtLeast(1).toFloat() / best))
+                ) {
+                    best = candidate
+                }
+            }
+            return best
+        }
+
         const val MAX_ATTACK_MS = 200f
         const val MAX_RELEASE_MS = 1500f
         const val MIN_QUALITY = 1

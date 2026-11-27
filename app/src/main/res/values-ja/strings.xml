@@ -1457,6 +1457,10 @@
     <string name="spectrogram3d_attack_desc">新しい音に水面が立ち上がる速さ。0 で即座に。</string>
     <string name="spectrogram3d_release">リリース</string>
     <string name="spectrogram3d_release_desc">音が消えていくあいだ残る長さ。0 で即座に落ち、長くすると短い音がひとつのうねりにつながります。</string>
+    <string name="spectrogram3d_fft_desc">各スペクトルが読む音の長さ（サンプル数）。小さいとすぐ反応し音が太く、大きいと音程が細かく反応が遅れます。</string>
+    <string name="spectrogram3d_overlap_desc">各 FFT ウィンドウが前のウィンドウと重なる割合。大きいほど 1 秒あたりのスペクトルが増え、速い速度でも表面が滑らかになりますが、負荷も増えます。</string>
+    <string name="spectrogram3d_range">レンジ</string>
+    <string name="spectrogram3d_range_desc">床から最大の山までの dB 幅。狭いとどの音も高く立ち、広いと小さな音は低いままで大きな音が際立ちます。</string>
     <string name="spectrogram3d_angle">カメラの角度</string>
     <string name="spectrogram3d_angle_desc">低い：ほぼ平らな地平線。高い：地形を見下ろします。</string>
     <string name="spectrogram3d_peak">ピークの高さ</string>

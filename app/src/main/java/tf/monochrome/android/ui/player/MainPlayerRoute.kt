@@ -702,6 +702,7 @@ fun MainPlayerRoute(
         LocalLyricGlyphAnchors provides glyphAnchors.takeIf { lyricsBeatOn },
         LocalBeatPulse provides beatPulse,
         LocalSpectrogramBins provides spectrogramFeed,
+        LocalSpectrogramFeed provides playerViewModel.spectrumAnalyzer.spectrogramFeed,
         // The transport buttons' refractive glass parameters (Studio › Player Glass).
         LocalPlayerGlass provides playerGlass,
         LocalGlassArea provides LinkArea.PLAYER,

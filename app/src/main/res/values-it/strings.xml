@@ -1541,6 +1541,10 @@
     <string name="spectrogram3d_attack_desc">Quanto in fretta l’acqua sale a un nuovo suono. 0 è subito.</string>
     <string name="spectrogram3d_release">Rilascio</string>
     <string name="spectrogram3d_release_desc">Quanto a lungo un suono resta mentre si spegne. 0 cade subito; più lungo unisce le note brevi in un’unica onda.</string>
+    <string name="spectrogram3d_fft_desc">Quanto suono legge ogni spettro, in campioni. Piccolo: risposta immediata e note spesse; grande: altezza fine e risposta più tarda.</string>
+    <string name="spectrogram3d_overlap_desc">Quanto ogni finestra FFT si sovrappone alla precedente. Più è alta, più spettri al secondo: superficie più liscia ad alta velocità e più lavoro per il telefono.</string>
+    <string name="spectrogram3d_range">Intervallo</string>
+    <string name="spectrogram3d_range_desc">I dB tra il fondo e un picco pieno. Stretto: ogni suono si alza; ampio: i suoni deboli restano bassi e quelli forti risaltano.</string>
     <string name="spectrogram3d_angle">Angolo della telecamera</string>
     <string name="spectrogram3d_angle_desc">Basso: un orizzonte quasi piatto. Alto: il paesaggio visto dall’alto.</string>
     <string name="spectrogram3d_peak">Altezza dei picchi</string>

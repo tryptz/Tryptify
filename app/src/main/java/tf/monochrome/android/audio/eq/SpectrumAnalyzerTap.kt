@@ -25,6 +25,7 @@ import javax.inject.Singleton
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.ln
 import kotlin.math.log10
 import kotlin.math.log2
 import kotlin.math.max
@@ -84,11 +85,48 @@ class SpectrumAnalyzerTap @Inject constructor(
          * hit is spread over the whole window, before and after it. A short
          * window is fatter in pitch, which the landscape's bars want anyway.
          */
-        internal fun spectrogramFftSize(sampleRate: Int): Int = when {
-            sampleRate <= 64_000 -> 2048
-            sampleRate <= 128_000 -> 4096
-            else -> 8192
+        internal fun spectrogramFftSize(sampleRate: Int, base: Int = DEFAULT_SPECTROGRAM_FFT): Int {
+            val size = spectrogramFftBase(base) * when {
+                sampleRate <= 64_000 -> 1
+                sampleRate <= 128_000 -> 2
+                else -> 4
+            }
+            // The ring holds twice this: a window, and what arrived since it.
+            return size.coerceAtMost(FFT_SIZE_HIGH)
         }
+
+        /**
+         * The 3D spectrogram's FFT sizes, as the listener picks them: samples
+         * at 44.1 and 48 kHz (twice that at 88.2 and 96, four times above).
+         * A short one answers at once with fat notes; a long one is fine in
+         * pitch and answers as late as it is long.
+         */
+        val SPECTROGRAM_FFT_SIZES = intArrayOf(1024, 2048, 4096, 8192, 16384)
+        const val DEFAULT_SPECTROGRAM_FFT = 4096
+
+        /** [size] as one of [SPECTROGRAM_FFT_SIZES]: the nearest, by the octave. */
+        fun spectrogramFftBase(size: Int): Int {
+            var best = SPECTROGRAM_FFT_SIZES[0]
+            for (candidate in SPECTROGRAM_FFT_SIZES) {
+                if (abs(ln(size.coerceAtLeast(1).toFloat() / candidate)) < abs(ln(size.coerceAtLeast(1).toFloat() / best))) {
+                    best = candidate
+                }
+            }
+            return best
+        }
+
+        /** Samples from one of the 3D spectrogram's spectra to the next: what [overlap] leaves of a window of [fftSize]. */
+        internal fun spectrogramHop(fftSize: Int, overlap: Float): Int =
+            (fftSize * (1f - overlap.coerceIn(MIN_OVERLAP, MAX_OVERLAP))).toInt().coerceAtLeast(MIN_SPECTROGRAM_HOP)
+
+        /**
+         * The most spectra one pass makes for the 3D spectrogram: about
+         * 24,000 samples of FFT a pass whatever the size, so a long FFT
+         * costs no more than a short one. Past it the hop is stretched.
+         */
+        internal fun spectraPerPass(fftSize: Int): Int = (24_576 / fftSize.coerceAtLeast(1)).coerceIn(1, 12)
+
+        private const val MIN_SPECTROGRAM_HOP = 16
 
         /** Frames handed to the native scope ring per push, at most. */
         const val SCOPE_CHUNK = 4096
@@ -135,7 +173,9 @@ class SpectrumAnalyzerTap @Inject constructor(
         private set
 
     // Active ring buffer (mono samples)
-    @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH)
+    // Twice the longest FFT: the 3D spectrogram reads windows that end a
+    // pass's worth of samples back from the newest.
+    @Volatile private var ring: FloatArray = FloatArray(FFT_SIZE_HIGH * 2)
     @Volatile private var ringWrite = 0
 
     // Left/right for the Wave Candy scope, gathered per buffer and handed to
@@ -172,6 +212,21 @@ class SpectrumAnalyzerTap @Inject constructor(
      */
     @Volatile var overlap: Float = DEFAULT_OVERLAP
         set(value) { field = value.coerceIn(MIN_OVERLAP, MAX_OVERLAP) }
+
+    /**
+     * The 3D spectrogram's FFT size ([SPECTROGRAM_FFT_SIZES]) and how much
+     * each of its windows overlaps the one before, from its settings. Its
+     * own, not the display's [fftSize] and [overlap]: a landscape wants a
+     * shorter window than a line does.
+     */
+    @Volatile var spectrogramFft: Int = DEFAULT_SPECTROGRAM_FFT
+        set(value) { field = spectrogramFftBase(value) }
+
+    @Volatile var spectrogramOverlap: Float = DEFAULT_OVERLAP
+        set(value) { field = value.coerceIn(MIN_OVERLAP, MAX_OVERLAP) }
+
+    /** The 3D spectrogram's spectra as they are made, several to a frame while one is on screen. */
+    val spectrogramFeed = SpectrogramFeed()
 
     @Volatile private var _analysisDirty = true
     @Volatile private var analysisActive = false
@@ -353,7 +408,8 @@ class SpectrumAnalyzerTap @Inject constructor(
             var smoothed = FloatArray(OUTPUT_BINS)
             var binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
             // The 3D spectrogram's own, shorter FFT (see spectrogramFftSize).
-            var shortSize = spectrogramFftSize(sampleRate)
+            var shortBase = spectrogramFft
+            var shortSize = spectrogramFftSize(sampleRate, shortBase)
             var shortWindow = buildHannWindow(shortSize)
             var shortReal = FloatArray(shortSize)
             var shortImag = FloatArray(shortSize)
@@ -370,10 +426,21 @@ class SpectrumAnalyzerTap @Inject constructor(
             // stopped moving since it last did. See the idle check below.
             var lastWriteIdx = -1
             var settled = false
+            // The 3D spectrogram's pass: where the ring stood at the last
+            // one, the samples since that no spectrum ends on yet, and the
+            // feed's clock (the sample its newest spectrum ends at).
+            var specSeen = -1
+            var specOwed = 0
+            var specClock = 0L
+            // The display's own analysis keeps its pace (its overlap) while
+            // the loop turns every frame for the 3D spectrogram.
+            var sinceMainMs = Long.MAX_VALUE / 4
+            var slept = 0L
+            spectrogramFeed.restart(sampleRate)
 
             while (isActive) {
                 // Re-allocate work arrays if size changed
-                if (_analysisDirty || currentSize != fftSize) {
+                if (_analysisDirty || currentSize != fftSize || shortBase != spectrogramFft) {
                     currentSize = fftSize
                     window = buildHannWindow(currentSize)
                     real = FloatArray(currentSize)
@@ -381,7 +448,8 @@ class SpectrumAnalyzerTap @Inject constructor(
                     twiddleCos = buildTwiddleCos(currentSize)
                     twiddleSin = buildTwiddleSin(currentSize)
                     binMap = buildBinMap(currentSize, sampleRate, OUTPUT_BINS)
-                    shortSize = spectrogramFftSize(sampleRate)
+                    shortBase = spectrogramFft
+                    shortSize = spectrogramFftSize(sampleRate, shortBase)
                     shortWindow = buildHannWindow(shortSize)
                     shortReal = FloatArray(shortSize)
                     shortImag = FloatArray(shortSize)
@@ -391,6 +459,10 @@ class SpectrumAnalyzerTap @Inject constructor(
                     smoothed = FloatArray(OUTPUT_BINS)
                     _analysisDirty = false
                     settled = false
+                    specSeen = -1
+                    specOwed = 0
+                    specClock = 0L
+                    spectrogramFeed.restart(sampleRate)
                 }
 
                 // Copy last N samples from ring buffer
@@ -398,6 +470,56 @@ class SpectrumAnalyzerTap @Inject constructor(
                 val ringLocal = ring
                 val ringLen = ringLocal.size
                 val writeIdx = ringWrite
+
+                // The 3D spectrogram, while one is on screen: a spectrum for
+                // every hop of sound that arrived since the last pass, oldest
+                // first, each ending where its hop does. The loop turns every
+                // frame for it, and the display's analysis below runs only
+                // when its own interval has passed.
+                val wanted = spectrogramFeed.isWanted
+                val mainEveryMs = analysisIntervalMs(currentSize, sampleRate, overlap, frameDelayMs)
+                val stepMs = if (wanted) frameDelayMs else mainEveryMs
+                if (wanted) {
+                    val arrived = if (specSeen < 0) 0 else (writeIdx - specSeen + ringLen) % ringLen
+                    specSeen = writeIdx
+                    specOwed = minOf(specOwed + arrived, ringLen - shortSize - 1)
+                    var hop = spectrogramHop(shortSize, spectrogramOverlap)
+                    var due = specOwed / hop
+                    val most = spectraPerPass(shortSize)
+                    if (due > most) {
+                        due = most
+                        hop = specOwed / due
+                    }
+                    for (i in 1..due) {
+                        val back = specOwed - i * hop
+                        var start = (writeIdx - back - shortSize) % ringLen
+                        if (start < 0) start += ringLen
+                        for (j in 0 until shortSize) {
+                            shortReal[j] = ringLocal[(start + j) % ringLen] * shortWindow[j]
+                            shortImag[j] = 0f
+                        }
+                        fft(shortReal, shortImag, shortCos, shortSin)
+                        bands.levels(shortReal, shortImag, spectrogramFeed.slot())
+                        specClock += hop
+                        spectrogramFeed.publish(specClock)
+                    }
+                    specOwed -= due * hop
+                    // The newest, for whoever reads one a frame (and the
+                    // Settings preview, which tells live sound by a new array).
+                    if (due > 0) {
+                        _spectrogramBins.value = spectrogramFeed.spectrum(spectrogramFeed.count - 1).copyOf()
+                    }
+                    sinceMainMs += slept
+                    if (sinceMainMs < mainEveryMs) {
+                        slept = stepMs
+                        delay(stepMs)
+                        continue
+                    }
+                } else {
+                    specSeen = -1
+                    specOwed = 0
+                }
+                sinceMainMs = 0L
                 // Paused (or between tracks) the player stops feeding this
                 // processor, so the ring holds still and every frame re-ran
                 // the same FFT and published a new — but equal — array. Each
@@ -407,6 +529,7 @@ class SpectrumAnalyzerTap @Inject constructor(
                 // on the stale spectrum, then stop until audio arrives again.
                 val idle = writeIdx == lastWriteIdx
                 if (idle && settled) {
+                    slept = frameDelayMs
                     delay(frameDelayMs)
                     continue
                 }
@@ -422,19 +545,22 @@ class SpectrumAnalyzerTap @Inject constructor(
 
                 fft(real, imag, twiddleCos, twiddleSin)
 
-                // The 3D spectrogram's reading: the newest sound through its
-                // own short FFT, so a note is there as it starts and gone as
-                // it ends. A fresh array: its reader keeps the reference.
-                var shortStart = writeIdx - shortSize
-                if (shortStart < 0) shortStart += ringLen
-                for (i in 0 until shortSize) {
-                    shortReal[i] = ringLocal[(shortStart + i) % ringLen] * shortWindow[i]
-                    shortImag[i] = 0f
+                // The 3D spectrogram's reading with none on screen (the
+                // pass above makes them otherwise): the newest sound through
+                // its own FFT, one a pass. A fresh array: its reader keeps
+                // the reference.
+                if (!wanted) {
+                    var shortStart = writeIdx - shortSize
+                    if (shortStart < 0) shortStart += ringLen
+                    for (i in 0 until shortSize) {
+                        shortReal[i] = ringLocal[(shortStart + i) % ringLen] * shortWindow[i]
+                        shortImag[i] = 0f
+                    }
+                    fft(shortReal, shortImag, shortCos, shortSin)
+                    val plain = FloatArray(OUTPUT_BINS)
+                    bands.levels(shortReal, shortImag, plain)
+                    _spectrogramBins.value = plain
                 }
-                fft(shortReal, shortImag, shortCos, shortSin)
-                val plain = FloatArray(OUTPUT_BINS)
-                bands.levels(shortReal, shortImag, plain)
-                _spectrogramBins.value = plain
 
                 // Compute magnitudes for target log-frequency bins.
                 // Zeroed first because the loop below `continue`s past
@@ -515,7 +641,8 @@ class SpectrumAnalyzerTap @Inject constructor(
                 }
                 if (!settled) _spectrumBins.value = out
 
-                delay(analysisIntervalMs(currentSize, sampleRate, overlap, frameDelayMs))
+                slept = stepMs
+                delay(stepMs)
             }
         }
     }

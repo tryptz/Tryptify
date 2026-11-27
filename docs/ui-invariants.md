@@ -400,19 +400,39 @@ subsurface scattering is still poor, it needs to look like a proper Blender
 render". What it rests on now, each found by drawing the real scene and
 shader with Skia beside the reference's frames:
 
-- **Its own feed, never the display's spectrum.** `SpectrumAnalyzerTap.
-  spectrogramBins` (`SpectrogramBands`): per log band the strongest FFT bin,
-  dBFS with the pink tilt, and no more. `spectrumBins` is re-centred on its
-  midband every frame, so a quiet moment was raised to a loud one's level and
-  the landscape was bumps everywhere, silence included. It comes from a
-  **short FFT of its own** (`spectrogramFftSize`, 2048 samples up to 64 kHz):
-  the display's long window answers a drum hit over a tenth of a second,
-  which no Attack setting could undo. Provided once around the player
-  (`LocalSpectrogramBins`) and read in the frame loop, not collected.
+- **Its own feed, never the display's spectrum.** `SpectrumAnalyzerTap`
+  reads each of its spectra through `SpectrogramBands`: per log band the
+  strongest FFT bin, dBFS with the pink tilt, and no more. `spectrumBins` is
+  re-centred on its midband every frame, so a quiet moment was raised to a
+  loud one's level and the landscape was bumps everywhere, silence included.
+- **A spectrum for every hop of sound, played back at the sound's pace**
+  (`SpectrogramFeed`, `SpectrogramPlayhead`, `LocalSpectrogramFeed`). One
+  spectrum a frame was all there was at first. At Speed 0.5 s with Attack
+  and Release at 0 (the owner's settings, 2026-11-26) each frame's spectrum
+  was a slab a frame wide, joined to the next by a ramp, and a held voice was
+  a staircase of them: "it's still mega blocky". Now, while a 3D view is on
+  screen (`acquire`), the analyzer's loop turns every frame and makes a
+  spectrum for every hop that arrived, oldest first, each stamped with the
+  sample its window ends at; the display's own analysis keeps its interval.
+  The playhead moves on by each frame's time, a little behind the newest
+  (`LATENCY_S`, two passes: the spectra come in batches, and at the newest
+  it would stand still between them and jump), hands the scene each spectrum
+  it passed with the time since the one before, and spends what is left of
+  the frame moving toward the next. So the scene's time is the sound's, and
+  `advance` runs several times a frame: keep it cheap (the blur's weights
+  are worked out when the blur changes, not for every row).
+- **The FFT is the listener's** (FFT size, Overlap, in its settings; applied
+  by `PlayerViewModel` as `spectrogramFft` and `spectrogramOverlap`). Sizes
+  1024 to 16384 samples at 44.1 and 48 kHz, twice and four times that at the
+  higher rates so a size is as long in time (`spectrogramFftSize`), 4096 as
+  shipped: short answers at once with fat notes, long is fine in pitch and
+  answers as late as it is long, and no Attack setting undoes a long window.
+  The ring holds twice the longest. A pass makes about 24,000 samples of FFT
+  whatever the size (`spectraPerPass`); past that the hop is stretched.
 - **Level against the loudest band, over a narrow range.** A reference
   follows the loudest band (up within frames, down 2 dB a second, never for
-  a rest's silence), the floor is `RANGE_DB` (23) under it and a full peak
-  `HEADROOM_DB` (2.5) under it. Measured on dense music through the short
+  a rest's silence), the floor is Range under it (`rangeDb`, 23 dB as
+  shipped, 12 to 60) and a full peak `HEADROOM_DB` (2.5) under it. Measured on dense music through the short
   FFT, half of all bands lie about 24 dB under the loudest and a tenth
   within 9: with 46 dB of range nearly everything stood near the top and the
   picture was white.
@@ -537,7 +557,7 @@ shader with Skia beside the reference's frames:
 - **Settings › 3D spectrogram**, after the waterfall, with a preview that can
   be switched off and is steered like the waterfall's (one finger: up and
   down the camera, left and right the speed; pinch: peak height). Speed,
-  attack, release, camera angle, peak height, gloss, subsurface glow, water
+  FFT size, overlap, range, attack, release, camera angle, peak height, gloss, subsurface glow, water
   ripples, shadows, light from the lyrics, smoothness, depth haze, the pitch
   range and quality. All of it travels in a theme's visualizer part except
   quality and the preview switch, the listener's own (`withPersonalFrom`).

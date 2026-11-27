@@ -127,6 +127,9 @@ class SettingsViewModel @Inject constructor(
     /** The 3D spectrogram's own feed; read its value in the preview's frame loop. */
     val spectrogramBins: StateFlow<FloatArray> = spectrumAnalyzerTap.spectrogramBins
 
+    /** The same analyzer's spectra as they are made: what the 3D spectrogram's preview draws live sound from. */
+    val spectrogramFeed: tf.monochrome.android.audio.eq.SpectrogramFeed get() = spectrumAnalyzerTap.spectrogramFeed
+
     /**
      * Reference-counted subscription to the FFT analysis coroutine. The preview
      * keeps running as long as any on-screen caller holds a stake, so opening

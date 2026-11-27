@@ -1457,6 +1457,10 @@
     <string name="spectrogram3d_attack_desc">水面随新声音升起的速度。0 为立即。</string>
     <string name="spectrogram3d_release">释音</string>
     <string name="spectrogram3d_release_desc">声音消逝时保持的时间。0 为立即落下；更长会把短音连成一道涌浪。</string>
+    <string name="spectrogram3d_fft_desc">每个频谱读取的声音长度（采样数）。小：响应即时，音符较粗；大：音高更精细，响应较慢。</string>
+    <string name="spectrogram3d_overlap_desc">每个 FFT 窗口与前一个窗口的重叠程度。越大，每秒的频谱越多：高速度下表面更平滑，手机负担也更大。</string>
+    <string name="spectrogram3d_range">范围</string>
+    <string name="spectrogram3d_range_desc">从底面到满峰之间的分贝数。窄：每个声音都立得很高；宽：安静的声音保持较低，响亮的更突出。</string>
     <string name="spectrogram3d_angle">镜头角度</string>
     <string name="spectrogram3d_angle_desc">低：接近平坦的地平线。高：俯视地形。</string>
     <string name="spectrogram3d_peak">峰值高度</string>

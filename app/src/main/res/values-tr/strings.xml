@@ -1499,6 +1499,10 @@
     <string name="spectrogram3d_attack_desc">Suyun yeni bir sese ne kadar hızlı yükseldiği. 0 anında.</string>
     <string name="spectrogram3d_release">Bırakma</string>
     <string name="spectrogram3d_release_desc">Bir sesin sönerken ne kadar ayakta kaldığı. 0 anında düşer; daha uzunu kısa notaları tek bir dalgada birleştirir.</string>
+    <string name="spectrogram3d_fft_desc">Her spektrumun okuduğu ses miktarı, örnek olarak. Küçük: anında yanıt, kalın notalar; büyük: ince perde, daha geç yanıt.</string>
+    <string name="spectrogram3d_overlap_desc">Her FFT penceresinin bir öncekiyle ne kadar örtüştüğü. Daha fazlası saniyede daha çok spektrum demektir: yüksek hızda daha pürüzsüz yüzey, telefona daha çok iş.</string>
+    <string name="spectrogram3d_range">Aralık</string>
+    <string name="spectrogram3d_range_desc">Zemin ile tam tepe arasındaki dB. Dar: her ses yükselir; geniş: kısık sesler alçak kalır, yüksek sesler öne çıkar.</string>
     <string name="spectrogram3d_angle">Kamera açısı</string>
     <string name="spectrogram3d_angle_desc">Düşük: neredeyse düz bir ufuk. Yüksek: manzaraya yukarıdan bakış.</string>
     <string name="spectrogram3d_peak">Tepe yüksekliği</string>

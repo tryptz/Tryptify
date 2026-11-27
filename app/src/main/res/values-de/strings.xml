@@ -1499,6 +1499,10 @@
     <string name="spectrogram3d_attack_desc">Wie schnell das Wasser zu einem neuen Klang ansteigt. 0 ist sofort.</string>
     <string name="spectrogram3d_release">Release</string>
     <string name="spectrogram3d_release_desc">Wie lange ein Klang stehen bleibt, während er ausklingt. 0 fällt sofort; länger verbindet kurze Töne zu einer Welle.</string>
+    <string name="spectrogram3d_fft_desc">Wie viel Klang jedes Spektrum liest, in Samples. Klein reagiert sofort und zeichnet dicke Töne; groß zeichnet feine Tonhöhen und reagiert später.</string>
+    <string name="spectrogram3d_overlap_desc">Wie stark jedes FFT-Fenster das vorige überlappt. Mehr bedeutet mehr Spektren pro Sekunde: glattere Oberfläche bei hohem Tempo und mehr Arbeit für das Telefon.</string>
+    <string name="spectrogram3d_range">Bereich</string>
+    <string name="spectrogram3d_range_desc">Die dB zwischen Boden und vollem Gipfel. Schmal lässt jeden Klang hoch aufragen; breit hält leise Klänge niedrig, sodass die lauten herausstehen.</string>
     <string name="spectrogram3d_angle">Kamerawinkel</string>
     <string name="spectrogram3d_angle_desc">Niedrig: ein fast flacher Horizont. Hoch: der Blick von oben auf die Landschaft.</string>
     <string name="spectrogram3d_peak">Spitzenhöhe</string>

@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -36,6 +37,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import tf.monochrome.android.audio.eq.SpectrogramFeed
 
 /**
  * The 3D spectrogram's own feed ([SpectrumAnalyzerTap.spectrogramBins], read
@@ -44,6 +46,14 @@ import kotlin.math.sqrt
  * be. Without one the overlay is handed what its caller has.
  */
 val LocalSpectrogramBins = androidx.compose.runtime.staticCompositionLocalOf<(() -> FloatArray)?> { null }
+
+/**
+ * The same analyzer's spectra as they are made, several to a frame
+ * ([SpectrogramFeed]): what the 3D spectrogram draws from where it is
+ * provided, at the sound's own pace ([SpectrogramPlayhead]). Without it the
+ * view takes one spectrum a frame from its `bins`.
+ */
+val LocalSpectrogramFeed = androidx.compose.runtime.staticCompositionLocalOf<SpectrogramFeed?> { null }
 
 /**
  * The 3D spectrogram is drawn as one mesh with `drawVertices`, which Android
@@ -78,8 +88,24 @@ internal fun Spectrogram3DOverlay(
      * where no lyrics are drawn over the surface.
      */
     lyricLight: ((SpectrogramLamp) -> Unit)? = null,
+    /**
+     * The analyzer's spectra as they are made, where the picture is of the
+     * live sound: it is played back at the sound's pace, and [bins] is left
+     * for a picture of something else (the Settings preview's demo signal).
+     */
+    feed: SpectrogramFeed? = LocalSpectrogramFeed.current,
 ) {
     val scene = remember { Spectrogram3DScene() }
+    val playhead = remember(feed) { feed?.let { SpectrogramPlayhead(it) } }
+    // While this is on screen and playing, the analyzer makes a spectrum
+    // for every hop, not one a frame.
+    if (feed != null) {
+        DisposableEffect(feed, isPlaying) {
+            if (isPlaying) feed.acquire()
+            onDispose { if (isPlaying) feed.release() }
+        }
+    }
+    val currentPlayhead by rememberUpdatedState(playhead)
     // What was last said in the log of how this is drawn. Not state: the draw phase's own.
     val said = remember { IntArray(5) }
     val lamp = remember { SpectrogramLamp() }
@@ -108,7 +134,13 @@ internal fun Spectrogram3DOverlay(
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else (now - last) / 1e9f
                 last = now
-                scene.advance(currentBins(), currentSettings, dt)
+                val head = currentPlayhead
+                if (head != null) {
+                    val s = currentSettings
+                    head.advance(dt) { spectrum, seconds -> scene.advance(spectrum, s, seconds) }
+                } else {
+                    scene.advance(currentBins(), currentSettings, dt)
+                }
                 frame++
             }
         }
@@ -648,6 +680,8 @@ internal class Spectrogram3DScene {
     private val ripple = FloatArray(MAX_ROWS)
     private val before = FloatArray(MAX_ROWS)
     private val pushed = FloatArray(MAX_ROWS)
+    private val blurWeight = FloatArray(25)
+    private var blurSigma = -1f
     private val rowBin = FloatArray(MAX_ROWS + 1)
     private val rowTilt = FloatArray(MAX_ROWS)
     private var acc = 0f
@@ -823,8 +857,8 @@ internal class Spectrogram3DScene {
             // Back at the bottom: the next sound sets it at once.
             if (referenceDb <= MIN_REFERENCE_DB + 0.5f) primed = false
         }
-        val floor = referenceDb - RANGE_DB
-        val span = RANGE_DB - HEADROOM_DB
+        val floor = referenceDb - s.rangeDb
+        val span = s.rangeDb - HEADROOM_DB
         for (j in 0 until texRows) {
             // What lies under the floor still stirs it a little: the ripple
             // the light catches where nothing is loud enough to stand up.
@@ -833,12 +867,18 @@ internal class Spectrogram3DScene {
         }
         val sigma = (BLUR_MIN + s.smoothness * BLUR_RANGE) * texRows / 129f
         val radius = (sigma * 2.5f).roundToInt().coerceIn(0, 24)
+        // The blur's weights, worked out when the blur changes: this runs
+        // for every spectrum, several times a frame.
+        if (sigma != blurSigma) {
+            blurSigma = sigma
+            for (k in 0..24) blurWeight[k] = exp(-0.5f * k * k / (sigma * sigma))
+        }
         for (j in 0 until texRows) {
             var sum = 0f
             var weight = 0f
             for (k in -radius..radius) {
                 val r = (j + k).coerceIn(0, texRows - 1)
-                val w = exp(-0.5f * k * k / (sigma * sigma))
+                val w = blurWeight[if (k < 0) -k else k]
                 sum += sampled[r] * w
                 weight += w
             }

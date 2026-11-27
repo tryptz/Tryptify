@@ -43,6 +43,7 @@ import java.util.Locale
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.roundToInt
+import tf.monochrome.android.audio.eq.SpectrogramFeed
 
 /**
  * Settings › 3D spectrogram: the cover's third view, with a preview that can
@@ -57,6 +58,8 @@ internal fun Spectrogram3DSettingsSection(
     onChange: (Spectrogram3DSettings) -> Unit,
     /** The analyzer's bins, or null when the analyzer is switched off. */
     liveBins: (() -> FloatArray)?,
+    /** The analyzer's spectra as they are made, for the preview of live sound; null with the analyzer off. */
+    liveFeed: SpectrogramFeed? = null,
     /** Lyrics FX › Visualizer under the lyrics, shown here too: it is asked for here first. Null hides it. */
     underLyrics: Boolean? = null,
     onUnderLyrics: (Boolean) -> Unit = {},
@@ -93,6 +96,7 @@ internal fun Spectrogram3DSettingsSection(
         Spectrogram3DPreview(
             settings = shown,
             liveBins = liveBins,
+            liveFeed = liveFeed,
             onAdjust = { drag(it) },
             onAdjustDone = { onChange(it.clamped()) },
         )
@@ -112,6 +116,26 @@ internal fun Spectrogram3DSettingsSection(
         stringResource(R.string.spectrogram3d_speed), stringResource(R.string.spectrogram3d_speed_desc),
         shown.secondsAcross, Spectrogram3DSettings.MIN_SECONDS..Spectrogram3DSettings.MAX_SECONDS,
         { String.format(Locale.US, "%.1f s", it) }, { drag(shown.copy(secondsAcross = it)) }, ::commit,
+    )
+    // The FFT: its size by the step (five sizes), its overlap, and the
+    // range of loudness the height spans.
+    val sizes = Spectrogram3DSettings.FFT_SIZES
+    SpectroSlider(
+        stringResource(R.string.settings_fft_size), stringResource(R.string.spectrogram3d_fft_desc),
+        sizes.indexOf(shown.fftSize).coerceAtLeast(0).toFloat(), 0f..(sizes.size - 1).toFloat(),
+        { sizes[it.roundToInt().coerceIn(0, sizes.size - 1)].toString() },
+        { drag(shown.copy(fftSize = sizes[it.roundToInt().coerceIn(0, sizes.size - 1)])) }, ::commit,
+        steps = sizes.size - 2,
+    )
+    SpectroSlider(
+        stringResource(R.string.waterfall_overlap), stringResource(R.string.spectrogram3d_overlap_desc),
+        shown.overlapPct, Spectrogram3DSettings.MIN_OVERLAP_PCT..Spectrogram3DSettings.MAX_OVERLAP_PCT,
+        { "${it.roundToInt()}%" }, { drag(shown.copy(overlapPct = it)) }, ::commit,
+    )
+    SpectroSlider(
+        stringResource(R.string.spectrogram3d_range), stringResource(R.string.spectrogram3d_range_desc),
+        shown.rangeDb, Spectrogram3DSettings.MIN_RANGE_DB..Spectrogram3DSettings.MAX_RANGE_DB,
+        { "${it.roundToInt()} dB" }, { drag(shown.copy(rangeDb = it)) }, ::commit,
     )
     val ms = { v: Float -> "${v.roundToInt()} ms" }
     SpectroSlider(
@@ -222,6 +246,7 @@ private fun hz(value: Float): String =
 private fun Spectrogram3DPreview(
     settings: Spectrogram3DSettings,
     liveBins: (() -> FloatArray)?,
+    liveFeed: SpectrogramFeed?,
     onAdjust: (Spectrogram3DSettings) -> Unit,
     onAdjustDone: (Spectrogram3DSettings) -> Unit,
 ) {
@@ -316,6 +341,9 @@ private fun Spectrogram3DPreview(
                 // The demo and the live sound are levels apart: a change
                 // between them starts the landscape afresh.
                 resetKey = showingLive,
+                // Live sound is played from the analyzer's spectra as they
+                // are made; the demo signal is one spectrum a frame.
+                feed = if (showingLive) liveFeed else null,
             )
         } else {
             PreviewPaused(Modifier.align(Alignment.Center))

@@ -1181,6 +1181,7 @@ internal fun VisualizerSettings(
             settings = spectrogram3d,
             onChange = viewModel::setSpectrogram3d,
             liveBins = if (spectrumEnabled) spectrogramFeed else null,
+            liveFeed = if (spectrumEnabled) viewModel.spectrogramFeed else null,
             underLyrics = underLyrics,
             onUnderLyrics = onUnderLyrics,
         )

@@ -1541,6 +1541,10 @@
     <string name="spectrogram3d_attack_desc">La vitesse à laquelle l’eau monte vers un nouveau son. 0 : aussitôt.</string>
     <string name="spectrogram3d_release">Relâchement</string>
     <string name="spectrogram3d_release_desc">Le temps qu’un son reste debout en s’éteignant. 0 : il retombe aussitôt ; plus long, les notes courtes se fondent en une seule houle.</string>
+    <string name="spectrogram3d_fft_desc">La quantité de son lue par chaque spectre, en échantillons. Petite : réponse immédiate, notes épaisses ; grande : hauteur fine, réponse plus tardive.</string>
+    <string name="spectrogram3d_overlap_desc">Le recouvrement de chaque fenêtre FFT avec la précédente. Plus il est grand, plus il y a de spectres par seconde : surface plus lisse à grande vitesse, et plus de travail pour le téléphone.</string>
+    <string name="spectrogram3d_range">Plage</string>
+    <string name="spectrogram3d_range_desc">Les dB entre le sol et un pic complet. Étroite : chaque son se dresse haut ; large : les sons faibles restent bas et les forts ressortent.</string>
     <string name="spectrogram3d_angle">Angle de la caméra</string>
     <string name="spectrogram3d_angle_desc">Bas : un horizon presque plat. Haut : on regarde le paysage d’en haut.</string>
     <string name="spectrogram3d_peak">Hauteur des crêtes</string>

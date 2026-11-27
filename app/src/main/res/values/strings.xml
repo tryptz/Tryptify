@@ -1500,6 +1500,10 @@
     <string name="spectrogram3d_attack_desc">How fast the water rises to a new sound. 0 is at once.</string>
     <string name="spectrogram3d_release">Release</string>
     <string name="spectrogram3d_release_desc">How long a sound stands as it dies away. 0 drops at once; longer joins short notes into one swell.</string>
+    <string name="spectrogram3d_fft_desc">How much sound each spectrum reads, in samples. Small answers at once and draws thick notes; large draws fine pitch and answers later.</string>
+    <string name="spectrogram3d_overlap_desc">How much each FFT window overlaps the one before. More is more spectra a second: a smoother surface at a fast Speed, and more work for the phone.</string>
+    <string name="spectrogram3d_range">Range</string>
+    <string name="spectrogram3d_range_desc">The dB between the floor and a full peak. Narrow stands every sound up tall; wide keeps quiet sounds low, so the loud ones stand out.</string>
     <string name="spectrogram3d_angle">Camera angle</string>
     <string name="spectrogram3d_angle_desc">Low: a near-flat horizon. High: looking down on the landscape.</string>
     <string name="spectrogram3d_peak">Peak height</string>
