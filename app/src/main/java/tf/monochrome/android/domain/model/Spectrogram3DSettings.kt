@@ -3,6 +3,9 @@ package tf.monochrome.android.domain.model
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import java.util.Locale
+import kotlin.math.ln
+import kotlin.math.pow
 
 /**
  * The cover's third view: the music as a sheet of water (a spectrogram drawn
@@ -134,8 +137,27 @@ data class Spectrogram3DSettings(
         fun fromSaved(savedJson: String, decoded: Spectrogram3DSettings): Spectrogram3DSettings =
             if (savedForAnOlderLook(savedJson)) DEFAULT.withPersonalFrom(decoded) else decoded
 
-        const val MIN_SECONDS = 0.5f
+        /** The fastest: half a second until 2026-11-28, when the owner asked for a tenth. */
+        const val MIN_SECONDS = 0.1f
         const val MAX_SECONDS = 20f
+
+        /**
+         * Where a speed stands on its slider, 0 the fastest and 1 the
+         * slowest. Even by the ratio, not by the second: a tenth of a second
+         * to one second is as much of the track as two seconds to twenty.
+         * Laid out by the second, everything under half a second would be
+         * the track's first fiftieth, which no thumb can set.
+         */
+        fun speedPosition(seconds: Float): Float =
+            (ln(seconds.coerceIn(MIN_SECONDS, MAX_SECONDS) / MIN_SECONDS) / ln(MAX_SECONDS / MIN_SECONDS)).coerceIn(0f, 1f)
+
+        /** The speed at [position] of its slider ([speedPosition] back again). */
+        fun speedAt(position: Float): Float =
+            (MIN_SECONDS * (MAX_SECONDS / MIN_SECONDS).pow(position.coerceIn(0f, 1f))).coerceIn(MIN_SECONDS, MAX_SECONDS)
+
+        /** A speed as the slider shows it: hundredths under a second, where a tenth is a big step. */
+        fun speedLabel(seconds: Float): String =
+            String.format(Locale.US, if (seconds < 0.995f) "%.2f s" else "%.1f s", seconds)
         const val MIN_ANGLE_DEG = 5f
         const val MAX_ANGLE_DEG = 60f
         const val MIN_PEAK = 0.25f

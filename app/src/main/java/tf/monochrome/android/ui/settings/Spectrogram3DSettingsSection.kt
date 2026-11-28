@@ -126,10 +126,13 @@ internal fun Spectrogram3DSettingsSection(
     )
 
     val percent = { v: Float -> "${(v * 100).roundToInt()}%" }
+    // The track is the speed by the ratio (speedPosition), so the fast end
+    // has room: by the second, 0.1 to 0.5 s was its first fiftieth.
     SpectroSlider(
         stringResource(R.string.spectrogram3d_speed), stringResource(R.string.spectrogram3d_speed_desc),
-        shown.secondsAcross, Spectrogram3DSettings.MIN_SECONDS..Spectrogram3DSettings.MAX_SECONDS,
-        { String.format(Locale.US, "%.1f s", it) }, { drag(shown.copy(secondsAcross = it)) }, ::commit,
+        Spectrogram3DSettings.speedPosition(shown.secondsAcross), 0f..1f,
+        { Spectrogram3DSettings.speedLabel(Spectrogram3DSettings.speedAt(it)) },
+        { drag(shown.copy(secondsAcross = Spectrogram3DSettings.speedAt(it))) }, ::commit,
     )
     // The FFT: its size by the step (five sizes), its overlap, and the
     // range of loudness the height spans.
@@ -352,7 +355,10 @@ private fun Spectrogram3DPreview(
                             val pan = event.calculatePan()
                             s.copy(
                                 angleDeg = s.angleDeg - pan.y / size.height * 60f,
-                                secondsAcross = s.secondsAcross - pan.x / size.width * 10f,
+                                secondsAcross = Spectrogram3DSettings.speedAt(
+                                    Spectrogram3DSettings.speedPosition(s.secondsAcross) -
+                                        pan.x / size.width * SPEED_DRAG_TRACK,
+                                ),
                             )
                         }
                         val next = moved.clamped()
@@ -393,6 +399,12 @@ private fun Spectrogram3DPreview(
         )
     }
 }
+
+/**
+ * How much of the Speed slider's track a drag across the preview's width
+ * moves: half, as it was when the track was even in seconds (10 of 19.5).
+ */
+private const val SPEED_DRAG_TRACK = 0.5f
 
 /** Analyzer silence for this long and the preview switches to the demo, as the waterfall's does. */
 private const val LIVE_TIMEOUT_NANOS = 1_500_000_000L

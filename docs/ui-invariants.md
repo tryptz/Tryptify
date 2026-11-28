@@ -452,9 +452,16 @@ shader with Skia beside the reference's frames:
 - **Attack and Release are the listener's** (`attackMs`, `releaseMs`,
   `follow`): 0 is at once, a frame. As shipped a sound is up in 12 ms and
   stands 160 ms, so a run of short notes on a pitch is still one bar with a
-  pinch between them. Speed goes down to half a second across; then several
-  columns are pushed in one frame, each a step between the last frame's
-  heights and this one's, or the fast setting would draw stairs. A little of
+  pinch between them. Speed goes down to a tenth of a second across (half a
+  second until 2026-11-28, when the owner asked for a tenth); then many
+  columns are pushed in one frame, a sixth of the screen at 60 frames a
+  second, each a step between the last frame's heights and this one's, or
+  the fast setting would draw stairs. The Speed slider's track is even by
+  the ratio (`speedPosition`, `speedAt`), and the preview's drag moves along
+  that track: by the second, everything under half a second was the track's
+  first fiftieth, which no thumb can set. Under a second it reads in
+  hundredths. At that speed the FFT is what limits the detail: 4096 samples
+  are 85 ms, most of the screen, so it wants a short one. A little of
   what the pitch blur removes is put back (`DETAIL`), and what lies under
   the floor still stirs it (`RIPPLE`).
 - **Low relief** (`HEIGHT_SCALE`): the reference is embossed, not a mountain

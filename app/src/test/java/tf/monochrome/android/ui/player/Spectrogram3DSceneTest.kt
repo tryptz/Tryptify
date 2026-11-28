@@ -84,6 +84,73 @@ class Spectrogram3DSceneTest {
     }
 
     @Test
+    fun `the fastest speed is a tenth of a second across, at any frame rate and with no stairs`() {
+        assertEquals(0.1f, Spectrogram3DSettings.MIN_SECONDS, 0f)
+        assertEquals(0.1f, Spectrogram3DSettings(secondsAcross = 0.01f).clamped().secondsAcross, 0f)
+        val fast = settings.copy(secondsAcross = Spectrogram3DSettings.MIN_SECONDS, attackMs = 0f, releaseMs = 0f)
+        // A second of it is ten screens of columns, whatever the frame rate.
+        listOf(30f, 60f, 120f, 165f).forEach { fps ->
+            val scene = Spectrogram3DScene()
+            repeat(fps.toInt()) { scene.advance(silence, fast, 1f / fps) }
+            val expected = 10L * scene.frontColumns
+            assertTrue("${scene.pushes} against $expected at $fps", abs(scene.pushes - expected) <= 1)
+        }
+        // One frame at 60 a second is a sixth of the screen. A sound that
+        // starts in it is a slope across those columns, up to the live one,
+        // never one stair a sixth of the screen wide.
+        val scene = Spectrogram3DScene()
+        repeat(30) { scene.advance(silence, fast, 1f / 60) }
+        val pushedBefore = scene.pushes
+        scene.advance(flat(-20f), fast, 1f / 60)
+        val due = (scene.pushes - pushedBefore).toInt()
+        assertEquals(scene.frontColumns / 6f, due.toFloat(), 1.5f)
+        val top = scene.liveHeight(0)
+        assertTrue("the sound stands up: $top", top > 0.3f)
+        assertEquals(top, scene.historyHeight(0, 0), 1e-4f)
+        for (k in 0 until due - 1) {
+            val rise = scene.historyHeight(k, 0) - scene.historyHeight(k + 1, 0)
+            assertEquals("column $k", top / due, rise, top / due * 0.05f)
+        }
+        // A whole screen in one step is the most a step pushes, and the ring holds it.
+        val whole = Spectrogram3DScene()
+        whole.advance(silence, fast, Spectrogram3DScene.MAX_STEP_SECONDS)
+        assertTrue(whole.pushes <= whole.frontColumns + 1L)
+        assertTrue(whole.frontColumns < whole.texColumns)
+    }
+
+    @Test
+    fun `the speed slider is even by the ratio, so the fast end has room`() {
+        val s = Spectrogram3DSettings
+        assertEquals(s.MIN_SECONDS, s.speedAt(0f), 0f)
+        assertEquals(s.MAX_SECONDS, s.speedAt(1f), 0f)
+        assertEquals(0f, s.speedPosition(s.MIN_SECONDS), 0f)
+        assertEquals(1f, s.speedPosition(s.MAX_SECONDS), 0f)
+        // Under half a second is three tenths of the track; by the second it was a fiftieth.
+        assertEquals(0.30f, s.speedPosition(0.5f), 0.01f)
+        assertEquals(0.70f, s.speedPosition(s.DEFAULT.secondsAcross), 0.01f)
+        // Always upward, and there and back.
+        var last = 0f
+        for (i in 0..200) {
+            val position = i / 200f
+            val seconds = s.speedAt(position)
+            assertTrue("upward at $position", seconds > last)
+            assertEquals(position, s.speedPosition(seconds), 1e-4f)
+            last = seconds
+        }
+        // Off the track is its ends, and a speed out of range stands at one.
+        assertEquals(s.MIN_SECONDS, s.speedAt(-3f), 0f)
+        assertEquals(s.MAX_SECONDS, s.speedAt(9f), 0f)
+        assertEquals(0f, s.speedPosition(0.001f), 0f)
+        assertEquals(1f, s.speedPosition(500f), 0f)
+        // Hundredths under a second, where a tenth is a big step.
+        assertEquals("0.10 s", s.speedLabel(0.1f))
+        assertEquals("0.25 s", s.speedLabel(0.25f))
+        assertEquals("1.0 s", s.speedLabel(0.999f))
+        assertEquals("4.0 s", s.speedLabel(4f))
+        assertEquals("20.0 s", s.speedLabel(20f))
+    }
+
+    @Test
     fun `bass stands at the front, and the newest sound enters at the right`() {
         val scene = Spectrogram3DScene()
         repeat(60) { scene.advance(bassOnly(), settings, 1f / 60) }
